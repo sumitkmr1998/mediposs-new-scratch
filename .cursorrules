@@ -1,0 +1,20 @@
+# MediPoss Architecture Rules
+
+You are assisting with the MediPoss project, which uses a "Shared Brain + Segregated UI" architecture.
+
+## Strict Hierarchy
+1. **Shared Logic (The Brain)**: `lib/shared/`
+   - Contains Models, Providers, Services.
+   - **RULE**: Any change here requires manual verification on BOTH Windows and Android.
+2. **Platform UI (The Skin)**: `lib/screens/windows/` & `lib/screens/android/`
+   - Independent UI implementations.
+   - **RULE**: Changes to one must not impact the other.
+3. **Dispatchers**: `lib/screens/*.dart`
+   - These are routers. Keep them clean of logic.
+
+## Technical Requirements
+- Use **Relative Imports** always.
+- Run `dart run build_runner build --delete-conflicting-outputs` if models change.
+- Verify stability with `flutter run -d windows` and `flutter run -d [android]`.
+
+Refer to `.agent/rules/architecture_rules.md` and `project_summary.md` for full context.

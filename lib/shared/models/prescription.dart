@@ -1,0 +1,122 @@
+import 'package:objectbox/objectbox.dart';
+
+@Entity()
+class Prescription {
+  @Id()
+  int id = 0;
+
+  int appointmentId;
+  int patientId;
+  String patientName; // Denormalized
+  int doctorId;
+  String doctorName; // Denormalized
+
+  String diagnosis;
+  String complaints; // Chief complaints
+  String notes; // Doctor's clinical notes
+
+  // JSON arrays stored as strings for ObjectBox compatibility
+  String itemsJson; // List<PrescriptionItem>
+  String labTestsJson; // List<String> — test names requested
+  String vitalsJson; // {bp, weight, temp, spo2, pulse}
+
+  bool dispensed; // Whether pharmacy has fulfilled this prescription
+
+  @Property(type: PropertyType.date)
+  DateTime createdAt;
+
+  Prescription({
+    this.id = 0,
+    required this.appointmentId,
+    required this.patientId,
+    required this.patientName,
+    required this.doctorId,
+    required this.doctorName,
+    this.diagnosis = '',
+    this.complaints = '',
+    this.notes = '',
+    this.itemsJson = '[]',
+    this.labTestsJson = '[]',
+    this.vitalsJson = '{}',
+    this.dispensed = false,
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
+}
+
+// Transient models — not ObjectBox entities
+
+class PrescriptionItem {
+  final int medicineId;
+  final String medicineName;
+  final int qty;
+  final String dosage; // e.g. "1-0-1 after meals"
+  final int days;
+  final bool isAvailable; // flag from inventory check
+
+  PrescriptionItem({
+    required this.medicineId,
+    required this.medicineName,
+    required this.qty,
+    this.dosage = '',
+    this.days = 1,
+    this.isAvailable = true,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'medicineId': medicineId,
+        'medicineName': medicineName,
+        'qty': qty,
+        'dosage': dosage,
+        'days': days,
+        'isAvailable': isAvailable,
+      };
+
+  factory PrescriptionItem.fromJson(Map<String, dynamic> json) =>
+      PrescriptionItem(
+        medicineId: json['medicineId'],
+        medicineName: json['medicineName'],
+        qty: json['qty'],
+        dosage: json['dosage'] ?? '',
+        days: json['days'] ?? 1,
+        isAvailable: json['isAvailable'] ?? true,
+      );
+}
+
+class Vitals {
+  final String bp; // e.g. "120/80"
+  final String weight; // e.g. "65 kg"
+  final String temp; // e.g. "98.6 F"
+  final String spo2; // e.g. "98%"
+  final String pulse; // e.g. "72 bpm"
+
+  const Vitals({
+    this.bp = '',
+    this.weight = '',
+    this.temp = '',
+    this.spo2 = '',
+    this.pulse = '',
+  });
+
+  Map<String, dynamic> toJson() => {
+        'bp': bp,
+        'weight': weight,
+        'temp': temp,
+        'spo2': spo2,
+        'pulse': pulse,
+      };
+
+  factory Vitals.fromJson(Map<String, dynamic> json) => Vitals(
+        bp: json['bp'] ?? '',
+        weight: json['weight'] ?? '',
+        temp: json['temp'] ?? '',
+        spo2: json['spo2'] ?? '',
+        pulse: json['pulse'] ?? '',
+      );
+
+  bool get isEmpty =>
+      bp.isEmpty &&
+      weight.isEmpty &&
+      temp.isEmpty &&
+      spo2.isEmpty &&
+      pulse.isEmpty;
+}

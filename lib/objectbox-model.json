@@ -1,0 +1,889 @@
+{
+  "_note1": "KEEP THIS FILE! Check it into a version control system (VCS) like git.",
+  "_note2": "ObjectBox manages crucial IDs for your object model. See docs for details.",
+  "_note3": "If you have VCS merge conflicts, you must resolve them according to ObjectBox docs.",
+  "entities": [
+    {
+      "id": "1:637942838794498612",
+      "lastPropertyId": "16:2954104296010480771",
+      "name": "AppSettings",
+      "properties": [
+        {
+          "id": "1:7943039523454338979",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:2628881509298230261",
+          "name": "storeName",
+          "type": 9
+        },
+        {
+          "id": "3:6131133953687112296",
+          "name": "storeAddress",
+          "type": 9
+        },
+        {
+          "id": "4:6651073908117458573",
+          "name": "storePhone",
+          "type": 9
+        },
+        {
+          "id": "5:3279496383450985082",
+          "name": "gstNumber",
+          "type": 9
+        },
+        {
+          "id": "6:4535527541372788846",
+          "name": "receiptFooterMessage",
+          "type": 9
+        },
+        {
+          "id": "7:4075934536005748734",
+          "name": "taxRate",
+          "type": 8
+        },
+        {
+          "id": "8:2350579350287618221",
+          "name": "currencySymbol",
+          "type": 9
+        },
+        {
+          "id": "9:4623492060925694124",
+          "name": "themeMode",
+          "type": 9
+        },
+        {
+          "id": "10:4919946992958534162",
+          "name": "serverPort",
+          "type": 6
+        },
+        {
+          "id": "11:3139568686476377997",
+          "name": "jwtSecret",
+          "type": 9
+        },
+        {
+          "id": "12:3615139733680601627",
+          "name": "defaultPrinterName",
+          "type": 9
+        },
+        {
+          "id": "13:5597935855387391771",
+          "name": "autoPrintReceipt",
+          "type": 1
+        },
+        {
+          "id": "14:6223836685144272439",
+          "name": "receiptPaperSize",
+          "type": 9
+        },
+        {
+          "id": "15:2087240489065515041",
+          "name": "hubIp",
+          "type": 9
+        },
+        {
+          "id": "16:2954104296010480771",
+          "name": "autoLoginPin",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "2:1561353773588181738",
+      "lastPropertyId": "20:137962504004245421",
+      "name": "AppUser",
+      "properties": [
+        {
+          "id": "1:209872916379997369",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:7132183807743949040",
+          "name": "name",
+          "type": 9
+        },
+        {
+          "id": "3:189628037659336316",
+          "name": "role",
+          "type": 9
+        },
+        {
+          "id": "4:2229427451313085792",
+          "name": "pin",
+          "type": 9
+        },
+        {
+          "id": "5:1347987568702340748",
+          "name": "isActive",
+          "type": 1
+        },
+        {
+          "id": "6:6120769259294666181",
+          "name": "canAccessSettings",
+          "type": 1
+        },
+        {
+          "id": "7:1253727687733724949",
+          "name": "canManageUsers",
+          "type": 1
+        },
+        {
+          "id": "8:5462561997299913743",
+          "name": "canViewDashboard",
+          "type": 1
+        },
+        {
+          "id": "9:1170736313800154167",
+          "name": "canViewInventory",
+          "type": 1
+        },
+        {
+          "id": "10:3133254953533518505",
+          "name": "canEditInventory",
+          "type": 1
+        },
+        {
+          "id": "11:8268974162108787154",
+          "name": "canViewWarehouse",
+          "type": 1
+        },
+        {
+          "id": "12:8260917776319499929",
+          "name": "canTransferStock",
+          "type": 1
+        },
+        {
+          "id": "13:3270053108856606653",
+          "name": "canAccessPOS",
+          "type": 1
+        },
+        {
+          "id": "14:6766016237532762186",
+          "name": "canDiscountSales",
+          "type": 1
+        },
+        {
+          "id": "15:8616747996891506229",
+          "name": "canViewSalesHistory",
+          "type": 1
+        },
+        {
+          "id": "16:495380346165754863",
+          "name": "canVoidSales",
+          "type": 1
+        },
+        {
+          "id": "17:7793814133069506798",
+          "name": "canProcessReturns",
+          "type": 1
+        },
+        {
+          "id": "18:4840328541116935397",
+          "name": "canAccessOPD",
+          "type": 1
+        },
+        {
+          "id": "19:3288731633746395810",
+          "name": "canManageDoctors",
+          "type": 1
+        },
+        {
+          "id": "20:137962504004245421",
+          "name": "canViewOpdReports",
+          "type": 1
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "3:1105416590503540471",
+      "lastPropertyId": "14:2636574971836139801",
+      "name": "Appointment",
+      "properties": [
+        {
+          "id": "1:6394093570240595131",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:6761892274774273369",
+          "name": "patientId",
+          "type": 6
+        },
+        {
+          "id": "3:6618890115870539927",
+          "name": "patientName",
+          "type": 9
+        },
+        {
+          "id": "4:1610316765670901951",
+          "name": "patientPhone",
+          "type": 9
+        },
+        {
+          "id": "5:2996785805101770237",
+          "name": "doctorId",
+          "type": 6
+        },
+        {
+          "id": "6:233266060777707503",
+          "name": "doctorName",
+          "type": 9
+        },
+        {
+          "id": "7:6695422585276856194",
+          "name": "tokenNumber",
+          "type": 6
+        },
+        {
+          "id": "8:2172279708784537299",
+          "name": "status",
+          "type": 9
+        },
+        {
+          "id": "9:467793757491113189",
+          "name": "consultationFee",
+          "type": 8
+        },
+        {
+          "id": "10:6980556269924278077",
+          "name": "notes",
+          "type": 9
+        },
+        {
+          "id": "11:7958320642023442256",
+          "name": "scheduledAt",
+          "type": 10
+        },
+        {
+          "id": "12:2075831885726806763",
+          "name": "createdAt",
+          "type": 10
+        },
+        {
+          "id": "13:7572869959530686338",
+          "name": "isWalkIn",
+          "type": 1
+        },
+        {
+          "id": "14:2636574971836139801",
+          "name": "consultationBilled",
+          "type": 1
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "4:676837588087970264",
+      "lastPropertyId": "8:1314911606399271183",
+      "name": "Doctor",
+      "properties": [
+        {
+          "id": "1:1389005125284229218",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:4639529703416523672",
+          "name": "name",
+          "type": 9
+        },
+        {
+          "id": "3:8799701781707252732",
+          "name": "specialization",
+          "type": 9
+        },
+        {
+          "id": "4:3806838882282781836",
+          "name": "consultationFee",
+          "type": 8
+        },
+        {
+          "id": "5:9024852760320589835",
+          "name": "qualifications",
+          "type": 9
+        },
+        {
+          "id": "6:2543047353537132906",
+          "name": "phone",
+          "type": 9
+        },
+        {
+          "id": "7:3041884951303444634",
+          "name": "isActive",
+          "type": 1
+        },
+        {
+          "id": "8:1314911606399271183",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "5:3743056661326749831",
+      "lastPropertyId": "12:3660298760812754583",
+      "name": "Medicine",
+      "properties": [
+        {
+          "id": "1:940266531253499567",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:3203127430373115229",
+          "name": "name",
+          "type": 9
+        },
+        {
+          "id": "3:6107513838213416191",
+          "name": "barcode",
+          "type": 9
+        },
+        {
+          "id": "4:7177199884126591172",
+          "name": "category",
+          "type": 9
+        },
+        {
+          "id": "5:6346513612858439538",
+          "name": "unit",
+          "type": 9
+        },
+        {
+          "id": "6:2348480507007881244",
+          "name": "purchasePrice",
+          "type": 8
+        },
+        {
+          "id": "7:5077219256147687239",
+          "name": "sellingPrice",
+          "type": 8
+        },
+        {
+          "id": "8:7877538710423796953",
+          "name": "mainStock",
+          "type": 6
+        },
+        {
+          "id": "9:1097645321798000170",
+          "name": "storeStock",
+          "type": 6
+        },
+        {
+          "id": "10:127187661911805242",
+          "name": "lowStockThreshold",
+          "type": 6
+        },
+        {
+          "id": "11:6744450476245279298",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "12:3660298760812754583",
+          "name": "synced",
+          "type": 1
+        }
+      ],
+      "relations": [
+        {
+          "id": "1:2143695166283597161",
+          "name": "batches",
+          "targetId": "13:6725712331159432176"
+        }
+      ]
+    },
+    {
+      "id": "6:8565129510349412883",
+      "lastPropertyId": "9:6127794589942969779",
+      "name": "Patient",
+      "properties": [
+        {
+          "id": "1:1806142710908090582",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:3180548274558549193",
+          "name": "uhid",
+          "type": 9
+        },
+        {
+          "id": "3:3911710095549316686",
+          "name": "name",
+          "type": 9
+        },
+        {
+          "id": "4:3794446808928587504",
+          "name": "phone",
+          "type": 9
+        },
+        {
+          "id": "5:4870797169307836344",
+          "name": "gender",
+          "type": 9
+        },
+        {
+          "id": "6:89100522858480228",
+          "name": "address",
+          "type": 9
+        },
+        {
+          "id": "7:1349424930631033259",
+          "name": "bloodGroup",
+          "type": 9
+        },
+        {
+          "id": "8:7889564649081023638",
+          "name": "age",
+          "type": 6
+        },
+        {
+          "id": "9:6127794589942969779",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "7:4447377553788985337",
+      "lastPropertyId": "6:6185792921755662565",
+      "name": "PatientImage",
+      "properties": [
+        {
+          "id": "1:3266403764226881786",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:5120057904641489614",
+          "name": "patientId",
+          "type": 6
+        },
+        {
+          "id": "3:1511796390251626779",
+          "name": "imagePath",
+          "type": 9
+        },
+        {
+          "id": "4:4669415630028251486",
+          "name": "category",
+          "type": 9
+        },
+        {
+          "id": "5:3615213140587119665",
+          "name": "date",
+          "type": 10
+        },
+        {
+          "id": "6:6185792921755662565",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "8:387908478841800652",
+      "lastPropertyId": "14:9166390049168587947",
+      "name": "Prescription",
+      "properties": [
+        {
+          "id": "1:4263371874581674535",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:5314330415042100083",
+          "name": "appointmentId",
+          "type": 6
+        },
+        {
+          "id": "3:3765754610715993001",
+          "name": "patientId",
+          "type": 6
+        },
+        {
+          "id": "4:5419269301462686337",
+          "name": "patientName",
+          "type": 9
+        },
+        {
+          "id": "5:2827896583370619918",
+          "name": "doctorId",
+          "type": 6
+        },
+        {
+          "id": "6:6207082959088303685",
+          "name": "doctorName",
+          "type": 9
+        },
+        {
+          "id": "7:5874561743598374618",
+          "name": "diagnosis",
+          "type": 9
+        },
+        {
+          "id": "8:9057787181660027612",
+          "name": "complaints",
+          "type": 9
+        },
+        {
+          "id": "9:3619681501599759379",
+          "name": "notes",
+          "type": 9
+        },
+        {
+          "id": "10:5099465294055240603",
+          "name": "itemsJson",
+          "type": 9
+        },
+        {
+          "id": "11:8255349668579227299",
+          "name": "labTestsJson",
+          "type": 9
+        },
+        {
+          "id": "12:8181722299857106167",
+          "name": "vitalsJson",
+          "type": 9
+        },
+        {
+          "id": "13:1718928858232437030",
+          "name": "dispensed",
+          "type": 1
+        },
+        {
+          "id": "14:9166390049168587947",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "9:8373256226224193875",
+      "lastPropertyId": "9:12517226281642158",
+      "name": "PrescriptionTemplate",
+      "properties": [
+        {
+          "id": "1:5158256026162465190",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:5417182693189532253",
+          "name": "name",
+          "type": 9
+        },
+        {
+          "id": "3:8886506614745074426",
+          "name": "diagnosis",
+          "type": 9
+        },
+        {
+          "id": "4:6581219452686666548",
+          "name": "complaints",
+          "type": 9
+        },
+        {
+          "id": "5:8767932400335877628",
+          "name": "notes",
+          "type": 9
+        },
+        {
+          "id": "6:8446052341914119821",
+          "name": "itemsJson",
+          "type": 9
+        },
+        {
+          "id": "7:8079705916485081420",
+          "name": "labTestsJson",
+          "type": 9
+        },
+        {
+          "id": "8:820108801535082016",
+          "name": "doctorId",
+          "type": 6
+        },
+        {
+          "id": "9:12517226281642158",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "10:8864801482337884747",
+      "lastPropertyId": "8:6654847863707300662",
+      "name": "PurchaseRecord",
+      "properties": [
+        {
+          "id": "1:6121766694254232057",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:7664041047945195272",
+          "name": "medicineId",
+          "type": 6
+        },
+        {
+          "id": "3:335153981523104729",
+          "name": "medicineName",
+          "type": 9
+        },
+        {
+          "id": "4:4935268128684303369",
+          "name": "qty",
+          "type": 6
+        },
+        {
+          "id": "5:8050422828364633028",
+          "name": "purchasePrice",
+          "type": 8
+        },
+        {
+          "id": "6:7545132335782356552",
+          "name": "purchasedAt",
+          "type": 10
+        },
+        {
+          "id": "7:2920549172653466242",
+          "name": "note",
+          "type": 9
+        },
+        {
+          "id": "8:6654847863707300662",
+          "name": "supplier",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "11:2308013346348508445",
+      "lastPropertyId": "18:4284571914144702466",
+      "name": "Sale",
+      "properties": [
+        {
+          "id": "1:2619371424383892058",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:4074957319330479802",
+          "name": "invoiceNo",
+          "type": 9
+        },
+        {
+          "id": "3:8221546485611610323",
+          "name": "patientId",
+          "type": 6
+        },
+        {
+          "id": "4:4199457586777197852",
+          "name": "patientName",
+          "type": 9
+        },
+        {
+          "id": "5:7031361988776898225",
+          "name": "patientPhone",
+          "type": 9
+        },
+        {
+          "id": "6:3990944472424571482",
+          "name": "subtotal",
+          "type": 8
+        },
+        {
+          "id": "7:4985480439942674224",
+          "name": "discount",
+          "type": 8
+        },
+        {
+          "id": "8:7010157979476624317",
+          "name": "taxRate",
+          "type": 8
+        },
+        {
+          "id": "9:2051792240838901232",
+          "name": "taxAmount",
+          "type": 8
+        },
+        {
+          "id": "10:7954139051113401983",
+          "name": "total",
+          "type": 8
+        },
+        {
+          "id": "11:2791663024059737762",
+          "name": "paymentMethod",
+          "type": 9
+        },
+        {
+          "id": "12:9192602293136754226",
+          "name": "cashAmount",
+          "type": 8
+        },
+        {
+          "id": "13:1751187346093881532",
+          "name": "upiAmount",
+          "type": 8
+        },
+        {
+          "id": "14:1654842626375396492",
+          "name": "cardAmount",
+          "type": 8
+        },
+        {
+          "id": "15:4075633278518050572",
+          "name": "createdAt",
+          "type": 10
+        },
+        {
+          "id": "16:5556967118302888192",
+          "name": "synced",
+          "type": 1
+        },
+        {
+          "id": "17:3321088224981575665",
+          "name": "isReturn",
+          "type": 1
+        },
+        {
+          "id": "18:4284571914144702466",
+          "name": "itemsJson",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "12:7082812279176577223",
+      "lastPropertyId": "9:1100797951206036300",
+      "name": "StockTransfer",
+      "properties": [
+        {
+          "id": "1:5408690270309385572",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:7168104900371179342",
+          "name": "medicineId",
+          "type": 6
+        },
+        {
+          "id": "3:2803715566115720334",
+          "name": "medicineName",
+          "type": 9
+        },
+        {
+          "id": "4:7938587821772494644",
+          "name": "qty",
+          "type": 6
+        },
+        {
+          "id": "5:6505144859333441375",
+          "name": "fromWarehouse",
+          "type": 9
+        },
+        {
+          "id": "6:7380992073094052234",
+          "name": "toWarehouse",
+          "type": 9
+        },
+        {
+          "id": "7:7685456843699385424",
+          "name": "transferredAt",
+          "type": 10
+        },
+        {
+          "id": "8:6404009768501974588",
+          "name": "note",
+          "type": 9
+        },
+        {
+          "id": "9:1100797951206036300",
+          "name": "transferredBy",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "13:6725712331159432176",
+      "lastPropertyId": "6:3748165661863182735",
+      "name": "MedicineBatch",
+      "properties": [
+        {
+          "id": "1:2539247311861295282",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:5878599026185101819",
+          "name": "batchNo",
+          "type": 9
+        },
+        {
+          "id": "3:229663240190795393",
+          "name": "expiryDate",
+          "type": 10
+        },
+        {
+          "id": "4:6324191616599707841",
+          "name": "mainStock",
+          "type": 6
+        },
+        {
+          "id": "5:989722989783780592",
+          "name": "storeStock",
+          "type": 6
+        },
+        {
+          "id": "6:3748165661863182735",
+          "name": "medicineId",
+          "type": 11,
+          "flags": 520,
+          "indexId": "1:5015225040438721990",
+          "relationTarget": "Medicine"
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "lastEntityId": "13:6725712331159432176",
+  "lastIndexId": "1:5015225040438721990",
+  "lastRelationId": "1:2143695166283597161",
+  "lastSequenceId": "0:0",
+  "modelVersion": 5,
+  "modelVersionParserMinimum": 5,
+  "retiredEntityUids": [],
+  "retiredIndexUids": [],
+  "retiredPropertyUids": [],
+  "retiredRelationUids": [],
+  "version": 1
+}
