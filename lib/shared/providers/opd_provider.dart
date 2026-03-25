@@ -57,6 +57,19 @@ class OpdProvider extends ChangeNotifier {
   double get filteredConsultationRevenue =>
       filteredQueue.fold(0.0, (sum, a) => sum + a.consultationFee);
 
+  static const int pageSize = 30;
+  int _loadedCount = 30;
+
+  List<Appointment> get displayedQueue =>
+      filteredQueue.take(_loadedCount).toList();
+  bool get hasMore => _loadedCount < filteredQueue.length;
+
+  void loadMore() {
+    if (!hasMore) return;
+    _loadedCount = (_loadedCount + pageSize).clamp(0, filteredQueue.length);
+    notifyListeners();
+  }
+
   OpdProvider() {
     _setToday();
   }
@@ -103,6 +116,7 @@ class OpdProvider extends ChangeNotifier {
         }
         break;
     }
+    _loadedCount = pageSize;
     notifyListeners();
   }
 
@@ -111,6 +125,7 @@ class OpdProvider extends ChangeNotifier {
     _appointments = db.appointmentBox.getAll()
       ..sort((a, b) => b.scheduledAt.compareTo(a.scheduledAt));
     _doctors = db.doctorBox.getAll()..sort((a, b) => a.name.compareTo(b.name));
+    _loadedCount = pageSize;
     notifyListeners();
   }
 

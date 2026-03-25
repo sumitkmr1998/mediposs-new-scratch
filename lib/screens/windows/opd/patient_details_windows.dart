@@ -12,40 +12,21 @@ import '../../../shared/models/prescription.dart';
 import '../../../shared/providers/patient_provider.dart';
 import '../../../shared/providers/sales_provider.dart';
 import '../../../shared/providers/prescription_provider.dart';
-import '../../../shared/providers/opd_provider.dart';
 import '../../../shared/services/sync_service.dart';
-import '../../../../theme/app_theme.dart';
-import '../../opd/../../screens/opd/prescription_screen.dart';
+import '../../../theme/app_theme.dart';
 
 class PatientDetailsWindows extends StatefulWidget {
   final int patientId;
-
   const PatientDetailsWindows({super.key, required this.patientId});
 
   @override
   State<PatientDetailsWindows> createState() => _PatientDetailsWindowsState();
 }
 
-class _PatientDetailsWindowsState extends State<PatientDetailsWindows>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
+class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
   @override
   Widget build(BuildContext context) {
     final patient = context.watch<PatientProvider>().getById(widget.patientId);
-
     if (patient == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Patient Details')),
@@ -53,44 +34,226 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows>
       );
     }
 
+    final sales = context.watch<SalesProvider>().getSalesByPatient(patient.id);
+    final prescriptions = context
+        .watch<PrescriptionProvider>()
+        .getPrescriptionsForPatient(patient.id);
+    final photos =
+        context.watch<PatientProvider>().getPatientPhotos(patient.id);
+    final totalSpent =
+        sales.fold(0.0, (sum, s) => sum + (s.isReturn ? -s.total : s.total));
+
     return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(patient.name, style: const TextStyle(fontSize: 18)),
-            Text(
-              patient.uhid,
-              style: TextStyle(color: context.textMutedColor, fontSize: 12),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.delete_outline, color: AppTheme.danger),
-            tooltip: 'Delete Patient',
-            onPressed: () => _confirmDelete(context, patient),
-          ),
-          const SizedBox(width: 8),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: AppTheme.primaryLight,
-          unselectedLabelColor: context.textMutedColor,
-          indicatorColor: AppTheme.primaryLight,
-          tabs: const [
-            Tab(icon: Icon(Icons.history), text: 'History'),
-            Tab(icon: Icon(Icons.photo_library), text: 'Gallery'),
-            Tab(icon: Icon(Icons.info_outline), text: 'Profile'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
+      body: Column(
         children: [
-          _HistoryTab(patient: patient),
-          _GalleryTab(patient: patient),
-          _ProfileTab(patient: patient),
+          // ── Hero Header ──
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Color(0xFF0A5D5F),
+                  AppTheme.primary,
+                  Color(0xFF14A085)
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.arrow_back_rounded,
+                            color: Colors.white, size: 20),
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    const SizedBox(width: 12),
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.4),
+                            width: 3),
+                      ),
+                      child: Center(
+                        child: Text(
+                          patient.name.isNotEmpty
+                              ? patient.name[0].toUpperCase()
+                              : '?',
+                          style: const TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(patient.name,
+                              style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  letterSpacing: -0.5)),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [
+                              _HeroBadge(
+                                  text: patient.uhid,
+                                  icon: Icons.badge_outlined),
+                              _HeroBadge(
+                                  text: patient.gender,
+                                  icon: patient.gender == 'Male'
+                                      ? Icons.male_rounded
+                                      : Icons.female_rounded),
+                              if (patient.ageYears > 0)
+                                _HeroBadge(
+                                    text: '${patient.ageYears} yrs',
+                                    icon: Icons.cake_outlined),
+                              if (patient.bloodGroup.isNotEmpty)
+                                _HeroBadge(
+                                    text: patient.bloodGroup,
+                                    icon: Icons.bloodtype_outlined),
+                              if (patient.phone.isNotEmpty)
+                                _HeroBadge(
+                                    text: patient.phone,
+                                    icon: Icons.phone_rounded),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        _HeroStat(
+                            value: '${prescriptions.length}',
+                            label: 'Prescriptions',
+                            icon: Icons.medical_services_rounded),
+                        const SizedBox(width: 16),
+                        _HeroStat(
+                            value: '${sales.length}',
+                            label: 'Transactions',
+                            icon: Icons.receipt_long_rounded),
+                        const SizedBox(width: 16),
+                        _HeroStat(
+                            value: '₹${totalSpent.toStringAsFixed(0)}',
+                            label: 'Total Spent',
+                            icon: Icons.currency_rupee_rounded),
+                      ],
+                    ),
+                    const SizedBox(width: 12),
+                    IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.delete_outline_rounded,
+                            color: Colors.white, size: 20),
+                      ),
+                      tooltip: 'Delete Patient',
+                      onPressed: () => _confirmDelete(context, patient),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ── Full Screen 2x2 Grid ──
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _SectionCard(
+                            title: 'Patient Information',
+                            icon: Icons.person_rounded,
+                            accentColor: AppTheme.primary,
+                            child: _PatientDetailsContent(patient: patient),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _SectionCard(
+                            title: 'Gallery',
+                            icon: Icons.photo_library_rounded,
+                            accentColor: const Color(0xFF7C3AED),
+                            badge:
+                                photos.isNotEmpty ? '${photos.length}' : null,
+                            trailing: _AddPhotoBtn(
+                                onTap: () => _addPhoto(context, patient)),
+                            child: _GalleryContent(
+                              photos: photos,
+                              onView: (i) => _viewPhotos(context, photos, i),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _SectionCard(
+                            title: 'Prescriptions',
+                            icon: Icons.medical_services_rounded,
+                            accentColor: AppTheme.primaryLight,
+                            badge: prescriptions.isNotEmpty
+                                ? '${prescriptions.length}'
+                                : null,
+                            child: _PrescriptionsContent(
+                              prescriptions: prescriptions,
+                              pProvider: context.watch<PrescriptionProvider>(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _SectionCard(
+                            title: 'Sales History',
+                            icon: Icons.receipt_long_rounded,
+                            accentColor: AppTheme.success,
+                            badge: sales.isNotEmpty ? '${sales.length}' : null,
+                            child: _SalesContent(
+                              sales: sales,
+                              salesProvider: context.watch<SalesProvider>(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -100,867 +263,1244 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Patient?'),
+        title: Row(children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppTheme.danger.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.warning_rounded,
+                color: AppTheme.danger, size: 22),
+          ),
+          const SizedBox(width: 12),
+          const Text('Delete Patient?',
+              style: TextStyle(color: AppTheme.danger)),
+        ]),
         content: Text(
-            'Are you sure you want to delete ${patient.name}? This will remove all their medical history and photographs. This action cannot be undone.'),
+            'Permanently delete ${patient.name}? All medical history will be removed.'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Cancel',
+                  style: TextStyle(color: context.textMutedColor))),
+          ElevatedButton.icon(
             onPressed: () {
               context.read<PatientProvider>().deletePatient(patient.id);
-              Navigator.pop(ctx); // Close dialog
-              Navigator.pop(context); // Back to list
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Patient ${patient.name} deleted'),
-                  backgroundColor: AppTheme.danger,
-                ),
-              );
+              Navigator.pop(ctx);
+              Navigator.pop(context);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
-            child: const Text('Delete'),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.danger,
+                foregroundColor: Colors.white),
+            icon: const Icon(Icons.delete_rounded, size: 18),
+            label: const Text('Delete'),
           ),
+        ],
+      ),
+    );
+  }
+
+  void _addPhoto(BuildContext context, Patient patient) async {
+    if (Platform.isAndroid || Platform.isIOS) {
+      showModalBottomSheet(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(
+                leading: const Icon(Icons.camera_alt, color: AppTheme.primary),
+                title: const Text('Take Photo'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickImage(patient, ImageSource.camera);
+                }),
+            ListTile(
+                leading:
+                    const Icon(Icons.photo_library, color: AppTheme.primary),
+                title: const Text('Choose from Gallery'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickImage(patient, ImageSource.gallery);
+                }),
+          ]),
+        ),
+      );
+    } else {
+      final result = await FilePicker.platform
+          .pickFiles(type: FileType.image, allowMultiple: false);
+      if (result != null && result.files.single.path != null) {
+        if (!context.mounted) return;
+        await context.read<PatientProvider>().savePatientPhoto(
+            patient.id, result.files.single.path!,
+            syncService: context.read<SyncService>());
+      }
+    }
+  }
+
+  Future<void> _pickImage(Patient patient, ImageSource source) async {
+    final picked = await ImagePicker().pickImage(source: source);
+    if (picked != null && mounted) {
+      final sync = Platform.isAndroid ? context.read<SyncService>() : null;
+      await context
+          .read<PatientProvider>()
+          .savePatientPhoto(patient.id, picked.path, syncService: sync);
+    }
+  }
+
+  void _viewPhotos(BuildContext context, List<PatientImage> photos, int index) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.9),
+      builder: (ctx) => _PhotoViewer(
+        photos: photos,
+        initialIndex: index,
+        onDelete: (p) => context.read<PatientProvider>().deletePatientPhoto(p),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HERO COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _HeroBadge extends StatelessWidget {
+  final String text;
+  final IconData icon;
+  const _HeroBadge({required this.text, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 13, color: Colors.white70),
+        const SizedBox(width: 5),
+        Text(text,
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600)),
+      ]),
+    );
+  }
+}
+
+class _HeroStat extends StatelessWidget {
+  final String value;
+  final String label;
+  final IconData icon;
+  const _HeroStat(
+      {required this.value, required this.label, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+        Text(value,
+            style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Colors.white)),
+        Text(label,
+            style: const TextStyle(fontSize: 11, color: Colors.white60)),
+      ]),
+      const SizedBox(width: 8),
+      Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, size: 18, color: Colors.white),
+      ),
+    ]);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SECTION CARD
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _SectionCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Color accentColor;
+  final String? badge;
+  final Widget? trailing;
+  final Widget child;
+
+  const _SectionCard({
+    required this.title,
+    required this.icon,
+    required this.accentColor,
+    this.badge,
+    this.trailing,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+              color: accentColor.withValues(alpha: 0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 4)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.06),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
+              border: Border(
+                  bottom:
+                      BorderSide(color: accentColor.withValues(alpha: 0.1))),
+            ),
+            child: Row(children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, size: 16, color: accentColor),
+              ),
+              const SizedBox(width: 10),
+              Text(title,
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: accentColor)),
+              if (badge != null) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: accentColor,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(badge!,
+                      style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white)),
+                ),
+              ],
+              const Spacer(),
+              if (trailing != null) trailing!,
+            ]),
+          ),
+          Expanded(child: child),
         ],
       ),
     );
   }
 }
 
-// --- History Tab ---
-class _HistoryTab extends StatelessWidget {
-  final Patient patient;
-
-  const _HistoryTab({required this.patient});
+class _AddPhotoBtn extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AddPhotoBtn({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final sales = context.watch<SalesProvider>().getSalesByPatient(patient.id);
-    final prescriptions = context
-        .watch<PrescriptionProvider>()
-        .getPrescriptionsForPatient(patient.id);
-
-    // Merge and sort by date
-    final List<dynamic> history = [...sales, ...prescriptions]
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-    if (history.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.history_toggle_off,
-              size: 64,
-              color: context.textMutedColor,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'No history found for this patient',
-              style: TextStyle(color: context.textMutedColor),
-            ),
-          ],
+    return Material(
+      color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: const Padding(
+          padding: EdgeInsets.all(6),
+          child: Icon(Icons.add_photo_alternate_rounded,
+              size: 18, color: Color(0xFF7C3AED)),
         ),
-      );
-    }
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PATIENT DETAILS CONTENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _PatientDetailsContent extends StatelessWidget {
+  final Patient patient;
+  const _PatientDetailsContent({required this.patient});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      ('UHID', patient.uhid, Icons.badge_outlined),
+      (
+        'Phone',
+        patient.phone.isEmpty ? 'Not provided' : patient.phone,
+        Icons.phone_outlined
+      ),
+      ('Gender', patient.gender, Icons.wc_outlined),
+      (
+        'Age',
+        patient.ageYears > 0 ? '${patient.ageYears} years' : 'Not set',
+        Icons.cake_outlined
+      ),
+      (
+        'Blood Group',
+        patient.bloodGroup.isEmpty ? 'Not set' : patient.bloodGroup,
+        Icons.bloodtype_outlined
+      ),
+      (
+        'Address',
+        patient.address.isEmpty ? 'Not provided' : patient.address,
+        Icons.location_on_outlined
+      ),
+      (
+        'Registered',
+        DateFormat('dd MMM yyyy').format(patient.createdAt),
+        Icons.calendar_today_outlined
+      ),
+    ];
 
     return ListView.builder(
-      padding: const EdgeInsets.all(12),
-      itemCount: history.length,
+      padding: const EdgeInsets.all(16),
+      itemCount: items.length,
       itemBuilder: (ctx, i) {
-        final item = history[i];
-        if (item is Sale) {
-          return _SaleHistoryTile(sale: item);
-        } else if (item is Prescription) {
-          return _PrescriptionHistoryTile(prescription: item);
-        }
-        return const SizedBox();
+        final (label, value, icon) = items[i];
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: i.isEven
+                ? AppTheme.primary.withValues(alpha: 0.03)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 16, color: AppTheme.primary),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 90,
+              child: Text(label,
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: context.textMutedColor,
+                      letterSpacing: 0.3)),
+            ),
+            Expanded(
+              child: Text(value,
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1A2332))),
+            ),
+          ]),
+        );
       },
     );
   }
 }
 
-class _SaleHistoryTile extends StatelessWidget {
-  final Sale sale;
-  const _SaleHistoryTile({required this.sale});
+// ═══════════════════════════════════════════════════════════════════════════
+// GALLERY CONTENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _GalleryContent extends StatelessWidget {
+  final List<PatientImage> photos;
+  final ValueChanged<int> onView;
+  const _GalleryContent({required this.photos, required this.onView});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: AppTheme.success.withValues(alpha: 0.1),
-          child: const Icon(
-            Icons.shopping_cart_outlined,
-            color: AppTheme.success,
-            size: 20,
-          ),
-        ),
-        title: Text('Sale: ${sale.invoiceNo}'),
-        subtitle: Text(
-          'Total: ₹${sale.total.toStringAsFixed(2)} • ${DateFormat('dd MMM yyyy, hh:mm a').format(sale.createdAt)}',
-        ),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () {
-          showDialog(
-            context: context,
-            builder: (ctx) => _SaleDetailDialog(sale: sale),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _SaleDetailDialog extends StatelessWidget {
-  final Sale sale;
-  const _SaleDetailDialog({required this.sale});
-
-  @override
-  Widget build(BuildContext context) {
-    final sProvider = context.read<SalesProvider>();
-    final items = sProvider.getSaleItems(sale);
-
-    return AlertDialog(
-      title: Text('Invoice: ${sale.invoiceNo}'),
-      content: SizedBox(
-        width: 400,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-                'Date: ${DateFormat('dd MMM yyyy, hh:mm a').format(sale.createdAt)}'),
-            Text('Payment: ${sale.paymentMethod.toUpperCase()}'),
-            const Divider(),
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: items.length,
-                itemBuilder: (ctx, i) {
-                  final item = items[i];
-                  return ListTile(
-                    dense: true,
-                    title: Text(item.medicineName),
-                    subtitle: Text(
-                        '${item.qty} x ₹${item.unitPrice.toStringAsFixed(2)}'),
-                    trailing: Text('₹${item.lineTotal.toStringAsFixed(2)}'),
-                  );
-                },
-              ),
+    if (photos.isEmpty) {
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF7C3AED).withValues(alpha: 0.08),
+              shape: BoxShape.circle,
             ),
-            const Divider(),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Total:',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                Text('₹${sale.total.toStringAsFixed(2)}',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
+            child: Icon(Icons.add_a_photo_rounded,
+                size: 32,
+                color: const Color(0xFF7C3AED).withValues(alpha: 0.5)),
+          ),
+          const SizedBox(height: 12),
+          const Text('No photos yet',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF64748B))),
+          const SizedBox(height: 4),
+          const Text('Click + to add photos',
+              style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+        ]),
+      );
+    }
+
+    return GridView.builder(
+      padding: const EdgeInsets.all(14),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4, crossAxisSpacing: 10, mainAxisSpacing: 10),
+      itemCount: photos.length,
+      itemBuilder: (ctx, i) {
+        final photo = photos[i];
+        return GestureDetector(
+          onTap: () => onView(i),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2)),
               ],
             ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close')),
-      ],
-    );
-  }
-}
-
-class _PrescriptionHistoryTile extends StatelessWidget {
-  final Prescription prescription;
-  const _PrescriptionHistoryTile({required this.prescription});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-          child: const Icon(
-            Icons.medical_services_outlined,
-            color: AppTheme.primary,
-            size: 20,
-          ),
-        ),
-        title: Text('Prescription by Dr. ${prescription.doctorName}'),
-        subtitle: Text(
-          '${prescription.diagnosis} • ${DateFormat('dd MMM yyyy').format(prescription.createdAt)}',
-        ),
-        trailing: prescription.dispensed
-            ? const Icon(Icons.check_circle, color: AppTheme.success, size: 20)
-            : null,
-        onTap: () {
-          showDialog(
-            context: context,
-            builder: (ctx) =>
-                _PrescriptionDetailDialog(prescription: prescription),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _PrescriptionDetailDialog extends StatelessWidget {
-  final Prescription prescription;
-  const _PrescriptionDetailDialog({required this.prescription});
-
-  @override
-  Widget build(BuildContext context) {
-    final pProvider = context.read<PrescriptionProvider>();
-    final items = pProvider.getItems(prescription);
-    final labTests = pProvider.getLabTests(prescription);
-    final vitals = pProvider.getVitals(prescription);
-
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        width: 500,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Prescription Details',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        DateFormat('dd MMM yyyy, hh:mm a')
-                            .format(prescription.createdAt),
-                        style: TextStyle(
-                            color: context.textMutedColor, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined,
-                            color: AppTheme.primary),
-                        onPressed: () => _edit(context),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline,
-                            color: AppTheme.danger),
-                        onPressed: () => _confirmDelete(context),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const Divider(height: 24),
-              if (vitals.weight.isNotEmpty || vitals.bp.isNotEmpty) ...[
-                const Text('🩺 Vitals',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 16,
-                  children: [
-                    if (vitals.bp.isNotEmpty) _v('BP', vitals.bp),
-                    if (vitals.pulse.isNotEmpty) _v('Pulse', vitals.pulse),
-                    if (vitals.temp.isNotEmpty) _v('Temp', vitals.temp),
-                    if (vitals.weight.isNotEmpty) _v('Wt', vitals.weight),
-                    if (vitals.spo2.isNotEmpty) _v('SpO2', vitals.spo2),
-                  ],
-                ),
-                const SizedBox(height: 16),
-              ],
-              if (prescription.complaints.isNotEmpty) ...[
-                const Text('Complaints',
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                Text(prescription.complaints,
-                    style: const TextStyle(fontSize: 13)),
-                const SizedBox(height: 12),
-              ],
-              if (prescription.diagnosis.isNotEmpty) ...[
-                const Text('Diagnosis',
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                Text(prescription.diagnosis,
-                    style: const TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
-              ],
-              if (items.isNotEmpty) ...[
-                const Text('💊 Medicines',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                ...items.asMap().entries.map((e) => Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('${e.key + 1}. ',
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 13)),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(e.value.medicineName,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13)),
-                                Text(
-                                  '${e.value.dosage}  •  ${e.value.days} days (Qty: ${e.value.qty})',
-                                  style: TextStyle(
-                                      color: context.textMutedColor,
-                                      fontSize: 12),
-                                ),
-                              ],
-                            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Stack(fit: StackFit.expand, children: [
+                Image.file(File(photo.imagePath), fit: BoxFit.cover),
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [Colors.black54, Colors.transparent]),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(DateFormat('dd/MM/yy').format(photo.date),
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600)),
+                        if (photo.category != 'General')
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                                color: Colors.white24,
+                                borderRadius: BorderRadius.circular(4)),
+                            child: Text(photo.category,
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 8)),
                           ),
-                        ],
-                      ),
-                    )),
-                const SizedBox(height: 16),
-              ],
-              if (labTests.isNotEmpty) ...[
-                const Text('🧪 Lab Tests',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children: labTests
-                      .map((t) => Chip(
-                            label:
-                                Text(t, style: const TextStyle(fontSize: 11)),
-                            visualDensity: VisualDensity.compact,
-                          ))
-                      .toList(),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 16),
-              ],
-              if (prescription.notes.isNotEmpty) ...[
-                const Text('Notes',
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                Text(prescription.notes, style: const TextStyle(fontSize: 13)),
-              ],
-            ],
+              ]),
+            ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _v(String l, String v) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(l, style: const TextStyle(fontSize: 10, color: Colors.grey)),
-          Text(v,
-              style:
-                  const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-        ],
-      );
-
-  void _edit(BuildContext context) async {
-    final opd = context.read<OpdProvider>();
-    final appt = opd.getAppointmentById(prescription.appointmentId);
-    if (appt == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error: Appointment not found')),
-      );
-      return;
-    }
-    Navigator.pop(context);
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PrescriptionScreen(appointment: appt),
-      ),
-    );
-  }
-
-  void _confirmDelete(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Prescription?'),
-        content: const Text('This action cannot be undone.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
-            onPressed: () {
-              context
-                  .read<PrescriptionProvider>()
-                  .deletePrescription(prescription.id);
-              Navigator.pop(ctx);
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text('Prescription deleted'),
-                    backgroundColor: AppTheme.danger),
-              );
-            },
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
 
-// --- Gallery Tab ---
-class _GalleryTab extends StatefulWidget {
-  final Patient patient;
-  const _GalleryTab({required this.patient});
+// ═══════════════════════════════════════════════════════════════════════════
+// PRESCRIPTIONS CONTENT (Expandable)
+// ═══════════════════════════════════════════════════════════════════════════
 
-  @override
-  State<_GalleryTab> createState() => _GalleryTabState();
-}
-
-class _GalleryTabState extends State<_GalleryTab> {
-  bool _loadingFromHub = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // Lazy on-demand pull — fetch this patient's photos from Hub when
-    // the Gallery tab first opens (NOT at login).
-    WidgetsBinding.instance.addPostFrameCallback((_) => _pullPhotosFromHub());
-  }
-
-  Future<void> _pullPhotosFromHub() async {
-    if (!Platform.isAndroid) return;
-    final sync = context.read<SyncService>();
-    if (!sync.isConnected) return;
-    final uhid = widget.patient.uhid;
-    if (uhid.isEmpty) return;
-
-    setState(() => _loadingFromHub = true);
-    await sync.pullPatientPhotosForPatient(uhid, widget.patient.id);
-    if (mounted) {
-      setState(() => _loadingFromHub = false);
-    }
-  }
+class _PrescriptionsContent extends StatelessWidget {
+  final List<Prescription> prescriptions;
+  final PrescriptionProvider pProvider;
+  const _PrescriptionsContent(
+      {required this.prescriptions, required this.pProvider});
 
   @override
   Widget build(BuildContext context) {
-    final pProvider = context.watch<PatientProvider>();
-    final photos = pProvider.getPatientPhotos(widget.patient.id);
+    if (prescriptions.isEmpty) {
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryLight.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.medical_services_outlined,
+                size: 32, color: AppTheme.primaryLight.withValues(alpha: 0.5)),
+          ),
+          const SizedBox(height: 12),
+          const Text('No prescriptions',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF64748B))),
+        ]),
+      );
+    }
 
-    return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addPhoto,
-        backgroundColor: AppTheme.primary,
-        child: const Icon(Icons.add_a_photo, color: Colors.white),
+    return ListView.builder(
+      padding: const EdgeInsets.all(14),
+      itemCount: prescriptions.length,
+      itemBuilder: (ctx, i) => _ExpandablePrescription(
+          prescription: prescriptions[i], pProvider: pProvider),
+    );
+  }
+}
+
+class _ExpandablePrescription extends StatefulWidget {
+  final Prescription prescription;
+  final PrescriptionProvider pProvider;
+  const _ExpandablePrescription(
+      {required this.prescription, required this.pProvider});
+
+  @override
+  State<_ExpandablePrescription> createState() =>
+      _ExpandablePrescriptionState();
+}
+
+class _ExpandablePrescriptionState extends State<_ExpandablePrescription> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.prescription;
+    final items = widget.pProvider.getItems(p);
+    final vitals = widget.pProvider.getVitals(p);
+    final labTests = widget.pProvider.getLabTests(p);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: _expanded
+            ? AppTheme.primaryLight.withValues(alpha: 0.06)
+            : AppTheme.primaryLight.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color:
+                AppTheme.primaryLight.withValues(alpha: _expanded ? 0.2 : 0.1)),
+        boxShadow: _expanded
+            ? [
+                BoxShadow(
+                    color: AppTheme.primaryLight.withValues(alpha: 0.08),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4))
+              ]
+            : [],
       ),
-      body: _loadingFromHub
-          ? const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 12),
-                  Text('Loading photos from Hub...'),
-                ],
-              ),
-            )
-          : photos.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.photo_album_outlined,
-                        size: 64,
-                        color: context.textMutedColor,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'No photographs saved for this patient',
-                        style: TextStyle(color: context.textMutedColor),
-                      ),
-                      if (Platform.isAndroid) ...[
-                        const SizedBox(height: 12),
-                        TextButton.icon(
-                          onPressed: _pullPhotosFromHub,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Refresh from Hub'),
+      child: Column(
+        children: [
+          // Summary row (always visible)
+          InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: IntrinsicHeight(
+              child: Row(children: [
+                Container(
+                  width: 4,
+                  decoration: BoxDecoration(
+                    color:
+                        p.dispensed ? AppTheme.success : AppTheme.primaryLight,
+                    borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(14),
+                        bottomLeft: Radius.circular(14)),
+                  ),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryLight.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      ],
-                    ],
-                  ),
-                )
-              : GridView.builder(
-                  padding: const EdgeInsets.all(12),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                  ),
-                  itemCount: photos.length,
-                  itemBuilder: (ctx, i) {
-                    final photo = photos[i];
-                    return GestureDetector(
-                      onTap: () => _viewPhotos(photos, i),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Stack(
-                          fit: StackFit.expand,
+                        child: const Icon(Icons.medical_services_rounded,
+                            color: AppTheme.primaryLight, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Image.file(File(photo.imagePath),
-                                fit: BoxFit.cover),
-                            Positioned(
-                              bottom: 0,
-                              left: 0,
-                              right: 0,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 2, horizontal: 4),
-                                color: Colors.black54,
-                                child: Text(
-                                  DateFormat('dd/MM/yy').format(photo.date),
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 10),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
+                            Text('Dr. ${p.doctorName}',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700, fontSize: 13)),
+                            const SizedBox(height: 3),
+                            Text(
+                              p.diagnosis.isNotEmpty
+                                  ? p.diagnosis
+                                  : p.complaints.isNotEmpty
+                                      ? p.complaints
+                                      : 'No diagnosis',
+                              style: TextStyle(
+                                  fontSize: 12, color: context.textMutedColor),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
                       ),
-                    );
-                  },
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(DateFormat('dd MMM').format(p.createdAt),
+                              style: TextStyle(
+                                  fontSize: 11, color: context.textMutedColor)),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: p.dispensed
+                                  ? AppTheme.success.withValues(alpha: 0.1)
+                                  : AppTheme.warning.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(p.dispensed ? 'DISPENSED' : 'PENDING',
+                                style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.5,
+                                    color: p.dispensed
+                                        ? AppTheme.success
+                                        : AppTheme.warningDark)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        _expanded
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
+                        color: context.textMutedColor,
+                        size: 22,
+                      ),
+                    ]),
+                  ),
                 ),
-    );
-  }
-
-  void _addPhoto() async {
-    if (Platform.isAndroid || Platform.isIOS) {
-      // Mobile: Show modal bottom sheet to choose Camera or Gallery
-      showModalBottomSheet(
-        context: context,
-        builder: (ctx) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.camera_alt),
-                title: const Text('Take Photo'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _pickImage(ImageSource.camera);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_library),
-                title: const Text('Choose from Gallery'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _pickImage(ImageSource.gallery);
-                },
-              ),
-            ],
+              ]),
+            ),
           ),
-        ),
-      );
-    } else {
-      // Desktop: Fall back to FilePicker
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        allowMultiple: false,
-      );
-      if (result != null && result.files.single.path != null) {
-        _saveCapturedPhoto(result.files.single.path!);
-      }
-    }
-  }
 
-  Future<void> _pickImage(ImageSource source) async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: source);
-    if (pickedFile != null) {
-      _saveCapturedPhoto(pickedFile.path);
-    }
-  }
-
-  Future<void> _saveCapturedPhoto(String path) async {
-    final syncService = Platform.isAndroid ? context.read<SyncService>() : null;
-    await context.read<PatientProvider>().savePatientPhoto(
-          widget.patient.id,
-          path,
-          syncService: syncService,
-        );
-    setState(() {});
-  }
-
-  void _viewPhotos(List<PatientImage> photos, int initialIndex) {
-    showDialog(
-      context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.9),
-      builder: (ctx) => _EnhancedPhotoViewer(
-        photos: photos,
-        initialIndex: initialIndex,
-        onDelete: (photo) {
-          context.read<PatientProvider>().deletePatientPhoto(photo);
-          setState(() {});
-        },
+          // Expanded details
+          if (_expanded)
+            Container(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+              decoration: BoxDecoration(
+                border: Border(
+                    top: BorderSide(
+                        color: AppTheme.primaryLight.withValues(alpha: 0.1))),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Vitals
+                  if (vitals.bp.isNotEmpty ||
+                      vitals.weight.isNotEmpty ||
+                      vitals.temp.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    const Text('Vitals',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.primaryLight,
+                            letterSpacing: 0.5)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 6,
+                      children: [
+                        if (vitals.bp.isNotEmpty)
+                          _VitalChip(label: 'BP', value: vitals.bp),
+                        if (vitals.pulse.isNotEmpty)
+                          _VitalChip(label: 'Pulse', value: vitals.pulse),
+                        if (vitals.temp.isNotEmpty)
+                          _VitalChip(label: 'Temp', value: vitals.temp),
+                        if (vitals.weight.isNotEmpty)
+                          _VitalChip(label: 'Weight', value: vitals.weight),
+                        if (vitals.spo2.isNotEmpty)
+                          _VitalChip(label: 'SpO2', value: vitals.spo2),
+                      ],
+                    ),
+                  ],
+                  // Medicines
+                  if (items.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    const Text('Medicines',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.primaryLight,
+                            letterSpacing: 0.5)),
+                    const SizedBox(height: 8),
+                    ...items.asMap().entries.map((e) => Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                child: Text('${e.key + 1}.',
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppTheme.primaryLight)),
+                              ),
+                              Expanded(
+                                child: Text(e.value.medicineName,
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600)),
+                              ),
+                              Text(
+                                  '${e.value.dosage} \u2022 ${e.value.days}d \u2022 Qty:${e.value.qty}',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: context.textMutedColor)),
+                            ],
+                          ),
+                        )),
+                  ],
+                  // Lab tests
+                  if (labTests.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    const Text('Lab Tests',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.primaryLight,
+                            letterSpacing: 0.5)),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      children: labTests
+                          .map((t) => Chip(
+                              label:
+                                  Text(t, style: const TextStyle(fontSize: 11)),
+                              visualDensity: VisualDensity.compact,
+                              backgroundColor: AppTheme.primaryLight
+                                  .withValues(alpha: 0.08)))
+                          .toList(),
+                    ),
+                  ],
+                  // Notes
+                  if (p.notes.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    const Text('Notes',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.primaryLight,
+                            letterSpacing: 0.5)),
+                    const SizedBox(height: 4),
+                    Text(p.notes,
+                        style: const TextStyle(
+                            fontSize: 12, color: Color(0xFF475569))),
+                  ],
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }
 }
 
-class _EnhancedPhotoViewer extends StatefulWidget {
+class _VitalChip extends StatelessWidget {
+  final String label;
+  final String value;
+  const _VitalChip({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryLight.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: RichText(
+        text: TextSpan(
+          style: const TextStyle(fontSize: 11, color: Color(0xFF1A2332)),
+          children: [
+            TextSpan(
+                text: '$label: ',
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            TextSpan(text: value),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SALES CONTENT (Expandable)
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _SalesContent extends StatelessWidget {
+  final List<Sale> sales;
+  final SalesProvider salesProvider;
+  const _SalesContent({required this.sales, required this.salesProvider});
+
+  @override
+  Widget build(BuildContext context) {
+    if (sales.isEmpty) {
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.success.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.receipt_long_outlined,
+                size: 32, color: AppTheme.success.withValues(alpha: 0.5)),
+          ),
+          const SizedBox(height: 12),
+          const Text('No sales recorded',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF64748B))),
+        ]),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(14),
+      itemCount: sales.length,
+      itemBuilder: (ctx, i) =>
+          _ExpandableSale(sale: sales[i], salesProvider: salesProvider),
+    );
+  }
+}
+
+class _ExpandableSale extends StatefulWidget {
+  final Sale sale;
+  final SalesProvider salesProvider;
+  const _ExpandableSale({required this.sale, required this.salesProvider});
+
+  @override
+  State<_ExpandableSale> createState() => _ExpandableSaleState();
+}
+
+class _ExpandableSaleState extends State<_ExpandableSale> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.sale;
+    final isReturn = s.isReturn;
+    final color = isReturn ? AppTheme.danger : AppTheme.success;
+    final items = widget.salesProvider.getSaleItems(s);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: _expanded
+            ? color.withValues(alpha: 0.06)
+            : color.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border:
+            Border.all(color: color.withValues(alpha: _expanded ? 0.25 : 0.1)),
+        boxShadow: _expanded
+            ? [
+                BoxShadow(
+                    color: color.withValues(alpha: 0.08),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4))
+              ]
+            : [],
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: IntrinsicHeight(
+              child: Row(children: [
+                Container(
+                  width: 4,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(14),
+                        bottomLeft: Radius.circular(14)),
+                  ),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          isReturn
+                              ? Icons.keyboard_return_rounded
+                              : Icons.receipt_rounded,
+                          color: color,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(s.invoiceNo,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    fontFamily: 'monospace')),
+                            const SizedBox(height: 3),
+                            Row(children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(s.paymentMethod.toUpperCase(),
+                                    style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                        color: context.textMutedColor)),
+                              ),
+                              if (isReturn) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        AppTheme.danger.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Text('REFUND',
+                                      style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppTheme.danger)),
+                                ),
+                              ],
+                            ]),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text('₹${s.total.toStringAsFixed(2)}',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                  color: color)),
+                          const SizedBox(height: 3),
+                          Text(DateFormat('dd MMM, h:mm a').format(s.createdAt),
+                              style: TextStyle(
+                                  fontSize: 11, color: context.textMutedColor)),
+                        ],
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        _expanded
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
+                        color: context.textMutedColor,
+                        size: 22,
+                      ),
+                    ]),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+
+          // Expanded item details
+          if (_expanded)
+            Container(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+              decoration: BoxDecoration(
+                border: Border(
+                    top: BorderSide(color: color.withValues(alpha: 0.1))),
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 10),
+                  // Items header
+                  Row(children: [
+                    Expanded(
+                        child: Text('ITEM',
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                                color: context.textMutedColor))),
+                    SizedBox(
+                        width: 80,
+                        child: Text('QTY',
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                                color: context.textMutedColor),
+                            textAlign: TextAlign.center)),
+                    SizedBox(
+                        width: 90,
+                        child: Text('PRICE',
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                                color: context.textMutedColor),
+                            textAlign: TextAlign.end)),
+                    SizedBox(
+                        width: 90,
+                        child: Text('SUBTOTAL',
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                                color: context.textMutedColor),
+                            textAlign: TextAlign.end)),
+                  ]),
+                  Divider(height: 14, color: color.withValues(alpha: 0.1)),
+                  // Items
+                  ...items.map((item) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(children: [
+                          Expanded(
+                              child: Text(item.medicineName,
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500))),
+                          SizedBox(
+                              width: 80,
+                              child: Text('${item.qty}',
+                                  style: const TextStyle(fontSize: 12),
+                                  textAlign: TextAlign.center)),
+                          SizedBox(
+                              width: 90,
+                              child: Text(
+                                  '₹${item.unitPrice.toStringAsFixed(2)}',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: context.textMutedColor),
+                                  textAlign: TextAlign.end)),
+                          SizedBox(
+                              width: 90,
+                              child: Text(
+                                  '₹${item.lineTotal.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600),
+                                  textAlign: TextAlign.end)),
+                        ]),
+                      )),
+                  Divider(height: 14, color: color.withValues(alpha: 0.1)),
+                  // Totals
+                  if (s.discount > 0)
+                    Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                      Text('Discount',
+                          style: TextStyle(
+                              fontSize: 12, color: context.textMutedColor)),
+                      const SizedBox(width: 32),
+                      SizedBox(
+                          width: 90,
+                          child: Text('-₹${s.discount.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                  color: AppTheme.danger,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12),
+                              textAlign: TextAlign.end)),
+                    ]),
+                  if (s.discount > 0) const SizedBox(height: 4),
+                  Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                    const Text('Total',
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1A2332))),
+                    const SizedBox(width: 32),
+                    SizedBox(
+                        width: 90,
+                        child: Text('₹${s.total.toStringAsFixed(2)}',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 16,
+                                color: color),
+                            textAlign: TextAlign.end)),
+                  ]),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PHOTO VIEWER
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _PhotoViewer extends StatefulWidget {
   final List<PatientImage> photos;
   final int initialIndex;
   final Function(PatientImage) onDelete;
-
-  const _EnhancedPhotoViewer({
-    required this.photos,
-    required this.initialIndex,
-    required this.onDelete,
-  });
+  const _PhotoViewer(
+      {required this.photos,
+      required this.initialIndex,
+      required this.onDelete});
 
   @override
-  State<_EnhancedPhotoViewer> createState() => _EnhancedPhotoViewerState();
+  State<_PhotoViewer> createState() => _PhotoViewerState();
 }
 
-class _EnhancedPhotoViewerState extends State<_EnhancedPhotoViewer> {
-  late int _currentIndex;
-  final _transformationCtrl = TransformationController();
+class _PhotoViewerState extends State<_PhotoViewer> {
+  late int _idx;
+  final _ctrl = TransformationController();
 
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
-  }
-
-  void _next() {
-    if (_currentIndex < widget.photos.length - 1) {
-      setState(() {
-        _currentIndex++;
-        _transformationCtrl.value = Matrix4.identity();
-      });
-    }
-  }
-
-  void _prev() {
-    if (_currentIndex > 0) {
-      setState(() {
-        _currentIndex--;
-        _transformationCtrl.value = Matrix4.identity();
-      });
-    }
+    _idx = widget.initialIndex;
   }
 
   @override
   Widget build(BuildContext context) {
-    final photo = widget.photos[_currentIndex];
+    final photo = widget.photos[_idx];
     return KeyboardListener(
       focusNode: FocusNode()..requestFocus(),
-      onKeyEvent: (event) {
-        if (event is KeyDownEvent) {
-          if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-            _next();
-          } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-            _prev();
-          } else if (event.logicalKey == LogicalKeyboardKey.escape) {
+      onKeyEvent: (e) {
+        if (e is KeyDownEvent) {
+          if (e.logicalKey == LogicalKeyboardKey.arrowRight &&
+              _idx < widget.photos.length - 1) {
+            setState(() {
+              _idx++;
+              _ctrl.value = Matrix4.identity();
+            });
+          }
+          if (e.logicalKey == LogicalKeyboardKey.arrowLeft && _idx > 0) {
+            setState(() {
+              _idx--;
+              _ctrl.value = Matrix4.identity();
+            });
+          }
+          if (e.logicalKey == LogicalKeyboardKey.escape) {
             Navigator.pop(context);
           }
         }
       },
       child: Dialog.fullscreen(
         backgroundColor: Colors.transparent,
-        child: Stack(
-          children: [
-            Center(
-              child: InteractiveViewer(
-                transformationController: _transformationCtrl,
-                minScale: 0.5,
-                maxScale: 4.0,
-                child: Image.file(
-                  File(photo.imagePath),
+        child: Stack(children: [
+          Center(
+            child: InteractiveViewer(
+              transformationController: _ctrl,
+              minScale: 0.5,
+              maxScale: 4,
+              child: Image.file(File(photo.imagePath),
                   fit: BoxFit.contain,
                   width: double.infinity,
-                  height: double.infinity,
-                ),
-              ),
+                  height: double.infinity),
             ),
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                color: Colors.black45,
-                child: AppBar(
-                  backgroundColor: Colors.transparent,
-                  elevation: 0,
-                  foregroundColor: Colors.white,
-                  title: Column(
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              color: Colors.black45,
+              child: AppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                foregroundColor: Colors.white,
+                title: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(DateFormat('dd MMM yyyy').format(photo.date)),
                       Text(
-                        'Photo ${_currentIndex + 1} of ${widget.photos.length} • Category: ${photo.category}',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ],
-                  ),
-                  actions: [
-                    IconButton(
+                          '${_idx + 1} of ${widget.photos.length} \u2022 ${photo.category}',
+                          style: const TextStyle(fontSize: 12)),
+                    ]),
+                actions: [
+                  IconButton(
                       icon: const Icon(Icons.delete_outline,
                           color: AppTheme.danger),
                       onPressed: () {
                         widget.onDelete(photo);
-                        if (widget.photos.length <= 1) {
-                          Navigator.pop(context);
-                        } else {
-                          Navigator.pop(context);
-                        }
-                      },
-                    ),
-                    IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context)),
-                  ],
-                ),
+                        Navigator.pop(context);
+                      }),
+                  IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context)),
+                ],
               ),
             ),
-            if (_currentIndex > 0)
-              Positioned(
+          ),
+          if (_idx > 0)
+            Positioned(
                 left: 20,
                 top: 0,
                 bottom: 0,
                 child: Center(
-                  child: IconButton(
-                    icon: const Icon(Icons.chevron_left,
-                        color: Colors.white, size: 48),
-                    onPressed: _prev,
-                  ),
-                ),
-              ),
-            if (_currentIndex < widget.photos.length - 1)
-              Positioned(
+                    child: IconButton(
+                        icon: const Icon(Icons.chevron_left,
+                            color: Colors.white, size: 48),
+                        onPressed: () => setState(() {
+                              _idx--;
+                              _ctrl.value = Matrix4.identity();
+                            })))),
+          if (_idx < widget.photos.length - 1)
+            Positioned(
                 right: 20,
                 top: 0,
                 bottom: 0,
                 child: Center(
-                  child: IconButton(
-                    icon: const Icon(Icons.chevron_right,
-                        color: Colors.white, size: 48),
-                    onPressed: _next,
-                  ),
-                ),
-              ),
-            const Positioned(
-              bottom: 20,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Text(
-                  'Use mouse wheel/pinch to zoom • Arrow keys to navigate',
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// --- Profile Tab ---
-class _ProfileTab extends StatelessWidget {
-  final Patient patient;
-  const _ProfileTab({required this.patient});
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          _ProfileInfoItem(
-              label: 'UHID', value: patient.uhid, icon: Icons.badge_outlined),
-          _ProfileInfoItem(
-              label: 'Phone',
-              value: patient.phone.isEmpty ? 'N/A' : patient.phone,
-              icon: Icons.phone_outlined),
-          _ProfileInfoItem(
-              label: 'Gender',
-              value: patient.gender,
-              icon: Icons.person_outline),
-          _ProfileInfoItem(
-              label: 'Age',
-              value: '${patient.ageYears} years',
-              icon: Icons.cake_outlined),
-          _ProfileInfoItem(
-              label: 'Address',
-              value: patient.address.isEmpty ? 'N/A' : patient.address,
-              icon: Icons.location_on_outlined),
-          _ProfileInfoItem(
-              label: 'Registered On',
-              value: DateFormat('dd MMM yyyy').format(patient.createdAt),
-              icon: Icons.calendar_today_outlined),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileInfoItem extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-
-  const _ProfileInfoItem(
-      {required this.label, required this.value, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: context.borderColor),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: AppTheme.primaryLight, size: 24),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style:
-                      TextStyle(color: context.textMutedColor, fontSize: 11)),
-              const SizedBox(height: 2),
-              Text(value,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 14)),
-            ],
-          ),
-        ],
+                    child: IconButton(
+                        icon: const Icon(Icons.chevron_right,
+                            color: Colors.white, size: 48),
+                        onPressed: () => setState(() {
+                              _idx++;
+                              _ctrl.value = Matrix4.identity();
+                            })))),
+        ]),
       ),
     );
   }

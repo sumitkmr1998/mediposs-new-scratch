@@ -16,177 +16,373 @@ class SalesHistoryWindows extends StatefulWidget {
 }
 
 class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  List<Sale> _filteredSales(List<Sale> sales) {
+    if (_searchQuery.isEmpty) return sales;
+    final q = _searchQuery.toLowerCase();
+    return sales.where((s) {
+      return s.invoiceNo.toLowerCase().contains(q) ||
+          (s.patientName.isNotEmpty &&
+              s.patientName.toLowerCase().contains(q)) ||
+          s.paymentMethod.toLowerCase().contains(q);
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final sales = context.watch<SalesProvider>();
+    final displayed = _filteredSales(sales.displayedSales);
+
+    double grossSales = 0;
+    double returns = 0;
+    for (final s in sales.sales) {
+      if (s.isReturn) {
+        returns += s.total.abs();
+      } else {
+        grossSales += s.total;
+      }
+    }
+    final netTotal = grossSales - returns;
+    final saleCount = sales.sales.where((s) => !s.isReturn).length;
+    final returnCount = sales.sales.where((s) => s.isReturn).length;
+    final rangeLabel = _getRangeLabel(sales);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sales History'),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.receipt_long_rounded,
+                  color: AppTheme.primary, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Sales History',
+                    style:
+                        TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                Text('$rangeLabel overview',
+                    style:
+                        TextStyle(fontSize: 12, color: context.textMutedColor)),
+              ],
+            ),
+          ],
+        ),
       ),
-      body: Column(
-        children: [
-          // Summary banner
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: AppTheme.primary.withValues(alpha: 0.1),
-            child: LayoutBuilder(builder: (ctx, constraints) {
-              final rangeLabel = _getRangeLabel(sales);
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // KPI Cards Row
+            LayoutBuilder(builder: (ctx, constraints) {
+              final cols = constraints.maxWidth > 1000
+                  ? 4
+                  : (constraints.maxWidth > 600 ? 2 : 1);
+              const spacing = 16.0;
+              final cardWidth =
+                  (constraints.maxWidth - (cols - 1) * spacing) / cols;
 
-              // Local calculations for filtered list
-              double grossSales = 0;
-              double returns = 0;
-              for (final s in sales.sales) {
-                if (s.isReturn) {
-                  returns += s.total.abs();
-                } else {
-                  grossSales += s.total;
-                }
-              }
-              final netTotal = grossSales - returns;
-
-              return Column(
+              return Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _StatBadge(
-                          label: "Gross Sales",
-                          value: '₹${grossSales.toStringAsFixed(0)}',
-                          color: AppTheme.primary),
-                      _StatBadge(
-                          label: "Returns",
-                          value: '₹${returns.toStringAsFixed(0)}',
-                          color: AppTheme.danger),
-                      _StatBadge(
-                          label: "Net Total",
-                          value: '₹${netTotal.toStringAsFixed(0)}',
-                          color: AppTheme.success),
-                    ],
+                  _KpiCard(
+                    label: 'Gross Sales',
+                    value: '₹${grossSales.toStringAsFixed(0)}',
+                    icon: Icons.trending_up_rounded,
+                    color: AppTheme.primary,
+                    count: '$saleCount transactions',
+                    width: cardWidth,
                   ),
-                  const Divider(height: 24, thickness: 0.5),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _StatBadge(
-                          label: "$rangeLabel Sales",
-                          value:
-                              '${sales.sales.where((s) => !s.isReturn).length}',
-                          color: AppTheme.primaryLight),
-                      _StatBadge(
-                          label: "$rangeLabel Returns",
-                          value:
-                              '${sales.sales.where((s) => s.isReturn).length}',
-                          color: AppTheme.danger),
-                      _StatBadge(
-                          label: 'All-time Revenue',
-                          value: '₹${sales.totalRevenue.toStringAsFixed(0)}',
-                          color: AppTheme.accent),
-                    ],
+                  _KpiCard(
+                    label: 'Returns',
+                    value: '₹${returns.toStringAsFixed(0)}',
+                    icon: Icons.keyboard_return_rounded,
+                    color: AppTheme.danger,
+                    count: '$returnCount returned',
+                    width: cardWidth,
+                  ),
+                  _KpiCard(
+                    label: 'Net Revenue',
+                    value: '₹${netTotal.toStringAsFixed(0)}',
+                    icon: Icons.account_balance_wallet_rounded,
+                    color: AppTheme.success,
+                    count: '$rangeLabel total',
+                    width: cardWidth,
+                  ),
+                  _KpiCard(
+                    label: 'All-time Revenue',
+                    value: '₹${sales.totalRevenue.toStringAsFixed(0)}',
+                    icon: Icons.auto_graph_rounded,
+                    color: AppTheme.accent,
+                    count: 'Lifetime',
+                    width: cardWidth,
                   ),
                 ],
               );
             }),
-          ),
 
-          // Date Filter Bar
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
+            const SizedBox(height: 24),
+
+            // Filter + Search Row
+            Row(
               children: [
-                _FilterChip(
-                  label: 'Today',
-                  isSelected: sales.activeFilter == SalesFilter.today,
-                  onSelected: () => sales.setFilter(SalesFilter.today),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'Yesterday',
-                  isSelected: sales.activeFilter == SalesFilter.yesterday,
-                  onSelected: () => sales.setFilter(SalesFilter.yesterday),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'Last 7 Days',
-                  isSelected: sales.activeFilter == SalesFilter.last7Days,
-                  onSelected: () => sales.setFilter(SalesFilter.last7Days),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'All Time',
-                  isSelected: sales.activeFilter == SalesFilter.allTime,
-                  onSelected: () => sales.setFilter(SalesFilter.allTime),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'Custom',
-                  isSelected: sales.activeFilter == SalesFilter.custom,
-                  onSelected: () async {
-                    final range = await showDateRangePicker(
-                      context: context,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime.now(),
-                      builder: (ctx, child) {
-                        return Theme(
-                          data: Theme.of(context).copyWith(
-                            colorScheme: Theme.of(context).colorScheme.copyWith(
-                                  primary: AppTheme.primary,
-                                  onPrimary: Colors.white,
-                                ),
-                          ),
-                          child: child!,
-                        );
-                      },
-                    );
-                    if (range != null) {
-                      sales.setFilter(SalesFilter.custom, range: range);
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-
-          // Table header
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: context.surfaceColor,
-            child: Row(
-              children: [
-                SizedBox(
-                    width: 140,
-                    child: Text('INVOICE', style: _hStyle(context))),
-                Expanded(child: Text('PATIENT', style: _hStyle(context))),
-                SizedBox(
-                    width: 80, child: Text('METHOD', style: _hStyle(context))),
-                SizedBox(
-                    width: 100, child: Text('TOTAL', style: _hStyle(context))),
-                SizedBox(
-                    width: 100, child: Text('DATE', style: _hStyle(context))),
-              ],
-            ),
-          ),
-
-          // Sales list
-          Expanded(
-            child: sales.sales.isEmpty
-                ? Center(
-                    child: Text('No sales yet',
-                        style: TextStyle(color: context.textMutedColor)))
-                : ListView.separated(
-                    itemCount: sales.sales.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (ctx, i) =>
-                        _SaleRow(sale: sales.sales[i], salesProvider: sales),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _buildFilterChip(sales, 'Today', Icons.today_rounded,
+                            SalesFilter.today),
+                        const SizedBox(width: 8),
+                        _buildFilterChip(sales, 'Yesterday',
+                            Icons.history_rounded, SalesFilter.yesterday),
+                        const SizedBox(width: 8),
+                        _buildFilterChip(sales, 'Last 7 Days',
+                            Icons.date_range_rounded, SalesFilter.last7Days),
+                        const SizedBox(width: 8),
+                        _buildFilterChip(sales, 'All Time',
+                            Icons.all_inbox_rounded, SalesFilter.allTime),
+                        const SizedBox(width: 8),
+                        _buildFilterChip(sales, 'Custom',
+                            Icons.calendar_month_rounded, SalesFilter.custom,
+                            isCustom: true),
+                      ],
+                    ),
                   ),
-          ),
-        ],
+                ),
+                const SizedBox(width: 16),
+                SizedBox(
+                  width: 260,
+                  child: TextField(
+                    controller: _searchCtrl,
+                    onChanged: (v) => setState(() => _searchQuery = v),
+                    style: const TextStyle(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Search invoice, patient...',
+                      hintStyle: TextStyle(
+                          fontSize: 13, color: context.textMutedColor),
+                      prefixIcon: Icon(Icons.search_rounded,
+                          size: 20, color: context.textMutedColor),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.close_rounded, size: 18),
+                              onPressed: () {
+                                _searchCtrl.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                            )
+                          : null,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
+            // Results count
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Showing ${displayed.length} of ${sales.totalCount} records',
+                style: TextStyle(fontSize: 12, color: context.textMutedColor),
+              ),
+            ),
+
+            // Table Header
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withValues(alpha: 0.06),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(16)),
+                border: Border.all(color: context.borderColor),
+              ),
+              child: Row(
+                children: [
+                  SizedBox(
+                      width: 150,
+                      child: Text('INVOICE', style: _headerStyle(context))),
+                  Expanded(
+                      flex: 3,
+                      child: Text('PATIENT', style: _headerStyle(context))),
+                  SizedBox(
+                      width: 110,
+                      child: Text('METHOD', style: _headerStyle(context))),
+                  SizedBox(
+                      width: 120,
+                      child: Text('TOTAL', style: _headerStyle(context))),
+                  SizedBox(
+                      width: 120,
+                      child: Text('DATE', style: _headerStyle(context))),
+                  const SizedBox(width: 48),
+                ],
+              ),
+            ),
+
+            // Sales rows
+            if (displayed.isEmpty)
+              _EmptyState(hasQuery: _searchQuery.isNotEmpty)
+            else
+              Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    left: BorderSide(color: context.borderColor),
+                    right: BorderSide(color: context.borderColor),
+                    bottom: BorderSide(color: context.borderColor),
+                  ),
+                  borderRadius:
+                      const BorderRadius.vertical(bottom: Radius.circular(16)),
+                ),
+                child: Column(
+                  children: [
+                    ...List.generate(
+                      displayed.length,
+                      (i) => Column(
+                        children: [
+                          _SaleRow(sale: displayed[i], salesProvider: sales),
+                          if (i < displayed.length - 1)
+                            Divider(height: 1, color: context.borderColor),
+                        ],
+                      ),
+                    ),
+                    // Load More button
+                    if (sales.hasMore)
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Material(
+                          color: AppTheme.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () => sales.loadMore(),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                    color: AppTheme.primary
+                                        .withValues(alpha: 0.3)),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.expand_more_rounded,
+                                      color: AppTheme.primary, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Load More (${sales.totalCount - displayed.length} remaining)',
+                                    style: const TextStyle(
+                                      color: AppTheme.primary,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
+            const SizedBox(height: 24),
+          ],
+        ),
       ),
     );
   }
 
-  TextStyle _hStyle(BuildContext context) => TextStyle(
+  Widget _buildFilterChip(
+      SalesProvider sales, String label, IconData icon, SalesFilter filter,
+      {bool isCustom = false}) {
+    final isSelected = sales.activeFilter == filter;
+    return Material(
+      color: isSelected ? AppTheme.primary : context.surfaceColor,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () async {
+          if (isCustom) {
+            final range = await showDateRangePicker(
+              context: context,
+              firstDate: DateTime(2020),
+              lastDate: DateTime.now(),
+              builder: (ctx, child) {
+                return Theme(
+                  data: Theme.of(context).copyWith(
+                    colorScheme: Theme.of(context).colorScheme.copyWith(
+                          primary: AppTheme.primary,
+                          onPrimary: Colors.white,
+                        ),
+                  ),
+                  child: child!,
+                );
+              },
+            );
+            if (range != null) {
+              sales.setFilter(SalesFilter.custom, range: range);
+            }
+          } else {
+            sales.setFilter(filter);
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? AppTheme.primary : context.borderColor,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon,
+                  size: 16,
+                  color: isSelected ? Colors.white : context.textMutedColor),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isSelected ? Colors.white : context.textMutedColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  TextStyle _headerStyle(BuildContext context) => TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w700,
         color: context.textMutedColor,
@@ -209,39 +405,74 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
   }
 }
 
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final VoidCallback onSelected;
+// ── KPI Card ────────────────────────────────────────────────────────────────
 
-  const _FilterChip({
+class _KpiCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final String count;
+  final double width;
+
+  const _KpiCard({
     required this.label,
-    required this.isSelected,
-    required this.onSelected,
+    required this.value,
+    required this.icon,
+    required this.color,
+    required this.count,
+    required this.width,
   });
 
   @override
   Widget build(BuildContext context) {
-    return ChoiceChip(
-      label: Text(label,
-          style: TextStyle(
-            fontSize: 12,
-            color: isSelected ? Colors.white : context.textMutedColor,
-          )),
-      selected: isSelected,
-      onSelected: (_) => onSelected(),
-      selectedColor: AppTheme.primary,
-      backgroundColor: context.surfaceColor,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: isSelected ? AppTheme.primary : context.borderColor,
+    return SizedBox(
+      width: width,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: color, size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(value,
+                        style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: color)),
+                    const SizedBox(height: 2),
+                    Text(label,
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.onSurface)),
+                    const SizedBox(height: 2),
+                    Text(count,
+                        style: TextStyle(
+                            fontSize: 11, color: context.textMutedColor)),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-      showCheckmark: false,
     );
   }
 }
+
+// ── Sale Row ────────────────────────────────────────────────────────────────
 
 class _SaleRow extends StatelessWidget {
   final Sale sale;
@@ -256,164 +487,248 @@ class _SaleRow extends StatelessWidget {
     final canProcessReturns = context.watch<AuthProvider>().canProcessReturns;
     final inv = context.read<InventoryProvider>();
 
-    return ExpansionTile(
-      leading:
-          const Icon(Icons.receipt, color: AppTheme.primaryLight, size: 20),
-      title: Row(
-        children: [
-          SizedBox(
-            width: 130,
-            child: Text(sale.invoiceNo,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                    color: AppTheme.primaryLight)),
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+        childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: sale.isReturn
+                ? AppTheme.danger.withValues(alpha: 0.1)
+                : AppTheme.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
           ),
-          Expanded(
-            child: Row(
+          child: Icon(
+            sale.isReturn
+                ? Icons.keyboard_return_rounded
+                : Icons.receipt_long_rounded,
+            color: sale.isReturn ? AppTheme.danger : AppTheme.primary,
+            size: 18,
+          ),
+        ),
+        title: Row(
+          children: [
+            SizedBox(
+              width: 140,
+              child: Text(sale.invoiceNo,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: AppTheme.primary)),
+            ),
+            Expanded(
+              flex: 3,
+              child: Row(
+                children: [
+                  if (sale.isReturn)
+                    Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppTheme.danger.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                            color: AppTheme.danger.withValues(alpha: 0.3)),
+                      ),
+                      child: const Text('REFUND',
+                          style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.danger)),
+                    ),
+                  Expanded(
+                    child: Text(
+                      sale.patientName.isEmpty
+                          ? 'Walk-in Customer'
+                          : sale.patientName,
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w500),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              width: 100,
+              child: _PaymentBadge(method: sale.paymentMethod),
+            ),
+            SizedBox(
+              width: 110,
+              child: Text(
+                '₹${sale.total.toStringAsFixed(2)}',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  color: sale.isReturn ? AppTheme.danger : AppTheme.success,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 110,
+              child: Text(
+                '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}',
+                style: TextStyle(fontSize: 12, color: context.textMutedColor),
+              ),
+            ),
+          ],
+        ),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? AppTheme.darkBg.withValues(alpha: 0.5)
+                  : AppTheme.lightBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: context.borderColor),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (sale.isReturn)
-                  Container(
-                    margin: const EdgeInsets.only(right: 6),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                    decoration: BoxDecoration(
-                        color: AppTheme.danger,
-                        borderRadius: BorderRadius.circular(4)),
-                    child: const Text('REFUND',
+                Row(
+                  children: [
+                    Text('ITEM',
                         style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white)),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: context.textMutedColor,
+                            letterSpacing: 0.5)),
+                    const Spacer(),
+                    SizedBox(
+                        width: 100,
+                        child: Text('QTY x PRICE',
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: context.textMutedColor,
+                                letterSpacing: 0.5),
+                            textAlign: TextAlign.end)),
+                    const SizedBox(width: 24),
+                    SizedBox(
+                        width: 90,
+                        child: Text('SUBTOTAL',
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: context.textMutedColor,
+                                letterSpacing: 0.5),
+                            textAlign: TextAlign.end)),
+                  ],
+                ),
+                const Divider(height: 16),
+                ...salesProvider.getSaleItems(sale).map((item) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(item.medicineName,
+                                style: const TextStyle(fontSize: 13)),
+                          ),
+                          SizedBox(
+                            width: 100,
+                            child: Text(
+                              '${item.qty} x ₹${item.unitPrice.toStringAsFixed(2)}',
+                              style: TextStyle(
+                                  fontSize: 12, color: context.textMutedColor),
+                              textAlign: TextAlign.end,
+                            ),
+                          ),
+                          const SizedBox(width: 24),
+                          SizedBox(
+                            width: 90,
+                            child: Text(
+                              '₹${item.lineTotal.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 13),
+                              textAlign: TextAlign.end,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )),
+                const Divider(height: 20),
+                if (sale.discount > 0)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text('Discount',
+                          style: TextStyle(
+                              fontSize: 12, color: context.textMutedColor)),
+                      const SizedBox(width: 32),
+                      SizedBox(
+                        width: 90,
+                        child: Text('-₹${sale.discount.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                                color: AppTheme.danger,
+                                fontWeight: FontWeight.w600),
+                            textAlign: TextAlign.end),
+                      ),
+                    ],
                   ),
-                Expanded(
-                  child: Text(
-                    sale.patientName.isEmpty ? 'Walk-in' : sale.patientName,
-                    style: const TextStyle(fontSize: 13),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                if (sale.discount > 0) const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text('Total',
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: context.textColor)),
+                    const SizedBox(width: 32),
+                    SizedBox(
+                      width: 90,
+                      child: Text('₹${sale.total.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: AppTheme.primary,
+                              fontSize: 16),
+                          textAlign: TextAlign.end),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _ActionButton(
+                      icon: Icons.print_rounded,
+                      label: 'Print Receipt',
+                      color: AppTheme.primary,
+                      onTap: () =>
+                          PrintingService.instance.printReceipt(context, sale),
+                    ),
+                    if (!sale.isReturn && canProcessReturns) ...[
+                      const SizedBox(width: 12),
+                      _ActionButton(
+                        icon: Icons.assignment_return_rounded,
+                        label: 'Process Return',
+                        color: AppTheme.warning,
+                        onTap: () => showDialog(
+                          context: context,
+                          builder: (_) => ReturnDialog(originalSale: sale),
+                        ),
+                      ),
+                    ],
+                    if (canVoidSales) ...[
+                      const SizedBox(width: 12),
+                      _ActionButton(
+                        icon: Icons.delete_forever_rounded,
+                        label: 'Void Sale',
+                        color: AppTheme.danger,
+                        onTap: () => _confirmDelete(context, inv),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
           ),
-          SizedBox(
-            width: 70,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: context.borderColor,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(sale.paymentMethod.toUpperCase(),
-                  style:
-                      TextStyle(fontSize: 10, color: context.textMutedColor)),
-            ),
-          ),
-          SizedBox(
-            width: 90,
-            child: Text('₹${sale.total.toStringAsFixed(2)}',
-                style: const TextStyle(
-                    fontWeight: FontWeight.w700, color: AppTheme.success)),
-          ),
-          SizedBox(
-            width: 90,
-            child: Text('${dt.day}/${dt.month}/${dt.year}',
-                style: TextStyle(fontSize: 11, color: context.textMutedColor)),
-          ),
         ],
       ),
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ...salesProvider.getSaleItems(sale).map((item) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Row(
-                      children: [
-                        Expanded(child: Text(item.medicineName)),
-                        Text(
-                            '${item.qty} × ₹${item.unitPrice.toStringAsFixed(2)}'),
-                        const SizedBox(width: 16),
-                        Text('₹${item.lineTotal.toStringAsFixed(2)}',
-                            style:
-                                const TextStyle(fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  )),
-              const Divider(),
-              if (sale.discount > 0)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text('Discount: -₹${sale.discount.toStringAsFixed(2)}',
-                        style: const TextStyle(color: AppTheme.danger)),
-                  ],
-                ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Text('Total: ₹${sale.total.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          color: AppTheme.primaryLight,
-                          fontSize: 16)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      PrintingService.instance.printReceipt(context, sale);
-                    },
-                    icon: const Icon(Icons.print,
-                        color: AppTheme.primaryLight, size: 18),
-                    label: const Text('Print Receipt',
-                        style: TextStyle(color: AppTheme.primaryLight)),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppTheme.primaryLight),
-                    ),
-                  ),
-                  if (!sale.isReturn && canProcessReturns) ...[
-                    const SizedBox(width: 16),
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (_) => ReturnDialog(originalSale: sale),
-                        );
-                      },
-                      icon: const Icon(Icons.assignment_return,
-                          color: AppTheme.danger, size: 18),
-                      label: const Text('Process Return',
-                          style: TextStyle(color: AppTheme.danger)),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: AppTheme.danger),
-                      ),
-                    ),
-                  ],
-                  if (canVoidSales) ...[
-                    const SizedBox(width: 16),
-                    OutlinedButton.icon(
-                      onPressed: () => _confirmDelete(context, inv),
-                      icon: const Icon(Icons.delete_forever,
-                          color: AppTheme.danger, size: 18),
-                      label: const Text('Void Sale',
-                          style: TextStyle(color: AppTheme.danger)),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: AppTheme.danger),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 
@@ -421,32 +736,60 @@ class _SaleRow extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title:
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppTheme.danger.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.warning_rounded,
+                  color: AppTheme.danger, size: 22),
+            ),
+            const SizedBox(width: 12),
             const Text('Void Sale', style: TextStyle(color: AppTheme.danger)),
+          ],
+        ),
         content: Text(
-            'Are you sure you want to permanently delete receipt ${sale.invoiceNo}?\n\nThis will precisely refund all inventory quantities and completely remove this record from the sales ledger.'),
+          'Are you sure you want to permanently delete receipt ${sale.invoiceNo}?\n\nThis will refund all inventory quantities and completely remove this record.',
+          style: const TextStyle(height: 1.5),
+        ),
         backgroundColor: context.surfaceColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child:
                 Text('Cancel', style: TextStyle(color: context.textMutedColor)),
           ),
-          ElevatedButton(
+          ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.danger,
-                foregroundColor: Colors.white),
+              backgroundColor: AppTheme.danger,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () {
               salesProvider.deleteSale(sale, inv);
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Sale ${sale.invoiceNo} voided successfully.'),
+                  content: Row(
+                    children: [
+                      const Icon(Icons.check_circle_rounded,
+                          color: Colors.white, size: 20),
+                      const SizedBox(width: 8),
+                      Text('Sale ${sale.invoiceNo} voided successfully.'),
+                    ],
+                  ),
                   backgroundColor: AppTheme.success,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 ),
               );
             },
-            child: const Text('Yes, Void Sale'),
+            icon: const Icon(Icons.delete_forever_rounded, size: 18),
+            label: const Text('Void Sale'),
           ),
         ],
       ),
@@ -454,25 +797,144 @@ class _SaleRow extends StatelessWidget {
   }
 }
 
-class _StatBadge extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
+// ── Payment Badge ───────────────────────────────────────────────────────────
 
-  const _StatBadge(
-      {required this.label, required this.value, required this.color});
+class _PaymentBadge extends StatelessWidget {
+  final String method;
+  const _PaymentBadge({required this.method});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(value,
+    final (Color color, IconData icon) = switch (method.toLowerCase()) {
+      'cash' => (AppTheme.success, Icons.payments_rounded),
+      'upi' => (AppTheme.primary, Icons.qr_code_2_rounded),
+      'card' => (AppTheme.accent, Icons.credit_card_rounded),
+      'mixed' => (const Color(0xFF7C3AED), Icons.account_balance_rounded),
+      _ => (context.textMutedColor, Icons.payments_outlined),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 5),
+          Text(
+            method.toUpperCase(),
             style: TextStyle(
-                fontSize: 20, fontWeight: FontWeight.w800, color: color)),
-        const SizedBox(height: 2),
-        Text(label,
-            style: TextStyle(fontSize: 11, color: context.textMutedColor)),
-      ],
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: color,
+                letterSpacing: 0.5),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Action Button ───────────────────────────────────────────────────────────
+
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: color.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withValues(alpha: 0.25)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 16),
+              const SizedBox(width: 6),
+              Text(label,
+                  style: TextStyle(
+                      color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Empty State ─────────────────────────────────────────────────────────────
+
+class _EmptyState extends StatelessWidget {
+  final bool hasQuery;
+  const _EmptyState({required this.hasQuery});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(60),
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(color: context.borderColor),
+          right: BorderSide(color: context.borderColor),
+          bottom: BorderSide(color: context.borderColor),
+        ),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              hasQuery ? Icons.search_off_rounded : Icons.receipt_long_rounded,
+              size: 40,
+              color: AppTheme.primary.withValues(alpha: 0.5),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            hasQuery ? 'No matching sales found' : 'No sales recorded yet',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: context.textColor,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            hasQuery
+                ? 'Try adjusting your search query'
+                : 'Sales will appear here once transactions are made',
+            style: TextStyle(fontSize: 13, color: context.textMutedColor),
+          ),
+        ],
+      ),
     );
   }
 }

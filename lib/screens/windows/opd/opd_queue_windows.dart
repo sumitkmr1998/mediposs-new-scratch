@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/models/appointment.dart';
@@ -31,91 +32,216 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
     final opd = context.watch<OpdProvider>();
     final queue = opd.todayQueue;
 
+    final waiting = queue.where((a) => a.status == kStatusWaiting).toList();
+    final withDoctor =
+        queue.where((a) => a.status == kStatusWithDoctor).toList();
+    final pharmacy = queue.where((a) => a.status == kStatusPharmacy).toList();
+    final done = queue.where((a) => a.status == kStatusDone).toList();
+
+    // Sequential order: 1, 2, 3... by token number
+    final sortedQueue = List<Appointment>.from(queue)
+      ..sort((a, b) => a.tokenNumber.compareTo(b.tokenNumber));
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('OPD Queue — Today'),
-      ),
-      body: Column(
-        children: [
-          // Mobile-friendly stats bar
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.people_alt_rounded,
+                  color: AppTheme.primary, size: 22),
+            ),
+            const SizedBox(width: 12),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _StatBadge(
-                  label: '${opd.filteredPatientCount} Patients',
-                  color: AppTheme.primary,
-                ),
-                const SizedBox(width: 8),
-                _StatBadge(
-                  label: '${opd.filteredDoneCount} Done',
-                  color: AppTheme.success,
-                ),
-                const SizedBox(width: 8),
-                _StatBadge(
-                  label:
-                      '₹${opd.filteredConsultationRevenue.toStringAsFixed(0)} Fees',
-                  color: AppTheme.accent,
-                ),
+                Text('OPD Queue',
+                    style:
+                        TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                Text('Today\'s live queue',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF6B7B8D))),
               ],
             ),
-          ),
-          Expanded(
-            child: queue.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+          ],
+        ),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Stats Row
+            LayoutBuilder(builder: (ctx, constraints) {
+              final cols = constraints.maxWidth > 800
+                  ? 4
+                  : (constraints.maxWidth > 500 ? 2 : 1);
+              const spacing = 12.0;
+              final cardWidth =
+                  (constraints.maxWidth - (cols - 1) * spacing) / cols;
+
+              return Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: [
+                  _StatCard(
+                    label: 'OPD Today',
+                    value: '${queue.length}',
+                    icon: Icons.groups_rounded,
+                    color: AppTheme.primary,
+                    width: cardWidth,
+                  ),
+                  _StatCard(
+                    label: 'Tokens Left',
+                    value:
+                        '${waiting.length + withDoctor.length + pharmacy.length}',
+                    icon: Icons.hourglass_top_rounded,
+                    color: AppTheme.warning,
+                    width: cardWidth,
+                  ),
+                  _StatCard(
+                    label: 'With Doctor',
+                    value: '${withDoctor.length}',
+                    icon: Icons.healing_rounded,
+                    color: AppTheme.primaryLight,
+                    width: cardWidth,
+                  ),
+                  _StatCard(
+                    label: 'Completed',
+                    value: '${done.length}',
+                    icon: Icons.check_circle_rounded,
+                    color: AppTheme.success,
+                    width: cardWidth,
+                  ),
+                ],
+              );
+            }),
+
+            const SizedBox(height: 24),
+
+            // Bento Queue Table
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                    color: AppTheme.lightBorder.withValues(alpha: 0.5)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 24,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  // Table Header
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 14),
+                    child: Row(
                       children: [
-                        Icon(Icons.queue,
-                            size: 72, color: context.textMutedColor),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No patients in queue today',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(color: context.textMutedColor),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Add a patient using the + button below',
-                          style: TextStyle(color: context.textMutedColor),
-                        ),
+                        SizedBox(
+                            width: 60,
+                            child: Text('TOKEN', style: _headerStyle(context))),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                            flex: 2,
+                            child: Text('PATIENT DETAILS',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 1.5,
+                                    color: Color(0xFF6B7B8D)))),
+                        const Expanded(
+                            flex: 2,
+                            child: Text('ASSIGNED CONSULTANT',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 1.5,
+                                    color: Color(0xFF6B7B8D)))),
+                        const SizedBox(
+                            width: 180,
+                            child: Center(
+                                child: Text('WAIT DURATION',
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 1.5,
+                                        color: Color(0xFF6B7B8D))))),
+                        const SizedBox(
+                            width: 180,
+                            child: Center(
+                                child: Text('CURRENT STATUS',
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 1.5,
+                                        color: Color(0xFF6B7B8D))))),
+                        const SizedBox(
+                            width: 180,
+                            child: Align(
+                                alignment: Alignment.centerRight,
+                                child: Text('ACTIONS',
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 1.5,
+                                        color: Color(0xFF6B7B8D))))),
                       ],
                     ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: queue.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (ctx, i) => _QueueCard(
-                      appointment: queue[i],
-                      onStatusChange: (newStatus) => context
-                          .read<OpdProvider>()
-                          .updateStatus(queue[i].id, newStatus,
-                              context.read<SyncService>()),
-                      onConsult: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              PrescriptionScreen(appointment: queue[i]),
-                        ),
-                      ),
-                    ),
                   ),
-          ),
-        ],
+
+                  Divider(height: 1, color: context.borderColor),
+
+                  const SizedBox(height: 4),
+
+                  // Queue Rows (sequential 1, 2, 3...)
+                  if (sortedQueue.isEmpty)
+                    const _EmptyQueue()
+                  else
+                    ...sortedQueue.map((appt) => _QueueRow(
+                          appointment: appt,
+                          onStatusChange: (newStatus) => context
+                              .read<OpdProvider>()
+                              .updateStatus(appt.id, newStatus,
+                                  context.read<SyncService>()),
+                          onConsult: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  PrescriptionScreen(appointment: appt),
+                            ),
+                          ),
+                        )),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddPatientOptions(context),
-        icon: const Icon(Icons.person_add),
+        icon: const Icon(Icons.person_add_rounded),
         label: const Text('Add Patient'),
         backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
       ),
     );
   }
+
+  TextStyle _headerStyle(BuildContext context) => TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.5,
+        color: context.textMutedColor,
+      );
 
   void _showAddPatientOptions(BuildContext context) {
     showModalBottomSheet(
@@ -131,7 +257,7 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.grey.withOpacity(0.3),
+              color: Colors.grey.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -181,203 +307,642 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
   }
 }
 
-// ─── Queue Card ───────────────────────────────────────────────────────────────
-class _QueueCard extends StatelessWidget {
+// ── Stat Card ───────────────────────────────────────────────────────────────
+
+class _StatCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final double width;
+
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    required this.width,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(value,
+                      style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: color)),
+                  Text(label,
+                      style: TextStyle(
+                          fontSize: 12, color: context.textMutedColor)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Queue Row ───────────────────────────────────────────────────────────────
+
+class _QueueRow extends StatefulWidget {
   final Appointment appointment;
   final ValueChanged<String> onStatusChange;
   final VoidCallback onConsult;
 
-  const _QueueCard({
+  const _QueueRow({
     required this.appointment,
     required this.onStatusChange,
     required this.onConsult,
   });
 
-  Color _statusColor(String status) {
-    switch (status) {
-      case kStatusWaiting:
-        return AppTheme.warning;
-      case kStatusWithDoctor:
-        return AppTheme.primary;
-      case kStatusPharmacy:
-        return const Color(0xFF7C3AED);
-      case kStatusDone:
-        return AppTheme.success;
-      default:
-        return Colors.grey;
-    }
-  }
+  @override
+  State<_QueueRow> createState() => _QueueRowState();
+}
 
-  String _statusLabel(String status) {
-    switch (status) {
-      case kStatusWaiting:
-        return 'Waiting';
-      case kStatusWithDoctor:
-        return 'With Doctor';
-      case kStatusPharmacy:
-        return 'At Pharmacy';
-      case kStatusDone:
-        return 'Done';
-      default:
-        return status;
+class _QueueRowState extends State<_QueueRow> {
+  Timer? _timer;
+  Duration _elapsed = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.appointment.status == kStatusWithDoctor) {
+      _elapsed = DateTime.now().difference(widget.appointment.scheduledAt);
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) {
+          setState(() {
+            _elapsed =
+                DateTime.now().difference(widget.appointment.scheduledAt);
+          });
+        }
+      });
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    final color = _statusColor(appointment.status);
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
 
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: color.withValues(alpha: 0.4), width: 1.5),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            // Token number
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
+  String _formatDuration(Duration d) {
+    final mins = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final secs = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$mins:$secs';
+  }
+
+  String _waitTime() {
+    final diff = DateTime.now().difference(widget.appointment.scheduledAt);
+    if (diff.inMinutes < 1) return '< 1 min';
+    return '${diff.inMinutes} mins';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final a = widget.appointment;
+    final isWithDoctor = a.status == kStatusWithDoctor;
+    final isDone = a.status == kStatusDone;
+    final isPharmacy = a.status == kStatusPharmacy;
+
+    // ── DONE: Faded ──
+    if (isDone) {
+      return Opacity(
+        opacity: 0.4,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          decoration: BoxDecoration(
+            color: context.bgColor.withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 60,
+                child: Text('#${a.tokenNumber.toString().padLeft(2, '0')}',
+                    style: const TextStyle(
+                        fontFamily: 'Manrope',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF94A3B8))),
               ),
-              child: Center(
-                child: Text(
-                  '${appointment.tokenNumber}',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    color: color,
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(a.patientName,
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF64748B))),
+                    Text('ID: P-${a.patientId}',
+                        style: const TextStyle(
+                            fontSize: 10, color: Color(0xFF94A3B8))),
+                  ],
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text('Dr. ${a.doctorName}',
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF94A3B8))),
+              ),
+              const SizedBox(
+                width: 180,
+                child: Center(
+                  child: Text('-- : --',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontFamily: 'monospace',
+                          color: Color(0xFF94A3B8))),
+                ),
+              ),
+              SizedBox(
+                width: 180,
+                child: Center(
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE2E8F0),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text('DONE',
+                        style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1,
+                            color: Color(0xFF94A3B8))),
                   ),
                 ),
               ),
+              const SizedBox(
+                width: 180,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Icon(Icons.more_vert_rounded,
+                      color: Color(0xFFCBD5E1), size: 20),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ── WITH DOCTOR: Strong highlight ──
+    if (isWithDoctor) {
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        decoration: BoxDecoration(
+          color: AppTheme.primary.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(14),
+          border: const Border(
+            left: BorderSide(color: AppTheme.primary, width: 6),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.primary.withValues(alpha: 0.12),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
             ),
-            const SizedBox(width: 16),
-            // Patient + doctor info
+          ],
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 60,
+              child: Text('#${a.tokenNumber.toString().padLeft(2, '0')}',
+                  style: const TextStyle(
+                      fontFamily: 'Manrope',
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.primary)),
+            ),
+            const SizedBox(width: 12),
             Expanded(
+              flex: 2,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(appointment.patientName,
+                  Text(a.patientName,
                       style: const TextStyle(
-                          fontWeight: FontWeight.w700, fontSize: 15)),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.primary)),
                   const SizedBox(height: 2),
-                  Text(
-                    'Dr. ${appointment.doctorName}  •  ₹${appointment.consultationFee.toStringAsFixed(0)}',
-                    style:
-                        TextStyle(color: context.textMutedColor, fontSize: 12),
-                  ),
-                  const SizedBox(height: 6),
+                  Text('ID: P-${a.patientId}',
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.primary.withValues(alpha: 0.7))),
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Row(
+                children: [
+                  const Icon(Icons.medical_services_rounded,
+                      size: 18, color: AppTheme.primary),
+                  const SizedBox(width: 8),
+                  Text('Dr. ${a.doctorName}',
+                      style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.primary)),
+                ],
+              ),
+            ),
+            SizedBox(
+              width: 180,
+              child: Column(
+                children: [
+                  Text('ELAPSED',
+                      style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.5,
+                          color: AppTheme.primary.withValues(alpha: 0.6))),
+                  const SizedBox(height: 4),
+                  Text(_formatDuration(_elapsed),
+                      style: const TextStyle(
+                          fontSize: 20,
+                          fontFamily: 'monospace',
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.primary)),
+                ],
+              ),
+            ),
+            SizedBox(
+              width: 180,
+              child: Column(
+                children: [
                   Container(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
                     decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.1),
+                      color: AppTheme.primary,
                       borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.primary.withValues(alpha: 0.3),
+                          blurRadius: 8,
+                        ),
+                      ],
                     ),
-                    child: Text(
-                      _statusLabel(appointment.status),
+                    child: const Text('WITH DOCTOR',
+                        style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1,
+                            color: Colors.white)),
+                  ),
+                  const SizedBox(height: 4),
+                  Text('Active',
                       style: TextStyle(
-                          color: color,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600),
-                    ),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.primary.withValues(alpha: 0.5))),
+                ],
+              ),
+            ),
+            SizedBox(
+              width: 180,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  _ActionBtn(
+                    label: 'Prescribe',
+                    icon: Icons.edit_note_rounded,
+                    color: AppTheme.primary,
+                    onTap: widget.onConsult,
+                    filled: true,
                   ),
                 ],
               ),
             ),
-            // Action buttons
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (appointment.status == kStatusWaiting)
-                  _ActionBtn(
-                    label: '▶ Call In',
-                    color: AppTheme.primary,
-                    onTap: () => onStatusChange(kStatusWithDoctor),
+          ],
+        ),
+      );
+    }
+
+    // ── AT PHARMACY: Light highlight ──
+    if (isPharmacy) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppTheme.success.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(14),
+          border: const Border(
+            left: BorderSide(color: AppTheme.success, width: 3),
+          ),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 60,
+              child: Text('#${a.tokenNumber.toString().padLeft(2, '0')}',
+                  style: const TextStyle(
+                      fontFamily: 'Manrope',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.primary)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(a.patientName,
+                      style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.primary)),
+                  Text('ID: P-${a.patientId}',
+                      style: TextStyle(
+                          fontSize: 10, color: context.textMutedColor)),
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text('Pharmacy Unit',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: context.textMutedColor)),
+            ),
+            SizedBox(
+              width: 180,
+              child: Center(
+                child: Text(_waitTime(),
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.success)),
+              ),
+            ),
+            SizedBox(
+              width: 180,
+              child: Center(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppTheme.success.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                if (appointment.status == kStatusWithDoctor) ...[
+                  child: const Text('AT PHARMACY',
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1,
+                          color: AppTheme.success)),
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 180,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
                   _ActionBtn(
-                    label: '📋 Prescribe',
-                    color: AppTheme.primary,
-                    onTap: onConsult,
-                  ),
-                  const SizedBox(height: 6),
-                  _ActionBtn(
-                    label: '→ Pharmacy',
-                    color: const Color(0xFF7C3AED),
-                    onTap: () => onStatusChange(kStatusPharmacy),
+                    label: 'Complete',
+                    icon: Icons.check_circle_rounded,
+                    color: AppTheme.success,
+                    onTap: () => widget.onStatusChange(kStatusDone),
+                    filled: true,
                   ),
                 ],
-                if (appointment.status == kStatusPharmacy)
-                  _ActionBtn(
-                    label: '✓ Done',
-                    color: AppTheme.success,
-                    onTap: () => onStatusChange(kStatusDone),
-                  ),
-              ],
+              ),
             ),
           ],
         ),
+      );
+    }
+
+    // ── WAITING: Normal ──
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 60,
+            child: Text('#${a.tokenNumber.toString().padLeft(2, '0')}',
+                style: const TextStyle(
+                    fontFamily: 'Manrope',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.primary)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(a.patientName,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.primary)),
+                Text('ID: P-${a.patientId}',
+                    style:
+                        TextStyle(fontSize: 10, color: context.textMutedColor)),
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text('Dr. ${a.doctorName}',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: context.textMutedColor)),
+          ),
+          SizedBox(
+            width: 180,
+            child: Center(
+              child: Text(_waitTime(),
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontFamily: 'monospace',
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.warning)),
+            ),
+          ),
+          SizedBox(
+            width: 180,
+            child: Center(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppTheme.warning.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text('WAITING',
+                    style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1,
+                        color: AppTheme.warningDark)),
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 180,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _ActionBtn(
+                  label: 'Call In',
+                  icon: Icons.play_arrow_rounded,
+                  color: AppTheme.primary,
+                  onTap: () => widget.onStatusChange(kStatusWithDoctor),
+                  filled: true,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
+// ── Action Button ───────────────────────────────────────────────────────────
+
 class _ActionBtn extends StatelessWidget {
   final String label;
+  final IconData icon;
   final Color color;
   final VoidCallback onTap;
+  final bool filled;
 
   const _ActionBtn({
     required this.label,
+    required this.icon,
     required this.color,
     required this.onTap,
+    this.filled = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
+    if (filled) {
+      return Material(
+        color: color,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 16, color: Colors.white),
+                const SizedBox(width: 5),
+                Text(label,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
         ),
-        child: Text(label,
-            style: TextStyle(
-                color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+      );
+    }
+
+    return Material(
+      color: color.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 5),
+              Text(label,
+                  style: TextStyle(
+                      color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
-class _StatBadge extends StatelessWidget {
-  final String label;
-  final Color color;
+// ── Empty Queue ─────────────────────────────────────────────────────────────
 
-  const _StatBadge({required this.label, required this.color});
+class _EmptyQueue extends StatelessWidget {
+  const _EmptyQueue();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+    return Padding(
+      padding: const EdgeInsets.all(60),
+      child: Column(
+        children: [
+          Icon(Icons.people_outline_rounded,
+              size: 48, color: context.textMutedColor),
+          const SizedBox(height: 16),
+          Text('No patients in queue today',
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: context.textMutedColor)),
+          const SizedBox(height: 4),
+          Text('Add a patient using the button below',
+              style: TextStyle(fontSize: 13, color: context.textMutedColor)),
+        ],
       ),
-      child: Text(label,
-          style: TextStyle(
-              color: color, fontSize: 11, fontWeight: FontWeight.w600)),
     );
   }
 }

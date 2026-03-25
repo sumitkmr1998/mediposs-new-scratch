@@ -1,4 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/models/appointment.dart';
 import '../../../shared/models/prescription.dart';
@@ -39,12 +42,14 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
   List<String> _labTests = [];
   final _labTestCtrl = TextEditingController();
 
+  // Attached images
+  final List<String> _imagePaths = [];
+
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    // Load existing prescription if it exists
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final pProvider = context.read<PrescriptionProvider>();
       final existing =
@@ -87,6 +92,8 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -100,175 +107,402 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
           ],
         ),
         actions: [
-          // Load Template button
-          OutlinedButton.icon(
+          IconButton(
             onPressed: () => _loadTemplateDialog(context),
-            icon: const Icon(Icons.library_books_outlined, size: 18),
-            label: const Text('Templates'),
+            icon: const Icon(Icons.auto_stories_outlined, size: 20),
+            tooltip: 'Templates',
           ),
-          const SizedBox(width: 8),
-          // Save as Template button
-          OutlinedButton.icon(
+          IconButton(
             onPressed: () => _saveAsTemplateDialog(context),
-            icon: const Icon(Icons.bookmark_add_outlined, size: 18),
-            label: const Text('Save Template'),
+            icon: const Icon(Icons.bookmark_add_outlined, size: 20),
+            tooltip: 'Save Template',
           ),
-          const SizedBox(width: 8),
-          ElevatedButton.icon(
-            onPressed: _saving ? null : _save,
-            icon: const Icon(Icons.save_outlined),
-            label: const Text('Save & Send'),
-          ),
-          const SizedBox(width: 12),
         ],
       ),
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [AppTheme.primary, AppTheme.primaryLight],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.primary.withValues(alpha: 0.35),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: FloatingActionButton.extended(
+          onPressed: _saving ? null : _save,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          icon: _saving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
+                )
+              : const Icon(Icons.save_outlined, color: Colors.white),
+          label: Text(
+            _saving ? 'Saving...' : 'Save & Send',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Vitals Section ──────────────────────────
-            _SectionHeader(
-                title: '🩺 Vitals', icon: Icons.monitor_heart_outlined),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _VitalField(
-                    ctrl: _bpCtrl, label: 'Blood Pressure', hint: '120/80'),
-                _VitalField(ctrl: _pulseCtrl, label: 'Pulse', hint: '72 bpm'),
-                _VitalField(
-                    ctrl: _tempCtrl, label: 'Temperature', hint: '98.6°F'),
-                _VitalField(ctrl: _weightCtrl, label: 'Weight', hint: '65 kg'),
-                _VitalField(ctrl: _spo2Ctrl, label: 'SpO2', hint: '98%'),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // ── Complaints & Diagnosis ──────────────────
-            _SectionHeader(
-                title: '📋 Consultation', icon: Icons.chat_bubble_outline),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _complaintsCtrl,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Chief Complaints',
-                hintText: 'e.g. Fever since 2 days, headache...',
-                prefixIcon: Icon(Icons.sick_outlined),
-                isDense: true,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _diagnosisCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Diagnosis / Impression',
-                hintText: 'e.g. Viral fever, URTI',
-                prefixIcon: Icon(Icons.biotech_outlined),
-                isDense: true,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _notesCtrl,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: "Doctor's Notes",
-                hintText: 'Additional clinical observations...',
-                prefixIcon: Icon(Icons.notes),
-                isDense: true,
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // ── Medicines ──────────────────────────────
-            _SectionHeader(
-                title: '💊 Medicines', icon: Icons.medication_outlined),
-            const SizedBox(height: 12),
-            _MedicineAdder(
-              searchCtrl: _medSearchCtrl,
-              dosageCtrl: _dosageCtrl,
-              daysCtrl: _daysCtrl,
-              qtyCtrl: _qtyCtrl,
-              onAdd: (item) => setState(() => _items.add(item)),
-            ),
-            const SizedBox(height: 8),
-            ..._items.asMap().entries.map((entry) {
-              final i = entry.key;
-              final item = entry.value;
-              return Card(
-                margin: const EdgeInsets.only(bottom: 6),
-                child: ListTile(
-                  dense: true,
-                  leading: CircleAvatar(
-                    radius: 16,
-                    backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-                    child: Text('${i + 1}',
-                        style: const TextStyle(
-                            color: AppTheme.primary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold)),
+            _buildCard(
+              isDark: isDark,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SectionBadge(
+                    icon: Icons.monitor_heart_outlined,
+                    label: 'Vitals Monitor',
                   ),
-                  title: Text(item.medicineName,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 13)),
-                  subtitle: Text(
-                      'Qty: ${item.qty}  •  ${item.dosage.isNotEmpty ? item.dosage : "No dosage"}  •  ${item.days} days',
-                      style: TextStyle(
-                          color: context.textMutedColor, fontSize: 11)),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.close,
-                        size: 16, color: AppTheme.danger),
-                    onPressed: () => setState(() => _items.removeAt(i)),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _VitalField(
+                            ctrl: _bpCtrl,
+                            label: 'Blood Pressure',
+                            unit: 'mmHg'),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _VitalField(
+                            ctrl: _pulseCtrl, label: 'Pulse', unit: 'BPM'),
+                      ),
+                    ],
                   ),
-                ),
-              );
-            }),
-            const SizedBox(height: 24),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _VitalField(
+                            ctrl: _tempCtrl, label: 'Temperature', unit: '°F'),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _VitalField(
+                            ctrl: _weightCtrl, label: 'Weight', unit: 'kg'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _VitalField(
+                            ctrl: _spo2Ctrl, label: 'SpO2', unit: '%'),
+                      ),
+                      const Expanded(child: SizedBox()),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Consultation Notes ──────────────────────
+            _buildCard(
+              isDark: isDark,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SectionBadge(
+                    icon: Icons.edit_note,
+                    label: 'Consultation Notes',
+                  ),
+                  const SizedBox(height: 20),
+                  _FormLabel('Chief Complaints'),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _complaintsCtrl,
+                    maxLines: 3,
+                    style: const TextStyle(fontSize: 13, height: 1.5),
+                    decoration: InputDecoration(
+                      hintText: 'e.g. Severe headache for 2 days...',
+                      filled: true,
+                      fillColor:
+                          isDark ? AppTheme.darkBg : const Color(0xFFF7F9FB),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: AppTheme.primary.withValues(alpha: 0.2),
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.all(16),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _FormLabel('Diagnosis / Impression'),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _diagnosisCtrl,
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600),
+                    decoration: InputDecoration(
+                      hintText: 'e.g. Viral Syndrome',
+                      filled: true,
+                      fillColor:
+                          isDark ? AppTheme.darkBg : const Color(0xFFF7F9FB),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: AppTheme.primary.withValues(alpha: 0.2),
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.all(16),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _FormLabel("Doctor's Clinical Notes"),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _notesCtrl,
+                    maxLines: 4,
+                    style: const TextStyle(fontSize: 13, height: 1.5),
+                    decoration: InputDecoration(
+                      hintText: 'Additional observations...',
+                      filled: true,
+                      fillColor:
+                          isDark ? AppTheme.darkBg : const Color(0xFFF7F9FB),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: AppTheme.primary.withValues(alpha: 0.2),
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.all(16),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Prescribed Medications ──────────────────
+            _buildCard(
+              isDark: isDark,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SectionBadge(
+                    icon: Icons.medication_outlined,
+                    label: 'Prescribed Medications',
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: _MedicineAdder(
+                      searchCtrl: _medSearchCtrl,
+                      dosageCtrl: _dosageCtrl,
+                      daysCtrl: _daysCtrl,
+                      qtyCtrl: _qtyCtrl,
+                      onAdd: (item) => setState(() => _items.add(item)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._items.asMap().entries.map((entry) {
+                    final i = entry.key;
+                    final item = entry.value;
+                    return _MedicineListItem(
+                      index: i + 1,
+                      name: item.medicineName,
+                      details:
+                          'Qty: ${item.qty}  •  ${item.dosage.isNotEmpty ? item.dosage : "No dosage"}  •  ${item.days} days',
+                      onDelete: () => setState(() => _items.removeAt(i)),
+                      isDark: isDark,
+                    );
+                  }),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
 
             // ── Lab Tests ──────────────────────────────
-            _SectionHeader(title: '🧪 Lab Tests', icon: Icons.science_outlined),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
+            _buildCard(
+              isDark: isDark,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SectionBadge(
+                    icon: Icons.science_outlined,
+                    label: 'Diagnostic Lab Orders',
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
                     controller: _labTestCtrl,
-                    decoration: const InputDecoration(
-                      hintText: 'e.g. CBC, Blood Sugar, Urine',
-                      prefixIcon: Icon(Icons.add_circle_outline),
-                      isDense: true,
+                    style: const TextStyle(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Search and add lab tests...',
+                      hintStyle: TextStyle(
+                          color: context.textMutedColor, fontSize: 13),
+                      prefixIcon: Icon(Icons.search,
+                          color: context.textMutedColor, size: 20),
+                      filled: true,
+                      fillColor:
+                          isDark ? AppTheme.darkBg : const Color(0xFFF7F9FB),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide(
+                          color: AppTheme.primary.withValues(alpha: 0.2),
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 14),
                     ),
                     onSubmitted: (_) => _addLabTest(),
                   ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                    onPressed: _addLabTest, child: const Text('Add')),
-              ],
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      ..._labTests.asMap().entries.map((entry) {
+                        return _LabTestChip(
+                          label: entry.value,
+                          onDelete: () =>
+                              setState(() => _labTests.removeAt(entry.key)),
+                        );
+                      }),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(24),
+                        onTap: () => _addLabTest(),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 9),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: context.borderColor,
+                              width: 1.5,
+                            ),
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.add,
+                                  size: 16, color: context.textMutedColor),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Custom Test',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: context.textMutedColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: _labTests.asMap().entries.map((entry) {
-                return Chip(
-                  label: Text(entry.value),
-                  deleteIcon: const Icon(Icons.close, size: 14),
-                  onDeleted: () =>
-                      setState(() => _labTests.removeAt(entry.key)),
-                  backgroundColor: Color(0xFF7C3AED).withValues(alpha: 0.1),
-                  side: const BorderSide(color: Color(0xFF7C3AED), width: 0.5),
-                  labelStyle:
-                      const TextStyle(color: Color(0xFF7C3AED), fontSize: 12),
-                );
-              }).toList(),
+            const SizedBox(height: 16),
+
+            // ── Attach Images ──────────────────────────
+            _buildCard(
+              isDark: isDark,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SectionBadge(
+                    icon: Icons.attach_file_outlined,
+                    label: 'Attach Prescription Images',
+                  ),
+                  const SizedBox(height: 20),
+                  if (_imagePaths.isNotEmpty) ...[
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: _imagePaths.asMap().entries.map((entry) {
+                        return _ImageThumbnail(
+                          path: entry.value,
+                          onDelete: () =>
+                              setState(() => _imagePaths.removeAt(entry.key)),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+                  Row(
+                    children: [
+                      _UploadButton(
+                        icon: Icons.photo_library_outlined,
+                        label: 'Gallery',
+                        onTap: () => _pickImage(ImageSource.gallery),
+                      ),
+                      const SizedBox(width: 12),
+                      _UploadButton(
+                        icon: Icons.camera_alt_outlined,
+                        label: 'Camera',
+                        onTap: () => _pickImage(ImageSource.camera),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildCard({required bool isDark, required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.darkCard : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? AppTheme.darkBorder.withValues(alpha: 0.5)
+              : const Color(0xFFE8ECF0),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 
@@ -279,6 +513,14 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
         _labTests.add(test);
         _labTestCtrl.clear();
       });
+    }
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: source, imageQuality: 80);
+    if (picked != null) {
+      setState(() => _imagePaths.add(picked.path));
     }
   }
 
@@ -320,7 +562,6 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
     }
   }
 
-  /// Shows a bottom sheet with saved templates to apply
   void _loadTemplateDialog(BuildContext context) {
     final tProvider = context.read<TemplateProvider>();
     tProvider.load();
@@ -422,7 +663,6 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
     );
   }
 
-  /// Applies a template's content to the current form
   void _applyTemplate(dynamic t, TemplateProvider tProvider) {
     setState(() {
       if (t.diagnosis.isNotEmpty) _diagnosisCtrl.text = t.diagnosis;
@@ -434,12 +674,11 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
       if (templateTests.isNotEmpty) _labTests = List.from(templateTests);
     });
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('Template "${t.name}" applied ✓'),
+      content: Text('Template "${t.name}" applied'),
       backgroundColor: AppTheme.success,
     ));
   }
 
-  /// Dialog to name and save the current form content as a template
   void _saveAsTemplateDialog(BuildContext context) {
     final nameCtrl = TextEditingController();
     showDialog(
@@ -506,6 +745,117 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
   }
 }
 
+// ─── Section Badge ─────────────────────────────────────────────────────────
+class _SectionBadge extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _SectionBadge({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: AppTheme.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 20, color: AppTheme.primary),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+              ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Form Label ────────────────────────────────────────────────────────────
+class _FormLabel extends StatelessWidget {
+  final String text;
+  const _FormLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text.toUpperCase(),
+      style: TextStyle(
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.2,
+        color: context.textMutedColor,
+      ),
+    );
+  }
+}
+
+// ─── Vital Field ───────────────────────────────────────────────────────────
+class _VitalField extends StatelessWidget {
+  final TextEditingController ctrl;
+  final String label;
+  final String unit;
+
+  const _VitalField({
+    required this.ctrl,
+    required this.label,
+    required this.unit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FormLabel(label),
+        const SizedBox(height: 6),
+        TextField(
+          controller: ctrl,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: isDark ? AppTheme.darkBg : const Color(0xFFF7F9FB),
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: AppTheme.primary.withValues(alpha: 0.2),
+                width: 2,
+              ),
+            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            suffixIcon: Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: Text(
+                unit,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: context.textMutedColor.withValues(alpha: 0.5),
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+            suffixIconConstraints:
+                const BoxConstraints(minWidth: 0, minHeight: 0),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Medicine Adder (Keyboard-driven workflow) ─────────────────────────────
 class _MedicineAdder extends StatefulWidget {
   final TextEditingController searchCtrl;
   final TextEditingController dosageCtrl;
@@ -529,94 +879,55 @@ class _MedicineAdderState extends State<_MedicineAdder> {
   String? _selectedId;
   String? _selectedName;
 
-  @override
-  Widget build(BuildContext context) {
-    final inv = context.watch<InventoryProvider>();
+  final _qtyFocus = FocusNode();
+  final _daysFocus = FocusNode();
+  final _dosageFocus = FocusNode();
+  final _addBtnFocus = FocusNode();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              flex: 3,
-              child: Autocomplete<String>(
-                optionsBuilder: (textEditingValue) {
-                  if (textEditingValue.text.isEmpty) return const [];
-                  final q = textEditingValue.text.toLowerCase();
-                  return inv.medicines
-                      .where((m) => m.name.toLowerCase().contains(q))
-                      .map((m) => '${m.id}||${m.name}')
-                      .take(8);
-                },
-                displayStringForOption: (opt) => opt.split('||').last,
-                onSelected: (option) {
-                  final parts = option.split('||');
-                  setState(() {
-                    _selectedId = parts[0];
-                    _selectedName = parts[1];
-                  });
-                  widget.searchCtrl.text = parts[1];
-                },
-                fieldViewBuilder: (ctx, ctrl, focus, onSubmit) => TextField(
-                  controller: ctrl,
-                  focusNode: focus,
-                  decoration: const InputDecoration(
-                    hintText: 'Search medicine...',
-                    prefixIcon: Icon(Icons.medication_outlined),
-                    isDense: true,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              width: 70,
-              child: TextField(
-                controller: widget.qtyCtrl,
-                keyboardType: TextInputType.number,
-                decoration:
-                    const InputDecoration(labelText: 'Qty', isDense: true),
-              ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              width: 70,
-              child: TextField(
-                controller: widget.daysCtrl,
-                keyboardType: TextInputType.number,
-                decoration:
-                    const InputDecoration(labelText: 'Days', isDense: true),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: widget.dosageCtrl,
-                decoration: const InputDecoration(
-                  hintText: 'Dosage e.g. 1-0-1 after meals',
-                  isDense: true,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Add'),
-              onPressed: _selectedName != null ? _addItem : null,
-            ),
-          ],
-        ),
-      ],
-    );
+  @override
+  void dispose() {
+    _qtyFocus.dispose();
+    _daysFocus.dispose();
+    _dosageFocus.dispose();
+    _addBtnFocus.dispose();
+    super.dispose();
+  }
+
+  /// Format dosage: "101" → "1-0-1", "211" → "2-1-1"
+  String _formatDosage(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.contains('-')) return trimmed;
+    final digits = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.length >= 2 && digits.length <= 3) {
+      return digits.split('').join('-');
+    }
+    return trimmed;
+  }
+
+  void _onMedicineSelected(String option) {
+    final parts = option.split('||');
+    setState(() {
+      _selectedId = parts[0];
+      _selectedName = parts[1];
+    });
+    widget.searchCtrl.text = parts[1];
+    _qtyFocus.requestFocus();
+  }
+
+  void _onQtyEditingComplete() => _daysFocus.requestFocus();
+
+  void _onDaysEditingComplete() => _dosageFocus.requestFocus();
+
+  void _onDosageEditingComplete() {
+    widget.dosageCtrl.text = _formatDosage(widget.dosageCtrl.text);
+    _addBtnFocus.requestFocus();
   }
 
   void _addItem() {
     if (_selectedName == null) return;
+    final formattedDosage = _formatDosage(widget.dosageCtrl.text.trim());
+    widget.dosageCtrl.text = formattedDosage;
+
     final qty = int.tryParse(widget.qtyCtrl.text) ?? 1;
     final days = int.tryParse(widget.daysCtrl.text) ?? 3;
     final inv = context.read<InventoryProvider>();
@@ -628,7 +939,7 @@ class _MedicineAdderState extends State<_MedicineAdder> {
       medicineId: int.tryParse(_selectedId ?? '0') ?? 0,
       medicineName: _selectedName!,
       qty: qty,
-      dosage: widget.dosageCtrl.text.trim(),
+      dosage: formattedDosage,
       days: days,
       isAvailable: isAvailable,
     ));
@@ -636,58 +947,410 @@ class _MedicineAdderState extends State<_MedicineAdder> {
     setState(() {
       _selectedId = null;
       _selectedName = null;
-      widget.searchCtrl.clear();
-      widget.dosageCtrl.clear();
-      widget.qtyCtrl.text = '1';
-      widget.daysCtrl.text = '3';
     });
+    widget.searchCtrl.clear();
+    widget.dosageCtrl.clear();
+    widget.qtyCtrl.text = '1';
+    widget.daysCtrl.text = '3';
+    FocusScope.of(context).unfocus();
   }
-}
-
-// ─── Section Header ────────────────────────────────────────────────────────────
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final IconData icon;
-
-  const _SectionHeader({required this.title, required this.icon});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final inv = context.watch<InventoryProvider>();
+
+    return Column(
       children: [
-        Icon(icon, size: 18, color: AppTheme.primary),
-        const SizedBox(width: 8),
-        Text(title,
-            style: Theme.of(context)
-                .textTheme
-                .titleSmall
-                ?.copyWith(fontWeight: FontWeight.w700)),
-        const SizedBox(width: 8),
-        Expanded(child: Divider(color: context.borderColor)),
+        Autocomplete<String>(
+          optionsBuilder: (textEditingValue) {
+            if (textEditingValue.text.isEmpty) return const [];
+            final q = textEditingValue.text.toLowerCase();
+            return inv.medicines
+                .where((m) => m.name.toLowerCase().contains(q))
+                .map((m) => '${m.id}||${m.name}')
+                .take(8);
+          },
+          displayStringForOption: (opt) => opt.split('||').last,
+          onSelected: _onMedicineSelected,
+          fieldViewBuilder: (ctx, ctrl, focus, onSubmit) => TextField(
+            controller: ctrl,
+            focusNode: focus,
+            style: const TextStyle(fontSize: 13),
+            decoration: InputDecoration(
+              hintText: 'Search medicine, Enter to select...',
+              hintStyle: TextStyle(color: context.textMutedColor, fontSize: 13),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(24),
+                borderSide: BorderSide(color: context.borderColor),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(24),
+                borderSide: BorderSide(color: context.borderColor),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(24),
+                borderSide:
+                    const BorderSide(color: AppTheme.primary, width: 1.5),
+              ),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            SizedBox(
+              width: 64,
+              child: _SmallField(
+                controller: widget.qtyCtrl,
+                label: 'Qty',
+                focusNode: _qtyFocus,
+                onEditingComplete: _onQtyEditingComplete,
+              ),
+            ),
+            const SizedBox(width: 10),
+            SizedBox(
+              width: 64,
+              child: _SmallField(
+                controller: widget.daysCtrl,
+                label: 'Days',
+                focusNode: _daysFocus,
+                onEditingComplete: _onDaysEditingComplete,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _FormLabel('Dosage'),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: widget.dosageCtrl,
+                    focusNode: _dosageFocus,
+                    style: const TextStyle(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: '1-0-1 or just type 101',
+                      hintStyle: TextStyle(
+                          color: context.textMutedColor, fontSize: 13),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide(color: context.borderColor),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide(color: context.borderColor),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: const BorderSide(
+                            color: AppTheme.primary, width: 1.5),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                    ),
+                    onEditingComplete: _onDosageEditingComplete,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Focus(
+              focusNode: _addBtnFocus,
+              onKeyEvent: (node, event) {
+                if (event is KeyDownEvent &&
+                    event.logicalKey == LogicalKeyboardKey.enter) {
+                  if (_selectedName != null) _addItem();
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              },
+              child: Container(
+                height: 42,
+                width: 42,
+                decoration: BoxDecoration(
+                  color: _selectedName != null
+                      ? AppTheme.primary
+                      : AppTheme.primary.withValues(alpha: 0.3),
+                  shape: BoxShape.circle,
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(21),
+                    onTap: _selectedName != null ? _addItem : null,
+                    child: const Icon(Icons.add, color: Colors.white, size: 22),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
 }
 
-// ─── Vital Field ───────────────────────────────────────────────────────────────
-class _VitalField extends StatelessWidget {
-  final TextEditingController ctrl;
+// ─── Small Field (Qty / Days) ──────────────────────────────────────────────
+class _SmallField extends StatelessWidget {
+  final TextEditingController controller;
   final String label;
-  final String hint;
+  final FocusNode? focusNode;
+  final VoidCallback? onEditingComplete;
 
-  const _VitalField(
-      {required this.ctrl, required this.label, required this.hint});
+  const _SmallField({
+    required this.controller,
+    required this.label,
+    this.focusNode,
+    this.onEditingComplete,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 160,
-      child: TextField(
-        controller: ctrl,
-        decoration: InputDecoration(
-          labelText: label,
-          hintText: hint,
-          isDense: true,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FormLabel(label),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          focusNode: focusNode,
+          keyboardType: TextInputType.number,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(24),
+              borderSide: BorderSide(color: context.borderColor),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(24),
+              borderSide: BorderSide(color: context.borderColor),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(24),
+              borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
+            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+          ),
+          onEditingComplete: onEditingComplete,
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Medicine List Item ────────────────────────────────────────────────────
+class _MedicineListItem extends StatelessWidget {
+  final int index;
+  final String name;
+  final String details;
+  final VoidCallback onDelete;
+  final bool isDark;
+
+  const _MedicineListItem({
+    required this.index,
+    required this.name,
+    required this.details,
+    required this.onDelete,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.darkBg : const Color(0xFFF7F9FB),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: context.borderColor),
+            ),
+            child: const Icon(Icons.medication_outlined,
+                size: 18, color: AppTheme.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  details,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: context.textMutedColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: onDelete,
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(Icons.cancel_outlined,
+                  size: 20,
+                  color: context.textMutedColor.withValues(alpha: 0.3)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Lab Test Chip ─────────────────────────────────────────────────────────
+class _LabTestChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onDelete;
+
+  const _LabTestChip({required this.label, required this.onDelete});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: AppTheme.primary.withValues(alpha: 0.15),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.primary,
+            ),
+          ),
+          const SizedBox(width: 6),
+          InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: onDelete,
+            child: Icon(
+              Icons.close,
+              size: 14,
+              color: AppTheme.primary.withValues(alpha: 0.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Image Thumbnail ───────────────────────────────────────────────────────
+class _ImageThumbnail extends StatelessWidget {
+  final String path;
+  final VoidCallback onDelete;
+
+  const _ImageThumbnail({required this.path, required this.onDelete});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.file(
+            File(path),
+            width: 90,
+            height: 90,
+            fit: BoxFit.cover,
+          ),
+        ),
+        Positioned(
+          top: 4,
+          right: 4,
+          child: GestureDetector(
+            onTap: onDelete,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                color: AppTheme.danger,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.close, size: 14, color: Colors.white),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Upload Button ─────────────────────────────────────────────────────────
+class _UploadButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _UploadButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+        decoration: BoxDecoration(
+          color: AppTheme.primary.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: AppTheme.primary.withValues(alpha: 0.15),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: AppTheme.primary),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.primary,
+              ),
+            ),
+          ],
         ),
       ),
     );

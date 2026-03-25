@@ -11,6 +11,20 @@ class SalesProvider extends ChangeNotifier {
   List<Sale> _sales = [];
   List<Sale> get sales => List.unmodifiable(_sales);
 
+  static const int pageSize = 30;
+  int _loadedCount = 30;
+
+  List<Sale> get displayedSales =>
+      List.unmodifiable(_sales.take(_loadedCount).toList());
+  bool get hasMore => _loadedCount < _sales.length;
+  int get totalCount => _sales.length;
+
+  void loadMore() {
+    if (!hasMore) return;
+    _loadedCount = (_loadedCount + pageSize).clamp(0, _sales.length);
+    notifyListeners();
+  }
+
   SalesFilter _activeFilter = SalesFilter.allTime;
   DateTime? _customStart;
   DateTime? _customEnd;
@@ -148,6 +162,7 @@ class SalesProvider extends ChangeNotifier {
     }
 
     _sales = query.find();
+    _loadedCount = pageSize;
     query.close();
     notifyListeners();
   }

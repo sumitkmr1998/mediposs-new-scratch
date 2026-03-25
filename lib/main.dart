@@ -14,6 +14,7 @@ import 'shared/providers/opd_provider.dart';
 import 'shared/providers/prescription_provider.dart';
 import 'shared/providers/template_provider.dart';
 import 'theme/app_theme.dart';
+import 'shared/services/data_population_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/app_shell.dart';
 import 'screens/connection_screen.dart';
@@ -63,6 +64,25 @@ void main() async {
   opdProvider.loadAll();
   prescriptionProvider.load();
   templateProvider.load();
+
+  // Data Population (One-time)
+  print('=========================================');
+  print('DEBUG: checking data status...');
+  print('DEBUG: Sales count: ${salesProvider.sales.length}');
+  print('DEBUG: Patients count: ${patientProvider.patients.length}');
+  
+  if (salesProvider.sales.isEmpty || patientProvider.patients.isEmpty) {
+    print('DEBUG: DATA POPULATION STARTING...');
+    await DataPopulationService().populateOneYearData();
+    inventoryProvider.load();
+    salesProvider.load();
+    patientProvider.load();
+    opdProvider.loadAll();
+    print('DEBUG: DATA POPULATION FINISHED');
+  } else {
+    print('DEBUG: Skipping population, data already exists.');
+  }
+  print('=========================================');
 
   runApp(
     MultiProvider(
