@@ -203,7 +203,7 @@
     },
     {
       "id": "3:1105416590503540471",
-      "lastPropertyId": "14:2636574971836139801",
+      "lastPropertyId": "15:7471962558499072335",
       "name": "Appointment",
       "properties": [
         {
@@ -276,6 +276,11 @@
           "id": "14:2636574971836139801",
           "name": "consultationBilled",
           "type": 1
+        },
+        {
+          "id": "15:7471962558499072335",
+          "name": "paymentMethod",
+          "type": 9
         }
       ],
       "relations": []

@@ -149,6 +149,7 @@ class OpdProvider extends ChangeNotifier {
     required int doctorId,
     required String doctorName,
     required double consultationFee,
+    required String paymentMethod,
     DateTime? scheduledAt,
     bool isWalkIn = true,
     SyncService? syncService,
@@ -162,6 +163,7 @@ class OpdProvider extends ChangeNotifier {
       doctorName: doctorName,
       tokenNumber: _nextTokenForToday(),
       consultationFee: consultationFee,
+      paymentMethod: paymentMethod,
       scheduledAt: scheduledAt ?? now,
       isWalkIn: isWalkIn,
     );
@@ -206,6 +208,30 @@ class OpdProvider extends ChangeNotifier {
       final success = await syncService.pushAppointment(appt);
       if (!success) {
         debugPrint('OpdProvider: updateStatus push failed for appt ${appt.id}');
+      }
+    }
+  }
+
+  void updateStatusWithPayment(
+      int appointmentId, String newStatus, String paymentMethod,
+      [SyncService? syncService]) async {
+    final appt = ObjectBoxService.instance.appointmentBox.get(appointmentId);
+    if (appt == null) return;
+    appt.status = newStatus;
+    appt.paymentMethod = paymentMethod;
+    ObjectBoxService.instance.appointmentBox.put(appt);
+    loadAll();
+
+    // Broadcast sync
+    if (Platform.isWindows) {
+      if (LocalServerService.instance.isRunning) {
+        LocalServerService.instance.broadcast({'event': 'sync_received'});
+      }
+    } else if (Platform.isAndroid && syncService != null) {
+      final success = await syncService.pushAppointment(appt);
+      if (!success) {
+        debugPrint(
+            'OpdProvider: updateStatusWithPayment push failed for appt ${appt.id}');
       }
     }
   }

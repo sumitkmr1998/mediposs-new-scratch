@@ -356,6 +356,7 @@ class BookAppointmentDialog extends StatefulWidget {
 
 class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
   Doctor? _selectedDoctor;
+  String _paymentMethod = 'cash';
 
   @override
   Widget build(BuildContext context) {
@@ -427,6 +428,43 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
                   ],
                 ),
               ),
+              const SizedBox(height: 20),
+              const Text('Payment Mode *',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF6B7B8D))),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _PaymentChip(
+                    icon: Icons.payments_rounded,
+                    label: 'Cash',
+                    value: 'cash',
+                    selected: _paymentMethod,
+                    color: AppTheme.success,
+                    onTap: () => setState(() => _paymentMethod = 'cash'),
+                  ),
+                  const SizedBox(width: 8),
+                  _PaymentChip(
+                    icon: Icons.qr_code_2_rounded,
+                    label: 'UPI',
+                    value: 'upi',
+                    selected: _paymentMethod,
+                    color: AppTheme.primary,
+                    onTap: () => setState(() => _paymentMethod = 'upi'),
+                  ),
+                  const SizedBox(width: 8),
+                  _PaymentChip(
+                    icon: Icons.credit_card_rounded,
+                    label: 'Card',
+                    value: 'card',
+                    selected: _paymentMethod,
+                    color: AppTheme.accent,
+                    onTap: () => setState(() => _paymentMethod = 'card'),
+                  ),
+                ],
+              ),
             ],
           ],
         ),
@@ -447,6 +485,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
                     doctorId: resolvedDoctor.id,
                     doctorName: resolvedDoctor.name,
                     consultationFee: resolvedDoctor.consultationFee,
+                    paymentMethod: _paymentMethod,
                     syncService: context.read<SyncService>(),
                   );
                   if (!mounted) return;
@@ -462,6 +501,63 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
           child: const Text('Book Appointment'),
         ),
       ],
+    );
+  }
+}
+
+class _PaymentChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final String selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _PaymentChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = selected == value;
+    return Expanded(
+      child: Material(
+        color: isSelected ? color.withOpacity(0.15) : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isSelected ? color : Colors.grey.shade300,
+                width: isSelected ? 2 : 1,
+              ),
+            ),
+            child: Column(
+              children: [
+                Icon(icon, color: isSelected ? color : Colors.grey, size: 20),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected ? color : Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -9,11 +9,15 @@ import '../../../shared/models/patient.dart';
 import '../../../shared/models/patient_image.dart';
 import '../../../shared/models/sale.dart';
 import '../../../shared/models/prescription.dart';
+import '../../../shared/models/doctor.dart';
 import '../../../shared/providers/patient_provider.dart';
 import '../../../shared/providers/sales_provider.dart';
 import '../../../shared/providers/prescription_provider.dart';
+import '../../../shared/providers/opd_provider.dart';
 import '../../../shared/services/sync_service.dart';
 import '../../../theme/app_theme.dart';
+import '../../../widgets/patient_dialogs.dart';
+import '../../opd/prescription_screen.dart';
 
 class PatientDetailsWindows extends StatefulWidget {
   final int patientId;
@@ -161,6 +165,21 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
                       ],
                     ),
                     const SizedBox(width: 12),
+                    // Edit Button
+                    IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.edit_rounded,
+                            color: Colors.white, size: 20),
+                      ),
+                      tooltip: 'Edit Patient',
+                      onPressed: () => _showEditPatientDialog(context, patient),
+                    ),
+                    // Delete Button
                     IconButton(
                       icon: Container(
                         padding: const EdgeInsets.all(6),
@@ -228,6 +247,9 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
                             badge: prescriptions.isNotEmpty
                                 ? '${prescriptions.length}'
                                 : null,
+                            trailing: _AddPrescriptionBtn(
+                              onTap: () => _addPrescription(context, patient),
+                            ),
                             child: _PrescriptionsContent(
                               prescriptions: prescriptions,
                               pProvider: context.watch<PrescriptionProvider>(),
@@ -256,6 +278,13 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showEditPatientDialog(BuildContext context, Patient patient) {
+    showDialog(
+      context: context,
+      builder: (ctx) => PatientDialog(patient: patient),
     );
   }
 
@@ -356,6 +385,108 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
         photos: photos,
         initialIndex: index,
         onDelete: (p) => context.read<PatientProvider>().deletePatientPhoto(p),
+      ),
+    );
+  }
+
+  void _addPrescription(BuildContext context, Patient patient) async {
+    final opd = context.read<OpdProvider>();
+    final doctors = opd.activeDoctors;
+
+    if (doctors.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add a doctor first'),
+          backgroundColor: AppTheme.warning,
+        ),
+      );
+      return;
+    }
+
+    final selectedDoctor = await showDialog<Doctor>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.medical_services_rounded, color: AppTheme.primary),
+            SizedBox(width: 12),
+            Text('Select Doctor'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: doctors
+              .map((d) => ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                      child: Text(d.name[0].toUpperCase(),
+                          style: const TextStyle(color: AppTheme.primary)),
+                    ),
+                    title: Text('Dr. ${d.name}'),
+                    subtitle: Text(d.specialization),
+                    onTap: () => Navigator.pop(ctx, d),
+                  ))
+              .toList(),
+        ),
+      ),
+    );
+
+    if (selectedDoctor != null && context.mounted) {
+      final appointment = await opd.createAppointment(
+        patientId: patient.id,
+        patientName: patient.name,
+        patientPhone: patient.phone,
+        doctorId: selectedDoctor.id,
+        doctorName: selectedDoctor.name,
+        consultationFee: selectedDoctor.consultationFee,
+      );
+
+      if (context.mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PrescriptionScreen(appointment: appointment),
+          ),
+        );
+      }
+    }
+  }
+}
+
+// ── Add Prescription Button ───────────────────────────────────────────────────
+
+class _AddPrescriptionBtn extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AddPrescriptionBtn({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppTheme.primaryLight.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.add_rounded,
+                  size: 18, color: AppTheme.primaryLight),
+              const SizedBox(width: 6),
+              const Text(
+                'Add',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.primaryLight,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

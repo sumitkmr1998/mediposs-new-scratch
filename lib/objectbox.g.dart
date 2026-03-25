@@ -230,7 +230,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(3, 1105416590503540471),
       name: 'Appointment',
-      lastPropertyId: const obx_int.IdUid(14, 2636574971836139801),
+      lastPropertyId: const obx_int.IdUid(15, 7471962558499072335),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -302,6 +302,11 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(14, 2636574971836139801),
             name: 'consultationBilled',
             type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(15, 7471962558499072335),
+            name: 'paymentMethod',
+            type: 9,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
@@ -1173,7 +1178,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final doctorNameOffset = fbb.writeString(object.doctorName);
           final statusOffset = fbb.writeString(object.status);
           final notesOffset = fbb.writeString(object.notes);
-          fbb.startTable(15);
+          final paymentMethodOffset = fbb.writeString(object.paymentMethod);
+          fbb.startTable(16);
           fbb.addInt64(0, object.id);
           fbb.addInt64(1, object.patientId);
           fbb.addOffset(2, patientNameOffset);
@@ -1188,6 +1194,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addInt64(11, object.createdAt.millisecondsSinceEpoch);
           fbb.addBool(12, object.isWalkIn);
           fbb.addBool(13, object.consultationBilled);
+          fbb.addOffset(14, paymentMethodOffset);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -1224,6 +1231,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.BoolReader().vTableGet(buffer, rootOffset, 28, false);
           final consultationBilledParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 30, false);
+          final paymentMethodParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGet(buffer, rootOffset, 32, '');
           final object = Appointment(
               id: idParam,
               patientId: patientIdParam,
@@ -1238,7 +1248,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               scheduledAt: scheduledAtParam,
               createdAt: createdAtParam,
               isWalkIn: isWalkInParam,
-              consultationBilled: consultationBilledParam);
+              consultationBilled: consultationBilledParam,
+              paymentMethod: paymentMethodParam);
 
           return object;
         }),
@@ -2108,6 +2119,10 @@ class Appointment_ {
   /// See [Appointment.consultationBilled].
   static final consultationBilled =
       obx.QueryBooleanProperty<Appointment>(_entities[2].properties[13]);
+
+  /// See [Appointment.paymentMethod].
+  static final paymentMethod =
+      obx.QueryStringProperty<Appointment>(_entities[2].properties[14]);
 }
 
 /// [Doctor] entity fields to define ObjectBox queries.

@@ -38,6 +38,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
   String _selectedPrinter = '';
   bool _autoPrint = false;
   String _paperSize = 'A6';
+  int _selectedSection = 0;
 
   @override
   void initState() {
@@ -69,7 +70,6 @@ class _SettingsWindowsState extends State<SettingsWindows> {
         _printers = printers.where((p) => p.isAvailable).toList();
         if (_selectedPrinter.isNotEmpty &&
             !_printers.any((p) => p.name == _selectedPrinter)) {
-          // If saved printer is no longer available
           _selectedPrinter = '';
         }
       });
@@ -95,9 +95,17 @@ class _SettingsWindowsState extends State<SettingsWindows> {
 
     settingsProv.save(s);
 
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text('✅ Settings saved'),
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: const Row(
+        children: [
+          Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+          SizedBox(width: 8),
+          Text('Settings saved successfully'),
+        ],
+      ),
       backgroundColor: AppTheme.success,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     ));
   }
 
@@ -112,7 +120,6 @@ class _SettingsWindowsState extends State<SettingsWindows> {
 
       String? outputPath;
       if (Platform.isWindows) {
-        // Fallback for Windows if Downloads directory isn't strictly standard
         final downloadsPath =
             '${Platform.environment['USERPROFILE']}\\Downloads';
         outputPath = downloadsPath;
@@ -132,15 +139,19 @@ class _SettingsWindowsState extends State<SettingsWindows> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('✅ Backup saved to: $backupPath'),
+          content: Text('Backup saved to: $backupPath'),
           backgroundColor: AppTheme.success,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('❌ Backup failed: $e'),
+          content: Text('Backup failed: $e'),
           backgroundColor: AppTheme.danger,
+          behavior: SnackBarBehavior.floating,
         ));
       }
     }
@@ -148,12 +159,9 @@ class _SettingsWindowsState extends State<SettingsWindows> {
 
   Future<void> _restoreDatabase() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type:
-            FileType.any, // .mdb might not have standard mime types registered
-      );
+      final result = await FilePicker.platform.pickFiles(type: FileType.any);
 
-      if (result == null || result.files.isEmpty) return; // User cancelled
+      if (result == null || result.files.isEmpty) return;
 
       final selectedFile = File(result.files.single.path!);
       if (!selectedFile.path.endsWith('.mdb')) {
@@ -163,7 +171,6 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       final docDir = await getApplicationDocumentsDirectory();
       final dbFile = File('${docDir.path}/objectbox/data.mdb');
 
-      // Crucial: Copy the selected file OVER the active database file
       await selectedFile.copy(dbFile.path);
 
       if (mounted) {
@@ -174,13 +181,10 @@ class _SettingsWindowsState extends State<SettingsWindows> {
             title: const Text('Restore Successful',
                 style: TextStyle(color: AppTheme.success)),
             content: const Text(
-                'The database has been successfully restored.\n\nThe application must now restart to secure the new data lock. Please close the app and open it again.'),
+                'The database has been successfully restored.\n\nThe application must now restart.'),
             actions: [
               ElevatedButton(
-                onPressed: () {
-                  // Forcefully close the app so ObjectBox completely unbinds its Store pointers
-                  SystemNavigator.pop();
-                },
+                onPressed: () => SystemNavigator.pop(),
                 child: const Text('Exit App'),
               ),
             ],
@@ -190,7 +194,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('❌ Restore failed: $e'),
+          content: Text('Restore failed: $e'),
           backgroundColor: AppTheme.danger,
         ));
       }
@@ -211,7 +215,6 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       var excel = excel_pkg.Excel.createExcel();
       var sheet = excel['Sheet1'];
 
-      // Header row
       sheet.appendRow([
         excel_pkg.TextCellValue('ID'),
         excel_pkg.TextCellValue('Medicine Name'),
@@ -262,7 +265,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
         File(filePath).writeAsBytesSync(fileBytes);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('✅ Excel Export successful: $filePath'),
+            content: Text('Excel Export successful: $filePath'),
             backgroundColor: AppTheme.success,
           ));
         }
@@ -270,7 +273,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('❌ Excel Export failed: $e'),
+          content: Text('Excel Export failed: $e'),
           backgroundColor: AppTheme.danger,
         ));
       }
@@ -311,7 +314,6 @@ class _SettingsWindowsState extends State<SettingsWindows> {
         int headerRowIndex = -1;
         Map<String, int> colMap = {};
 
-        // 1. Find the header row
         for (int i = 0; i < table.maxRows; i++) {
           final row = table.row(i);
           for (int j = 0; j < row.length; j++) {
@@ -333,7 +335,6 @@ class _SettingsWindowsState extends State<SettingsWindows> {
               "Could not find a header row containing 'Medicine Name'.");
         }
 
-        // 2. Map columns
         final headerRow = table.row(headerRowIndex);
         for (int j = 0; j < headerRow.length; j++) {
           final title =
@@ -343,7 +344,6 @@ class _SettingsWindowsState extends State<SettingsWindows> {
           }
         }
 
-        // Helper to get index matching a list of possible names
         int getColIdx(List<String> possibleNames) {
           for (final name in possibleNames) {
             if (colMap.containsKey(name)) return colMap[name]!;
@@ -364,7 +364,6 @@ class _SettingsWindowsState extends State<SettingsWindows> {
             getColIdx(['store front stock', 'store stock', 'quantity', 'qty']);
         final lowStockIdx = getColIdx(['low stock threshold', 'threshold']);
 
-        // 3. Process rows
         for (int i = headerRowIndex + 1; i < table.maxRows; i++) {
           final row = table.row(i);
 
@@ -382,7 +381,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
               : def;
 
           final nameCell = getCellStr(nameIdx, '');
-          if (nameCell.isEmpty) continue; // Skip empty rows
+          if (nameCell.isEmpty) continue;
 
           final barcode = getCellStr(barcodeIdx, '');
           final category = getCellStr(categoryIdx, 'General');
@@ -438,7 +437,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                  '✅ Excel Import Complete: Added $added new, Updated $updated existing medicines.'),
+                  'Import Complete: Added $added new, Updated $updated existing.'),
               backgroundColor: AppTheme.success,
             ),
           );
@@ -446,7 +445,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('❌ Excel Import failed: $e'),
+            content: Text('Excel Import failed: $e'),
             backgroundColor: AppTheme.danger,
           ));
         }
@@ -459,330 +458,465 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     final auth = context.watch<AuthProvider>();
     final serverRunning = LocalServerService.instance.isRunning;
 
+    final sections = [
+      _NavItem(Icons.store_rounded, 'Store Details', AppTheme.primary),
+      _NavItem(Icons.print_rounded, 'Printing', AppTheme.accent),
+      _NavItem(Icons.palette_rounded, 'Appearance', const Color(0xFF7C3AED)),
+      _NavItem(Icons.wifi_rounded, 'Networking', const Color(0xFF0EA5E9)),
+      _NavItem(Icons.folder_rounded, 'Data', AppTheme.warning),
+      if (auth.isAdmin)
+        _NavItem(Icons.people_rounded, 'Users', AppTheme.success),
+    ];
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ExpansionTile(
-              initiallyExpanded: true,
-              title: _sectionHeader('Store Details & Printing'),
-              childrenPadding: const EdgeInsets.all(16),
-              children: [
-                _field(_storeNameCtrl, 'Store Name'),
-                const SizedBox(height: 12),
-                _field(_addressCtrl, 'Physical Address'),
-                const SizedBox(height: 12),
-                Row(children: [
-                  Expanded(child: _field(_phoneCtrl, 'Contact Phone')),
-                  const SizedBox(width: 16),
-                  Expanded(child: _field(_gstCtrl, 'GST Number (Optional)')),
-                ]),
-              ],
+      body: Row(
+        children: [
+          Container(
+            width: 260,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(right: BorderSide(color: context.borderColor)),
             ),
-            ExpansionTile(
-              title: _sectionHeader('Printing Settings'),
-              childrenPadding: const EdgeInsets.all(16),
+            child: Column(
               children: [
-                _field(_footerCtrl, 'Receipt Footer Message'),
-                const SizedBox(height: 12),
-                Row(children: [
-                  Expanded(
-                      child: _field(_currencyCtrl, 'Currency Symbol (e.g. ₹)')),
-                  const SizedBox(width: 12),
-                  Expanded(
-                      child: _field(_taxCtrl, 'Global Tax Rate (%)',
-                          keyboardType: TextInputType.number)),
-                ]),
-                const SizedBox(height: 24),
-                Text('Hardware Configuration',
-                    style: TextStyle(
-                        color: context.textMutedColor,
-                        fontWeight: FontWeight.bold)),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Paper Size',
-                              style: TextStyle(
-                                  fontSize: 12, color: context.textMutedColor)),
-                          DropdownButton<String>(
-                            isExpanded: true,
-                            value: ['A6', 'Letter', 'A4', 'Roll80']
-                                    .contains(_paperSize)
-                                ? _paperSize
-                                : 'A6',
-                            dropdownColor: context.surfaceColor,
-                            items: const [
-                              DropdownMenuItem(value: 'A6', child: Text('A6')),
-                              DropdownMenuItem(
-                                  value: 'Letter', child: Text('Letter')),
-                              DropdownMenuItem(value: 'A4', child: Text('A4')),
-                              DropdownMenuItem(
-                                  value: 'Roll80',
-                                  child: Text('Thermal Roll (80mm)')),
-                            ],
-                            onChanged: (val) {
-                              if (val != null) setState(() => _paperSize = val);
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      flex: 2,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Default Hardware Printer',
-                              style: TextStyle(
-                                  fontSize: 12, color: context.textMutedColor)),
-                          DropdownButton<String>(
-                            isExpanded: true,
-                            value:
-                                _printers.any((p) => p.name == _selectedPrinter)
-                                    ? _selectedPrinter
-                                    : (_selectedPrinter.isEmpty ? '' : null),
-                            hint: const Text('Select OS Printer...'),
-                            dropdownColor: context.surfaceColor,
-                            items: [
-                              const DropdownMenuItem(
-                                  value: '',
-                                  child: Text('None (Always Preview)')),
-                              ..._printers.map((p) => DropdownMenuItem(
-                                  value: p.name, child: Text(p.name))),
-                            ],
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() => _selectedPrinter = val);
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                SwitchListTile(
-                  title: const Text('Auto-Print on Checkout'),
-                  subtitle: Text(
-                      'Instantly print without confirming via OS Print Preview window',
-                      style: TextStyle(
-                          color: context.textMutedColor, fontSize: 12)),
-                  value: _autoPrint,
-                  activeThumbColor: AppTheme.primaryLight,
-                  onChanged: _selectedPrinter.isEmpty
-                      ? null
-                      : (val) => setState(() => _autoPrint = val),
-                  contentPadding: EdgeInsets.zero,
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      _save(); // ensure settings are updated in memory before test
-                      await PrintingService.instance.testPrint(context);
-                    },
-                    icon: const Icon(Icons.print),
-                    label: const Text('Test Current Configuration'),
-                  ),
-                ),
-              ],
-            ),
-            ExpansionTile(
-              title: _sectionHeader('App Preferences'),
-              childrenPadding: const EdgeInsets.all(16),
-              children: [
-                Row(
-                  children: [
-                    Text('UI Theme Mode',
-                        style: TextStyle(color: context.textMutedColor)),
-                    const Spacer(),
-                    DropdownButton<String>(
-                      value: _selectedTheme,
-                      dropdownColor: context.surfaceColor,
-                      items: const [
-                        DropdownMenuItem(
-                            value: 'system', child: Text('System Default')),
-                        DropdownMenuItem(
-                            value: 'light', child: Text('Light Mode')),
-                        DropdownMenuItem(
-                            value: 'dark', child: Text('Dark Mode')),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) setState(() => _selectedTheme = val);
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            ExpansionTile(
-              title: _sectionHeader('Networking (Windows Hub)'),
-              childrenPadding: const EdgeInsets.all(16),
-              children: [
-                _field(_portCtrl, 'Server Port',
-                    keyboardType: TextInputType.number),
-                const SizedBox(height: 12),
-                Row(children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: serverRunning
-                          ? AppTheme.success.withValues(alpha: 0.15)
-                          : AppTheme.danger.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color: serverRunning
-                              ? AppTheme.success
-                              : AppTheme.danger),
-                    ),
-                    child: Row(children: [
-                      Icon(serverRunning ? Icons.check_circle : Icons.cancel,
-                          color: serverRunning
-                              ? AppTheme.success
-                              : AppTheme.danger,
-                          size: 16),
-                      const SizedBox(width: 6),
-                      Text(
-                          serverRunning
-                              ? 'Hub Server Running on :${_portCtrl.text}'
-                              : 'Hub Server Stopped',
-                          style: TextStyle(
-                              color: serverRunning
-                                  ? AppTheme.success
-                                  : AppTheme.danger,
-                              fontWeight: FontWeight.w600)),
-                    ]),
-                  ),
-                ]),
-              ],
-            ),
-            ExpansionTile(
-              title: _sectionHeader('Data Management (Excel Import/Export)'),
-              childrenPadding: const EdgeInsets.all(16),
-              children: [
-                Text(
-                  'Bulk import medicines from an Excel file or export your current inventory list.',
-                  style: TextStyle(color: context.textMutedColor, fontSize: 13),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.file_upload),
-                      label: const Text('Import Medicines'),
-                      onPressed: _importExcel,
-                    ),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.file_download,
-                          color: AppTheme.primary),
-                      label: const Text('Export Medicines',
-                          style: TextStyle(color: AppTheme.primary)),
-                      style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: AppTheme.primary)),
-                      onPressed: _exportExcel,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            ExpansionTile(
-              title: _sectionHeader('Data Management (Backup & Restore)'),
-              childrenPadding: const EdgeInsets.all(16),
-              children: [
-                Text(
-                  'Create a backup of your entire store database, or restore an existing backup. Restoring a backup will overwrite all current data and immediately restart the app.',
-                  style: TextStyle(color: context.textMutedColor, fontSize: 13),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.download),
-                      label: const Text('Backup DB'),
-                      onPressed: _backupDatabase,
-                    ),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.restore, color: AppTheme.danger),
-                      label: const Text('Restore DB',
-                          style: TextStyle(color: AppTheme.danger)),
-                      style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: AppTheme.danger)),
-                      onPressed: _restoreDatabase,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            if (auth.isAdmin)
-              ExpansionTile(
-                title: _sectionHeader('User Management'),
-                childrenPadding: const EdgeInsets.all(16),
-                children: [
-                  ...auth.getAllUsers().map((u) => Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor:
-                                AppTheme.primary.withValues(alpha: 0.15),
-                            child: Text(u.name[0].toUpperCase(),
-                                style:
-                                    const TextStyle(color: AppTheme.primary)),
-                          ),
-                          title: Text(u.name),
-                          subtitle: Text(u.role),
-                          trailing:
-                              u.role == 'admin' || auth.currentUser?.id == u.id
-                                  ? TextButton(
-                                      onPressed: () =>
-                                          _changePinDialog(context, u, auth),
-                                      child: const Text('Change PIN'))
-                                  : null,
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      )),
-                ],
-              ),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: _save,
-                child: const Text('Save All Settings',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        child: const Icon(Icons.settings_rounded,
+                            color: AppTheme.primary, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Settings',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Divider(height: 1, color: context.borderColor),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    itemCount: sections.length,
+                    itemBuilder: (ctx, i) {
+                      final s = sections[i];
+                      final isSelected = _selectedSection == i;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 4),
+                        child: Material(
+                          color: isSelected
+                              ? s.color.withValues(alpha: 0.1)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () => setState(() => _selectedSection = i),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 12),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? s.color
+                                          : s.color.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Icon(s.icon,
+                                        size: 18,
+                                        color: isSelected
+                                            ? Colors.white
+                                            : s.color),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(s.label,
+                                      style: TextStyle(
+                                        fontWeight: isSelected
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
+                                        color: isSelected
+                                            ? s.color
+                                            : context.textMutedColor,
+                                      )),
+                                  if (isSelected) ...[
+                                    const Spacer(),
+                                    Container(
+                                      width: 4,
+                                      height: 20,
+                                      decoration: BoxDecoration(
+                                        color: s.color,
+                                        borderRadius: BorderRadius.circular(2),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _save,
+                      icon: const Icon(Icons.save_rounded, size: 18),
+                      label: const Text('Save All Settings'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Container(
+              color: AppTheme.lightBg,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_selectedSection == 0) _buildStoreDetailsSection(),
+                    if (_selectedSection == 1) _buildPrintingSection(),
+                    if (_selectedSection == 2) _buildAppearanceSection(),
+                    if (_selectedSection == 3)
+                      _buildNetworkingSection(serverRunning),
+                    if (_selectedSection == 4) _buildDataSection(),
+                    if (auth.isAdmin && _selectedSection == 5)
+                      _buildUsersSection(auth),
+                    const SizedBox(height: 24),
+                  ],
+                ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _sectionHeader(String title) => Text(title,
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: AppTheme.primaryLight,
-          ));
+  Widget _buildStoreDetailsSection() {
+    return _SettingsCard(
+      title: 'Store Information',
+      icon: Icons.store_rounded,
+      accentColor: AppTheme.primary,
+      children: [
+        _field(_storeNameCtrl, 'Store Name'),
+        const SizedBox(height: 12),
+        _field(_addressCtrl, 'Physical Address'),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(child: _field(_phoneCtrl, 'Contact Phone')),
+          const SizedBox(width: 16),
+          Expanded(child: _field(_gstCtrl, 'GST Number (Optional)')),
+        ]),
+      ],
+    );
+  }
+
+  Widget _buildPrintingSection() {
+    return Column(children: [
+      _SettingsCard(
+        title: 'Receipt Settings',
+        icon: Icons.receipt_long_rounded,
+        accentColor: AppTheme.accent,
+        children: [
+          _field(_footerCtrl, 'Receipt Footer Message'),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: _field(_currencyCtrl, 'Currency Symbol (e.g. ₹)')),
+            const SizedBox(width: 16),
+            Expanded(
+                child: _field(_taxCtrl, 'Global Tax Rate (%)',
+                    keyboardType: TextInputType.number)),
+          ]),
+        ],
+      ),
+      const SizedBox(height: 20),
+      _SettingsCard(
+        title: 'Hardware Configuration',
+        icon: Icons.print_rounded,
+        accentColor: AppTheme.accent,
+        children: [
+          Row(children: [
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Paper Size',
+                        style: TextStyle(
+                            fontSize: 12, color: context.textMutedColor)),
+                    const SizedBox(height: 6),
+                    DropdownButton<String>(
+                      isExpanded: true,
+                      value:
+                          ['A6', 'Letter', 'A4', 'Roll80'].contains(_paperSize)
+                              ? _paperSize
+                              : 'A6',
+                      dropdownColor: context.surfaceColor,
+                      items: const [
+                        DropdownMenuItem(value: 'A6', child: Text('A6')),
+                        DropdownMenuItem(
+                            value: 'Letter', child: Text('Letter')),
+                        DropdownMenuItem(value: 'A4', child: Text('A4')),
+                        DropdownMenuItem(
+                            value: 'Roll80',
+                            child: Text('Thermal Roll (80mm)')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) setState(() => _paperSize = val);
+                      },
+                    ),
+                  ]),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 2,
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Default Printer',
+                        style: TextStyle(
+                            fontSize: 12, color: context.textMutedColor)),
+                    const SizedBox(height: 6),
+                    DropdownButton<String>(
+                      isExpanded: true,
+                      value: _printers.any((p) => p.name == _selectedPrinter)
+                          ? _selectedPrinter
+                          : (_selectedPrinter.isEmpty ? '' : null),
+                      hint: const Text('Select Printer...'),
+                      dropdownColor: context.surfaceColor,
+                      items: [
+                        const DropdownMenuItem(
+                            value: '', child: Text('None (Preview Only)')),
+                        ..._printers.map((p) => DropdownMenuItem(
+                            value: p.name, child: Text(p.name))),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) setState(() => _selectedPrinter = val);
+                      },
+                    ),
+                  ]),
+            ),
+          ]),
+          const SizedBox(height: 16),
+          Row(children: [
+            Expanded(
+              child: SwitchListTile(
+                title: const Text('Auto-Print on Checkout',
+                    style: TextStyle(fontSize: 13)),
+                subtitle: Text('Print without preview',
+                    style:
+                        TextStyle(fontSize: 11, color: context.textMutedColor)),
+                value: _autoPrint,
+                activeTrackColor: AppTheme.success.withValues(alpha: 0.5),
+                thumbColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return AppTheme.success;
+                  }
+                  return Colors.grey;
+                }),
+                onChanged: _selectedPrinter.isEmpty
+                    ? null
+                    : (val) => setState(() => _autoPrint = val),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () async {
+              _save();
+              await PrintingService.instance.testPrint(context);
+            },
+            icon: const Icon(Icons.print, size: 18),
+            label: const Text('Test Print'),
+          ),
+        ],
+      ),
+    ]);
+  }
+
+  Widget _buildAppearanceSection() {
+    return _SettingsCard(
+      title: 'UI Theme',
+      icon: Icons.palette_rounded,
+      accentColor: const Color(0xFF7C3AED),
+      children: [
+        Row(children: [
+          Text('Theme Mode', style: TextStyle(color: context.textMutedColor)),
+          const Spacer(),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'system', label: Text('System')),
+              ButtonSegment(value: 'light', label: Text('Light')),
+              ButtonSegment(value: 'dark', label: Text('Dark')),
+            ],
+            selected: {_selectedTheme},
+            onSelectionChanged: (vals) =>
+                setState(() => _selectedTheme = vals.first),
+          ),
+        ]),
+      ],
+    );
+  }
+
+  Widget _buildNetworkingSection(bool serverRunning) {
+    return _SettingsCard(
+      title: 'Windows Hub Server',
+      icon: Icons.wifi_rounded,
+      accentColor: const Color(0xFF0EA5E9),
+      children: [
+        _field(_portCtrl, 'Server Port', keyboardType: TextInputType.number),
+        const SizedBox(height: 16),
+        Row(children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: serverRunning
+                  ? AppTheme.success.withValues(alpha: 0.15)
+                  : AppTheme.danger.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                  color: serverRunning ? AppTheme.success : AppTheme.danger),
+            ),
+            child: Row(children: [
+              Icon(serverRunning ? Icons.check_circle : Icons.cancel,
+                  color: serverRunning ? AppTheme.success : AppTheme.danger,
+                  size: 16),
+              const SizedBox(width: 8),
+              Text(
+                serverRunning
+                    ? 'Running on port ${_portCtrl.text}'
+                    : 'Server Stopped',
+                style: TextStyle(
+                    color: serverRunning ? AppTheme.success : AppTheme.danger,
+                    fontWeight: FontWeight.w600),
+              ),
+            ]),
+          ),
+        ]),
+      ],
+    );
+  }
+
+  Widget _buildDataSection() {
+    return Column(children: [
+      _SettingsCard(
+        title: 'Excel Import / Export',
+        icon: Icons.table_chart_rounded,
+        accentColor: AppTheme.warning,
+        children: [
+          Text(
+              'Bulk import medicines from Excel or export your inventory list.',
+              style: TextStyle(fontSize: 13, color: context.textMutedColor)),
+          const SizedBox(height: 16),
+          Row(children: [
+            ElevatedButton.icon(
+              icon: const Icon(Icons.file_upload, size: 18),
+              label: const Text('Import'),
+              onPressed: _importExcel,
+            ),
+            const SizedBox(width: 12),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.file_download, size: 18),
+              label: const Text('Export'),
+              style:
+                  OutlinedButton.styleFrom(foregroundColor: AppTheme.primary),
+              onPressed: _exportExcel,
+            ),
+          ]),
+        ],
+      ),
+      const SizedBox(height: 20),
+      _SettingsCard(
+        title: 'Backup & Restore',
+        icon: Icons.backup_rounded,
+        accentColor: AppTheme.warning,
+        children: [
+          Text('Create a backup or restore your database.',
+              style: TextStyle(fontSize: 13, color: context.textMutedColor)),
+          const SizedBox(height: 16),
+          Row(children: [
+            ElevatedButton.icon(
+              icon: const Icon(Icons.download, size: 18),
+              label: const Text('Backup'),
+              onPressed: _backupDatabase,
+            ),
+            const SizedBox(width: 12),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.restore, size: 18),
+              label: const Text('Restore'),
+              style: OutlinedButton.styleFrom(foregroundColor: AppTheme.danger),
+              onPressed: _restoreDatabase,
+            ),
+          ]),
+        ],
+      ),
+    ]);
+  }
+
+  Widget _buildUsersSection(AuthProvider auth) {
+    return _SettingsCard(
+      title: 'User Management',
+      icon: Icons.people_rounded,
+      accentColor: AppTheme.success,
+      children: [
+        ...auth.getAllUsers().map((u) => Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: AppTheme.primary.withValues(alpha: 0.15),
+                  child: Text(u.name[0].toUpperCase(),
+                      style: const TextStyle(color: AppTheme.primary)),
+                ),
+                title: Text(u.name),
+                subtitle: Text(u.role),
+                trailing: u.role == 'admin' || auth.currentUser?.id == u.id
+                    ? TextButton(
+                        onPressed: () => _changePinDialog(context, u, auth),
+                        child: const Text('Change PIN'))
+                    : null,
+              ),
+            )),
+      ],
+    );
+  }
 
   Widget _field(TextEditingController ctrl, String label,
       {TextInputType? keyboardType}) {
     return TextField(
       controller: ctrl,
       keyboardType: keyboardType,
-      decoration: InputDecoration(labelText: label, isDense: true),
+      decoration: InputDecoration(
+          labelText: label,
+          isDense: true,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))),
     );
   }
 
@@ -808,11 +942,81 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                 if (pinCtrl.text.length >= 4) {
                   auth.updatePin(user.id, pinCtrl.text);
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('PIN updated')));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('PIN updated'),
+                      backgroundColor: AppTheme.success));
                 }
               },
               child: const Text('Update')),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavItem {
+  final IconData icon;
+  final String label;
+  final Color color;
+  _NavItem(this.icon, this.label, this.color);
+}
+
+class _SettingsCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Color accentColor;
+  final List<Widget> children;
+
+  const _SettingsCard({
+    required this.title,
+    required this.icon,
+    required this.accentColor,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.06),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Row(children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 18, color: accentColor),
+              ),
+              const SizedBox(width: 12),
+              Text(title,
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: accentColor)),
+            ]),
+          ),
+          Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(children: children)),
         ],
       ),
     );

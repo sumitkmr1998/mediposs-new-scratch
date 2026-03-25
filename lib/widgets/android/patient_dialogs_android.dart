@@ -479,8 +479,66 @@ class _BookAppointmentSheet extends StatefulWidget {
   State<_BookAppointmentSheet> createState() => _BookAppointmentSheetState();
 }
 
+class _AndroidPaymentChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final String selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _AndroidPaymentChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = selected == value;
+    return Expanded(
+      child: Material(
+        color: isSelected ? color.withOpacity(0.15) : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isSelected ? color : context.borderColor,
+                width: isSelected ? 2 : 1,
+              ),
+            ),
+            child: Column(
+              children: [
+                Icon(icon, color: isSelected ? color : Colors.grey, size: 22),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected ? color : Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _BookAppointmentSheetState extends State<_BookAppointmentSheet> {
   Doctor? _selectedDoctor;
+  String _paymentMethod = 'cash';
 
   @override
   Widget build(BuildContext context) {
@@ -644,6 +702,43 @@ class _BookAppointmentSheetState extends State<_BookAppointmentSheet> {
                 ],
               ),
             ),
+            const SizedBox(height: 20),
+            const Text('Payment Mode',
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B7B8D))),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _AndroidPaymentChip(
+                  icon: Icons.payments_rounded,
+                  label: 'Cash',
+                  value: 'cash',
+                  selected: _paymentMethod,
+                  color: AppTheme.success,
+                  onTap: () => setState(() => _paymentMethod = 'cash'),
+                ),
+                const SizedBox(width: 8),
+                _AndroidPaymentChip(
+                  icon: Icons.qr_code_2_rounded,
+                  label: 'UPI',
+                  value: 'upi',
+                  selected: _paymentMethod,
+                  color: AppTheme.primary,
+                  onTap: () => setState(() => _paymentMethod = 'upi'),
+                ),
+                const SizedBox(width: 8),
+                _AndroidPaymentChip(
+                  icon: Icons.credit_card_rounded,
+                  label: 'Card',
+                  value: 'card',
+                  selected: _paymentMethod,
+                  color: AppTheme.accent,
+                  onTap: () => setState(() => _paymentMethod = 'card'),
+                ),
+              ],
+            ),
           ],
           const SizedBox(height: 24),
           SizedBox(
@@ -659,6 +754,7 @@ class _BookAppointmentSheetState extends State<_BookAppointmentSheet> {
                         doctorId: resolvedDoctor.id,
                         doctorName: resolvedDoctor.name,
                         consultationFee: resolvedDoctor.consultationFee,
+                        paymentMethod: _paymentMethod,
                         syncService: context.read<SyncService>(),
                       );
                       if (!context.mounted) return;

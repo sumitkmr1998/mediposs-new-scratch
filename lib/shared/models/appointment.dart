@@ -33,6 +33,7 @@ class Appointment {
 
   bool isWalkIn; // Walk-in vs advance booking
   bool consultationBilled; // Whether fee was added to POS
+  String paymentMethod; // cash / upi / card / pending
 
   Appointment({
     this.id = 0,
@@ -49,5 +50,6 @@ class Appointment {
     DateTime? createdAt,
     this.isWalkIn = true,
     this.consultationBilled = false,
+    this.paymentMethod = 'pending',
   }) : createdAt = createdAt ?? DateTime.now();
 }

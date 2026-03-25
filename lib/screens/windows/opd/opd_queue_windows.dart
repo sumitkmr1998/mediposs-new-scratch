@@ -4,11 +4,13 @@ import 'package:provider/provider.dart';
 import '../../../shared/models/appointment.dart';
 import '../../../shared/providers/opd_provider.dart';
 import '../../../shared/providers/prescription_provider.dart';
+import '../../../shared/providers/patient_provider.dart';
 import '../../../theme/app_theme.dart';
 import '../../../shared/models/patient.dart';
 import '../../../widgets/patient_dialogs.dart';
 import '../../../shared/services/sync_service.dart';
 import '../../opd/prescription_screen.dart';
+import '../../opd/patient_details_screen.dart';
 
 class OpdQueueWindows extends StatefulWidget {
   const OpdQueueWindows({super.key});
@@ -208,6 +210,14 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                   else
                     ...sortedQueue.map((appt) => _QueueRow(
                           appointment: appt,
+                          onStatusChangeWithPayment:
+                              (newStatus, paymentMethod) => context
+                                  .read<OpdProvider>()
+                                  .updateStatusWithPayment(
+                                      appt.id,
+                                      newStatus,
+                                      paymentMethod,
+                                      context.read<SyncService>()),
                           onStatusChange: (newStatus) => context
                               .read<OpdProvider>()
                               .updateStatus(appt.id, newStatus,
@@ -219,6 +229,26 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                                   PrescriptionScreen(appointment: appt),
                             ),
                           ),
+                          onViewPatient: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => PatientDetailsScreen(
+                                  patientId: appt.patientId),
+                            ),
+                          ),
+                          onEditPatient: () async {
+                            final patientProvider =
+                                context.read<PatientProvider>();
+                            final patient =
+                                patientProvider.getById(appt.patientId);
+                            if (patient != null) {
+                              showDialog(
+                                context: context,
+                                builder: (ctx) =>
+                                    PatientDialog(patient: patient),
+                              );
+                            }
+                          },
                         )),
                 ],
               ),
@@ -367,13 +397,19 @@ class _StatCard extends StatelessWidget {
 
 class _QueueRow extends StatefulWidget {
   final Appointment appointment;
-  final ValueChanged<String> onStatusChange;
+  final Function(String status, String paymentMethod) onStatusChangeWithPayment;
+  final Function(String status) onStatusChange;
   final VoidCallback onConsult;
+  final VoidCallback onViewPatient;
+  final VoidCallback onEditPatient;
 
   const _QueueRow({
     required this.appointment,
+    required this.onStatusChangeWithPayment,
     required this.onStatusChange,
     required this.onConsult,
+    required this.onViewPatient,
+    required this.onEditPatient,
   });
 
   @override
@@ -418,6 +454,15 @@ class _QueueRowState extends State<_QueueRow> {
     return '${diff.inMinutes} mins';
   }
 
+  void _handleComplete(BuildContext context) {
+    final paymentMethod = widget.appointment.paymentMethod;
+    if (paymentMethod == 'pending') {
+      showPaymentDialog(context, kStatusDone);
+    } else {
+      widget.onStatusChange(kStatusDone);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final a = widget.appointment;
@@ -450,18 +495,25 @@ class _QueueRowState extends State<_QueueRow> {
               const SizedBox(width: 12),
               Expanded(
                 flex: 2,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(a.patientName,
-                        style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF64748B))),
-                    Text('ID: P-${a.patientId}',
-                        style: const TextStyle(
-                            fontSize: 10, color: Color(0xFF94A3B8))),
-                  ],
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: widget.onViewPatient,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(a.patientName,
+                            style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF64748B))),
+                        Text('ID: P-${a.patientId}',
+                            style: const TextStyle(
+                                fontSize: 10, color: Color(0xFF94A3B8))),
+                      ],
+                    ),
+                  ),
                 ),
               ),
               Expanded(
@@ -548,21 +600,47 @@ class _QueueRowState extends State<_QueueRow> {
             const SizedBox(width: 12),
             Expanded(
               flex: 2,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(a.patientName,
-                      style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.primary)),
-                  const SizedBox(height: 2),
-                  Text('ID: P-${a.patientId}',
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: AppTheme.primary.withValues(alpha: 0.7))),
-                ],
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: widget.onViewPatient,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(a.patientName,
+                                style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.primary)),
+                          ),
+                          InkWell(
+                            onTap: widget.onEditPatient,
+                            borderRadius: BorderRadius.circular(4),
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Icon(Icons.edit_rounded,
+                                  size: 14, color: AppTheme.primary),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text('ID: P-${a.patientId}',
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: AppTheme.primary.withValues(alpha: 0.7))),
+                    ],
+                  ),
+                ),
               ),
             ),
             Expanded(
@@ -679,18 +757,44 @@ class _QueueRowState extends State<_QueueRow> {
             const SizedBox(width: 12),
             Expanded(
               flex: 2,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(a.patientName,
-                      style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.primary)),
-                  Text('ID: P-${a.patientId}',
-                      style: TextStyle(
-                          fontSize: 10, color: context.textMutedColor)),
-                ],
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: widget.onViewPatient,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(a.patientName,
+                                style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.primary)),
+                          ),
+                          InkWell(
+                            onTap: widget.onEditPatient,
+                            borderRadius: BorderRadius.circular(4),
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Icon(Icons.edit_rounded,
+                                  size: 14, color: AppTheme.primary),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Text('ID: P-${a.patientId}',
+                          style: TextStyle(
+                              fontSize: 10, color: context.textMutedColor)),
+                    ],
+                  ),
+                ),
               ),
             ),
             Expanded(
@@ -740,7 +844,7 @@ class _QueueRowState extends State<_QueueRow> {
                     label: 'Complete',
                     icon: Icons.check_circle_rounded,
                     color: AppTheme.success,
-                    onTap: () => widget.onStatusChange(kStatusDone),
+                    onTap: () => _handleComplete(context),
                     filled: true,
                   ),
                 ],
@@ -773,18 +877,44 @@ class _QueueRowState extends State<_QueueRow> {
           const SizedBox(width: 12),
           Expanded(
             flex: 2,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(a.patientName,
-                    style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.primary)),
-                Text('ID: P-${a.patientId}',
-                    style:
-                        TextStyle(fontSize: 10, color: context.textMutedColor)),
-              ],
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: widget.onViewPatient,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(a.patientName,
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.primary)),
+                        ),
+                        InkWell(
+                          onTap: widget.onEditPatient,
+                          borderRadius: BorderRadius.circular(4),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Icon(Icons.edit_rounded,
+                                size: 14, color: AppTheme.primary),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text('ID: P-${a.patientId}',
+                        style: TextStyle(
+                            fontSize: 10, color: context.textMutedColor)),
+                  ],
+                ),
+              ),
             ),
           ),
           Expanded(
@@ -911,6 +1041,251 @@ class _ActionBtn extends StatelessWidget {
               Text(label,
                   style: TextStyle(
                       color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Queue Row Extension ──────────────────────────────────────────────────────
+
+extension _QueueRowStateExtension on _QueueRowState {
+  void showPaymentDialog(BuildContext context, String newStatus) {
+    showDialog(
+      context: context,
+      builder: (ctx) => _PaymentModeDialog(
+        appointment: widget.appointment,
+        onConfirm: (paymentMethod) {
+          widget.onStatusChangeWithPayment(newStatus, paymentMethod);
+        },
+      ),
+    );
+  }
+}
+
+// ── Payment Mode Dialog ──────────────────────────────────────────────────────
+
+class _PaymentModeDialog extends StatefulWidget {
+  final Appointment appointment;
+  final Function(String paymentMethod) onConfirm;
+
+  const _PaymentModeDialog({
+    required this.appointment,
+    required this.onConfirm,
+  });
+
+  @override
+  State<_PaymentModeDialog> createState() => _PaymentModeDialogState();
+}
+
+class _PaymentModeDialogState extends State<_PaymentModeDialog> {
+  String _selected = 'pending';
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppTheme.success.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.payment_rounded,
+                color: AppTheme.success, size: 24),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Complete Appointment',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Text('Select payment mode for consultation',
+                    style:
+                        TextStyle(fontSize: 12, color: context.textMutedColor)),
+              ],
+            ),
+          ),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.lightBg,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                  child: Text(
+                    widget.appointment.patientName.isNotEmpty
+                        ? widget.appointment.patientName[0].toUpperCase()
+                        : 'P',
+                    style: const TextStyle(
+                        color: AppTheme.primary, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.appointment.patientName,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 15),
+                      ),
+                      Text(
+                        'Token #${widget.appointment.tokenNumber} • ₹${widget.appointment.consultationFee.toStringAsFixed(0)}',
+                        style: TextStyle(
+                            color: context.textMutedColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          _PaymentOption(
+            icon: Icons.payments_rounded,
+            label: 'Cash',
+            value: 'cash',
+            color: AppTheme.success,
+            groupValue: _selected,
+            onChanged: (v) => setState(() => _selected = v),
+          ),
+          const SizedBox(height: 10),
+          _PaymentOption(
+            icon: Icons.qr_code_2_rounded,
+            label: 'UPI',
+            value: 'upi',
+            color: AppTheme.primary,
+            groupValue: _selected,
+            onChanged: (v) => setState(() => _selected = v),
+          ),
+          const SizedBox(height: 10),
+          _PaymentOption(
+            icon: Icons.credit_card_rounded,
+            label: 'Card',
+            value: 'card',
+            color: AppTheme.accent,
+            groupValue: _selected,
+            onChanged: (v) => setState(() => _selected = v),
+          ),
+          const SizedBox(height: 10),
+          _PaymentOption(
+            icon: Icons.schedule_rounded,
+            label: 'Pending',
+            value: 'pending',
+            color: AppTheme.warning,
+            groupValue: _selected,
+            onChanged: (v) => setState(() => _selected = v),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppTheme.success,
+            foregroundColor: Colors.white,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          onPressed: () {
+            Navigator.pop(context);
+            widget.onConfirm(_selected);
+          },
+          icon: const Icon(Icons.check_circle_rounded, size: 18),
+          label: const Text('Complete'),
+        ),
+      ],
+    );
+  }
+}
+
+class _PaymentOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+  final String groupValue;
+  final ValueChanged<String> onChanged;
+
+  const _PaymentOption({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.groupValue,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = groupValue == value;
+    return Material(
+      color: isSelected ? color.withValues(alpha: 0.1) : Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => onChanged(value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? color : Colors.grey.shade300,
+              width: isSelected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                    color: isSelected ? color : Colors.black87,
+                  ),
+                ),
+              ),
+              if (isSelected)
+                Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.check, color: Colors.white, size: 14),
+                ),
             ],
           ),
         ),
