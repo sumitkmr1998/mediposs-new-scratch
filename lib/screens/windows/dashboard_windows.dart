@@ -1071,13 +1071,20 @@ class _AlertBox extends StatelessWidget {
           if (items.isEmpty)
             _EmptyAlertState(label: emptyLabel)
           else
-            Column(
-              children: items.take(3).map((m) => _StockWarningCard(
-                medicine: m,
-                color: color,
-                tag: tagLabel,
-                icon: icon,
-              )).toList(),
+            SizedBox(
+              height: 380,
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  return _StockWarningCard(
+                    medicine: items[index],
+                    color: color,
+                    tag: tagLabel,
+                    icon: icon,
+                  );
+                },
+              ),
             ),
         ],
       ),
