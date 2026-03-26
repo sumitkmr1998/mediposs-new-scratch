@@ -19,6 +19,7 @@ class Prescription {
   String itemsJson; // List<PrescriptionItem>
   String labTestsJson; // List<String> — test names requested
   String vitalsJson; // {bp, weight, temp, spo2, pulse}
+  String imagesJson; // List<String> — paths to attached images
 
   bool dispensed; // Whether pharmacy has fulfilled this prescription
 
@@ -38,6 +39,7 @@ class Prescription {
     this.itemsJson = '[]',
     this.labTestsJson = '[]',
     this.vitalsJson = '{}',
+    this.imagesJson = '[]',
     this.dispensed = false,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();

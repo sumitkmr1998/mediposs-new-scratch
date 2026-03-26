@@ -154,7 +154,7 @@ class OpdProvider extends ChangeNotifier {
     bool isWalkIn = true,
     SyncService? syncService,
   }) async {
-    final now = await TimeService.getRobustTime();
+    final now = DateTime.now();
     final appt = Appointment(
       patientId: patientId,
       patientName: patientName,
@@ -190,11 +190,14 @@ class OpdProvider extends ChangeNotifier {
     return appt;
   }
 
-  void updateStatus(int appointmentId, String newStatus,
+  Future<void> updateStatus(int appointmentId, String newStatus,
       [SyncService? syncService]) async {
     final appt = ObjectBoxService.instance.appointmentBox.get(appointmentId);
     if (appt == null) return;
     appt.status = newStatus;
+    if (newStatus == kStatusWithDoctor) {
+      appt.calledAt = DateTime.now();
+    }
     ObjectBoxService.instance.appointmentBox.put(appt);
     loadAll();
 
@@ -219,6 +222,9 @@ class OpdProvider extends ChangeNotifier {
     if (appt == null) return;
     appt.status = newStatus;
     appt.paymentMethod = paymentMethod;
+    if (newStatus == kStatusWithDoctor) {
+      appt.calledAt = DateTime.now();
+    }
     ObjectBoxService.instance.appointmentBox.put(appt);
     loadAll();
 

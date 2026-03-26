@@ -34,10 +34,8 @@ class SalesProvider extends ChangeNotifier {
   DateTime? get customEnd => _customEnd;
 
   SalesProvider() {
-    // Default to all-time so synced sales from Hub are always visible
-    // (today filter would hide non-today sales pulled from Hub on Android)
-    _customStart = null;
-    _customEnd = null;
+    _activeFilter = SalesFilter.today;
+    _setToday();
   }
 
   void _setToday() {

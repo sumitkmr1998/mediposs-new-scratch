@@ -536,7 +536,7 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
       );
 
       final syncService = context.read<SyncService>();
-      context.read<PrescriptionProvider>().savePrescription(
+      await context.read<PrescriptionProvider>().savePrescription(
             appointmentId: widget.appointment.id,
             patientId: widget.appointment.patientId,
             patientName: widget.appointment.patientName,
@@ -547,8 +547,10 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
             notes: _notesCtrl.text.trim(),
             items: _items,
             labTests: _labTests,
+            images: _imagePaths,
             vitals: vitals,
             syncService: syncService,
+            context: context, // Added context for reactivity
           );
 
       if (!mounted) return;

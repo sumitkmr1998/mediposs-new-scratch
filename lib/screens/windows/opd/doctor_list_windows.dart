@@ -13,6 +13,10 @@ class DoctorListWindows extends StatefulWidget {
 }
 
 class _DoctorListWindowsState extends State<DoctorListWindows> {
+  final _searchCtrl = TextEditingController();
+  bool _isGridView = false;
+  String _filter = 'all';
+
   @override
   void initState() {
     super.initState();
@@ -22,9 +26,33 @@ class _DoctorListWindowsState extends State<DoctorListWindows> {
   }
 
   @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final opd = context.watch<OpdProvider>();
     final allDoctors = opd.doctors;
+
+    final filteredDoctors = allDoctors.where((d) {
+      final matchesSearch = _searchCtrl.text.isEmpty ||
+          d.name.toLowerCase().contains(_searchCtrl.text.toLowerCase()) ||
+          d.specialization
+              .toLowerCase()
+              .contains(_searchCtrl.text.toLowerCase());
+
+      switch (_filter) {
+        case 'active':
+          return matchesSearch && d.isActive;
+        case 'inactive':
+          return matchesSearch && !d.isActive;
+        default:
+          return matchesSearch;
+      }
+    }).toList();
+
     final activeCount = allDoctors.where((d) => d.isActive).length;
     final inactiveCount = allDoctors.where((d) => !d.isActive).length;
 
@@ -54,147 +82,65 @@ class _DoctorListWindowsState extends State<DoctorListWindows> {
             ),
           ],
         ),
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 16),
+            width: 280,
+            child: TextField(
+              controller: _searchCtrl,
+              decoration: InputDecoration(
+                hintText: 'Search doctors...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: AppTheme.lightBg,
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Stats Row
-            LayoutBuilder(builder: (ctx, constraints) {
-              final cols = constraints.maxWidth > 700
-                  ? 3
-                  : (constraints.maxWidth > 400 ? 2 : 1);
-              const spacing = 12.0;
-              final cardWidth =
-                  (constraints.maxWidth - (cols - 1) * spacing) / cols;
-
-              return Wrap(
-                spacing: spacing,
-                runSpacing: spacing,
-                children: [
-                  _StatCard(
-                    label: 'Total Doctors',
-                    value: '${allDoctors.length}',
-                    icon: Icons.groups_rounded,
-                    color: AppTheme.primary,
-                    width: cardWidth,
+            Row(
+              children: [
+                Expanded(
+                  child: _StatsRow(
+                    allCount: allDoctors.length,
+                    activeCount: activeCount,
+                    inactiveCount: inactiveCount,
+                    filter: _filter,
+                    onFilterChanged: (f) => setState(() => _filter = f),
                   ),
-                  _StatCard(
-                    label: 'Active',
-                    value: '$activeCount',
-                    icon: Icons.check_circle_rounded,
-                    color: AppTheme.success,
-                    width: cardWidth,
-                  ),
-                  _StatCard(
-                    label: 'Inactive',
-                    value: '$inactiveCount',
-                    icon: Icons.pause_circle_rounded,
-                    color: Colors.grey,
-                    width: cardWidth,
-                  ),
-                ],
-              );
-            }),
-
-            const SizedBox(height: 24),
-
-            // Bento Table
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                    color: AppTheme.lightBorder.withValues(alpha: 0.5)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 24,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  // Table Header
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 14),
-                    child: Row(
-                      children: [
-                        const Expanded(
-                          flex: 3,
-                          child: Text('DOCTOR',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 1.5,
-                                  color: Color(0xFF6B7B8D))),
-                        ),
-                        const SizedBox(
-                            width: 150,
-                            child: Text('SPECIALIZATION',
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 1.5,
-                                    color: Color(0xFF6B7B8D)))),
-                        const SizedBox(
-                            width: 100,
-                            child: Text('FEE',
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 1.5,
-                                    color: Color(0xFF6B7B8D)))),
-                        const SizedBox(
-                            width: 130,
-                            child: Text('PHONE',
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 1.5,
-                                    color: Color(0xFF6B7B8D)))),
-                        const SizedBox(
-                            width: 180,
-                            child: Text('STATUS',
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 1.5,
-                                    color: Color(0xFF6B7B8D)))),
-                        const SizedBox(
-                            width: 100,
-                            child: Align(
-                                alignment: Alignment.centerRight,
-                                child: Text('ACTIONS',
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: 1.5,
-                                        color: Color(0xFF6B7B8D))))),
-                      ],
-                    ),
-                  ),
-
-                  Divider(height: 1, color: context.borderColor),
-
-                  const SizedBox(height: 4),
-
-                  // Doctor Rows
-                  if (allDoctors.isEmpty)
-                    _EmptyState(onAdd: () => _showDoctorDialog(context))
-                  else
-                    ...allDoctors.map((d) => _DoctorRow(
-                          doctor: d,
-                          onEdit: () => _showDoctorDialog(context, doctor: d),
-                          onDelete: () => _confirmDelete(context, d),
-                        )),
-                ],
-              ),
+                ),
+                const SizedBox(width: 16),
+                _ViewToggle(
+                  isGrid: _isGridView,
+                  onToggle: () => setState(() => _isGridView = !_isGridView),
+                ),
+              ],
             ),
+            const SizedBox(height: 24),
+            if (_isGridView)
+              _DoctorGrid(
+                doctors: filteredDoctors,
+                onEdit: (d) => _showDoctorDialog(context, doctor: d),
+                onDelete: (d) => _confirmDelete(context, d),
+              )
+            else
+              _DoctorTable(
+                doctors: filteredDoctors,
+                onEdit: (d) => _showDoctorDialog(context, doctor: d),
+                onDelete: (d) => _confirmDelete(context, d),
+              ),
           ],
         ),
       ),
@@ -278,53 +224,110 @@ class _DoctorListWindowsState extends State<DoctorListWindows> {
   }
 }
 
-// ── Stat Card ───────────────────────────────────────────────────────────────
+class _StatsRow extends StatelessWidget {
+  final int allCount;
+  final int activeCount;
+  final int inactiveCount;
+  final String filter;
+  final ValueChanged<String> onFilterChanged;
 
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final double width;
-
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-    required this.width,
+  const _StatsRow({
+    required this.allCount,
+    required this.activeCount,
+    required this.inactiveCount,
+    required this.filter,
+    required this.onFilterChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: width,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
+    return Row(
+      children: [
+        _FilterChip(
+          label: 'All',
+          count: allCount,
+          isSelected: filter == 'all',
+          color: AppTheme.primary,
+          onTap: () => onFilterChanged('all'),
+        ),
+        const SizedBox(width: 8),
+        _FilterChip(
+          label: 'Active',
+          count: activeCount,
+          isSelected: filter == 'active',
+          color: AppTheme.success,
+          onTap: () => onFilterChanged('active'),
+        ),
+        const SizedBox(width: 8),
+        _FilterChip(
+          label: 'Inactive',
+          count: inactiveCount,
+          isSelected: filter == 'inactive',
+          color: Colors.grey,
+          onTap: () => onFilterChanged('inactive'),
+        ),
+      ],
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final int count;
+  final bool isSelected;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _FilterChip({
+    required this.label,
+    required this.count,
+    required this.isSelected,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: isSelected ? color.withValues(alpha: 0.15) : Colors.transparent,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isSelected ? color : Colors.grey.shade300,
+              width: isSelected ? 1.5 : 1,
+            ),
+          ),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? color : Colors.grey.shade600,
+                  fontWeight: FontWeight.w600,
                 ),
-                child: Icon(icon, color: color, size: 20),
               ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(value,
-                      style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: color)),
-                  Text(label,
-                      style: TextStyle(
-                          fontSize: 12, color: context.textMutedColor)),
-                ],
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isSelected ? color : Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : Colors.grey.shade600,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),
@@ -334,197 +337,31 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-// ── Doctor Row ─────────────────────────────────────────────────────────────
+class _ViewToggle extends StatelessWidget {
+  final bool isGrid;
+  final VoidCallback onToggle;
 
-class _DoctorRow extends StatelessWidget {
-  final Doctor doctor;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-
-  const _DoctorRow({
-    required this.doctor,
-    required this.onEdit,
-    required this.onDelete,
-  });
+  const _ViewToggle({required this.isGrid, required this.onToggle});
 
   @override
   Widget build(BuildContext context) {
-    final isInactive = !doctor.isActive;
-
     return Container(
-      margin: const EdgeInsets.only(bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
       decoration: BoxDecoration(
-        color: isInactive
-            ? Colors.grey.withValues(alpha: 0.05)
-            : AppTheme.primary.withValues(alpha: 0.02),
-        borderRadius: BorderRadius.circular(14),
+        color: AppTheme.lightBg,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Doctor info
-          Expanded(
-            flex: 3,
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: isInactive
-                      ? Colors.grey.withValues(alpha: 0.15)
-                      : AppTheme.primary.withValues(alpha: 0.1),
-                  child: Text(
-                    doctor.name.isNotEmpty ? doctor.name[0].toUpperCase() : 'D',
-                    style: TextStyle(
-                        color: isInactive ? Colors.grey : AppTheme.primary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text('Dr. ${doctor.name}',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
-                                  color: isInactive
-                                      ? Colors.grey
-                                      : Colors.black87)),
-                          if (isInactive) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Text('INACTIVE',
-                                  style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.grey,
-                                      letterSpacing: 0.5)),
-                            ),
-                          ],
-                        ],
-                      ),
-                      if (doctor.qualifications.isNotEmpty)
-                        Text(doctor.qualifications,
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: context.textMutedColor,
-                                fontWeight: FontWeight.w400)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+          _ToggleBtn(
+            icon: Icons.view_list_rounded,
+            isSelected: !isGrid,
+            onTap: onToggle,
           ),
-
-          // Specialization
-          SizedBox(
-            width: 150,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF14A085).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                doctor.specialization,
-                style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF14A085)),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 16),
-
-          // Fee
-          SizedBox(
-            width: 100,
-            child: Text(
-              '₹${doctor.consultationFee.toStringAsFixed(0)}',
-              style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  color: isInactive ? Colors.grey : AppTheme.success),
-            ),
-          ),
-
-          // Phone
-          SizedBox(
-            width: 130,
-            child: Text(
-              doctor.phone.isNotEmpty ? doctor.phone : '--',
-              style: TextStyle(
-                  fontSize: 13,
-                  color: context.textMutedColor,
-                  fontFamily: doctor.phone.isNotEmpty ? 'monospace' : null),
-            ),
-          ),
-
-          // Status Toggle
-          SizedBox(
-            width: 180,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Switch(
-                  value: doctor.isActive,
-                  onChanged: (v) {
-                    doctor.isActive = v;
-                    final sync = context.read<SyncService>();
-                    context
-                        .read<OpdProvider>()
-                        .saveDoctor(doctor, syncService: sync);
-                  },
-                  activeColor: Colors.white,
-                  activeTrackColor: AppTheme.primary,
-                  inactiveThumbColor: Colors.white,
-                  inactiveTrackColor: const Color(0xFFCBD5E1),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  doctor.isActive ? 'Active' : 'Inactive',
-                  style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: doctor.isActive ? AppTheme.success : Colors.grey),
-                ),
-              ],
-            ),
-          ),
-
-          // Actions
-          SizedBox(
-            width: 100,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _ActionBtn(
-                  icon: Icons.edit_rounded,
-                  color: AppTheme.warning,
-                  onTap: onEdit,
-                  tooltip: 'Edit',
-                ),
-                const SizedBox(width: 6),
-                _ActionBtn(
-                  icon: Icons.delete_rounded,
-                  color: AppTheme.danger,
-                  onTap: onDelete,
-                  tooltip: 'Delete',
-                ),
-              ],
-            ),
+          _ToggleBtn(
+            icon: Icons.grid_view_rounded,
+            isSelected: isGrid,
+            onTap: onToggle,
           ),
         ],
       ),
@@ -532,15 +369,494 @@ class _DoctorRow extends StatelessWidget {
   }
 }
 
-// ── Action Button ───────────────────────────────────────────────────────────
+class _ToggleBtn extends StatelessWidget {
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
 
-class _ActionBtn extends StatelessWidget {
+  const _ToggleBtn({
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: isSelected ? AppTheme.primary : Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Icon(
+            icon,
+            size: 20,
+            color: isSelected ? Colors.white : Colors.grey.shade500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DoctorTable extends StatelessWidget {
+  final List<Doctor> doctors;
+  final Function(Doctor) onEdit;
+  final Function(Doctor) onDelete;
+
+  const _DoctorTable({
+    required this.doctors,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppTheme.lightBorder.withValues(alpha: 0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            child: Row(
+              children: [
+                const Expanded(
+                  flex: 3,
+                  child: Text('DOCTOR',
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.5,
+                          color: Color(0xFF6B7B8D))),
+                ),
+                const SizedBox(
+                    width: 150,
+                    child: Text('SPECIALIZATION',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.5,
+                            color: Color(0xFF6B7B8D)))),
+                const SizedBox(
+                    width: 100,
+                    child: Text('FEE',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.5,
+                            color: Color(0xFF6B7B8D)))),
+                const SizedBox(
+                    width: 130,
+                    child: Text('PHONE',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.5,
+                            color: Color(0xFF6B7B8D)))),
+                const SizedBox(
+                    width: 130,
+                    child: Text('STATUS',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.5,
+                            color: Color(0xFF6B7B8D)))),
+                const SizedBox(
+                    width: 100,
+                    child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Text('ACTIONS',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1.5,
+                                color: Color(0xFF6B7B8D))))),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: context.borderColor),
+          if (doctors.isEmpty)
+            _EmptyState(onAdd: () {})
+          else
+            ...doctors.map((d) => _DoctorTableRow(
+                  doctor: d,
+                  onEdit: () => onEdit(d),
+                  onDelete: () => onDelete(d),
+                )),
+        ],
+      ),
+    );
+  }
+}
+
+class _DoctorTableRow extends StatefulWidget {
+  final Doctor doctor;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _DoctorTableRow({
+    required this.doctor,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  State<_DoctorTableRow> createState() => _DoctorTableRowState();
+}
+
+class _DoctorTableRowState extends State<_DoctorTableRow> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isInactive = !widget.doctor.isActive;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: _isHovered
+              ? AppTheme.primary.withValues(alpha: 0.05)
+              : (isInactive ? Colors.grey.shade50 : Colors.white),
+          borderRadius: BorderRadius.circular(12),
+          border: _isHovered
+              ? Border.all(color: AppTheme.primary.withValues(alpha: 0.2))
+              : null,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: Row(
+                children: [
+                  _DoctorAvatar(
+                    name: widget.doctor.name,
+                    isActive: widget.doctor.isActive,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text('Dr. ${widget.doctor.name}',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                    color: isInactive
+                                        ? Colors.grey
+                                        : Colors.black87)),
+                            if (isInactive) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade200,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text('INACTIVE',
+                                    style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.grey,
+                                        letterSpacing: 0.5)),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (widget.doctor.qualifications.isNotEmpty)
+                          Text(widget.doctor.qualifications,
+                              style: TextStyle(
+                                  fontSize: 11, color: context.textMutedColor)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              width: 150,
+              child: _SpecializationBadge(
+                  specialization: widget.doctor.specialization),
+            ),
+            const SizedBox(width: 16),
+            SizedBox(
+              width: 100,
+              child: Text(
+                '₹${widget.doctor.consultationFee.toStringAsFixed(0)}',
+                style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: isInactive ? Colors.grey : AppTheme.success),
+              ),
+            ),
+            SizedBox(
+              width: 130,
+              child: Text(
+                widget.doctor.phone.isNotEmpty ? widget.doctor.phone : '--',
+                style: TextStyle(
+                    fontSize: 13,
+                    color: context.textMutedColor,
+                    fontFamily:
+                        widget.doctor.phone.isNotEmpty ? 'monospace' : null),
+              ),
+            ),
+            SizedBox(
+              width: 130,
+              child: _StatusToggle(doctor: widget.doctor),
+            ),
+            SizedBox(
+              width: 100,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  _IconActionBtn(
+                    icon: Icons.edit_rounded,
+                    color: AppTheme.warning,
+                    onTap: widget.onEdit,
+                    tooltip: 'Edit',
+                  ),
+                  const SizedBox(width: 4),
+                  _IconActionBtn(
+                    icon: Icons.delete_rounded,
+                    color: AppTheme.danger,
+                    onTap: widget.onDelete,
+                    tooltip: 'Delete',
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DoctorAvatar extends StatelessWidget {
+  final String name;
+  final bool isActive;
+
+  const _DoctorAvatar({required this.name, required this.isActive});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = isActive
+        ? [AppTheme.primary, AppTheme.primaryLight]
+        : [Colors.grey.shade400, Colors.grey.shade500];
+
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: colors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Center(
+        child: Text(
+          name.isNotEmpty ? name[0].toUpperCase() : 'D',
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+      ),
+    );
+  }
+}
+
+class _SpecializationBadge extends StatelessWidget {
+  final String specialization;
+
+  const _SpecializationBadge({required this.specialization});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF14A085).withValues(alpha: 0.1),
+            const Color(0xFF14A085).withValues(alpha: 0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        specialization,
+        style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF14A085)),
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+}
+
+class _StatusToggle extends StatelessWidget {
+  final Doctor doctor;
+
+  const _StatusToggle({required this.doctor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _AnimatedSwitch(
+          value: doctor.isActive,
+          onChanged: (v) {
+            doctor.isActive = v;
+            final sync = context.read<SyncService>();
+            context.read<OpdProvider>().saveDoctor(doctor, syncService: sync);
+          },
+        ),
+        const SizedBox(width: 8),
+        Text(
+          doctor.isActive ? 'Active' : 'Inactive',
+          style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: doctor.isActive ? AppTheme.success : Colors.grey),
+        ),
+      ],
+    );
+  }
+}
+
+class _AnimatedKey extends StatefulWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _AnimatedKey({required this.value, required this.onChanged});
+
+  @override
+  State<_AnimatedKey> createState() => _AnimatedKeyState();
+}
+
+class _AnimatedKeyState extends State<_AnimatedKey>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    _animation = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+    if (widget.value) _controller.forward();
+  }
+
+  @override
+  void didUpdateWidget(_AnimatedKey oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != oldWidget.value) {
+      if (widget.value) {
+        _controller.forward();
+      } else {
+        _controller.reverse();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => widget.onChanged(!widget.value),
+      child: AnimatedBuilder(
+        animation: _animation,
+        builder: (context, child) {
+          return Container(
+            width: 44,
+            height: 24,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: Color.lerp(
+                  const Color(0xFFCBD5E1), AppTheme.primary, _animation.value),
+            ),
+            child: Stack(
+              children: [
+                Positioned(
+                  left: 2 + (18 * _animation.value),
+                  top: 2,
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AnimatedSwitch extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _AnimatedSwitch({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return _AnimatedKey(value: value, onChanged: onChanged);
+  }
+}
+
+class _IconActionBtn extends StatelessWidget {
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
   final String tooltip;
 
-  const _ActionBtn({
+  const _IconActionBtn({
     required this.icon,
     required this.color,
     required this.onTap,
@@ -567,7 +883,211 @@ class _ActionBtn extends StatelessWidget {
   }
 }
 
-// ── Empty State ─────────────────────────────────────────────────────────────
+class _DoctorGrid extends StatelessWidget {
+  final List<Doctor> doctors;
+  final Function(Doctor) onEdit;
+  final Function(Doctor) onDelete;
+
+  const _DoctorGrid({
+    required this.doctors,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (doctors.isEmpty) {
+      return _EmptyState(onAdd: () {});
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = constraints.maxWidth > 1200
+            ? 4
+            : (constraints.maxWidth > 800 ? 3 : 2);
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 0.85,
+          ),
+          itemCount: doctors.length,
+          itemBuilder: (context, index) => _DoctorCard(
+            doctor: doctors[index],
+            onEdit: () => onEdit(doctors[index]),
+            onDelete: () => onDelete(doctors[index]),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _DoctorCard extends StatefulWidget {
+  final Doctor doctor;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _DoctorCard({
+    required this.doctor,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  State<_DoctorCard> createState() => _DoctorCardState();
+}
+
+class _DoctorCardState extends State<_DoctorCard> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isInactive = !widget.doctor.isActive;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        transform: _isHovered
+            ? (Matrix4.identity()..translate(0, -4, 0))
+            : Matrix4.identity(),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: _isHovered
+                ? AppTheme.primary.withValues(alpha: 0.3)
+                : AppTheme.lightBorder.withValues(alpha: 0.3),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: _isHovered
+                  ? AppTheme.primary.withValues(alpha: 0.15)
+                  : Colors.black.withValues(alpha: 0.04),
+              blurRadius: _isHovered ? 20 : 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _DoctorAvatar(
+                    name: widget.doctor.name,
+                    isActive: widget.doctor.isActive,
+                  ),
+                  const SizedBox(height: 12),
+                  Text('Dr. ${widget.doctor.name}',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          color: isInactive ? Colors.grey : Colors.black87),
+                      textAlign: TextAlign.center),
+                  const SizedBox(height: 4),
+                  _SpecializationBadge(
+                      specialization: widget.doctor.specialization),
+                  const Spacer(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '₹${widget.doctor.consultationFee.toStringAsFixed(0)}',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 18,
+                            color: isInactive ? Colors.grey : AppTheme.success),
+                      ),
+                      Text('/visit',
+                          style: TextStyle(
+                              fontSize: 12, color: context.textMutedColor)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _CardActionBtn(
+                          icon: Icons.edit_rounded,
+                          color: AppTheme.warning,
+                          onTap: widget.onEdit,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _CardActionBtn(
+                          icon: Icons.delete_rounded,
+                          color: AppTheme.danger,
+                          onTap: widget.onDelete,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            if (!isInactive)
+              Positioned(
+                top: 12,
+                right: 12,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: AppTheme.success,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.success.withValues(alpha: 0.4),
+                        blurRadius: 6,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CardActionBtn extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _CardActionBtn({
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: color.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Icon(icon, size: 18, color: color),
+        ),
+      ),
+    );
+  }
+}
 
 class _EmptyState extends StatelessWidget {
   final VoidCallback onAdd;
@@ -589,34 +1109,19 @@ class _EmptyState extends StatelessWidget {
                 size: 40, color: AppTheme.primary.withValues(alpha: 0.5)),
           ),
           const SizedBox(height: 16),
-          const Text('No doctors added yet',
+          const Text('No doctors found',
               style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF1A2332))),
           const SizedBox(height: 6),
-          Text('Add your first doctor to get started',
+          Text('Try adjusting your search or filters',
               style: TextStyle(fontSize: 13, color: context.textMutedColor)),
-          const SizedBox(height: 20),
-          ElevatedButton.icon(
-            onPressed: onAdd,
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Add Doctor'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-            ),
-          ),
         ],
       ),
     );
   }
 }
-
-// ── Doctor Dialog ───────────────────────────────────────────────────────────
 
 class _DoctorDialog extends StatefulWidget {
   final Doctor? doctor;
@@ -660,22 +1165,26 @@ class _DoctorDialogState extends State<_DoctorDialog> {
     final isEditing = widget.doctor != null;
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: Container(
-        width: 450,
-        padding: const EdgeInsets.all(24),
+        width: 480,
+        padding: const EdgeInsets.all(28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppTheme.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(14),
+                    gradient: LinearGradient(
+                      colors: [
+                        AppTheme.primary.withValues(alpha: 0.15),
+                        AppTheme.primaryLight.withValues(alpha: 0.1),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   child: const Icon(Icons.medical_services_rounded,
                       color: AppTheme.primary, size: 28),
@@ -688,7 +1197,7 @@ class _DoctorDialogState extends State<_DoctorDialog> {
                       Text(
                         isEditing ? 'Edit Doctor' : 'Add Doctor',
                         style: const TextStyle(
-                            fontSize: 20,
+                            fontSize: 22,
                             fontWeight: FontWeight.w800,
                             color: Color(0xFF1A2332)),
                       ),
@@ -697,97 +1206,70 @@ class _DoctorDialogState extends State<_DoctorDialog> {
                             ? 'Update consultant details'
                             : 'Register a new consultant',
                         style: TextStyle(
-                            fontSize: 12, color: context.textMutedColor),
+                            fontSize: 13, color: context.textMutedColor),
                       ),
                     ],
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.close, color: context.textMutedColor),
+                  icon:
+                      Icon(Icons.close_rounded, color: context.textMutedColor),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
             ),
-
-            const SizedBox(height: 24),
-
-            // Form fields
-            TextField(
-              controller: _nameCtrl,
-              decoration: InputDecoration(
-                labelText: 'Full Name *',
-                prefixIcon: const Icon(Icons.person_outline, size: 20),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                isDense: true,
-              ),
-            ),
-
-            const SizedBox(height: 14),
-
-            TextField(
-              controller: _specCtrl,
-              decoration: InputDecoration(
-                labelText: 'Specialization',
-                prefixIcon: const Icon(Icons.category_outlined, size: 20),
-                hintText: 'General / Ortho / Gynae...',
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                isDense: true,
-              ),
-            ),
-
-            const SizedBox(height: 14),
-
-            TextField(
-              controller: _qualCtrl,
-              decoration: InputDecoration(
-                labelText: 'Qualifications',
-                prefixIcon: const Icon(Icons.school_outlined, size: 20),
-                hintText: 'MBBS, MD...',
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                isDense: true,
-              ),
-            ),
-
-            const SizedBox(height: 14),
-
+            const SizedBox(height: 28),
             Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: _feeCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Consultation Fee',
-                      prefixIcon: const Icon(Icons.currency_rupee, size: 20),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      isDense: true,
-                    ),
+                  flex: 2,
+                  child: _ModernTextField(
+                    controller: _nameCtrl,
+                    label: 'Full Name',
+                    prefix: Icons.person_outline,
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: TextField(
-                    controller: _phoneCtrl,
-                    keyboardType: TextInputType.phone,
-                    decoration: InputDecoration(
-                      labelText: 'Phone',
-                      prefixIcon: const Icon(Icons.phone_outlined, size: 20),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      isDense: true,
-                    ),
+                  child: _ModernTextField(
+                    controller: _feeCtrl,
+                    label: 'Fee',
+                    prefix: Icons.currency_rupee,
+                    keyboardType: TextInputType.number,
                   ),
                 ),
               ],
             ),
-
-            const SizedBox(height: 24),
-
-            // Actions
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _ModernTextField(
+                    controller: _specCtrl,
+                    label: 'Specialization',
+                    prefix: Icons.category_outlined,
+                    hint: 'General / Ortho...',
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _ModernTextField(
+                    controller: _phoneCtrl,
+                    label: 'Phone',
+                    prefix: Icons.phone_outlined,
+                    keyboardType: TextInputType.phone,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _ModernTextField(
+              controller: _qualCtrl,
+              label: 'Qualifications',
+              prefix: Icons.school_outlined,
+              hint: 'MBBS, MD...',
+            ),
+            const SizedBox(height: 28),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -799,15 +1281,16 @@ class _DoctorDialogState extends State<_DoctorDialog> {
                 const SizedBox(width: 12),
                 ElevatedButton.icon(
                   onPressed: _save,
-                  icon: Icon(isEditing ? Icons.save : Icons.add, size: 18),
+                  icon: Icon(isEditing ? Icons.save_rounded : Icons.add_rounded,
+                      size: 18),
                   label: Text(isEditing ? 'Save Changes' : 'Add Doctor'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 12),
+                        horizontal: 24, vertical: 14),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
               ],
@@ -856,6 +1339,50 @@ class _DoctorDialogState extends State<_DoctorDialog> {
         backgroundColor: AppTheme.success,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+}
+
+class _ModernTextField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final IconData prefix;
+  final String? hint;
+  final TextInputType? keyboardType;
+
+  const _ModernTextField({
+    required this.controller,
+    required this.label,
+    required this.prefix,
+    this.hint,
+    this.keyboardType,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(prefix, size: 20, color: AppTheme.primaryLight),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppTheme.primary, width: 2),
+        ),
+        isDense: true,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
     );
   }

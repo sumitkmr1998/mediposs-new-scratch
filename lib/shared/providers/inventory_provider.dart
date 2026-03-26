@@ -27,6 +27,27 @@ class InventoryProvider extends ChangeNotifier {
   List<PurchaseRecord> get purchaseHistory =>
       List.unmodifiable(_purchaseHistory);
   int get lowStockCount => _medicines.where((m) => m.isLowStock).length;
+  
+  int get expiredCount => expiredMedicines.length;
+  int get nearExpiryCount => nearExpiryMedicines.length;
+
+  List<Medicine> get expiredMedicines {
+    final now = DateTime.now();
+    return _medicines.where((m) => m.batches.any((b) => 
+      b.expiryDate.isBefore(now) && (b.mainStock > 0 || b.storeStock > 0)
+    )).toList();
+  }
+
+  List<Medicine> get nearExpiryMedicines {
+    final now = DateTime.now();
+    final threshold = now.add(const Duration(days: 90)); // 3 months
+    return _medicines.where((m) => m.batches.any((b) => 
+      b.expiryDate.isAfter(now) && 
+      b.expiryDate.isBefore(threshold) && 
+      (b.mainStock > 0 || b.storeStock > 0)
+    )).toList();
+  }
+
   double get totalInventoryValue =>
       _medicines.fold(0, (sum, m) => sum + (m.storeStock * m.sellingPrice));
 

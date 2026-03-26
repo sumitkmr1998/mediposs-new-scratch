@@ -23,254 +23,288 @@ class DashboardAndroid extends StatelessWidget {
     final rangeLabel = _getRangeLabel(sales);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Dashboard'),
-        actions: [
-          Consumer<WebSocketService>(
-            builder: (context, wsvc, _) {
-              return IconButton(
-                icon: Icon(
-                  wsvc.connected ? Icons.link : Icons.link_off,
-                  color: wsvc.connected ? AppTheme.success : AppTheme.accent,
-                ),
-                tooltip: 'Connection Status',
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ConnectionScreen()),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => auth.logout(),
-            tooltip: 'Logout',
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Welcome back, ${auth.currentUser?.name ?? 'User'}! 👋',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: cs.onSurface,
-                    )),
-            const SizedBox(height: 4),
-            Text('Here\'s your store overview',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: context.textMutedColor)),
-            const SizedBox(height: 16),
-
-            // Global Date Filter Bar
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
+      backgroundColor: cs.surface,
+      body: CustomScrollView(
+        slivers: [
+          // Modern App Bar
+          SliverAppBar(
+            expandedHeight: 120,
+            floating: true,
+            pinned: true,
+            backgroundColor: cs.surface,
+            elevation: 0,
+            flexibleSpace: FlexibleSpaceBar(
+              titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
+              title: Row(
                 children: [
-                  _FilterChip(
-                    label: 'Today',
-                    isSelected: sales.activeFilter == SalesFilter.today,
-                    onSelected: () => sales.setFilter(SalesFilter.today),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [AppTheme.primary, AppTheme.primaryLight],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.dashboard_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  _FilterChip(
-                    label: 'Yesterday',
-                    isSelected: sales.activeFilter == SalesFilter.yesterday,
-                    onSelected: () => sales.setFilter(SalesFilter.yesterday),
-                  ),
-                  const SizedBox(width: 8),
-                  _FilterChip(
-                    label: 'Last 7 Days',
-                    isSelected: sales.activeFilter == SalesFilter.last7Days,
-                    onSelected: () => sales.setFilter(SalesFilter.last7Days),
-                  ),
-                  const SizedBox(width: 8),
-                  _FilterChip(
-                    label: 'All Time',
-                    isSelected: sales.activeFilter == SalesFilter.allTime,
-                    onSelected: () => sales.setFilter(SalesFilter.allTime),
-                  ),
-                  const SizedBox(width: 8),
-                  _FilterChip(
-                    label: 'Custom',
-                    isSelected: sales.activeFilter == SalesFilter.custom,
-                    onSelected: () async {
-                      final range = await showDateRangePicker(
-                        context: context,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime.now(),
-                        builder: (ctx, child) {
-                          return Theme(
-                            data: Theme.of(context).copyWith(
-                              colorScheme:
-                                  Theme.of(context).colorScheme.copyWith(
-                                        primary: AppTheme.primary,
-                                        onPrimary: Colors.white,
-                                      ),
-                            ),
-                            child: child!,
-                          );
-                        },
-                      );
-                      if (range != null) {
-                        sales.setFilter(SalesFilter.custom, range: range);
-                      }
-                    },
+                  const SizedBox(width: 10),
+                  Text(
+                    'Dashboard',
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 20,
+                    ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
-
-            // KPI Grid
-            LayoutBuilder(builder: (ctx, constraints) {
-              final cols = constraints.maxWidth > 900
-                  ? 3
-                  : (constraints.maxWidth > 600 ? 2 : 1);
-              final spacing = 16.0;
-              final cardWidth =
-                  (constraints.maxWidth - (cols - 1) * spacing) / cols;
-              final rangeLabel = _getRangeLabel(sales);
-              return Wrap(
-                spacing: spacing,
-                runSpacing: spacing,
-                children: [
-                  _KpiCard(
-                    label: "$rangeLabel Revenue",
-                    value:
-                        '₹${sales.sales.fold(0.0, (sum, s) => sum + s.total).toStringAsFixed(0)}',
-                    icon: Icons.currency_rupee,
-                    color: AppTheme.success,
-                    width: (constraints.maxWidth - (cols - 1) * 16) / cols,
+            actions: [
+              Consumer<WebSocketService>(
+                builder: (context, wsvc, _) {
+                  return Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    child: IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: wsvc.connected
+                              ? AppTheme.success.withValues(alpha: 0.1)
+                              : AppTheme.warning.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          wsvc.connected ? Icons.wifi : Icons.wifi_off,
+                          color: wsvc.connected
+                              ? AppTheme.success
+                              : AppTheme.warning,
+                          size: 20,
+                        ),
+                      ),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const ConnectionScreen()),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              Container(
+                margin: const EdgeInsets.only(right: 12),
+                child: IconButton(
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.danger.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.logout_rounded,
+                      color: AppTheme.danger,
+                      size: 20,
+                    ),
                   ),
-                  _KpiCard(
-                    label: '$rangeLabel Sales',
-                    value: '${sales.sales.length}',
-                    icon: Icons.receipt_long,
-                    color: AppTheme.primary,
-                    width: (constraints.maxWidth - (cols - 1) * 16) / cols,
-                  ),
-                  _KpiCard(
-                    label: 'All-time Revenue',
-                    value:
-                        '₹${(sales.totalRevenue / 1000).toStringAsFixed(1)}K',
-                    icon: Icons.trending_up,
-                    color: AppTheme.primaryLight,
-                    width: (constraints.maxWidth - (cols - 1) * 16) / cols,
-                  ),
-                  _KpiCard(
-                    label: 'Low Stock Items',
-                    value: '${inv.lowStockCount}',
-                    icon: Icons.warning_amber,
-                    color: AppTheme.warning,
-                    width: (constraints.maxWidth - (cols - 1) * 16) / cols,
-                  ),
-                  _KpiCard(
-                    label: 'Total Products',
-                    value: '${inv.medicines.length}',
-                    icon: Icons.medication,
-                    color: AppTheme.accent,
-                    width: (constraints.maxWidth - (cols - 1) * 16) / cols,
-                  ),
-                  _KpiCard(
-                    label: 'Store Stock Value',
-                    value:
-                        '₹${(inv.totalInventoryValue / 1000).toStringAsFixed(1)}K',
-                    icon: Icons.warehouse,
-                    color: const Color(0xFF7C3AED),
-                    width: cardWidth,
-                  ),
-                ],
-              );
-            }),
-
-            const SizedBox(height: 32),
-
-            // Revenue Breakdown
-            Text('$rangeLabel Revenue Breakdown',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 12),
-            LayoutBuilder(builder: (ctx, constraints) {
-              final width = constraints.maxWidth > 500
-                  ? (constraints.maxWidth - 32) / 3
-                  : constraints.maxWidth;
-
-              // Calculate breakdown from currently filtered sales
-              double cash = 0, upi = 0, card = 0;
-              for (final s in sales.sales) {
-                if (s.paymentMethod == 'mixed') {
-                  cash += s.cashAmount;
-                  upi += s.upiAmount;
-                  card += s.cardAmount;
-                } else if (s.paymentMethod == 'cash') {
-                  cash += s.total;
-                } else if (s.paymentMethod == 'upi') {
-                  upi += s.total;
-                } else if (s.paymentMethod == 'card') {
-                  card += s.total;
-                }
-              }
-
-              return Wrap(
-                spacing: 16,
-                runSpacing: 16,
-                children: [
-                  _KpiCard(
-                    label: "Cash",
-                    value: '₹${cash.toStringAsFixed(0)}',
-                    icon: Icons.money,
-                    color: AppTheme.success,
-                    width: width,
-                  ),
-                  _KpiCard(
-                    label: "UPI",
-                    value: '₹${upi.toStringAsFixed(0)}',
-                    icon: Icons.qr_code_scanner,
-                    color: AppTheme.primary,
-                    width: width,
-                  ),
-                  _KpiCard(
-                    label: "Card",
-                    value: '₹${card.toStringAsFixed(0)}',
-                    icon: Icons.credit_card,
-                    color: AppTheme.warning,
-                    width: width,
-                  ),
-                ],
-              );
-            }),
-
-            const SizedBox(height: 32),
-
-            // Quick Actions
-            Text('Quick Actions',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 12),
-            _QuickActions(),
-
-            if (inv.lowStockCount > 0) ...[
-              const SizedBox(height: 32),
-              Text('⚠️ Low Stock Alerts',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.warning,
-                      )),
-              const SizedBox(height: 12),
-              ...inv.medicines
-                  .where((m) => m.isLowStock)
-                  .take(5)
-                  .map((m) => _LowStockTile(medicine: m)),
+                  onPressed: () => auth.logout(),
+                ),
+              ),
             ],
+          ),
+
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Welcome Section
+                  _WelcomeSection(auth: auth, cs: cs),
+
+                  const SizedBox(height: 24),
+
+                  // Date Filter
+                  _DateFilterBar(sales: sales, cs: cs),
+
+                  const SizedBox(height: 24),
+
+                  // Primary Stats
+                  _PrimaryStats(
+                    sales: sales,
+                    inv: inv,
+                    rangeLabel: rangeLabel,
+                    cs: cs,
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Revenue Breakdown
+                  _RevenueBreakdown(
+                    sales: sales,
+                    rangeLabel: rangeLabel,
+                    cs: cs,
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Quick Actions
+                  _QuickActionsCard(cs: cs),
+
+                  const SizedBox(height: 20),
+
+                  // Low Stock Alerts
+                  if (inv.lowStockCount > 0) _LowStockCard(inv: inv, cs: cs),
+
+                  const SizedBox(height: 20),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WelcomeSection extends StatelessWidget {
+  final AuthProvider auth;
+  final ColorScheme cs;
+
+  const _WelcomeSection({required this.auth, required this.cs});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppTheme.primary.withValues(alpha: 0.08),
+            AppTheme.primaryLight.withValues(alpha: 0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppTheme.primary.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Welcome back,',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: cs.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  auth.currentUser?.name ?? 'User',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.person_rounded,
+              color: AppTheme.primary,
+              size: 28,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DateFilterBar extends StatelessWidget {
+  final SalesProvider sales;
+  final ColorScheme cs;
+
+  const _DateFilterBar({required this.sales, required this.cs});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: cs.outline.withValues(alpha: 0.08),
+        ),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _FilterChip(
+              label: 'Today',
+              isSelected: sales.activeFilter == SalesFilter.today,
+              onSelected: () => sales.setFilter(SalesFilter.today),
+            ),
+            _FilterChip(
+              label: 'Yesterday',
+              isSelected: sales.activeFilter == SalesFilter.yesterday,
+              onSelected: () => sales.setFilter(SalesFilter.yesterday),
+            ),
+            _FilterChip(
+              label: '7 Days',
+              isSelected: sales.activeFilter == SalesFilter.last7Days,
+              onSelected: () => sales.setFilter(SalesFilter.last7Days),
+            ),
+            _FilterChip(
+              label: 'All',
+              isSelected: sales.activeFilter == SalesFilter.allTime,
+              onSelected: () => sales.setFilter(SalesFilter.allTime),
+            ),
+            _FilterChip(
+              label: 'Custom',
+              isSelected: sales.activeFilter == SalesFilter.custom,
+              onSelected: () async {
+                final range = await showDateRangePicker(
+                  context: context,
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime.now(),
+                  builder: (ctx, child) {
+                    return Theme(
+                      data: Theme.of(context).copyWith(
+                        colorScheme: Theme.of(context).colorScheme.copyWith(
+                              primary: AppTheme.primary,
+                              onPrimary: Colors.white,
+                            ),
+                      ),
+                      child: child!,
+                    );
+                  },
+                );
+                if (range != null) {
+                  sales.setFilter(SalesFilter.custom, range: range);
+                }
+              },
+            ),
           ],
         ),
       ),
@@ -278,48 +312,44 @@ class DashboardAndroid extends StatelessWidget {
   }
 }
 
-class _KpiCard extends StatelessWidget {
+class _FilterChip extends StatelessWidget {
   final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final double width;
+  final bool isSelected;
+  final VoidCallback onSelected;
 
-  const _KpiCard({
+  const _FilterChip({
     required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-    required this.width,
+    required this.isSelected,
+    required this.onSelected,
   });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: width,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: color, size: 22),
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onSelected,
+          borderRadius: BorderRadius.circular(10),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            decoration: BoxDecoration(
+              color: isSelected ? AppTheme.primary : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: isSelected
+                    ? Colors.white
+                    : cs.onSurface.withValues(alpha: 0.6),
               ),
-              const SizedBox(height: 16),
-              Text(value,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: color,
-                      )),
-              const SizedBox(height: 4),
-              Text(label, style: Theme.of(context).textTheme.bodySmall),
-            ],
+            ),
           ),
         ),
       ),
@@ -327,118 +357,571 @@ class _KpiCard extends StatelessWidget {
   }
 }
 
-class _QuickActions extends StatelessWidget {
+class _PrimaryStats extends StatelessWidget {
+  final SalesProvider sales;
+  final InventoryProvider inv;
+  final String rangeLabel;
+  final ColorScheme cs;
+
+  const _PrimaryStats({
+    required this.sales,
+    required this.inv,
+    required this.rangeLabel,
+    required this.cs,
+  });
+
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _ActionButton(
-          label: 'New Sale',
-          icon: Icons.point_of_sale,
-          color: AppTheme.primary,
-          onTap: () => Navigator.push(
-              context, MaterialPageRoute(builder: (_) => const PosScreen())),
+        Text(
+          'Overview',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: cs.onSurface,
+          ),
         ),
-        _ActionButton(
-          label: 'Warehouse',
-          icon: Icons.warehouse,
-          color: const Color(0xFF7C3AED),
-          onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const WarehouseScreen())),
-        ),
-        _ActionButton(
-          label: 'Sales',
-          icon: Icons.receipt_long,
-          color: AppTheme.accent,
-          onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const SalesHistoryScreen())),
-        ),
-        _ActionButton(
-          label: 'Settings',
-          icon: Icons.settings,
-          color: context.textMutedColor,
-          onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen())),
+        const SizedBox(height: 14),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 14,
+          crossAxisSpacing: 14,
+          childAspectRatio: 1.1,
+          children: [
+            _StatCard(
+              title: '$rangeLabel Revenue',
+              value:
+                  '₹${sales.sales.fold(0.0, (sum, s) => sum + s.total).toStringAsFixed(0)}',
+              icon: Icons.trending_up_rounded,
+              gradient: [Color(0xFF10B981), Color(0xFF059669)],
+            ),
+            _StatCard(
+              title: '$rangeLabel Sales',
+              value: '${sales.sales.length}',
+              icon: Icons.receipt_long_rounded,
+              gradient: [AppTheme.primary, AppTheme.primaryLight],
+            ),
+            _StatCard(
+              title: 'Total Products',
+              value: '${inv.medicines.length}',
+              icon: Icons.inventory_2_rounded,
+              gradient: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
+            ),
+            _StatCard(
+              title: 'Low Stock',
+              value: '${inv.lowStockCount}',
+              icon: Icons.warning_amber_rounded,
+              gradient: [AppTheme.warning, AppTheme.warningDark],
+            ),
+          ],
         ),
       ],
     );
   }
 }
 
-class _ActionButton extends StatelessWidget {
-  final String label;
+class _StatCard extends StatelessWidget {
+  final String title;
+  final String value;
   final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
+  final List<Color> gradient;
 
-  const _ActionButton(
-      {required this.label,
-      required this.icon,
-      required this.color,
-      required this.onTap});
+  const _StatCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.gradient,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: gradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: gradient.first.withValues(alpha: 0.25),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: Colors.white, size: 20),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.white.withValues(alpha: 0.8),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RevenueBreakdown extends StatelessWidget {
+  final SalesProvider sales;
+  final String rangeLabel;
+  final ColorScheme cs;
+
+  const _RevenueBreakdown({
+    required this.sales,
+    required this.rangeLabel,
+    required this.cs,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Calculate breakdown
+    double cash = 0, upi = 0, card = 0;
+    for (final s in sales.sales) {
+      if (s.paymentMethod == 'mixed') {
+        cash += s.cashAmount;
+        upi += s.upiAmount;
+        card += s.cardAmount;
+      } else if (s.paymentMethod == 'cash') {
+        cash += s.total;
+      } else if (s.paymentMethod == 'upi') {
+        upi += s.total;
+      } else if (s.paymentMethod == 'card') {
+        card += s.total;
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '$rangeLabel Revenue Breakdown',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: cs.onSurface,
+          ),
+        ),
+        const SizedBox(height: 14),
+        Row(
           children: [
-            Icon(icon, color: color, size: 18),
-            const SizedBox(width: 8),
-            Text(label,
-                style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+            Expanded(
+              child: _BreakdownCard(
+                title: 'Cash',
+                value: '₹${cash.toStringAsFixed(0)}',
+                icon: Icons.payments_rounded,
+                color: Color(0xFF10B981),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _BreakdownCard(
+                title: 'UPI',
+                value: '₹${upi.toStringAsFixed(0)}',
+                icon: Icons.qr_code_rounded,
+                color: AppTheme.primary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _BreakdownCard(
+                title: 'Card',
+                value: '₹${card.toStringAsFixed(0)}',
+                icon: Icons.credit_card_rounded,
+                color: AppTheme.accent,
+              ),
+            ),
           ],
+        ),
+      ],
+    );
+  }
+}
+
+class _BreakdownCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _BreakdownCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: cs.outline.withValues(alpha: 0.08),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 16),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: cs.onSurface,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 11,
+              color: cs.onSurface.withValues(alpha: 0.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickActionsCard extends StatelessWidget {
+  final ColorScheme cs;
+
+  const _QuickActionsCard({required this.cs});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: cs.outline.withValues(alpha: 0.08),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.bolt_rounded,
+                  color: AppTheme.primary,
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Quick Actions',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurface,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _ActionChip(
+                icon: Icons.point_of_sale_rounded,
+                label: 'New Sale',
+                color: AppTheme.primary,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PosScreen()),
+                ),
+              ),
+              _ActionChip(
+                icon: Icons.warehouse_rounded,
+                label: 'Warehouse',
+                color: Color(0xFF8B5CF6),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const WarehouseScreen()),
+                ),
+              ),
+              _ActionChip(
+                icon: Icons.receipt_long_rounded,
+                label: 'Sales',
+                color: AppTheme.accent,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SalesHistoryScreen()),
+                ),
+              ),
+              _ActionChip(
+                icon: Icons.settings_rounded,
+                label: 'Settings',
+                color: cs.onSurface.withValues(alpha: 0.5),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: color.withValues(alpha: 0.15),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 16),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _LowStockTile extends StatelessWidget {
-  final dynamic medicine;
-  const _LowStockTile({required this.medicine});
+class _LowStockCard extends StatelessWidget {
+  final InventoryProvider inv;
+  final ColorScheme cs;
+
+  const _LowStockCard({required this.inv, required this.cs});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppTheme.warning.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppTheme.warning.withValues(alpha: 0.15),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: AppTheme.warning.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.warning_amber_rounded,
+                  color: AppTheme.warning,
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Low Stock Alerts',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurface,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.danger.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${inv.lowStockCount}',
+                  style: TextStyle(
+                    color: AppTheme.danger,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ...inv.medicines
+              .where((m) => m.isLowStock)
+              .take(5)
+              .map((m) => _LowStockItem(medicine: m)),
+        ],
+      ),
+    );
+  }
+}
+
+class _LowStockItem extends StatelessWidget {
+  final dynamic medicine;
+
+  const _LowStockItem({required this.medicine});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: AppTheme.warning.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Icon(Icons.warning_amber,
-              color: AppTheme.warning, size: 20),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: AppTheme.warning.withValues(alpha: 0.1),
         ),
-        title: Text(medicine.name,
-            style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle:
-            Text('Store: ${medicine.storeStock} | Main: ${medicine.mainStock}'),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: AppTheme.danger.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  medicine.name,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    color: cs.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Store: ${medicine.storeStock} | Main: ${medicine.mainStock}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: cs.onSurface.withValues(alpha: 0.5),
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: const Text('LOW',
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppTheme.danger.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              'LOW',
               style: TextStyle(
-                  color: AppTheme.danger,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700)),
-        ),
+                color: AppTheme.danger,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -456,39 +939,5 @@ String _getRangeLabel(SalesProvider sales) {
       return "All-time";
     case SalesFilter.custom:
       return "Custom";
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final VoidCallback onSelected;
-
-  const _FilterChip({
-    required this.label,
-    required this.isSelected,
-    required this.onSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ChoiceChip(
-      label: Text(label,
-          style: TextStyle(
-            fontSize: 12,
-            color: isSelected ? Colors.white : context.textMutedColor,
-          )),
-      selected: isSelected,
-      onSelected: (_) => onSelected(),
-      selectedColor: AppTheme.primary,
-      backgroundColor: context.surfaceColor,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: isSelected ? AppTheme.primary : context.borderColor,
-        ),
-      ),
-      showCheckmark: false,
-    );
   }
 }

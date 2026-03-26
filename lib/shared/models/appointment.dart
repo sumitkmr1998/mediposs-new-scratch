@@ -29,6 +29,9 @@ class Appointment {
   DateTime scheduledAt;
 
   @Property(type: PropertyType.date)
+  DateTime? calledAt;
+
+  @Property(type: PropertyType.date)
   DateTime createdAt;
 
   bool isWalkIn; // Walk-in vs advance booking
@@ -50,6 +53,6 @@ class Appointment {
     DateTime? createdAt,
     this.isWalkIn = true,
     this.consultationBilled = false,
-    this.paymentMethod = 'pending',
+    this.paymentMethod = 'cash',
   }) : createdAt = createdAt ?? DateTime.now();
 }

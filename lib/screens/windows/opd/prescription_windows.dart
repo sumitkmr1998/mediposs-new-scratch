@@ -67,6 +67,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
         setState(() {
           _items = pProvider.getItems(existing);
           _labTests = pProvider.getLabTests(existing);
+          _imagePaths.addAll(pProvider.getImages(existing));
         });
       }
     });
@@ -583,7 +584,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
       );
 
       final syncService = context.read<SyncService>();
-      context.read<PrescriptionProvider>().savePrescription(
+      await context.read<PrescriptionProvider>().savePrescription(
             appointmentId: widget.appointment.id,
             patientId: widget.appointment.patientId,
             patientName: widget.appointment.patientName,
@@ -594,8 +595,10 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
             notes: _notesCtrl.text.trim(),
             items: _items,
             labTests: _labTests,
+            images: _imagePaths,
             vitals: vitals,
             syncService: syncService,
+            context: context,
           );
 
       if (!mounted) return;
@@ -926,6 +929,7 @@ class _MedicineAdderState extends State<_MedicineAdder> {
   String? _selectedId;
   String? _selectedName;
 
+  final _searchFocus = FocusNode();
   final _qtyFocus = FocusNode();
   final _daysFocus = FocusNode();
   final _dosageFocus = FocusNode();
@@ -933,6 +937,7 @@ class _MedicineAdderState extends State<_MedicineAdder> {
 
   @override
   void dispose() {
+    _searchFocus.dispose();
     _qtyFocus.dispose();
     _daysFocus.dispose();
     _dosageFocus.dispose();
@@ -946,7 +951,7 @@ class _MedicineAdderState extends State<_MedicineAdder> {
     final trimmed = raw.trim();
     if (trimmed.contains('-')) return trimmed;
     final digits = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.length >= 2 && digits.length <= 3) {
+    if (digits.length >= 2) {
       return digits.split('').join('-');
     }
     return trimmed;
@@ -958,9 +963,10 @@ class _MedicineAdderState extends State<_MedicineAdder> {
       _selectedId = parts[0];
       _selectedName = parts[1];
     });
-    widget.searchCtrl.text = parts[1];
-    // Move focus to Qty field
-    _qtyFocus.requestFocus();
+    // Move focus to Qty field with a slight delay to allow Autocomplete to close
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) _qtyFocus.requestFocus();
+    });
   }
 
   void _onQtyEditingComplete() {
@@ -1000,6 +1006,7 @@ class _MedicineAdderState extends State<_MedicineAdder> {
       isAvailable: isAvailable,
     ));
 
+ 
     setState(() {
       _selectedId = null;
       _selectedName = null;
@@ -1009,8 +1016,7 @@ class _MedicineAdderState extends State<_MedicineAdder> {
       widget.daysCtrl.text = '3';
     });
     // Return focus to search field for the next medicine
-    widget.searchCtrl.clear();
-    FocusScope.of(context).unfocus();
+    _searchFocus.requestFocus();
   }
 
   @override
@@ -1024,7 +1030,9 @@ class _MedicineAdderState extends State<_MedicineAdder> {
           children: [
             Expanded(
               flex: 3,
-              child: Autocomplete<String>(
+              child: RawAutocomplete<String>(
+                focusNode: _searchFocus,
+                textEditingController: widget.searchCtrl,
                 optionsBuilder: (textEditingValue) {
                   if (textEditingValue.text.isEmpty) return const [];
                   final q = textEditingValue.text.toLowerCase();
@@ -1035,33 +1043,75 @@ class _MedicineAdderState extends State<_MedicineAdder> {
                 },
                 displayStringForOption: (opt) => opt.split('||').last,
                 onSelected: _onMedicineSelected,
-                fieldViewBuilder: (ctx, ctrl, focus, onSubmit) => TextField(
-                  controller: ctrl,
-                  focusNode: focus,
-                  style: const TextStyle(fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'Search medicine, Enter to select...',
-                    hintStyle:
-                        TextStyle(color: context.textMutedColor, fontSize: 13),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide(color: context.borderColor),
+                fieldViewBuilder: (ctx, ctrl, focus, onSubmit) {
+                  return TextField(
+                    controller: ctrl,
+                    focusNode: focus,
+                    style: const TextStyle(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Search medicine, Enter to select...',
+                      hintStyle: TextStyle(
+                          color: context.textMutedColor, fontSize: 13),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide(color: context.borderColor),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide(color: context.borderColor),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: const BorderSide(
+                            color: AppTheme.primary, width: 1.5),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 12),
                     ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide(color: context.borderColor),
+                    onSubmitted: (value) => onSubmit(),
+                  );
+                },
+                optionsViewBuilder: (context, onSelected, options) {
+                  return Align(
+                    alignment: Alignment.topLeft,
+                    child: Material(
+                      elevation: 4.0,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        width: 400, // Fixed width for visibility on Windows
+                        constraints: const BoxConstraints(maxHeight: 300),
+                        child: ListView.builder(
+                          padding: EdgeInsets.zero,
+                          shrinkWrap: true,
+                          itemCount: options.length,
+                          itemBuilder: (BuildContext context, int index) {
+                            final String option = options.elementAt(index);
+                            final bool isHovered =
+                                AutocompleteHighlightedOption.of(context) ==
+                                    index;
+                            return ListTile(
+                              tileColor: isHovered
+                                  ? AppTheme.primary.withValues(alpha: 0.1)
+                                  : null,
+                              title: Text(option.split('||').last,
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: isHovered
+                                          ? FontWeight.w700
+                                          : FontWeight.normal,
+                                      color: isHovered
+                                          ? AppTheme.primary
+                                          : Colors.black)),
+                              onTap: () => onSelected(option),
+                            );
+                          },
+                        ),
+                      ),
                     ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide:
-                          const BorderSide(color: AppTheme.primary, width: 1.5),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 12),
-                  ),
-                ),
+                  );
+                },
               ),
             ),
           ],
@@ -1096,7 +1146,7 @@ class _MedicineAdderState extends State<_MedicineAdder> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const _FormLabel('Dosage'),
+                   const _FormLabel('Dosage'),
                   const SizedBox(height: 6),
                   TextField(
                     controller: widget.dosageCtrl,
@@ -1130,34 +1180,51 @@ class _MedicineAdderState extends State<_MedicineAdder> {
               ),
             ),
             const SizedBox(width: 10),
-            Focus(
-              focusNode: _addBtnFocus,
-              onKeyEvent: (node, event) {
-                if (event is KeyDownEvent &&
-                    event.logicalKey == LogicalKeyboardKey.enter) {
-                  if (_selectedName != null) _addItem();
-                  return KeyEventResult.handled;
-                }
-                return KeyEventResult.ignored;
-              },
-              child: Container(
-                height: 44,
-                width: 44,
-                decoration: BoxDecoration(
-                  color: _selectedName != null
-                      ? AppTheme.primary
-                      : AppTheme.primary.withValues(alpha: 0.3),
-                  shape: BoxShape.circle,
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(22),
-                    onTap: _selectedName != null ? _addItem : null,
-                    child: const Icon(Icons.add, color: Colors.white, size: 22),
+            Column(
+              children: [
+                const SizedBox(height: 18), // Align with fields
+                Focus(
+                  focusNode: _addBtnFocus,
+                  onKeyEvent: (node, event) {
+                    if (event is KeyDownEvent &&
+                        event.logicalKey == LogicalKeyboardKey.enter) {
+                      if (_selectedName != null) _addItem();
+                      return KeyEventResult.handled;
+                    }
+                    return KeyEventResult.ignored;
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    height: 48,
+                    width: 48,
+                    decoration: BoxDecoration(
+                      color: _selectedName != null
+                          ? AppTheme.primary
+                          : Colors.grey.withValues(alpha: 0.3),
+                      shape: BoxShape.circle,
+                      boxShadow: _selectedName != null ? [
+                        BoxShadow(
+                          color: AppTheme.primary.withValues(alpha: 0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        )
+                      ] : null,
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(24),
+                        onTap: _selectedName != null ? _addItem : null,
+                        child: Icon(
+                          Icons.add_rounded, 
+                          color: _selectedName != null ? Colors.white : Colors.grey.shade600, 
+                          size: 28
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
           ],
         ),

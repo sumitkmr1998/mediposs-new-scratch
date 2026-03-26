@@ -440,6 +440,7 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
         doctorId: selectedDoctor.id,
         doctorName: selectedDoctor.name,
         consultationFee: selectedDoctor.consultationFee,
+        paymentMethod: 'cash',
       );
 
       if (context.mounted) {
@@ -1005,24 +1006,33 @@ class _ExpandablePrescriptionState extends State<_ExpandablePrescription> {
                               style: TextStyle(
                                   fontSize: 11, color: context.textMutedColor)),
                           const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: p.dispensed
-                                  ? AppTheme.success.withValues(alpha: 0.1)
-                                  : AppTheme.warning.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(p.dispensed ? 'DISPENSED' : 'PENDING',
-                                style: TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.5,
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
                                     color: p.dispensed
-                                        ? AppTheme.success
-                                        : AppTheme.warningDark)),
-                          ),
+                                        ? AppTheme.success.withValues(alpha: 0.1)
+                                        : AppTheme.warning.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(p.dispensed ? 'DISPENSED' : 'PENDING',
+                                      style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 0.5,
+                                          color: p.dispensed
+                                              ? AppTheme.success
+                                              : AppTheme.warningDark)),
+                                ),
+                                if (widget.pProvider.getImages(p).isNotEmpty) ...[
+                                  const SizedBox(width: 8),
+                                  Icon(Icons.image_rounded, size: 14, color: AppTheme.primaryLight.withValues(alpha: 0.6)),
+                                ],
+                              ],
+                            ),
                         ],
                       ),
                       const SizedBox(width: 8),
@@ -1154,10 +1164,76 @@ class _ExpandablePrescriptionState extends State<_ExpandablePrescription> {
                         style: const TextStyle(
                             fontSize: 12, color: Color(0xFF475569))),
                   ],
+                  // Images
+                  if (widget.pProvider.getImages(p).isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    const Text('Attachments',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.primaryLight,
+                            letterSpacing: 0.5)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: widget.pProvider.getImages(p).map((path) => GestureDetector(
+                        onTap: () => _viewPrescriptionImage(context, path),
+                        child: MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppTheme.primaryLight.withValues(alpha: 0.2)),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(
+                                File(path),
+                                width: 60,
+                                height: 60,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  width: 60, height: 60,
+                                  color: Colors.grey.shade200,
+                                  child: const Icon(Icons.broken_image, size: 20, color: Colors.grey),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      )).toList(),
+                    ),
+                  ],
                 ],
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  void _viewPrescriptionImage(BuildContext context, String path) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.85),
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            InteractiveViewer(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.file(File(path), fit: BoxFit.contain),
+              ),
+            ),
+            IconButton(
+              onPressed: () => Navigator.pop(ctx),
+              icon: const Icon(Icons.close, color: Colors.white, size: 32),
+            ),
+          ],
+        ),
       ),
     );
   }

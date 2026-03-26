@@ -211,17 +211,29 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                     ...sortedQueue.map((appt) => _QueueRow(
                           appointment: appt,
                           onStatusChangeWithPayment:
-                              (newStatus, paymentMethod) => context
-                                  .read<OpdProvider>()
-                                  .updateStatusWithPayment(
-                                      appt.id,
-                                      newStatus,
-                                      paymentMethod,
-                                      context.read<SyncService>()),
-                          onStatusChange: (newStatus) => context
-                              .read<OpdProvider>()
-                              .updateStatus(appt.id, newStatus,
-                                  context.read<SyncService>()),
+                              (newStatus, paymentMethod) {
+                            context.read<OpdProvider>().updateStatusWithPayment(
+                                appt.id,
+                                newStatus,
+                                paymentMethod,
+                                context.read<SyncService>());
+                            if (newStatus == kStatusDone) {
+                              context
+                                  .read<PrescriptionProvider>()
+                                  .markDispensedByAppointment(appt.id,
+                                      syncService: context.read<SyncService>());
+                            }
+                          },
+                          onStatusChange: (newStatus) {
+                            context.read<OpdProvider>().updateStatus(
+                                appt.id, newStatus, context.read<SyncService>());
+                            if (newStatus == kStatusDone) {
+                              context
+                                  .read<PrescriptionProvider>()
+                                  .markDispensedByAppointment(appt.id,
+                                      syncService: context.read<SyncService>());
+                            }
+                          },
                           onConsult: () => Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -423,16 +435,38 @@ class _QueueRowState extends State<_QueueRow> {
   @override
   void initState() {
     super.initState();
-    if (widget.appointment.status == kStatusWithDoctor) {
-      _elapsed = DateTime.now().difference(widget.appointment.scheduledAt);
+    _initTimer();
+  }
+
+  void _initTimer() {
+    _timer?.cancel();
+    _timer = null;
+
+    final status = widget.appointment.status;
+    if (status == kStatusWithDoctor && widget.appointment.calledAt != null) {
+      _elapsed = DateTime.now().difference(widget.appointment.calledAt!);
       _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (mounted) {
+        if (mounted && widget.appointment.calledAt != null) {
           setState(() {
-            _elapsed =
-                DateTime.now().difference(widget.appointment.scheduledAt);
+            _elapsed = DateTime.now().difference(widget.appointment.calledAt!);
           });
         }
       });
+    } else if (status == kStatusWaiting || status == kStatusPharmacy) {
+      // Refresh UI every 5 seconds for other active statuses
+      _timer = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (mounted) {
+          setState(() {});
+        }
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _QueueRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.appointment.status != oldWidget.appointment.status) {
+      _initTimer();
     }
   }
 
@@ -443,24 +477,32 @@ class _QueueRowState extends State<_QueueRow> {
   }
 
   String _formatDuration(Duration d) {
+    if (d.isNegative) return '00:00';
     final mins = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final secs = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$mins:$secs';
   }
 
   String _waitTime() {
-    final diff = DateTime.now().difference(widget.appointment.scheduledAt);
-    if (diff.inMinutes < 1) return '< 1 min';
-    return '${diff.inMinutes} mins';
+    final now = DateTime.now();
+    final scheduled = widget.appointment.scheduledAt;
+    final diff = now.difference(scheduled);
+    final minutes = diff.inMinutes;
+
+    if (minutes < 0) return 'Just now';
+    if (minutes == 0) return '< 1 min';
+    if (minutes < 60) return '$minutes min';
+    final hours = minutes ~/ 60;
+    final mins = minutes % 60;
+    return '${hours}h ${mins}m';
   }
 
   void _handleComplete(BuildContext context) {
-    final paymentMethod = widget.appointment.paymentMethod;
-    if (paymentMethod == 'pending') {
-      showPaymentDialog(context, kStatusDone);
-    } else {
-      widget.onStatusChange(kStatusDone);
-    }
+    widget.onStatusChange(kStatusDone);
+    // Fulfill prescription automatically if exists
+    context.read<PrescriptionProvider>().markDispensedByAppointment(
+        widget.appointment.id,
+        syncService: context.read<SyncService>());
   }
 
   @override
@@ -600,47 +642,37 @@ class _QueueRowState extends State<_QueueRow> {
             const SizedBox(width: 12),
             Expanded(
               flex: 2,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap: widget.onViewPatient,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(a.patientName,
+              child: Row(
+                children: [
+                  _EditPatientBtn(onTap: widget.onEditPatient),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: InkWell(
+                      onTap: widget.onViewPatient,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(a.patientName,
                                 style: const TextStyle(
                                     fontSize: 16,
-                                    fontWeight: FontWeight.w700,
+                                    fontWeight: FontWeight.w800,
                                     color: AppTheme.primary)),
-                          ),
-                          InkWell(
-                            onTap: widget.onEditPatient,
-                            borderRadius: BorderRadius.circular(4),
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primary.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Icon(Icons.edit_rounded,
-                                  size: 14, color: AppTheme.primary),
-                            ),
-                          ),
-                        ],
+                            const SizedBox(height: 2),
+                            Text('ID: P-${a.patientId}',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppTheme.primary
+                                        .withValues(alpha: 0.7))),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 2),
-                      Text('ID: P-${a.patientId}',
-                          style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: AppTheme.primary.withValues(alpha: 0.7))),
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
             Expanded(
@@ -757,44 +789,35 @@ class _QueueRowState extends State<_QueueRow> {
             const SizedBox(width: 12),
             Expanded(
               flex: 2,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap: widget.onViewPatient,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(a.patientName,
+              child: Row(
+                children: [
+                  _EditPatientBtn(onTap: widget.onEditPatient),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: InkWell(
+                      onTap: widget.onViewPatient,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(a.patientName,
                                 style: const TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
                                     color: AppTheme.primary)),
-                          ),
-                          InkWell(
-                            onTap: widget.onEditPatient,
-                            borderRadius: BorderRadius.circular(4),
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primary.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Icon(Icons.edit_rounded,
-                                  size: 14, color: AppTheme.primary),
-                            ),
-                          ),
-                        ],
+                            const SizedBox(height: 2),
+                            Text('ID: P-${a.patientId}',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    color: context.textMutedColor)),
+                          ],
+                        ),
                       ),
-                      Text('ID: P-${a.patientId}',
-                          style: TextStyle(
-                              fontSize: 10, color: context.textMutedColor)),
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
             Expanded(
@@ -877,44 +900,34 @@ class _QueueRowState extends State<_QueueRow> {
           const SizedBox(width: 12),
           Expanded(
             flex: 2,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: widget.onViewPatient,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(a.patientName,
+            child: Row(
+              children: [
+                _EditPatientBtn(onTap: widget.onEditPatient),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: InkWell(
+                    onTap: widget.onViewPatient,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(a.patientName,
                               style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
                                   color: AppTheme.primary)),
-                        ),
-                        InkWell(
-                          onTap: widget.onEditPatient,
-                          borderRadius: BorderRadius.circular(4),
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: AppTheme.primary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Icon(Icons.edit_rounded,
-                                size: 14, color: AppTheme.primary),
-                          ),
-                        ),
-                      ],
+                          const SizedBox(height: 2),
+                          Text('ID: P-${a.patientId}',
+                              style: TextStyle(
+                                  fontSize: 10, color: context.textMutedColor)),
+                        ],
+                      ),
                     ),
-                    Text('ID: P-${a.patientId}',
-                        style: TextStyle(
-                            fontSize: 10, color: context.textMutedColor)),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
           Expanded(
@@ -1049,21 +1062,6 @@ class _ActionBtn extends StatelessWidget {
   }
 }
 
-// ── Queue Row Extension ──────────────────────────────────────────────────────
-
-extension _QueueRowStateExtension on _QueueRowState {
-  void showPaymentDialog(BuildContext context, String newStatus) {
-    showDialog(
-      context: context,
-      builder: (ctx) => _PaymentModeDialog(
-        appointment: widget.appointment,
-        onConfirm: (paymentMethod) {
-          widget.onStatusChangeWithPayment(newStatus, paymentMethod);
-        },
-      ),
-    );
-  }
-}
 
 // ── Payment Mode Dialog ──────────────────────────────────────────────────────
 
@@ -1081,7 +1079,7 @@ class _PaymentModeDialog extends StatefulWidget {
 }
 
 class _PaymentModeDialogState extends State<_PaymentModeDialog> {
-  String _selected = 'pending';
+  String _selected = 'cash';
 
   @override
   Widget build(BuildContext context) {
@@ -1183,15 +1181,6 @@ class _PaymentModeDialogState extends State<_PaymentModeDialog> {
             label: 'Card',
             value: 'card',
             color: AppTheme.accent,
-            groupValue: _selected,
-            onChanged: (v) => setState(() => _selected = v),
-          ),
-          const SizedBox(height: 10),
-          _PaymentOption(
-            icon: Icons.schedule_rounded,
-            label: 'Pending',
-            value: 'pending',
-            color: AppTheme.warning,
             groupValue: _selected,
             onChanged: (v) => setState(() => _selected = v),
           ),
@@ -1317,6 +1306,32 @@ class _EmptyQueue extends StatelessWidget {
           Text('Add a patient using the button below',
               style: TextStyle(fontSize: 13, color: context.textMutedColor)),
         ],
+      ),
+    );
+  }
+}
+
+class _EditPatientBtn extends StatelessWidget {
+  final VoidCallback onTap;
+  const _EditPatientBtn({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        padding: const EdgeInsets.all(5),
+        decoration: BoxDecoration(
+          color: AppTheme.primary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: AppTheme.primary.withValues(alpha: 0.15),
+            width: 1,
+          ),
+        ),
+        child: const Icon(Icons.edit_rounded,
+            size: 14, color: AppTheme.primary),
       ),
     );
   }
