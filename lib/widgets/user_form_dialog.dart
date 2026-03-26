@@ -50,6 +50,14 @@ class _UserFormDialogState extends State<UserFormDialog> {
   bool _canAccessOPD = true;
   bool _canManageDoctors = false;
   bool _canViewOpdReports = false;
+  bool _canAccessMedicalRecords = false;
+
+  // Security & Data
+  bool _canViewPurchasePrice = false;
+  bool _canExportData = false;
+  bool _canOverrideStock = false;
+  bool _canOverridePrice = false;
+  bool _canBulkDiscount = false;
 
   @override
   void initState() {
@@ -82,7 +90,43 @@ class _UserFormDialogState extends State<UserFormDialog> {
       _canAccessOPD = u.canAccessOPD;
       _canManageDoctors = u.canManageDoctors;
       _canViewOpdReports = u.canViewOpdReports;
+      _canAccessMedicalRecords = u.canAccessMedicalRecords;
+
+      _canViewPurchasePrice = u.canViewPurchasePrice;
+      _canExportData = u.canExportData;
+      _canOverrideStock = u.canOverrideStock;
+      _canOverridePrice = u.canOverridePrice;
+      _canBulkDiscount = u.canBulkDiscount;
     }
+  }
+
+  void _applyPreset(String preset) {
+    final tempUser = AppUser(name: '');
+    tempUser.applyPreset(preset);
+    setState(() {
+      _roleCtrl.text = tempUser.role;
+      _canAccessSettings = tempUser.canAccessSettings;
+      _canManageUsers = tempUser.canManageUsers;
+      _canViewDashboard = tempUser.canViewDashboard;
+      _canViewInventory = tempUser.canViewInventory;
+      _canEditInventory = tempUser.canEditInventory;
+      _canViewWarehouse = tempUser.canViewWarehouse;
+      _canTransferStock = tempUser.canTransferStock;
+      _canAccessPOS = tempUser.canAccessPOS;
+      _canDiscountSales = tempUser.canDiscountSales;
+      _canViewSalesHistory = tempUser.canViewSalesHistory;
+      _canVoidSales = tempUser.canVoidSales;
+      _canProcessReturns = tempUser.canProcessReturns;
+      _canAccessOPD = tempUser.canAccessOPD;
+      _canManageDoctors = tempUser.canManageDoctors;
+      _canViewOpdReports = tempUser.canViewOpdReports;
+      _canAccessMedicalRecords = tempUser.canAccessMedicalRecords;
+      _canViewPurchasePrice = tempUser.canViewPurchasePrice;
+      _canExportData = tempUser.canExportData;
+      _canOverrideStock = tempUser.canOverrideStock;
+      _canOverridePrice = tempUser.canOverridePrice;
+      _canBulkDiscount = tempUser.canBulkDiscount;
+    });
   }
 
   @override
@@ -123,6 +167,13 @@ class _UserFormDialogState extends State<UserFormDialog> {
     u.canAccessOPD = _canAccessOPD;
     u.canManageDoctors = _canManageDoctors;
     u.canViewOpdReports = _canViewOpdReports;
+    u.canAccessMedicalRecords = _canAccessMedicalRecords;
+
+    u.canViewPurchasePrice = _canViewPurchasePrice;
+    u.canExportData = _canExportData;
+    u.canOverrideStock = _canOverrideStock;
+    u.canOverridePrice = _canOverridePrice;
+    u.canBulkDiscount = _canBulkDiscount;
 
     context.read<AuthProvider>().addUser(u);
     Navigator.pop(context, true);
@@ -192,6 +243,19 @@ class _UserFormDialogState extends State<UserFormDialog> {
                         ],
                       ),
                       const Spacer(),
+                      // Preset Chips
+                      Row(
+                        children: [
+                          _PresetChip('Cashier', Icons.point_of_sale, () => _applyPreset('Cashier')),
+                          const SizedBox(width: 8),
+                          _PresetChip('Pharmacist', Icons.medication, () => _applyPreset('Pharmacist')),
+                          const SizedBox(width: 8),
+                          _PresetChip('Manager', Icons.supervisor_account, () => _applyPreset('Manager')),
+                          const SizedBox(width: 8),
+                          _PresetChip('Admin', Icons.vignette, () => _applyPreset('Admin')),
+                        ],
+                      ),
+                      const SizedBox(width: 24),
                       _StatusToggle(
                         isActive: _isActive,
                         onChanged: (v) => setState(() => _isActive = v),
@@ -280,6 +344,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
                                 children: [
                                   _PermTile('Access Terminal', 'Bill customers at POS', _canAccessPOS, (v) => setState(() => _canAccessPOS = v)),
                                   _PermTile('Manual Discounts', 'Apply custom discounts', _canDiscountSales, (v) => setState(() => _canDiscountSales = v)),
+                                  _PermTile('Price Overrides', 'Change item price at checkout', _canOverridePrice, (v) => setState(() => _canOverridePrice = v)),
+                                  _PermTile('Bulk Discounts', 'Discount entire bill amount', _canBulkDiscount, (v) => setState(() => _canBulkDiscount = v)),
                                 ],
                               ),
                               _PermGroup(
@@ -288,6 +354,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
                                 children: [
                                   _PermTile('Manage Stock', 'View and audit stock levels', _canViewInventory, (v) => setState(() => _canViewInventory = v)),
                                   _PermTile('Modify Items', 'Edit medicine details/pricing', _canEditInventory, (v) => setState(() => _canEditInventory = v)),
+                                  _PermTile('Stock Corrections', 'Manually override stock counts', _canOverrideStock, (v) => setState(() => _canOverrideStock = v)),
                                   _PermTile('Warehouse HQ', 'Manage main distribution', _canViewWarehouse, (v) => setState(() => _canViewWarehouse = v)),
                                   _PermTile('Execute Transfers', 'Move stock between locations', _canTransferStock, (v) => setState(() => _canTransferStock = v)),
                                 ],
@@ -296,7 +363,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
                                 title: 'OPD & Clinical',
                                 icon: Icons.medical_services_outlined,
                                 children: [
-                                  _PermTile('Queue Management', 'Manage patiet visits', _canAccessOPD, (v) => setState(() => _canAccessOPD = v)),
+                                  _PermTile('Queue Management', 'Manage patient visits', _canAccessOPD, (v) => setState(() => _canAccessOPD = v)),
+                                  _PermTile('Patient Privacy', 'View prescriptions & history', _canAccessMedicalRecords, (v) => setState(() => _canAccessMedicalRecords = v)),
                                   _PermTile('Manage Doctors', 'Edit doctor fees & profiles', _canManageDoctors, (v) => setState(() => _canManageDoctors = v)),
                                 ],
                               ),
@@ -305,8 +373,10 @@ class _UserFormDialogState extends State<UserFormDialog> {
                                 icon: Icons.admin_panel_settings_outlined,
                                 children: [
                                   _PermTile('Sale Auditing', 'View sales and void receipts', _canViewSalesHistory, (v) => setState(() => _canViewSalesHistory = v)),
+                                  _PermTile('Financial Privacy', 'View purchase/cost prices', _canViewPurchasePrice, (v) => setState(() => _canViewPurchasePrice = v)),
                                   _PermTile('System Configuration', 'Access global settings', _canAccessSettings, (v) => setState(() => _canAccessSettings = v)),
                                   _PermTile('Manage Staff', 'Edit user roles & permissions', _canManageUsers, (v) => setState(() => _canManageUsers = v)),
+                                  _PermTile('Data Guard', 'Export records to Excel/CSV', _canExportData, (v) => setState(() => _canExportData = v)),
                                 ],
                               ),
                             ],
@@ -371,6 +441,25 @@ class _UserFormDialogState extends State<UserFormDialog> {
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
       ),
       validator: validator,
+    );
+  }
+}
+
+class _PresetChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  const _PresetChip(this.label, this.icon, this.onTap);
+
+  @override
+  Widget build(BuildContext context) {
+    return ActionChip(
+      avatar: Icon(icon, size: 14, color: AppTheme.primary),
+      label: Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+      onPressed: onTap,
+      backgroundColor: Colors.transparent,
+      side: BorderSide(color: AppTheme.primary.withValues(alpha: 0.2)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     );
   }
 }

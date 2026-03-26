@@ -175,6 +175,7 @@ class _ReturnDialogState extends State<ReturnDialog> {
       paymentMethod: widget.originalSale.paymentMethod,
       isReturn: true, // Mark as return
       itemsJson: "[]", // Encode list below
+      createdAt: now,
     );
 
     returnSale.itemsJson =

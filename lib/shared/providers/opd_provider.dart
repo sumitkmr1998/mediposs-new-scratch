@@ -154,7 +154,7 @@ class OpdProvider extends ChangeNotifier {
     bool isWalkIn = true,
     SyncService? syncService,
   }) async {
-    final now = DateTime.now();
+    final robustNow = await TimeService.getRobustTime();
     final appt = Appointment(
       patientId: patientId,
       patientName: patientName,
@@ -164,7 +164,7 @@ class OpdProvider extends ChangeNotifier {
       tokenNumber: _nextTokenForToday(),
       consultationFee: consultationFee,
       paymentMethod: paymentMethod,
-      scheduledAt: scheduledAt ?? now,
+      scheduledAt: scheduledAt ?? robustNow,
       isWalkIn: isWalkIn,
     );
     ObjectBoxService.instance.appointmentBox.put(appt);
@@ -196,7 +196,7 @@ class OpdProvider extends ChangeNotifier {
     if (appt == null) return;
     appt.status = newStatus;
     if (newStatus == kStatusWithDoctor) {
-      appt.calledAt = DateTime.now();
+      appt.calledAt = await TimeService.getRobustTime();
     }
     ObjectBoxService.instance.appointmentBox.put(appt);
     loadAll();
@@ -223,7 +223,7 @@ class OpdProvider extends ChangeNotifier {
     appt.status = newStatus;
     appt.paymentMethod = paymentMethod;
     if (newStatus == kStatusWithDoctor) {
-      appt.calledAt = DateTime.now();
+      appt.calledAt = await TimeService.getRobustTime();
     }
     ObjectBoxService.instance.appointmentBox.put(appt);
     loadAll();

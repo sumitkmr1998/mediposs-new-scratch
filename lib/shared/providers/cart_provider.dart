@@ -234,6 +234,7 @@ class CartProvider extends ChangeNotifier {
       cardAmount: fCard,
       isReturn: _isReturnMode,
       itemsJson: jsonEncode(saleItems.map((i) => i.toJson()).toList()),
+      createdAt: now,
     );
 
     db.saleBox.put(sale);

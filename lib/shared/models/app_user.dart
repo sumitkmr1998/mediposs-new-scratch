@@ -10,8 +10,7 @@ class AppUser {
   String pin;
   bool isActive;
 
-  // Granular Permissions
-
+  // -- Granular Permissions --
   // Settings & Staff
   bool canAccessSettings;
   bool canManageUsers;
@@ -22,6 +21,7 @@ class AppUser {
   // Inventory
   bool canViewInventory;
   bool canEditInventory;
+  bool canOverrideStock;         // Manual inventory adjustments
 
   // Warehouse
   bool canViewWarehouse;
@@ -30,6 +30,8 @@ class AppUser {
   // POS
   bool canAccessPOS;
   bool canDiscountSales;
+  bool canOverridePrice;         // AD-HOC Price override at POS
+  bool canBulkDiscount;          // Large checkout discounts
 
   // Sales History
   bool canViewSalesHistory;
@@ -40,6 +42,11 @@ class AppUser {
   bool canAccessOPD;
   bool canManageDoctors;
   bool canViewOpdReports;
+  bool canAccessMedicalRecords;  // Clinical privacy (Prescriptions/History)
+
+  // Security & Data
+  bool canViewPurchasePrice;     // Restricted financial data
+  bool canExportData;            // Prevent bulk extraction
 
   AppUser({
     this.id = 0,
@@ -52,17 +59,99 @@ class AppUser {
     this.canViewDashboard = false,
     this.canViewInventory = false,
     this.canEditInventory = false,
+    this.canOverrideStock = false,
     this.canViewWarehouse = false,
     this.canTransferStock = false,
     this.canAccessPOS = true,
     this.canDiscountSales = false,
+    this.canOverridePrice = false,
+    this.canBulkDiscount = false,
     this.canViewSalesHistory = false,
     this.canVoidSales = false,
     this.canProcessReturns = false,
     this.canAccessOPD = true,
     this.canManageDoctors = false,
     this.canViewOpdReports = false,
+    this.canAccessMedicalRecords = false,
+    this.canViewPurchasePrice = false,
+    this.canExportData = false,
   });
+
+  /// Applies standard permissions based on a role name.
+  void applyPreset(String preset) {
+    role = preset;
+    // Reset all to false first for safety
+    _setAll(false);
+
+    switch (preset.toLowerCase()) {
+      case 'admin':
+      case 'owner':
+        _setAll(true);
+        break;
+      case 'manager':
+        canViewDashboard = true;
+        canViewInventory = true;
+        canEditInventory = true;
+        canViewWarehouse = true;
+        canTransferStock = true;
+        canAccessPOS = true;
+        canDiscountSales = true;
+        canViewSalesHistory = true;
+        canProcessReturns = true;
+        canAccessOPD = true;
+        canViewPurchasePrice = true;
+        canOverrideStock = true;
+        canBulkDiscount = true;
+        break;
+      case 'pharmacist':
+        canViewInventory = true;
+        canEditInventory = true;
+        canViewWarehouse = true;
+        canTransferStock = true;
+        canAccessPOS = true;
+        canAccessOPD = true;
+        break;
+      case 'cashier':
+        canAccessPOS = true;
+        canViewInventory = true;
+        canAccessOPD = true;
+        break;
+      case 'doctor':
+        canAccessOPD = true;
+        canAccessMedicalRecords = true;
+        break;
+      case 'accountant':
+        canViewDashboard = true;
+        canViewSalesHistory = true;
+        canViewOpdReports = true;
+        canViewPurchasePrice = true;
+        break;
+    }
+  }
+
+  void _setAll(bool val) {
+    canAccessSettings = val;
+    canManageUsers = val;
+    canViewDashboard = val;
+    canViewInventory = val;
+    canEditInventory = val;
+    canOverrideStock = val;
+    canViewWarehouse = val;
+    canTransferStock = val;
+    canAccessPOS = val;
+    canDiscountSales = val;
+    canOverridePrice = val;
+    canBulkDiscount = val;
+    canViewSalesHistory = val;
+    canVoidSales = val;
+    canProcessReturns = val;
+    canAccessOPD = val;
+    canManageDoctors = val;
+    canViewOpdReports = val;
+    canAccessMedicalRecords = val;
+    canViewPurchasePrice = val;
+    canExportData = val;
+  }
 }
 
 @Entity()

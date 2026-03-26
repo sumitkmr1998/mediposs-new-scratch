@@ -45,6 +45,19 @@ class AuthProvider extends ChangeNotifier {
       isAdmin || (_currentUser?.canManageDoctors ?? false);
   bool get canViewOpdReports =>
       isAdmin || (_currentUser?.canViewOpdReports ?? false);
+  bool get canAccessMedicalRecords =>
+      isAdmin || (_currentUser?.canAccessMedicalRecords ?? false);
+
+  // Security & Data
+  bool get canViewPurchasePrice =>
+      isAdmin || (_currentUser?.canViewPurchasePrice ?? false);
+  bool get canExportData => isAdmin || (_currentUser?.canExportData ?? false);
+  bool get canOverrideStock =>
+      isAdmin || (_currentUser?.canOverrideStock ?? false);
+  bool get canOverridePrice =>
+      isAdmin || (_currentUser?.canOverridePrice ?? false);
+  bool get canBulkDiscount =>
+      isAdmin || (_currentUser?.canBulkDiscount ?? false);
 
   bool login(String pin) {
     final users = ObjectBoxService.instance.userBox.getAll();
