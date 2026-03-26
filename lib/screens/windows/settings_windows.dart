@@ -481,7 +481,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
           Container(
             width: 260,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.surfaceColor,
               border: Border(right: BorderSide(color: context.borderColor)),
             ),
             child: Column(
@@ -602,7 +602,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
           ),
           Expanded(
             child: Container(
-              color: AppTheme.lightBg,
+              color: context.bgColor,
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
                 child: Column(
@@ -1006,11 +1006,11 @@ class _SettingsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
+              color: Colors.black.withValues(alpha: 0.08),
               blurRadius: 16,
               offset: const Offset(0, 4)),
         ],

@@ -70,14 +70,14 @@ class _DoctorListWindowsState extends State<DoctorListWindows> {
                   color: AppTheme.primary, size: 22),
             ),
             const SizedBox(width: 12),
-            const Column(
+            Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Doctors',
+                const Text('Doctors',
                     style:
                         TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
                 Text('Clinic consultants',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF6B7B8D))),
+                    style: TextStyle(fontSize: 12, color: context.textMutedColor)),
               ],
             ),
           ],
@@ -98,7 +98,7 @@ class _DoctorListWindowsState extends State<DoctorListWindows> {
                   borderSide: BorderSide.none,
                 ),
                 filled: true,
-                fillColor: AppTheme.lightBg,
+                fillColor: context.surfaceColor,
               ),
               onChanged: (_) => setState(() {}),
             ),
@@ -299,7 +299,7 @@ class _FilterChip extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: isSelected ? color : Colors.grey.shade300,
+              color: isSelected ? color : context.borderColor,
               width: isSelected ? 1.5 : 1,
             ),
           ),
@@ -309,7 +309,7 @@ class _FilterChip extends StatelessWidget {
               Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? color : Colors.grey.shade600,
+                  color: isSelected ? color : context.textMutedColor,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -317,13 +317,13 @@ class _FilterChip extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: isSelected ? color : Colors.grey.shade300,
+                  color: isSelected ? color : context.borderColor,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   '$count',
                   style: TextStyle(
-                    color: isSelected ? Colors.white : Colors.grey.shade600,
+                    color: isSelected ? Colors.white : context.textMutedColor,
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                   ),
@@ -347,7 +347,7 @@ class _ViewToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.lightBg,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -393,7 +393,7 @@ class _ToggleBtn extends StatelessWidget {
           child: Icon(
             icon,
             size: 20,
-            color: isSelected ? Colors.white : Colors.grey.shade500,
+            color: isSelected ? Colors.white : context.textMutedColor,
           ),
         ),
       ),
@@ -416,12 +416,12 @@ class _DoctorTable extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppTheme.lightBorder.withValues(alpha: 0.5)),
+        border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 24,
             offset: const Offset(0, 4),
           ),
@@ -449,7 +449,7 @@ class _DoctorTable extends StatelessWidget {
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.5,
-                            color: Color(0xFF6B7B8D)))),
+                            color: Color(0xFF94A3B8)))),
                 const SizedBox(
                     width: 100,
                     child: Text('FEE',
@@ -457,7 +457,7 @@ class _DoctorTable extends StatelessWidget {
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.5,
-                            color: Color(0xFF6B7B8D)))),
+                            color: Color(0xFF94A3B8)))),
                 const SizedBox(
                     width: 130,
                     child: Text('PHONE',
@@ -465,7 +465,7 @@ class _DoctorTable extends StatelessWidget {
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.5,
-                            color: Color(0xFF6B7B8D)))),
+                            color: Color(0xFF94A3B8)))),
                 const SizedBox(
                     width: 130,
                     child: Text('STATUS',
@@ -473,7 +473,7 @@ class _DoctorTable extends StatelessWidget {
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.5,
-                            color: Color(0xFF6B7B8D)))),
+                            color: Color(0xFF94A3B8)))),
                 const SizedBox(
                     width: 100,
                     child: Align(
@@ -483,7 +483,7 @@ class _DoctorTable extends StatelessWidget {
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 1.5,
-                                color: Color(0xFF6B7B8D))))),
+                                color: Color(0xFF94A3B8))))),
               ],
             ),
           ),
@@ -533,8 +533,8 @@ class _DoctorTableRowState extends State<_DoctorTableRow> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: _isHovered
-              ? AppTheme.primary.withValues(alpha: 0.05)
-              : (isInactive ? Colors.grey.shade50 : Colors.white),
+              ? AppTheme.primary.withValues(alpha: 0.1)
+              : (isInactive ? context.borderColor.withValues(alpha: 0.2) : Colors.transparent),
           borderRadius: BorderRadius.circular(12),
           border: _isHovered
               ? Border.all(color: AppTheme.primary.withValues(alpha: 0.2))
@@ -562,8 +562,8 @@ class _DoctorTableRowState extends State<_DoctorTableRow> {
                                     fontWeight: FontWeight.w700,
                                     fontSize: 14,
                                     color: isInactive
-                                        ? Colors.grey
-                                        : Colors.black87)),
+                                        ? context.textMutedColor
+                                        : context.textColor)),
                             if (isInactive) ...[
                               const SizedBox(width: 8),
                               Container(
@@ -573,11 +573,11 @@ class _DoctorTableRowState extends State<_DoctorTableRow> {
                                   color: Colors.grey.shade200,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                child: const Text('INACTIVE',
+                                child: Text('INACTIVE',
                                     style: TextStyle(
                                         fontSize: 9,
                                         fontWeight: FontWeight.w700,
-                                        color: Colors.grey,
+                                        color: context.textMutedColor,
                                         letterSpacing: 0.5)),
                               ),
                             ],
@@ -662,7 +662,7 @@ class _DoctorAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = isActive
         ? [AppTheme.primary, AppTheme.primaryLight]
-        : [Colors.grey.shade400, Colors.grey.shade500];
+        : [context.textMutedColor, context.textMutedColor.withValues(alpha: 0.7)];
 
     return Container(
       width: 40,
@@ -679,7 +679,10 @@ class _DoctorAvatar extends StatelessWidget {
         child: Text(
           name.isNotEmpty ? name[0].toUpperCase() : 'D',
           style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+              color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 16,
+        ),
         ),
       ),
     );
@@ -740,7 +743,7 @@ class _StatusToggle extends StatelessWidget {
           style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: doctor.isActive ? AppTheme.success : Colors.grey),
+              color: doctor.isActive ? AppTheme.success : context.textMutedColor),
         ),
       ],
     );

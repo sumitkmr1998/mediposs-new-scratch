@@ -142,32 +142,12 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
             // Filter + Search Row
             Row(
               children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _buildFilterChip(sales, 'Today', Icons.today_rounded,
-                            SalesFilter.today),
-                        const SizedBox(width: 8),
-                        _buildFilterChip(sales, 'Yesterday',
-                            Icons.history_rounded, SalesFilter.yesterday),
-                        const SizedBox(width: 8),
-                        _buildFilterChip(sales, 'Last 7 Days',
-                            Icons.date_range_rounded, SalesFilter.last7Days),
-                        const SizedBox(width: 8),
-                        _buildFilterChip(sales, 'All Time',
-                            Icons.all_inbox_rounded, SalesFilter.allTime),
-                        const SizedBox(width: 8),
-                        _buildFilterChip(sales, 'Custom',
-                            Icons.calendar_month_rounded, SalesFilter.custom,
-                            isCustom: true),
-                      ],
-                    ),
-                  ),
-                ),
+                _buildModernFilterDropdown(sales),
+                const SizedBox(width: 16),
+                const Spacer(),
                 const SizedBox(width: 16),
                 SizedBox(
+
                   width: 260,
                   child: TextField(
                     controller: _searchCtrl,
@@ -222,20 +202,24 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
               ),
               child: Row(
                 children: [
+                  const SizedBox(
+                      width: 56), // Matches leading icon + gap in rows
                   SizedBox(
-                      width: 150,
+                      width: 140,
                       child: Text('INVOICE', style: _headerStyle(context))),
                   Expanded(
                       flex: 3,
                       child: Text('PATIENT', style: _headerStyle(context))),
                   SizedBox(
                       width: 110,
-                      child: Text('METHOD', style: _headerStyle(context))),
+                      child: Center(
+                          child: Text('METHOD', style: _headerStyle(context)))),
                   SizedBox(
-                      width: 120,
-                      child: Text('TOTAL', style: _headerStyle(context))),
+                      width: 110,
+                      child: Center(
+                          child: Text('TOTAL', style: _headerStyle(context)))),
                   SizedBox(
-                      width: 120,
+                      width: 110,
                       child: Text('DATE', style: _headerStyle(context))),
                   const SizedBox(width: 48),
                 ],
@@ -318,17 +302,54 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
     );
   }
 
-  Widget _buildFilterChip(
-      SalesProvider sales, String label, IconData icon, SalesFilter filter,
-      {bool isCustom = false}) {
-    final isSelected = sales.activeFilter == filter;
-    return Material(
-      color: isSelected ? AppTheme.primary : context.surfaceColor,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: () async {
-          if (isCustom) {
+  Widget _buildModernFilterDropdown(SalesProvider sales) {
+    String currentLabel = '';
+    IconData currentIcon = Icons.today_rounded;
+
+    switch (sales.activeFilter) {
+      case SalesFilter.today:
+        currentLabel = 'Today';
+        currentIcon = Icons.today_rounded;
+        break;
+      case SalesFilter.yesterday:
+        currentLabel = 'Yesterday';
+        currentIcon = Icons.history_rounded;
+        break;
+      case SalesFilter.last7Days:
+        currentLabel = 'Last 7 Days';
+        currentIcon = Icons.date_range_rounded;
+        break;
+      case SalesFilter.allTime:
+        currentLabel = 'All Time';
+        currentIcon = Icons.all_inbox_rounded;
+        break;
+      case SalesFilter.custom:
+        currentLabel = 'Custom Range';
+        currentIcon = Icons.calendar_month_rounded;
+        break;
+    }
+
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: PopupMenuButton<SalesFilter>(
+        offset: const Offset(0, 50),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        color: context.surfaceColor,
+        tooltip: 'Filter by date range',
+        onSelected: (SalesFilter filter) async {
+          if (filter == SalesFilter.custom) {
             final range = await showDateRangePicker(
               context: context,
               firstDate: DateTime(2020),
@@ -352,29 +373,38 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
             sales.setFilter(filter);
           }
         },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isSelected ? AppTheme.primary : context.borderColor,
-            ),
-          ),
+        itemBuilder: (context) => [
+          _buildPopupItem(SalesFilter.today, 'Today', Icons.today_rounded),
+          _buildPopupItem(
+              SalesFilter.yesterday, 'Yesterday', Icons.history_rounded),
+          _buildPopupItem(
+              SalesFilter.last7Days, 'Last 7 Days', Icons.date_range_rounded),
+          _buildPopupItem(SalesFilter.allTime, 'All Time', Icons.all_inbox_rounded),
+          const PopupMenuDivider(),
+          _buildPopupItem(
+              SalesFilter.custom, 'Custom Range', Icons.calendar_month_rounded),
+        ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon,
-                  size: 16,
-                  color: isSelected ? Colors.white : context.textMutedColor),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isSelected ? Colors.white : context.textMutedColor,
-                ),
+              Icon(currentIcon, size: 18, color: AppTheme.primary),
+              const SizedBox(width: 12),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Time Range',
+                      style: TextStyle(fontSize: 10, color: context.textMutedColor)),
+                  Text(currentLabel,
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w700)),
+                ],
               ),
+              const SizedBox(width: 16),
+              Icon(Icons.expand_more_rounded,
+                  size: 18, color: context.textMutedColor),
             ],
           ),
         ),
@@ -382,9 +412,25 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
     );
   }
 
+  PopupMenuItem<SalesFilter> _buildPopupItem(
+      SalesFilter value, String label, IconData icon) {
+    return PopupMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: context.textMutedColor),
+          const SizedBox(width: 12),
+          Text(label,
+              style:
+                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
   TextStyle _headerStyle(BuildContext context) => TextStyle(
         fontSize: 11,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w800,
         color: context.textMutedColor,
         letterSpacing: 1,
       );
@@ -514,8 +560,8 @@ class _SaleRow extends StatelessWidget {
               width: 140,
               child: Text(sale.invoiceNo,
                   style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
                       color: AppTheme.primary)),
             ),
             Expanded(
@@ -524,20 +570,21 @@ class _SaleRow extends StatelessWidget {
                 children: [
                   if (sale.isReturn)
                     Container(
-                      margin: const EdgeInsets.only(right: 8),
+                      margin: const EdgeInsets.only(right: 12),
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
+                          horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: AppTheme.danger.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                            color: AppTheme.danger.withValues(alpha: 0.3)),
+                            color: AppTheme.danger.withValues(alpha: 0.2)),
                       ),
                       child: const Text('REFUND',
                           style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.danger)),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: AppTheme.danger,
+                              letterSpacing: 0.5)),
                     ),
                   Expanded(
                     child: Text(
@@ -545,7 +592,7 @@ class _SaleRow extends StatelessWidget {
                           ? 'Walk-in Customer'
                           : sale.patientName,
                       style: const TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w500),
+                          fontSize: 14, fontWeight: FontWeight.w600),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -553,17 +600,20 @@ class _SaleRow extends StatelessWidget {
               ),
             ),
             SizedBox(
-              width: 100,
-              child: _PaymentBadge(method: sale.paymentMethod),
+              width: 110,
+              child: Center(child: _PaymentBadge(method: sale.paymentMethod)),
             ),
             SizedBox(
               width: 110,
-              child: Text(
-                '₹${sale.total.toStringAsFixed(2)}',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  color: sale.isReturn ? AppTheme.danger : AppTheme.success,
+              child: Center(
+                child: Text(
+                  '₹${sale.total.toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                    color: sale.isReturn ? AppTheme.danger : AppTheme.success,
+                    fontFamily: 'monospace',
+                  ),
                 ),
               ),
             ),
@@ -571,163 +621,213 @@ class _SaleRow extends StatelessWidget {
               width: 110,
               child: Text(
                 '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}',
-                style: TextStyle(fontSize: 12, color: context.textMutedColor),
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: context.textMutedColor),
               ),
             ),
           ],
         ),
         children: [
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Theme.of(context).brightness == Brightness.dark
-                  ? AppTheme.darkBg.withValues(alpha: 0.5)
-                  : AppTheme.lightBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: context.borderColor),
+                  ? AppTheme.darkBg.withValues(alpha: 0.7)
+                  : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: context.borderColor.withValues(alpha: 0.8)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            child: Column(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text('ITEM',
-                        style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: context.textMutedColor,
-                            letterSpacing: 0.5)),
-                    const Spacer(),
-                    SizedBox(
-                        width: 100,
-                        child: Text('QTY x PRICE',
-                            style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: context.textMutedColor,
-                                letterSpacing: 0.5),
-                            textAlign: TextAlign.end)),
-                    const SizedBox(width: 24),
-                    SizedBox(
-                        width: 90,
-                        child: Text('SUBTOTAL',
-                            style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: context.textMutedColor,
-                                letterSpacing: 0.5),
-                            textAlign: TextAlign.end)),
-                  ],
-                ),
-                const Divider(height: 16),
-                ...salesProvider.getSaleItems(sale).map((item) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
+                // Left Column: Items and Totals
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
-                          Expanded(
-                            child: Text(item.medicineName,
-                                style: const TextStyle(fontSize: 13)),
-                          ),
-                          SizedBox(
-                            width: 100,
-                            child: Text(
-                              '${item.qty} x ₹${item.unitPrice.toStringAsFixed(2)}',
+                          Text('ITEM DESCRIPTION',
                               style: TextStyle(
-                                  fontSize: 12, color: context.textMutedColor),
-                              textAlign: TextAlign.end,
-                            ),
-                          ),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: context.textMutedColor,
+                                  letterSpacing: 1.0)),
+                          const Spacer(),
+                          SizedBox(
+                              width: 110,
+                              child: Text('QTY x PRICE',
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      color: context.textMutedColor,
+                                      letterSpacing: 1.0),
+                                  textAlign: TextAlign.end)),
                           const SizedBox(width: 24),
                           SizedBox(
-                            width: 90,
-                            child: Text(
-                              '₹${item.lineTotal.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 13),
-                              textAlign: TextAlign.end,
+                              width: 100,
+                              child: Text('SUBTOTAL',
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      color: context.textMutedColor,
+                                      letterSpacing: 1.0),
+                                  textAlign: TextAlign.end)),
+                        ],
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Divider(height: 1),
+                      ),
+                      ...salesProvider.getSaleItems(sale).map((item) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(item.medicineName,
+                                      style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600)),
+                                ),
+                                SizedBox(
+                                  width: 110,
+                                  child: Text(
+                                    '${item.qty} x ₹${item.unitPrice.toStringAsFixed(2)}',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: context.textMutedColor,
+                                        fontFamily: 'monospace'),
+                                    textAlign: TextAlign.end,
+                                  ),
+                                ),
+                                const SizedBox(width: 24),
+                                SizedBox(
+                                  width: 100,
+                                  child: Text(
+                                    '₹${item.lineTotal.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13,
+                                        fontFamily: 'monospace'),
+                                    textAlign: TextAlign.end,
+                                  ),
+                                ),
+                              ],
                             ),
+                          )),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Divider(height: 1),
+                      ),
+                      if (sale.discount > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Text('Total Discount',
+                                  style: TextStyle(
+                                      fontSize: 13, color: context.textMutedColor)),
+                              const SizedBox(width: 32),
+                              SizedBox(
+                                width: 100,
+                                child: Text('-₹${sale.discount.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                        color: AppTheme.danger,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14,
+                                        fontFamily: 'monospace'),
+                                    textAlign: TextAlign.end),
+                              ),
+                            ],
+                          ),
+                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Text('Net Amount',
+                              style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  color: context.textColor)),
+                          const SizedBox(width: 32),
+                          SizedBox(
+                            width: 120,
+                            child: Text('₹${sale.total.toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    color: AppTheme.primary,
+                                    fontSize: 20,
+                                    fontFamily: 'monospace'),
+                                textAlign: TextAlign.end),
                           ),
                         ],
                       ),
-                    )),
-                const Divider(height: 20),
-                if (sale.discount > 0)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Text('Discount',
-                          style: TextStyle(
-                              fontSize: 12, color: context.textMutedColor)),
-                      const SizedBox(width: 32),
-                      SizedBox(
-                        width: 90,
-                        child: Text('-₹${sale.discount.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                                color: AppTheme.danger,
-                                fontWeight: FontWeight.w600),
-                            textAlign: TextAlign.end),
-                      ),
                     ],
                   ),
-                if (sale.discount > 0) const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text('Total',
-                        style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: context.textColor)),
-                    const SizedBox(width: 32),
-                    SizedBox(
-                      width: 90,
-                      child: Text('₹${sale.total.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.primary,
-                              fontSize: 16),
-                          textAlign: TextAlign.end),
-                    ),
-                  ],
                 ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _ActionButton(
-                      icon: Icons.print_rounded,
-                      label: 'Print Receipt',
-                      color: AppTheme.primary,
-                      onTap: () =>
-                          PrintingService.instance.printReceipt(context, sale),
-                    ),
-                    if (!sale.isReturn && canProcessReturns) ...[
-                      const SizedBox(width: 12),
+
+                // Vertical Divider
+                Container(
+                  width: 1,
+                  height: 140, // Approximate height to match content
+                  margin: const EdgeInsets.symmetric(horizontal: 32),
+                  color: context.borderColor.withValues(alpha: 0.5),
+                ),
+
+                // Right Column: Action Buttons
+                SizedBox(
+                  width: 180,
+                  child: Column(
+                    children: [
                       _ActionButton(
-                        icon: Icons.assignment_return_rounded,
-                        label: 'Process Return',
-                        color: AppTheme.warning,
-                        onTap: () => showDialog(
-                          context: context,
-                          builder: (_) => ReturnDialog(originalSale: sale),
+                        icon: Icons.print_rounded,
+                        label: 'Print Receipt',
+                        color: AppTheme.primary,
+                        isFullWidth: true,
+                        onTap: () =>
+                            PrintingService.instance.printReceipt(context, sale),
+                      ),
+                      if (!sale.isReturn && canProcessReturns) ...[
+                        const SizedBox(height: 12),
+                        _ActionButton(
+                          icon: Icons.assignment_return_rounded,
+                          label: 'Process Return',
+                          color: AppTheme.warning,
+                          isFullWidth: true,
+                          onTap: () => showDialog(
+                            context: context,
+                            builder: (_) => ReturnDialog(originalSale: sale),
+                          ),
                         ),
-                      ),
+                      ],
+                      if (canVoidSales) ...[
+                        const SizedBox(height: 12),
+                        _ActionButton(
+                          icon: Icons.delete_forever_rounded,
+                          label: 'Void Sale',
+                          color: AppTheme.danger,
+                          isFullWidth: true,
+                          onTap: () => _confirmDelete(context, inv),
+                        ),
+                      ],
                     ],
-                    if (canVoidSales) ...[
-                      const SizedBox(width: 12),
-                      _ActionButton(
-                        icon: Icons.delete_forever_rounded,
-                        label: 'Void Sale',
-                        color: AppTheme.danger,
-                        onTap: () => _confirmDelete(context, inv),
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
               ],
             ),
           ),
         ],
+
       ),
     );
   }
@@ -846,36 +946,40 @@ class _ActionButton extends StatelessWidget {
   final String label;
   final Color color;
   final VoidCallback onTap;
+  final bool isFullWidth;
 
   const _ActionButton({
     required this.icon,
     required this.label,
     required this.color,
     required this.onTap,
+    this.isFullWidth = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: color.withValues(alpha: 0.08),
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          width: isFullWidth ? double.infinity : null,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: color.withValues(alpha: 0.25)),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withValues(alpha: 0.2)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: isFullWidth ? MainAxisAlignment.center : MainAxisAlignment.start,
             children: [
-              Icon(icon, color: color, size: 16),
-              const SizedBox(width: 6),
+              Icon(icon, color: color, size: 18),
+              const SizedBox(width: 10),
               Text(label,
                   style: TextStyle(
-                      color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+                      color: color, fontSize: 13, fontWeight: FontWeight.bold)),
             ],
           ),
         ),

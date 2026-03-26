@@ -58,14 +58,14 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                   color: AppTheme.primary, size: 22),
             ),
             const SizedBox(width: 12),
-            const Column(
+            Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('OPD Queue',
+                const Text('OPD Queue',
                     style:
                         TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
                 Text('Today\'s live queue',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF6B7B8D))),
+                    style: TextStyle(fontSize: 12, color: context.textMutedColor)),
               ],
             ),
           ],
@@ -127,13 +127,13 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
             // Bento Queue Table
             Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.surfaceColor,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
-                    color: AppTheme.lightBorder.withValues(alpha: 0.5)),
+                    color: context.borderColor.withValues(alpha: 0.5)),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
+                    color: Colors.black.withValues(alpha: 0.08),
                     blurRadius: 24,
                     offset: const Offset(0, 4),
                   ),
@@ -159,7 +159,7 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
                                     letterSpacing: 1.5,
-                                    color: Color(0xFF6B7B8D)))),
+                                    color: Color(0xFF94A3B8)))),
                         const Expanded(
                             flex: 2,
                             child: Text('ASSIGNED CONSULTANT',
@@ -167,7 +167,7 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
                                     letterSpacing: 1.5,
-                                    color: Color(0xFF6B7B8D)))),
+                                    color: Color(0xFF94A3B8)))),
                         const SizedBox(
                             width: 180,
                             child: Center(
@@ -176,7 +176,7 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                                         fontSize: 11,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 1.5,
-                                        color: Color(0xFF6B7B8D))))),
+                                        color: Color(0xFF94A3B8))))),
                         const SizedBox(
                             width: 180,
                             child: Center(
@@ -185,7 +185,7 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                                         fontSize: 11,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 1.5,
-                                        color: Color(0xFF6B7B8D))))),
+                                        color: Color(0xFF94A3B8))))),
                         const SizedBox(
                             width: 180,
                             child: Align(
@@ -195,7 +195,7 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                                         fontSize: 11,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 1.5,
-                                        color: Color(0xFF6B7B8D))))),
+                                        color: Color(0xFF94A3B8))))),
                       ],
                     ),
                   ),
@@ -520,7 +520,7 @@ class _QueueRowState extends State<_QueueRow> {
           margin: const EdgeInsets.only(bottom: 4),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           decoration: BoxDecoration(
-            color: context.bgColor.withValues(alpha: 0.4),
+            color: context.cardColor.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(14),
           ),
           child: Row(
@@ -528,11 +528,11 @@ class _QueueRowState extends State<_QueueRow> {
               SizedBox(
                 width: 60,
                 child: Text('#${a.tokenNumber.toString().padLeft(2, '0')}',
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontFamily: 'Manrope',
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF94A3B8))),
+                        color: context.textMutedColor)),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -546,13 +546,13 @@ class _QueueRowState extends State<_QueueRow> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(a.patientName,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF64748B))),
+                                color: context.textMutedColor)),
                         Text('ID: P-${a.patientId}',
-                            style: const TextStyle(
-                                fontSize: 10, color: Color(0xFF94A3B8))),
+                            style: TextStyle(
+                                fontSize: 10, color: context.textMutedColor.withValues(alpha: 0.7))),
                       ],
                     ),
                   ),
@@ -561,19 +561,19 @@ class _QueueRowState extends State<_QueueRow> {
               Expanded(
                 flex: 2,
                 child: Text('Dr. ${a.doctorName}',
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
-                        color: Color(0xFF94A3B8))),
+                        color: context.textMutedColor)),
               ),
-              const SizedBox(
+              SizedBox(
                 width: 180,
                 child: Center(
                   child: Text('-- : --',
                       style: TextStyle(
                           fontSize: 13,
                           fontFamily: 'monospace',
-                          color: Color(0xFF94A3B8))),
+                          color: context.textMutedColor)),
                 ),
               ),
               SizedBox(
@@ -583,24 +583,24 @@ class _QueueRowState extends State<_QueueRow> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE2E8F0),
+                      color: context.borderColor,
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Text('DONE',
+                    child: Text('DONE',
                         style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1,
-                            color: Color(0xFF94A3B8))),
+                            color: context.textMutedColor)),
                   ),
                 ),
               ),
-              const SizedBox(
+              SizedBox(
                 width: 180,
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: Icon(Icons.more_vert_rounded,
-                      color: Color(0xFFCBD5E1), size: 20),
+                      color: context.textMutedColor.withValues(alpha: 0.5), size: 20),
                 ),
               ),
             ],

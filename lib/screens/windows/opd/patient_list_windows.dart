@@ -158,13 +158,13 @@ class _PatientListWindowsState extends State<PatientListWindows> {
             // Bento Table
             Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.surfaceColor,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
-                    color: AppTheme.lightBorder.withValues(alpha: 0.5)),
+                    color: context.borderColor.withValues(alpha: 0.5)),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
+                    color: Colors.black.withValues(alpha: 0.08),
                     blurRadius: 24,
                     offset: const Offset(0, 4),
                   ),
@@ -190,8 +190,8 @@ class _PatientListWindowsState extends State<PatientListWindows> {
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
                                     letterSpacing: 1.5,
-                                    color: Color(0xFF6B7B8D)))),
-                        SizedBox(
+                                    color: Color(0xFF94A3B8)))),
+                        const SizedBox(
                             width: 80,
                             child: Center(
                                 child: Text('GENDER',
@@ -199,8 +199,8 @@ class _PatientListWindowsState extends State<PatientListWindows> {
                                         fontSize: 11,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 1.5,
-                                        color: Color(0xFF6B7B8D))))),
-                        SizedBox(
+                                        color: Color(0xFF94A3B8))))),
+                        const SizedBox(
                             width: 70,
                             child: Center(
                                 child: Text('AGE',
@@ -208,16 +208,16 @@ class _PatientListWindowsState extends State<PatientListWindows> {
                                         fontSize: 11,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 1.5,
-                                        color: Color(0xFF6B7B8D))))),
-                        SizedBox(
+                                        color: Color(0xFF94A3B8))))),
+                        const SizedBox(
                             width: 140,
                             child: Text('PHONE',
                                 style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
                                     letterSpacing: 1.5,
-                                    color: Color(0xFF6B7B8D)))),
-                        SizedBox(
+                                    color: Color(0xFF94A3B8)))),
+                        const SizedBox(
                             width: 140,
                             child: Align(
                                 alignment: Alignment.centerRight,
@@ -226,7 +226,7 @@ class _PatientListWindowsState extends State<PatientListWindows> {
                                         fontSize: 11,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 1.5,
-                                        color: Color(0xFF6B7B8D))))),
+                                        color: Color(0xFF94A3B8))))),
                       ],
                     ),
                   ),
@@ -271,7 +271,7 @@ class _PatientListWindowsState extends State<PatientListWindows> {
       fontSize: 11,
       fontWeight: FontWeight.w700,
       letterSpacing: 1.5,
-      color: Color(0xFF6B7B8D));
+      color: Color(0xFF94A3B8));
 
   void _showPatientDialog(BuildContext context, {Patient? patient}) {
     showDialog(

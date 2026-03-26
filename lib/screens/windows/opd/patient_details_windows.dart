@@ -581,14 +581,14 @@ class _SectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
               color: accentColor.withValues(alpha: 0.08),
               blurRadius: 20,
               offset: const Offset(0, 4)),
-          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 8),
         ],
       ),
       child: Column(
@@ -718,7 +718,7 @@ class _PatientDetailsContent extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: i.isEven
-                ? AppTheme.primary.withValues(alpha: 0.03)
+                ? context.borderColor.withValues(alpha: 0.1)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
           ),
@@ -743,10 +743,10 @@ class _PatientDetailsContent extends StatelessWidget {
             ),
             Expanded(
               child: Text(value,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF1A2332))),
+                      color: context.textColor)),
             ),
           ]),
         );
@@ -784,10 +784,10 @@ class _GalleryContent extends StatelessWidget {
               style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF64748B))),
+                  color: Color(0xFF94A3B8))),
           const SizedBox(height: 4),
           const Text('Click + to add photos',
-              style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+              style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
         ]),
       );
     }
