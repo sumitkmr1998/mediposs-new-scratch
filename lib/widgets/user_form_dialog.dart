@@ -131,311 +131,343 @@ class _UserFormDialogState extends State<UserFormDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      backgroundColor: context.surfaceColor,
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
       child: Container(
-        width: 500,
-        height: 600,
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                widget.existingUser == null ? 'Add New Staff' : 'Edit Staff',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: context.textColor,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _nameCtrl,
-                      style: TextStyle(color: context.textColor),
-                      decoration: const InputDecoration(
-                        labelText: 'Full Name',
-                        prefixIcon: Icon(Icons.person, color: AppTheme.primary),
+        width: 850,
+        height: 700,
+        decoration: BoxDecoration(
+          color: context.surfaceColor,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.2),
+              blurRadius: 40,
+              offset: const Offset(0, 20),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.05),
+                    border: Border(bottom: BorderSide(color: context.borderColor, width: 0.5)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.manage_accounts_rounded, color: Colors.white),
                       ),
-                      validator: (v) => v!.isEmpty ? 'Required' : null,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _roleCtrl,
-                      style: TextStyle(color: context.textColor),
-                      decoration: const InputDecoration(
-                        labelText: 'Role Title (Display Only)',
-                        prefixIcon: Icon(Icons.badge, color: AppTheme.primary),
+                      const SizedBox(width: 20),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.existingUser == null ? 'CREATE NEW STAFF' : 'EDIT STAFF PROFILE',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 2,
+                              color: AppTheme.primary,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            widget.existingUser?.name ?? 'New Team Member',
+                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+                          ),
+                        ],
                       ),
-                      validator: (v) => v!.isEmpty ? 'Required' : null,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _pinCtrl,
-                      style: TextStyle(color: context.textColor),
-                      decoration: const InputDecoration(
-                        labelText: 'Login PIN',
-                        prefixIcon:
-                            Icon(Icons.password, color: AppTheme.primary),
+                      const Spacer(),
+                      _StatusToggle(
+                        isActive: _isActive,
+                        onChanged: (v) => setState(() => _isActive = v),
                       ),
-                      validator: (v) => v!.length < 4 ? 'Min 4 chars' : null,
-                    ),
+                    ],
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: SwitchListTile(
-                      title: Text('Account Active',
-                          style: TextStyle(color: context.textColor)),
-                      value: _isActive,
-                      activeThumbColor: AppTheme.success,
-                      onChanged: (val) => setState(() => _isActive = val),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Granular Permissions',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.primary,
                 ),
-              ),
-              Divider(color: context.borderColor),
-              Expanded(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: [
-                    ExpansionTile(
-                      title: Text('Admin & Settings',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: context.textColor)),
-                      children: [
-                        _buildPermToggle(
-                            'Access Settings',
-                            'Can view/edit shop configuration, run backups',
-                            _canAccessSettings,
-                            (v) => setState(() => _canAccessSettings = v)),
-                        _buildPermToggle(
-                            'Manage Users',
-                            'Can add staff and change their permissions',
-                            _canManageUsers,
-                            (v) => setState(() => _canManageUsers = v)),
-                      ],
-                    ),
-                    ExpansionTile(
-                      title: Text('Dashboard',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: context.textColor)),
-                      children: [
-                        _buildPermToggle(
-                            'View Dashboard',
-                            'Can access KPI analytics and high-level charts',
-                            _canViewDashboard,
-                            (v) => setState(() => _canViewDashboard = v)),
-                      ],
-                    ),
-                    ExpansionTile(
-                      title: Text('Inventory Management',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: context.textColor)),
-                      children: [
-                        _buildPermToggle(
-                            'View Inventory',
-                            'Can access Inventory list and check prices/stock',
-                            _canViewInventory,
-                            (v) => setState(() {
-                                  _canViewInventory = v;
-                                  if (!v) _canEditInventory = false;
-                                })),
-                        _buildPermToggle(
-                            'Edit Inventory',
-                            'Can ADD, EDIT, or DELETE medicines and categories',
-                            _canEditInventory,
-                            (v) => setState(() {
-                                  _canEditInventory = v;
-                                  if (v) _canViewInventory = true;
-                                })),
-                      ],
-                    ),
-                    ExpansionTile(
-                      title: Text('Warehouse Operations',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: context.textColor)),
-                      children: [
-                        _buildPermToggle(
-                            'View Warehouse',
-                            'Can view main vs store stock distribution',
-                            _canViewWarehouse,
-                            (v) => setState(() {
-                                  _canViewWarehouse = v;
-                                  if (!v) _canTransferStock = false;
-                                })),
-                        _buildPermToggle(
-                            'Execute Transfers',
-                            'Can move stock between Main and Store warehouse',
-                            _canTransferStock,
-                            (v) => setState(() {
-                                  _canTransferStock = v;
-                                  if (v) _canViewWarehouse = true;
-                                })),
-                      ],
-                    ),
-                    ExpansionTile(
-                      title: Text('Point of Sale (POS)',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: context.textColor)),
-                      children: [
-                        _buildPermToggle(
-                            'Access POS',
-                            'Can open POS screen and bill customers',
-                            _canAccessPOS,
-                            (v) => setState(() {
-                                  _canAccessPOS = v;
-                                  if (!v) _canDiscountSales = false;
-                                })),
-                        _buildPermToggle(
-                            'Apply Discounts',
-                            'Can apply manual discounts at checkout',
-                            _canDiscountSales,
-                            (v) => setState(() {
-                                  _canDiscountSales = v;
-                                  if (v) _canAccessPOS = true;
-                                })),
-                      ],
-                    ),
-                    ExpansionTile(
-                      title: Text('Sales History & Refunds',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: context.textColor)),
-                      children: [
-                        _buildPermToggle(
-                            'View History',
-                            'Can view table of past receipts',
-                            _canViewSalesHistory,
-                            (v) => setState(() {
-                                  _canViewSalesHistory = v;
-                                  if (!v) {
-                                    _canVoidSales = false;
-                                    _canProcessReturns = false;
-                                  }
-                                })),
-                        _buildPermToggle(
-                            'Process Returns',
-                            'Can execute Item Returns (negative quantities)',
-                            _canProcessReturns,
-                            (v) => setState(() {
-                                  _canProcessReturns = v;
-                                  if (v) _canViewSalesHistory = true;
-                                })),
-                        _buildPermToggle(
-                            'Void Receipts',
-                            'Can permanently delete/void an entire receipt',
-                            _canVoidSales,
-                            (v) => setState(() {
-                                  _canVoidSales = v;
-                                  if (v) _canViewSalesHistory = true;
-                                })),
-                      ],
-                    ),
-                    ExpansionTile(
-                      title: Text('OPD Management',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: context.textColor)),
-                      children: [
-                        _buildPermToggle(
-                            'Access OPD Queue',
-                            'Can manage patient queue and view patient list',
-                            _canAccessOPD,
-                            (v) => setState(() {
-                                  _canAccessOPD = v;
-                                  if (!v) {
-                                    _canManageDoctors = false;
-                                    _canViewOpdReports = false;
-                                  }
-                                })),
-                        _buildPermToggle(
-                            'Manage Doctors',
-                            'Can add/edit doctor profiles and fees',
-                            _canManageDoctors,
-                            (v) => setState(() {
-                                  _canManageDoctors = v;
-                                  if (v) _canAccessOPD = true;
-                                })),
-                        _buildPermToggle(
-                            'View OPD Analytics',
-                            'Can access OPD reports and revenue charts',
-                            _canViewOpdReports,
-                            (v) => setState(() {
-                                  _canViewOpdReports = v;
-                                  if (v) _canAccessOPD = true;
-                                })),
-                      ],
-                    ),
-                  ],
+
+                // Body
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Left Side: Basic Info
+                      Container(
+                        width: 320,
+                        padding: const EdgeInsets.all(32),
+                        decoration: BoxDecoration(
+                          border: Border(right: BorderSide(color: context.borderColor, width: 0.5)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('IDENTIFICATION',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.5,
+                                  color: context.textMutedColor,
+                                )),
+                            const SizedBox(height: 16),
+                            _buildInput(
+                              _nameCtrl,
+                              'Full Name',
+                              Icons.person_outline,
+                              (v) => v!.isEmpty ? 'Required' : null,
+                            ),
+                            const SizedBox(height: 16),
+                            _buildInput(
+                              _roleCtrl,
+                              'Role/Position',
+                              Icons.badge_outlined,
+                              (v) => v!.isEmpty ? 'Required' : null,
+                            ),
+                            const SizedBox(height: 16),
+                            _buildInput(
+                              _pinCtrl,
+                              'Login PIN',
+                              Icons.key_outlined,
+                              (v) => v!.length < 4 ? 'Min 4 digits' : null,
+                              isObscure: true,
+                            ),
+                            const Spacer(),
+                            const Icon(Icons.shield_outlined, size: 48, color: AppTheme.primary),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Secure Access',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              'Permissions defined on the right will take effect immediately after saving.',
+                              style: TextStyle(fontSize: 12, color: context.textMutedColor),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Right Side: Permissions Scored
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('PERMISSION MODULES',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1.5,
+                                    color: context.textMutedColor,
+                                  )),
+                              const SizedBox(height: 24),
+                              _PermGroup(
+                                title: 'POS & Sales',
+                                icon: Icons.shopping_basket_outlined,
+                                children: [
+                                  _PermTile('Access Terminal', 'Bill customers at POS', _canAccessPOS, (v) => setState(() => _canAccessPOS = v)),
+                                  _PermTile('Manual Discounts', 'Apply custom discounts', _canDiscountSales, (v) => setState(() => _canDiscountSales = v)),
+                                ],
+                              ),
+                              _PermGroup(
+                                title: 'Inventory & Warehouse',
+                                icon: Icons.inventory_2_outlined,
+                                children: [
+                                  _PermTile('Manage Stock', 'View and audit stock levels', _canViewInventory, (v) => setState(() => _canViewInventory = v)),
+                                  _PermTile('Modify Items', 'Edit medicine details/pricing', _canEditInventory, (v) => setState(() => _canEditInventory = v)),
+                                  _PermTile('Warehouse HQ', 'Manage main distribution', _canViewWarehouse, (v) => setState(() => _canViewWarehouse = v)),
+                                  _PermTile('Execute Transfers', 'Move stock between locations', _canTransferStock, (v) => setState(() => _canTransferStock = v)),
+                                ],
+                              ),
+                              _PermGroup(
+                                title: 'OPD & Clinical',
+                                icon: Icons.medical_services_outlined,
+                                children: [
+                                  _PermTile('Queue Management', 'Manage patiet visits', _canAccessOPD, (v) => setState(() => _canAccessOPD = v)),
+                                  _PermTile('Manage Doctors', 'Edit doctor fees & profiles', _canManageDoctors, (v) => setState(() => _canManageDoctors = v)),
+                                ],
+                              ),
+                              _PermGroup(
+                                title: 'History & Admin',
+                                icon: Icons.admin_panel_settings_outlined,
+                                children: [
+                                  _PermTile('Sale Auditing', 'View sales and void receipts', _canViewSalesHistory, (v) => setState(() => _canViewSalesHistory = v)),
+                                  _PermTile('System Configuration', 'Access global settings', _canAccessSettings, (v) => setState(() => _canAccessSettings = v)),
+                                  _PermTile('Manage Staff', 'Edit user roles & permissions', _canManageUsers, (v) => setState(() => _canManageUsers = v)),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text('Cancel',
-                        style: TextStyle(color: context.textMutedColor)),
+
+                // Footer
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                  decoration: BoxDecoration(
+                    color: context.surfaceColor,
+                    border: Border(top: BorderSide(color: context.borderColor, width: 0.5)),
                   ),
-                  const SizedBox(width: 16),
-                  ElevatedButton.icon(
-                    onPressed: _save,
-                    icon: const Icon(Icons.save),
-                    label: const Text('Save User'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 16),
-                    ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        ),
+                        child: Text('DISCARD', style: TextStyle(color: context.textMutedColor, letterSpacing: 1, fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(width: 16),
+                      FilledButton.icon(
+                        onPressed: _save,
+                        icon: const Icon(Icons.check_circle_outline, size: 18),
+                        label: const Text('SAVE PROFILE', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1)),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppTheme.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 2,
+                          shadowColor: AppTheme.primary.withValues(alpha: 0.3),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildPermToggle(
-      String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
+  Widget _buildInput(TextEditingController ctrl, String label, IconData icon, String? Function(String?)? validator, {bool isObscure = false}) {
+    return TextFormField(
+      controller: ctrl,
+      obscureText: isObscure,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, size: 20),
+        filled: true,
+        fillColor: context.bgColor.withValues(alpha: 0.5),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      ),
+      validator: validator,
+    );
+  }
+}
+
+class _StatusToggle extends StatelessWidget {
+  final bool isActive;
+  final ValueChanged<bool> onChanged;
+  const _StatusToggle({required this.isActive, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => onChanged(!isActive),
+      borderRadius: BorderRadius.circular(30),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: (isActive ? AppTheme.success : AppTheme.danger).withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: (isActive ? AppTheme.success : AppTheme.danger).withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: isActive ? AppTheme.success : AppTheme.danger,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              isActive ? 'ACCOUNT ACTIVE' : 'ACCOUNT DEACTIVATED',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                color: isActive ? AppTheme.success : AppTheme.danger,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PermGroup extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final List<Widget> children;
+  const _PermGroup({required this.title, required this.icon, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 16, color: AppTheme.primary),
+            const SizedBox(width: 8),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: context.surfaceColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: context.borderColor, width: 0.5),
+          ),
+          child: Column(children: children),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+}
+
+class _PermTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final bool active;
+  final ValueChanged<bool> onChanged;
+  const _PermTile(this.title, this.subtitle, this.active, this.onChanged);
+
+  @override
+  Widget build(BuildContext context) {
     return SwitchListTile(
-      title: Text(title,
-          style:
-              TextStyle(color: context.textColor, fontWeight: FontWeight.w600)),
-      subtitle: Text(subtitle,
-          style: TextStyle(color: context.textMutedColor, fontSize: 12)),
-      value: value,
-      activeThumbColor: AppTheme.primary,
+      value: active,
       onChanged: onChanged,
+      title: Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      subtitle: Text(subtitle, style: TextStyle(fontSize: 11, color: context.textMutedColor)),
+      activeColor: AppTheme.primary,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     );
   }
 }

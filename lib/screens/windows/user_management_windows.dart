@@ -19,148 +19,219 @@ class _UserManagementWindowsState extends State<UserManagementWindows> {
     final users = auth.getAllUsers();
 
     return Scaffold(
+      backgroundColor: context.bgColor,
       appBar: AppBar(
-        title: const Text('User Management'),
+        title: const Text('Staff Management'),
+        backgroundColor: context.surfaceColor,
+        elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.person_add),
-            tooltip: 'Add New Staff',
-            onPressed: () {
-              showDialog(
-                context: context,
-                barrierDismissible: false,
-                builder: (_) => const UserFormDialog(),
-              );
-            },
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.white,
+                elevation: 2,
+                shadowColor: AppTheme.primary.withValues(alpha: 0.3),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              icon: const Icon(Icons.person_add_rounded, size: 18),
+              label: const Text('Add New Staff'),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (_) => const UserFormDialog(),
+                );
+              },
+            ),
           ),
-          const SizedBox(width: 16),
         ],
       ),
-      body: CustomScrollView(
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.all(24),
-            sliver: SliverToBoxAdapter(
-              child: Card(
-                elevation: 0,
-                color: context.surfaceColor,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(
-                      color: AppTheme.primary.withValues(alpha: 0.1)),
-                ),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    headingTextStyle: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: context.textColor,
-                    ),
-                    columns: const [
-                      DataColumn(label: Text('Name')),
-                      DataColumn(label: Text('Role Title')),
-                      DataColumn(label: Text('Status')),
-                      DataColumn(label: Text('Sell')),
-                      DataColumn(label: Text('Inventory')),
-                      DataColumn(label: Text('OPD')),
-                      DataColumn(label: Text('Reports')),
-                      DataColumn(label: Text('Settings')),
-                      DataColumn(label: Text('Actions')),
-                    ],
-                    rows: users.map((u) => _buildRow(u, auth)).toList(),
-                  ),
-                ),
-              ),
-            ),
-          )
-        ],
+      body: GridView.builder(
+        padding: const EdgeInsets.all(24),
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 400,
+          mainAxisExtent: 260,
+          crossAxisSpacing: 24,
+          mainAxisSpacing: 24,
+        ),
+        itemCount: users.length,
+        itemBuilder: (ctx, i) => _UserCard(user: users[i], auth: auth),
       ),
     );
   }
+}
 
-  DataRow _buildRow(AppUser user, AuthProvider auth) {
+class _UserCard extends StatelessWidget {
+  final AppUser user;
+  final AuthProvider auth;
+  const _UserCard({required this.user, required this.auth});
+
+  @override
+  Widget build(BuildContext context) {
     final isAdmin = user.role.toLowerCase() == 'admin';
-    return DataRow(
-      cells: [
-        DataCell(
-          Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: AppTheme.primary.withValues(alpha: 0.15),
-                radius: 16,
-                child: Text(
-                  user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
-                  style: const TextStyle(color: AppTheme.primary, fontSize: 13),
-                ),
+
+    return Container(
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Stack(
+          children: [
+            // Status Strip
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 4,
+              child: Container(
+                color: user.isActive ? AppTheme.success : AppTheme.danger,
               ),
-              const SizedBox(width: 12),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(user.name,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
-                  Text(user.pin,
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 28,
+                        backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                        child: Text(
+                          user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.primary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(user.name,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.5,
+                                )),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: context.bgColor,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                user.role.toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1,
+                                  color: context.textMutedColor,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (_) => UserFormDialog(existingUser: user),
+                          );
+                        },
+                        icon: const Icon(Icons.edit_note_rounded),
+                        color: AppTheme.primary,
+                        style: IconButton.styleFrom(
+                          backgroundColor: AppTheme.primary.withValues(alpha: 0.08),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  const Divider(height: 1),
+                  const SizedBox(height: 20),
+                  Text('MODULE ACCESS',
                       style: TextStyle(
-                          color: context.textMutedColor, fontSize: 10)),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5,
+                        color: context.textMutedColor,
+                      )),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _PermIcon(Icons.shopping_cart, 'POS', user.canAccessPOS || isAdmin, context),
+                      _PermIcon(Icons.inventory_2, 'Stock', user.canEditInventory || isAdmin, context),
+                      _PermIcon(Icons.local_hospital, 'OPD', user.canAccessOPD || isAdmin, context),
+                      _PermIcon(Icons.analytics, 'Reports', (user.canViewDashboard || user.canViewOpdReports) || isAdmin, context),
+                      _PermIcon(Icons.settings, 'Admin', user.canAccessSettings || isAdmin, context),
+                    ],
+                  ),
                 ],
               ),
-            ],
-          ),
-        ),
-        DataCell(Text(user.role)),
-        DataCell(
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: user.isActive
-                  ? AppTheme.success.withValues(alpha: 0.15)
-                  : AppTheme.danger.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
             ),
-            child: Text(
-              user.isActive ? 'Active' : 'Inactive',
-              style: TextStyle(
-                color: user.isActive ? AppTheme.success : AppTheme.danger,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+            // PIN Badge (at bottom right)
+            Positioned(
+              bottom: 12,
+              right: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: context.bgColor.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.key, size: 12, color: context.textMutedColor),
+                    const SizedBox(width: 6),
+                    Text(user.pin,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: context.textColor,
+                          letterSpacing: 1.5,
+                        )),
+                  ],
+                ),
               ),
             ),
-          ),
+          ],
         ),
-        DataCell(_boolIcon(user.canAccessPOS || isAdmin)),
-        DataCell(_boolIcon(user.canEditInventory || isAdmin)),
-        DataCell(_boolIcon(user.canAccessOPD || isAdmin)),
-        DataCell(_boolIcon(
-            user.canViewDashboard || user.canViewOpdReports || isAdmin)),
-        DataCell(_boolIcon(user.canAccessSettings || isAdmin)),
-        DataCell(
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.edit, size: 20, color: AppTheme.primary),
-                tooltip: 'Edit Permissions',
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (_) => UserFormDialog(existingUser: user),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ],
+      ),
     );
   }
 
-  Widget _boolIcon(bool val) {
-    return Icon(
-      val ? Icons.check_circle : Icons.cancel,
-      color: val ? AppTheme.success : context.textMutedColor,
-      size: 18,
+  Widget _PermIcon(IconData icon, String label, bool active, BuildContext context) {
+    final color = active ? AppTheme.primary : context.textMutedColor.withValues(alpha: 0.3);
+    return Tooltip(
+      message: '$label: ${active ? "Access Granted" : "No Access"}',
+      child: Column(
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(height: 4),
+          Text(label, style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: color)),
+        ],
+      ),
     );
   }
 }
