@@ -32,6 +32,8 @@ class _SettingsWindowsState extends State<SettingsWindows> {
   late final TextEditingController _taxCtrl;
   late final TextEditingController _currencyCtrl;
   late final TextEditingController _portCtrl;
+  late final TextEditingController _lowStockCtrl;
+  late final TextEditingController _nearExpiryCtrl;
 
   String _selectedTheme = 'system';
   List<Printer> _printers = [];
@@ -52,6 +54,8 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     _taxCtrl = TextEditingController(text: '${s.taxRate}');
     _currencyCtrl = TextEditingController(text: s.currencySymbol);
     _portCtrl = TextEditingController(text: '${s.serverPort}');
+    _lowStockCtrl = TextEditingController(text: '${s.lowStockThreshold}');
+    _nearExpiryCtrl = TextEditingController(text: '${s.nearExpiryThresholdDays}');
     _selectedTheme = ['system', 'light', 'dark'].contains(s.themeMode)
         ? s.themeMode
         : 'system';
@@ -91,6 +95,8 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       ..defaultPrinterName = _selectedPrinter
       ..autoPrintReceipt = _autoPrint
       ..receiptPaperSize = _paperSize
+      ..lowStockThreshold = int.tryParse(_lowStockCtrl.text) ?? 10
+      ..nearExpiryThresholdDays = int.tryParse(_nearExpiryCtrl.text) ?? 90
       ..serverPort = int.tryParse(_portCtrl.text) ?? 8080;
 
     settingsProv.save(s);
@@ -463,6 +469,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       _NavItem(Icons.print_rounded, 'Printing', AppTheme.accent),
       _NavItem(Icons.palette_rounded, 'Appearance', const Color(0xFF7C3AED)),
       _NavItem(Icons.wifi_rounded, 'Networking', const Color(0xFF0EA5E9)),
+      _NavItem(Icons.inventory_2_rounded, 'Inventory', Colors.orange),
       _NavItem(Icons.folder_rounded, 'Data', AppTheme.warning),
       if (auth.isAdmin)
         _NavItem(Icons.people_rounded, 'Users', AppTheme.success),
@@ -606,8 +613,9 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                     if (_selectedSection == 2) _buildAppearanceSection(),
                     if (_selectedSection == 3)
                       _buildNetworkingSection(serverRunning),
-                    if (_selectedSection == 4) _buildDataSection(),
-                    if (auth.isAdmin && _selectedSection == 5)
+                    if (_selectedSection == 4) _buildInventorySection(),
+                    if (_selectedSection == 5) _buildDataSection(),
+                    if (auth.isAdmin && _selectedSection == 6)
                       _buildUsersSection(auth),
                     const SizedBox(height: 24),
                   ],
@@ -782,6 +790,26 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                 setState(() => _selectedTheme = vals.first),
           ),
         ]),
+      ],
+    );
+  }
+
+  Widget _buildInventorySection() {
+    return _SettingsCard(
+      title: 'Inventory Alert Thresholds',
+      icon: Icons.inventory_2_rounded,
+      accentColor: Colors.orange,
+      children: [
+        _field(_lowStockCtrl, 'Global Low Stock Warning Level',
+            keyboardType: TextInputType.number),
+        const SizedBox(height: 12),
+        _field(_nearExpiryCtrl, 'Near Expiry Warning Period (Days)',
+            keyboardType: TextInputType.number),
+        const SizedBox(height: 8),
+        Text(
+          'These thresholds control the alerts shown on your dashboard health bar.',
+          style: TextStyle(fontSize: 12, color: context.textMutedColor),
+        ),
       ],
     );
   }

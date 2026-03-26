@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/inventory_provider.dart';
 import '../../shared/providers/sales_provider.dart';
+import '../../shared/providers/opd_provider.dart';
+import '../../shared/models/appointment.dart';
 import '../../theme/app_theme.dart';
 import '../pos_screen.dart';
 import '../warehouse_screen.dart';
@@ -18,6 +20,7 @@ class DashboardAndroid extends StatelessWidget {
   Widget build(BuildContext context) {
     final inv = context.watch<InventoryProvider>();
     final sales = context.watch<SalesProvider>();
+    final opd = context.watch<OpdProvider>();
     final auth = context.read<AuthProvider>();
     final cs = Theme.of(context).colorScheme;
     final rangeLabel = _getRangeLabel(sales);
@@ -136,6 +139,7 @@ class DashboardAndroid extends StatelessWidget {
                   // Primary Stats
                   _PrimaryStats(
                     sales: sales,
+                    opd: opd,
                     inv: inv,
                     rangeLabel: rangeLabel,
                     cs: cs,
@@ -146,6 +150,7 @@ class DashboardAndroid extends StatelessWidget {
                   // Revenue Breakdown
                   _RevenueBreakdown(
                     sales: sales,
+                    opd: opd,
                     rangeLabel: rangeLabel,
                     cs: cs,
                   ),
@@ -157,10 +162,19 @@ class DashboardAndroid extends StatelessWidget {
 
                   const SizedBox(height: 20),
 
-                  // Low Stock Alerts
-                  if (inv.lowStockCount > 0) _LowStockCard(inv: inv, cs: cs),
-
-                  const SizedBox(height: 20),
+                  // Inventory Alerts
+                  if (inv.lowStockCount > 0) ...[
+                    _LowStockCard(inv: inv, cs: cs),
+                    const SizedBox(height: 16),
+                  ],
+                  if (inv.nearExpiryCount > 0) ...[
+                    _NearExpiryCard(inv: inv, cs: cs),
+                    const SizedBox(height: 16),
+                  ],
+                  if (inv.expiredCount > 0) ...[
+                    _ExpiredCard(inv: inv, cs: cs),
+                    const SizedBox(height: 16),
+                  ],
                 ],
               ),
             ),
@@ -359,12 +373,14 @@ class _FilterChip extends StatelessWidget {
 
 class _PrimaryStats extends StatelessWidget {
   final SalesProvider sales;
+  final OpdProvider opd;
   final InventoryProvider inv;
   final String rangeLabel;
   final ColorScheme cs;
 
   const _PrimaryStats({
     required this.sales,
+    required this.opd,
     required this.inv,
     required this.rangeLabel,
     required this.cs,
@@ -372,6 +388,24 @@ class _PrimaryStats extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final opdRev = opd.appointments
+        .where((a) =>
+            a.status == kStatusDone &&
+            a.scheduledAt.year == now.year &&
+            a.scheduledAt.month == now.month &&
+            a.scheduledAt.day == now.day)
+        .fold(0.0, (sum, a) => sum + (a.consultationFee));
+
+    final productRev = sales.sales
+        .where((s) =>
+            s.createdAt.year == now.year &&
+            s.createdAt.month == now.month &&
+            s.createdAt.day == now.day)
+        .fold(0.0, (sum, s) => sum + s.total);
+
+    final totalToday = opdRev + productRev;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -393,29 +427,34 @@ class _PrimaryStats extends StatelessWidget {
           childAspectRatio: 1.1,
           children: [
             _StatCard(
-              title: '$rangeLabel Revenue',
-              value:
-                  '₹${sales.sales.fold(0.0, (sum, s) => sum + s.total).toStringAsFixed(0)}',
+              title: 'Today\'s Revenue',
+              value: '₹${totalToday.toStringAsFixed(0)}',
               icon: Icons.trending_up_rounded,
-              gradient: [Color(0xFF10B981), Color(0xFF059669)],
+              gradient: [const Color(0xFF10B981), const Color(0xFF059669)],
             ),
             _StatCard(
-              title: '$rangeLabel Sales',
-              value: '${sales.sales.length}',
-              icon: Icons.receipt_long_rounded,
+              title: 'OPD Today',
+              value: '${opd.todayQueue.length}',
+              icon: Icons.people_alt_rounded,
               gradient: [AppTheme.primary, AppTheme.primaryLight],
-            ),
-            _StatCard(
-              title: 'Total Products',
-              value: '${inv.medicines.length}',
-              icon: Icons.inventory_2_rounded,
-              gradient: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
             ),
             _StatCard(
               title: 'Low Stock',
               value: '${inv.lowStockCount}',
               icon: Icons.warning_amber_rounded,
               gradient: [AppTheme.warning, AppTheme.warningDark],
+            ),
+            _StatCard(
+              title: 'Near Expiry',
+              value: '${inv.nearExpiryCount}',
+              icon: Icons.timer_rounded,
+              gradient: [const Color(0xFFF59E0B), const Color(0xFFD97706)],
+            ),
+            _StatCard(
+              title: 'Expired',
+              value: '${inv.expiredCount}',
+              icon: Icons.event_busy_rounded,
+              gradient: [AppTheme.danger, const Color(0xFFB91C1C)],
             ),
           ],
         ),
@@ -500,43 +539,76 @@ class _StatCard extends StatelessWidget {
 
 class _RevenueBreakdown extends StatelessWidget {
   final SalesProvider sales;
+  final OpdProvider opd;
   final String rangeLabel;
   final ColorScheme cs;
 
   const _RevenueBreakdown({
     required this.sales,
+    required this.opd,
     required this.rangeLabel,
     required this.cs,
   });
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
     // Calculate breakdown
     double cash = 0, upi = 0, card = 0;
+    
+    // Product Sales
     for (final s in sales.sales) {
-      if (s.paymentMethod == 'mixed') {
-        cash += s.cashAmount;
-        upi += s.upiAmount;
-        card += s.cardAmount;
-      } else if (s.paymentMethod == 'cash') {
-        cash += s.total;
-      } else if (s.paymentMethod == 'upi') {
-        upi += s.total;
-      } else if (s.paymentMethod == 'card') {
-        card += s.total;
+      if (s.createdAt.year == now.year &&
+          s.createdAt.month == now.month &&
+          s.createdAt.day == now.day) {
+        if (s.paymentMethod == 'mixed') {
+          cash += s.cashAmount;
+          upi += s.upiAmount;
+          card += s.cardAmount;
+        } else if (s.paymentMethod == 'cash') {
+          cash += s.total;
+        } else if (s.paymentMethod == 'upi') {
+          upi += s.total;
+        } else if (s.paymentMethod == 'card') {
+          card += s.total;
+        }
       }
     }
+
+    // OPD Revenue
+    for (final a in opd.appointments) {
+      if (a.status == kStatusDone &&
+          a.scheduledAt.year == now.year &&
+          a.scheduledAt.month == now.month &&
+          a.scheduledAt.day == now.day) {
+        if (a.paymentMethod == 'cash') {
+          cash += a.consultationFee;
+        } else if (a.paymentMethod == 'upi') {
+          upi += a.consultationFee;
+        } else if (a.paymentMethod == 'card') {
+          card += a.consultationFee;
+        }
+      }
+    }
+
+    final total = cash + upi + card;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '$rangeLabel Revenue Breakdown',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: cs.onSurface,
-          ),
+        Row(
+          children: [
+            Text(
+              'Revenue Breakdown',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: cs.onSurface,
+              ),
+            ),
+            const Spacer(),
+            _TodayTotalBadge(total: total),
+          ],
         ),
         const SizedBox(height: 14),
         Row(
@@ -546,7 +618,7 @@ class _RevenueBreakdown extends StatelessWidget {
                 title: 'Cash',
                 value: '₹${cash.toStringAsFixed(0)}',
                 icon: Icons.payments_rounded,
-                color: Color(0xFF10B981),
+                color: const Color(0xFF10B981),
               ),
             ),
             const SizedBox(width: 12),
@@ -570,6 +642,55 @@ class _RevenueBreakdown extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _TodayTotalBadge extends StatelessWidget {
+  final double total;
+  const _TodayTotalBadge({required this.total});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF10B981), Color(0xFF059669)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF10B981).withValues(alpha: 0.2),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'TODAY: ',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.8),
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5,
+            ),
+          ),
+          Text(
+            '₹${total.toStringAsFixed(0)}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -916,6 +1037,228 @@ class _LowStockItem extends StatelessWidget {
               'LOW',
               style: TextStyle(
                 color: AppTheme.danger,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NearExpiryCard extends StatelessWidget {
+  final InventoryProvider inv;
+  final ColorScheme cs;
+
+  const _NearExpiryCard({required this.inv, required this.cs});
+
+  @override
+  Widget build(BuildContext context) {
+    if (inv.nearExpiryCount == 0) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF59E0B).withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.timer_rounded,
+                  color: Color(0xFFF59E0B),
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Near Expiry Alerts',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurface,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${inv.nearExpiryCount}',
+                  style: const TextStyle(
+                    color: Color(0xFFD97706),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ...inv.nearExpiryMedicines
+              .take(3)
+              .map((m) => _ExpiryItem(medicine: m, isExpired: false)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExpiredCard extends StatelessWidget {
+  final InventoryProvider inv;
+  final ColorScheme cs;
+
+  const _ExpiredCard({required this.inv, required this.cs});
+
+  @override
+  Widget build(BuildContext context) {
+    if (inv.expiredCount == 0) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppTheme.danger.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppTheme.danger.withValues(alpha: 0.15),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: AppTheme.danger.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.event_busy_rounded,
+                  color: AppTheme.danger,
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Expired Items',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurface,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.danger.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${inv.expiredCount}',
+                  style: TextStyle(
+                    color: AppTheme.danger,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ...inv.expiredMedicines
+              .take(3)
+              .map((m) => _ExpiryItem(medicine: m, isExpired: true)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExpiryItem extends StatelessWidget {
+  final dynamic medicine;
+  final bool isExpired;
+
+  const _ExpiryItem({required this.medicine, required this.isExpired});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final color = isExpired ? AppTheme.danger : const Color(0xFFF59E0B);
+    
+    // Get the earliest problematic date
+    final now = DateTime.now();
+    DateTime? displayDate;
+    if (isExpired) {
+      displayDate = medicine.batches.firstWhere((b) => b.expiryDate.isBefore(now)).expiryDate;
+    } else {
+      final threshold = now.add(const Duration(days: 90));
+      displayDate = medicine.batches.firstWhere((b) => b.expiryDate.isAfter(now) && b.expiryDate.isBefore(threshold)).expiryDate;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: color.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  medicine.name,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    color: cs.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Exp: ${displayDate!.day}/${displayDate.month}/${displayDate.year}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: color,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              isExpired ? 'EXPIRED' : 'NEAR',
+              style: TextStyle(
+                color: color,
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
               ),

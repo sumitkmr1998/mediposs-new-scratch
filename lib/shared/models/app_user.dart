@@ -85,6 +85,8 @@ class AppSettings {
   String receiptPaperSize; // 'A6', 'Letter', 'A4', 'Roll80'
   String? hubIp; // To persist connection
   String? autoLoginPin; // Saved PIN for auto-login JWT refresh on Android
+  int lowStockThreshold;
+  int nearExpiryThresholdDays;
 
   AppSettings({
     this.id = 0,
@@ -103,5 +105,7 @@ class AppSettings {
     this.receiptPaperSize = 'A6',
     this.hubIp,
     this.autoLoginPin,
+    this.lowStockThreshold = 10,
+    this.nearExpiryThresholdDays = 90,
   });
 }

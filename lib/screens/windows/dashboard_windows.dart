@@ -37,54 +37,23 @@ class DashboardWindows extends StatelessWidget {
 
               const SizedBox(height: 32),
 
-              // 2. Top Row: KPIs (2/3) + Quick Actions (1/3)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: _KPIGrid(sales: sales, inv: inv, opd: opd),
-                  ),
-                  const SizedBox(width: 24),
-                  Expanded(
-                    flex: 1,
-                    child: _QuickActions(),
-                  ),
-                ],
-              ),
+              // 2. High-Density KPI Grid (Now Row 1)
+              _KPIGrid(sales: sales, inv: inv, opd: opd),
 
               const SizedBox(height: 32),
 
-              // 3. Middle: Financial Performance (Full Width)
+              // 3. Quick Actions (Now Horizontal Row 2/3)
+              _QuickActions(),
+
+              const SizedBox(height: 32),
+
+              // 4. Financial Performance (Restored Colorful Style)
               _RevenueBreakdown(sales: sales, opd: opd),
 
               const SizedBox(height: 32),
 
-              // 4. Bottom: Responsive Inventory Health Bar
-              LayoutBuilder(builder: (context, box) {
-                if (box.maxWidth > 1000) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: _LowStockAlerts(inv: inv)),
-                      const SizedBox(width: 24),
-                      Expanded(child: _NearExpiryAlerts(inv: inv)),
-                      const SizedBox(width: 24),
-                      Expanded(child: _ExpiredAlerts(inv: inv)),
-                    ],
-                  );
-                } else {
-                  return Column(
-                    children: [
-                      _LowStockAlerts(inv: inv),
-                      const SizedBox(height: 24),
-                      _NearExpiryAlerts(inv: inv),
-                      const SizedBox(height: 24),
-                      _ExpiredAlerts(inv: inv),
-                    ],
-                  );
-                }
-              }),
+              // 5. Inventory Health Row (Subdued Glass)
+              const _InventoryAlertSection(),
             ],
           ),
         ),
@@ -377,19 +346,19 @@ class _KPICard extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: isDark ? 0.15 : 0.08),
-        borderRadius: BorderRadius.circular(20),
+        color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: color.withValues(alpha: 0.2),
+          color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05),
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: color.withValues(alpha: 0.05),
+            color: isDark ? Colors.black26 : Colors.black.withValues(alpha: 0.05),
             blurRadius: 15,
-            offset: const Offset(0, 5),
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -401,10 +370,10 @@ class _KPICard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(14),
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                child: Icon(icon, color: color, size: 24),
+                child: Icon(icon, color: color, size: 26),
               ),
               if (showBadge)
                 Positioned(
@@ -432,28 +401,37 @@ class _KPICard extends StatelessWidget {
                 Text(
                   value,
                   style: GoogleFonts.manrope(
-                    fontSize: 24,
+                    fontSize: 28,
                     fontWeight: FontWeight.w900,
                     color: cs.onSurface,
-                    letterSpacing: -0.5,
+                    letterSpacing: -1,
                   ),
                 ),
+                const SizedBox(height: 2),
                 Text(
-                  label,
+                  label.toUpperCase(),
                   style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
                     color: cs.onSurface.withValues(alpha: 0.5),
+                    letterSpacing: 1.2,
                   ),
                 ),
                 if (subtitle != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle!,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: color.withValues(alpha: 0.7),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      subtitle!,
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: color,
+                      ),
                     ),
                   ),
                 ],
@@ -466,7 +444,7 @@ class _KPICard extends StatelessWidget {
   }
 }
 
-// ── Bottom Dashboard Row ──────────────────────────────────────────────────
+// ── Financial Performance Component ────────────────────────────────────────
 
 class _RevenueBreakdown extends StatelessWidget {
   final SalesProvider sales;
@@ -479,20 +457,15 @@ class _RevenueBreakdown extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Calculate Breakdown by Source (Collected only)
+    // Collected revenue only
     final productSales = sales.todayCashRevenue + sales.todayUpiRevenue + sales.todayCardRevenue;
     final opdAppts = opd.appointments.where((a) => _isToday(a.scheduledAt) && a.status != 'cancelled' && a.paymentMethod != 'pending');
     final opdRev = opdAppts.fold(0.0, (sum, a) => sum + a.consultationFee);
     final total = productSales + opdRev;
 
-    // Calculate Breakdown by Payment Method (Sales + OPD)
-    final opdCash = opdAppts.where((a) => a.paymentMethod == 'cash').fold(0.0, (sum, a) => sum + a.consultationFee);
-    final opdUpi = opdAppts.where((a) => a.paymentMethod == 'upi').fold(0.0, (sum, a) => sum + a.consultationFee);
-    final opdCard = opdAppts.where((a) => a.paymentMethod == 'card').fold(0.0, (sum, a) => sum + a.consultationFee);
-    
-    final totalCash = sales.todayCashRevenue + opdCash;
-    final totalUpi = sales.todayUpiRevenue + opdUpi;
-    final totalCard = sales.todayCardRevenue + opdCard;
+    final totalCash = sales.todayCashRevenue + opdAppts.where((a) => a.paymentMethod == 'cash').fold(0.0, (sum, a) => sum + a.consultationFee);
+    final totalUpi = sales.todayUpiRevenue + opdAppts.where((a) => a.paymentMethod == 'upi').fold(0.0, (sum, a) => sum + a.consultationFee);
+    final totalCard = sales.todayCardRevenue + opdAppts.where((a) => a.paymentMethod == 'card').fold(0.0, (sum, a) => sum + a.consultationFee);
 
     return Container(
       padding: const EdgeInsets.all(28),
@@ -500,6 +473,13 @@ class _RevenueBreakdown extends StatelessWidget {
         color: isDark ? AppTheme.darkCard : Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: cs.outline.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -516,15 +496,15 @@ class _RevenueBreakdown extends StatelessWidget {
                   color: cs.onSurface,
                 ),
               ),
-              const Spacer(),
-              _RevenueTotalBadge(total: total),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Left side: Source
+              _RevenueTotalBadge(total: total),
+              const SizedBox(width: 48),
+              // Left: Source Breakdown
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -533,20 +513,20 @@ class _RevenueBreakdown extends StatelessWidget {
                       'REVENUE SOURCE',
                       style: TextStyle(
                         fontSize: 11,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                         letterSpacing: 1.2,
                         color: cs.onSurface.withValues(alpha: 0.4),
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
                     _BreakdownRow(
                       icon: Icons.point_of_sale_rounded,
                       label: 'Product Sales',
                       amount: productSales,
-                      total: total > 0 ? total : 1.0, 
+                      total: total > 0 ? total : 1.0,
                       color: const Color(0xFF10B981),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
                     _BreakdownRow(
                       icon: Icons.medical_services_rounded,
                       label: 'OPD Consults',
@@ -557,15 +537,15 @@ class _RevenueBreakdown extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 40),
+              const SizedBox(width: 48),
               // Vertical Divider
               Container(
                 height: 200,
                 width: 1,
                 color: cs.outline.withValues(alpha: 0.1),
               ),
-              const SizedBox(width: 40),
-              // Right side: Payment Methods
+              const SizedBox(width: 48),
+              // Right: Method Breakdown (Vibrant Cards)
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -574,34 +554,41 @@ class _RevenueBreakdown extends StatelessWidget {
                       'PAYMENT MODES',
                       style: TextStyle(
                         fontSize: 11,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                         letterSpacing: 1.2,
                         color: cs.onSurface.withValues(alpha: 0.4),
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    _BreakdownRow(
-                      icon: Icons.payments_rounded,
-                      label: 'Cash collected',
-                      amount: totalCash,
-                      total: total > 0 ? total : 1.0,
-                      color: const Color(0xFF10B981),
-                    ),
-                    const SizedBox(height: 20),
-                    _BreakdownRow(
-                      icon: Icons.qr_code_2_rounded,
-                      label: 'UPI / Online',
-                      amount: totalUpi,
-                      total: total > 0 ? total : 1.0,
-                      color: AppTheme.primary,
-                    ),
-                    const SizedBox(height: 20),
-                    _BreakdownRow(
-                      icon: Icons.credit_card_rounded,
-                      label: 'Card payments',
-                      amount: totalCard,
-                      total: total > 0 ? total : 1.0,
-                      color: const Color(0xFF8B5CF6),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _BreakdownCard(
+                            title: 'Cash',
+                            value: '₹${totalCash.toStringAsFixed(0)}',
+                            icon: Icons.payments_rounded,
+                            color: const Color(0xFF10B981),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _BreakdownCard(
+                            title: 'UPI',
+                            value: '₹${totalUpi.toStringAsFixed(0)}',
+                            icon: Icons.qr_code_rounded,
+                            color: AppTheme.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _BreakdownCard(
+                            title: 'Card',
+                            value: '₹${totalCard.toStringAsFixed(0)}',
+                            icon: Icons.credit_card_rounded,
+                            color: const Color(0xFF8B5CF6),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -626,40 +613,43 @@ class _RevenueTotalBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 80),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF10B981), Color(0xFF059669)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF10B981).withValues(alpha: 0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+            color: const Color(0xFF10B981).withValues(alpha: 0.25),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: Row(
+      child: Column(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            'TODAY: ',
+            'TODAY',
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.8),
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.5,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.5,
             ),
           ),
+          const SizedBox(height: 12),
           Text(
             '₹${total.toStringAsFixed(0)}',
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 14,
+              fontSize: 24,
               fontWeight: FontWeight.w900,
+              letterSpacing: -1,
             ),
           ),
         ],
@@ -685,7 +675,6 @@ class _BreakdownRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final percent = total > 0 ? (amount / total) : 0.0;
 
     return Column(
@@ -694,58 +683,56 @@ class _BreakdownRow extends StatelessWidget {
           children: [
             Icon(icon, size: 18, color: color),
             const SizedBox(width: 12),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w600)),
+            Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
             const Spacer(),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: color.withValues(alpha: 0.3)),
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: color.withValues(alpha: 0.2)),
               ),
               child: Text(
                 '₹${amount.toStringAsFixed(0)}',
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  color: color,
-                  fontSize: 14,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w900, color: color, fontSize: 14),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         Stack(
           children: [
             Container(
-              height: 8,
+              height: 10,
               width: double.infinity,
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(4),
+                color: color.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(5),
               ),
             ),
             FractionallySizedBox(
               widthFactor: percent,
               child: Container(
-                height: 8,
+                height: 10,
                 decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(4),
+                  gradient: LinearGradient(
+                    colors: [color, color.withValues(alpha: 0.6)],
+                  ),
+                  borderRadius: BorderRadius.circular(5),
+                  boxShadow: [
+                    BoxShadow(color: color.withValues(alpha: 0.15), blurRadius: 4),
+                  ],
                 ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         Align(
           alignment: Alignment.centerRight,
           child: Text(
             '${(percent * 100).toStringAsFixed(1)}%',
-            style: TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w700, color: color),
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color),
           ),
         ),
       ],
@@ -753,7 +740,227 @@ class _BreakdownRow extends StatelessWidget {
   }
 }
 
-// ── Inventory Alerts ──────────────────────────────────────────────────────
+class _BreakdownCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _BreakdownCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.35),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+            spreadRadius: -2,
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: Colors.white, size: 20),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            title.toUpperCase(),
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              color: Colors.white70,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
+              letterSpacing: -0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Quick Actions Component ────────────────────────────────────────────────
+
+class _QuickActions extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _ModernActionCard(
+            label: 'New Sale',
+            icon: Icons.add_shopping_cart_rounded,
+            color: AppTheme.primary,
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PosScreen())),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: _ModernActionCard(
+            label: 'OPD Queue',
+            icon: Icons.personal_injury_rounded,
+            color: const Color(0xFF6366F1),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OpdQueueWindows())),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: _ModernActionCard(
+            label: 'Warehouse',
+            icon: Icons.inventory_2_rounded,
+            color: const Color(0xFFF59E0B),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WarehouseScreen())),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: _ModernActionCard(
+            label: 'History',
+            icon: Icons.history_rounded,
+            color: Colors.grey,
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesHistoryScreen())),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: _ModernActionCard(
+            label: 'Settings',
+            icon: Icons.settings_rounded,
+            color: Colors.blueGrey,
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ModernActionCard extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ModernActionCard({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.black26 : Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(24),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: color, size: 22),
+                const SizedBox(width: 12),
+                Text(
+                  label.toUpperCase(),
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 11,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Inventory Alerts Component ─────────────────────────────────────────────
+
+class _InventoryAlertSection extends StatelessWidget {
+  const _InventoryAlertSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final inv = context.watch<InventoryProvider>();
+    return LayoutBuilder(builder: (context, constraints) {
+      final isVertical = constraints.maxWidth < 1000;
+      
+      if (isVertical) {
+        return Column(
+          children: [
+            _LowStockAlerts(inv: inv),
+            const SizedBox(height: 24),
+            _NearExpiryAlerts(inv: inv),
+            const SizedBox(height: 24),
+            _ExpiredAlerts(inv: inv),
+          ],
+        );
+      }
+
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: _LowStockAlerts(inv: inv)),
+          const SizedBox(width: 24),
+          Expanded(child: _NearExpiryAlerts(inv: inv)),
+          const SizedBox(width: 24),
+          Expanded(child: _ExpiredAlerts(inv: inv)),
+        ],
+      );
+    });
+  }
+}
 
 class _LowStockAlerts extends StatelessWidget {
   final InventoryProvider inv;
@@ -762,7 +969,7 @@ class _LowStockAlerts extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final list = inv.medicines.where((m) => m.isLowStock).toList();
-    return _InventoryAlertSection(
+    return _AlertBox(
       title: 'Low Stock Alerts',
       icon: Icons.warning_amber_rounded,
       color: AppTheme.danger,
@@ -780,13 +987,13 @@ class _NearExpiryAlerts extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _InventoryAlertSection(
-      title: 'Near Expiry Alerts (90 Days)',
+    return _AlertBox(
+      title: 'Near Expiry Alerts',
       icon: Icons.history_rounded,
-      color: const Color(0xFF6366F1), // Indigo
+      color: const Color(0xFF6366F1),
       items: inv.nearExpiryMedicines,
       badgeLabel: 'WARNINGS',
-      emptyLabel: 'No near-expiry items detected',
+      emptyLabel: 'No near-expiry items',
       tagLabel: 'SOON',
     );
   }
@@ -798,19 +1005,19 @@ class _ExpiredAlerts extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _InventoryAlertSection(
+    return _AlertBox(
       title: 'Expired Stock Alerts',
       icon: Icons.event_busy_rounded,
-      color: const Color(0xFFEF4444), // Red
+      color: const Color(0xFFEF4444),
       items: inv.expiredMedicines,
       badgeLabel: 'CRITICAL',
-      emptyLabel: 'No expired items in stock',
+      emptyLabel: 'No expired items',
       tagLabel: 'EXPIRED',
     );
   }
 }
 
-class _InventoryAlertSection extends StatelessWidget {
+class _AlertBox extends StatelessWidget {
   final String title;
   final IconData icon;
   final Color color;
@@ -819,7 +1026,7 @@ class _InventoryAlertSection extends StatelessWidget {
   final String emptyLabel;
   final String tagLabel;
 
-  const _InventoryAlertSection({
+  const _AlertBox({
     required this.title,
     required this.icon,
     required this.color,
@@ -835,7 +1042,7 @@ class _InventoryAlertSection extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkCard : Colors.white,
         borderRadius: BorderRadius.circular(24),
@@ -857,23 +1064,21 @@ class _InventoryAlertSection extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              _ModernBadge(
-                count: items.length,
-                color: color,
-                label: badgeLabel,
-              ),
+              _ModernBadge(count: items.length, color: color, label: badgeLabel),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           if (items.isEmpty)
             _EmptyAlertState(label: emptyLabel)
           else
-            ...items.take(4).map((m) => _StockWarningCard(
-                  medicine: m,
-                  color: color,
-                  tag: tagLabel,
-                  icon: icon,
-                )),
+            Column(
+              children: items.take(3).map((m) => _StockWarningCard(
+                medicine: m,
+                color: color,
+                tag: tagLabel,
+                icon: icon,
+              )).toList(),
+            ),
         ],
       ),
     );
@@ -896,260 +1101,89 @@ class _StockWarningCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final soonestBatch = medicine.soonestExpiringBatch;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.1)),
+        color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05),
+          width: 1,
+        ),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: color, size: 16),
+            child: Icon(icon, color: color, size: 18),
           ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(medicine.name,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w800, fontSize: 13)),
-                const SizedBox(height: 4),
+                Text(
+                  medicine.name,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                    color: cs.onSurface,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
                 Text(
                   'Store: ${medicine.storeStock} | Main: ${medicine.mainStock}',
                   style: TextStyle(
-                      fontSize: 12,
-                      color: cs.onSurface.withValues(alpha: 0.5),
-                      fontWeight: FontWeight.w600),
+                    fontSize: 11,
+                    color: cs.onSurface.withValues(alpha: 0.5),
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
+                if (soonestBatch != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Expires: ${soonestBatch.expiryDate.day}/${soonestBatch.expiryDate.month}/${soonestBatch.expiryDate.year}',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: color.withValues(alpha: 0.7),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: color,
+              color: color.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Text(tag,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyAlertState extends StatelessWidget {
-  final String label;
-  const _EmptyAlertState({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF10B981).withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.check_circle_rounded,
-              color: Color(0xFF10B981), size: 24),
-          const SizedBox(width: 12),
-          Text(
-            label,
-            style: const TextStyle(
-                color: Color(0xFF10B981), fontWeight: FontWeight.w800),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickActions extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: cs.outline.withValues(alpha: 0.08)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.bolt_rounded, color: AppTheme.accent, size: 20),
-              const SizedBox(width: 10),
-              Text(
-                'Quick Actions',
-                style: GoogleFonts.manrope(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: cs.onSurface,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.4,
-            children: [
-              _ModernActionCard(
-                icon: Icons.payments_rounded,
-                label: 'New Sale',
-                color: AppTheme.primary,
-                onTap: () => Navigator.push(
-                    context, MaterialPageRoute(builder: (_) => const PosScreen())),
-              ),
-              _ModernActionCard(
-                icon: Icons.people_alt_rounded,
-                label: 'OPD Queue',
-                color: AppTheme.accent,
-                onTap: () => Navigator.push(
-                    context, MaterialPageRoute(builder: (_) => const OpdQueueWindows())),
-              ),
-              _ModernActionCard(
-                icon: Icons.warehouse_rounded,
-                label: 'Warehouse',
-                color: const Color(0xFF8B5CF6),
-                onTap: () => Navigator.push(
-                    context, MaterialPageRoute(builder: (_) => const WarehouseScreen())),
-              ),
-              _ModernActionCard(
-                icon: Icons.history_rounded,
-                label: 'History',
-                color: const Color(0xFF06B6D4),
-                onTap: () => Navigator.push(
-                    context, MaterialPageRoute(builder: (_) => const SalesHistoryScreen())),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _ActionTile(
-            icon: Icons.settings_rounded,
-            label: 'System Settings',
-            onTap: () => Navigator.push(
-                context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ModernActionCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ModernActionCard({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: color.withValues(alpha: 0.15)),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: color, size: 24),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ActionTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _ActionTile({required this.icon, required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          border: Border.all(color: cs.outline.withValues(alpha: 0.1)),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: cs.onSurface.withValues(alpha: 0.6)),
-            const SizedBox(width: 12),
-            Text(
-              label,
+            child: Text(
+              tag,
               style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: cs.onSurface.withValues(alpha: 0.7),
+                color: color,
+                fontSize: 9,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.5,
               ),
             ),
-            const Spacer(),
-            Icon(Icons.chevron_right_rounded, size: 18, color: cs.onSurface.withValues(alpha: 0.3)),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
-
 
 // ── Shared Utilities ───────────────────────────────────────────────────────
 
@@ -1172,9 +1206,7 @@ class _ModernBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label,
-              style: TextStyle(
-                  fontSize: 9, fontWeight: FontWeight.w900, color: color, letterSpacing: 0.5)),
+          Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: color, letterSpacing: 0.5)),
           const SizedBox(width: 6),
           Container(
             width: 18,
@@ -1185,6 +1217,33 @@ class _ModernBadge extends StatelessWidget {
               '$count',
               style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyAlertState extends StatelessWidget {
+  final String label;
+  const _EmptyAlertState({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF10B981).withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 24),
+          const SizedBox(width: 12),
+          Text(
+            label,
+            style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.w800),
           ),
         ],
       ),

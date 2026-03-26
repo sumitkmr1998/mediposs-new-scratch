@@ -153,196 +153,197 @@ class _LoginWindowsState extends State<LoginWindows> {
           return KeyEventResult.ignored;
         },
         child: Center(
-          child: SizedBox(
-            width: 400,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Logo
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.local_pharmacy,
-                      size: 48, color: AppTheme.primary),
-                ),
-                const SizedBox(height: 20),
-                Text('MediPoss',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.w900, color: AppTheme.primary)),
-                const SizedBox(height: 4),
-                Text('Medical Store Management',
-                    style: TextStyle(color: context.textMutedColor)),
-                const SizedBox(height: 40),
-
-                if (_selectedUser == null) ...[
-                  Text('Select User',
-                      style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 24),
-                  Wrap(
-                    spacing: 16,
-                    runSpacing: 16,
-                    alignment: WrapAlignment.center,
-                    children: users.map((u) {
-                      return InkWell(
-                        onTap: () => setState(() => _selectedUser = u),
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          width: 100,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: context.surfaceColor,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: context.borderColor),
-                          ),
-                          child: Column(
-                            children: [
-                              CircleAvatar(
-                                radius: 24,
-                                backgroundColor:
-                                    AppTheme.primary.withValues(alpha: 0.1),
-                                child: Text(u.name[0].toUpperCase(),
-                                    style: const TextStyle(
-                                        color: AppTheme.primary,
-                                        fontWeight: FontWeight.bold)),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(u.name,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 12)),
-                              Text(u.role,
-                                  style: TextStyle(
-                                      color: context.textMutedColor,
-                                      fontSize: 10)),
-                            ],
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 32),
-                  // Change Hub Button for Mobile
-                  if (!kIsWeb &&
-                      (defaultTargetPlatform == TargetPlatform.android ||
-                          defaultTargetPlatform == TargetPlatform.iOS))
-                    TextButton.icon(
-                      onPressed: () {
-                        context.read<SyncService>().disconnect();
-                        // SyncService notifies listeners and main.dart will push ConnectionScreen
-                      },
-                      icon: const Icon(Icons.hub),
-                      label: const Text('Change Hub'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppTheme.danger,
-                      ),
+          child: SingleChildScrollView(
+            child: SizedBox(
+              width: 400,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Logo
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
                     ),
-                ] else ...[
-                  // PIN Phase
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back),
-                        onPressed: () => setState(() => _selectedUser = null),
-                        tooltip: 'Back to User Selection (Esc)',
-                      ),
-                      const SizedBox(width: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(_selectedUser!.name,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold)),
-                          Text(_selectedUser!.role,
-                              style: TextStyle(
-                                  color: context.textMutedColor, fontSize: 12)),
-                        ],
-                      ),
-                    ],
+                    child: const Icon(Icons.local_pharmacy,
+                        size: 48, color: AppTheme.primary),
                   ),
-                  const SizedBox(height: 32),
-                  // PIN Dots
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(4, (i) {
-                      final filled = i < _pin.length;
-                      return Container(
-                        margin: const EdgeInsets.all(8),
-                        width: 16,
-                        height: 16,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _error
-                              ? AppTheme.danger
-                              : filled
-                                  ? AppTheme.primary
-                                  : context.borderColor,
-                        ),
-                      );
-                    }),
-                  ),
-                  const SizedBox(height: 8),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 200),
-                    child: _isLoading
-                        ? const CircularProgressIndicator()
-                        : _error
-                            ? const Text('Incorrect PIN',
-                                key: ValueKey('err'),
-                                style: TextStyle(color: AppTheme.danger))
-                            : Text('Enter PIN for ${_selectedUser!.name}',
-                                key: const ValueKey('prompt'),
-                                style:
-                                    TextStyle(color: context.textMutedColor)),
-                  ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 20),
+                  Text('MediPoss',
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.w900, color: AppTheme.primary)),
+                  const SizedBox(height: 4),
+                  Text('Medical Store Management',
+                      style: TextStyle(color: context.textMutedColor)),
+                  const SizedBox(height: 40),
 
-                  // Number Pad
-                  SizedBox(
-                    width: 320,
-                    child: GridView.count(
-                      shrinkWrap: true,
-                      crossAxisCount: 3,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 1.4,
+                  if (_selectedUser == null) ...[
+                    Text('Select User',
+                        style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 24),
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      alignment: WrapAlignment.center,
+                      children: users.map((u) {
+                        return InkWell(
+                          onTap: () => setState(() => _selectedUser = u),
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            width: 100,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: context.surfaceColor,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: context.borderColor),
+                            ),
+                            child: Column(
+                              children: [
+                                CircleAvatar(
+                                  radius: 24,
+                                  backgroundColor:
+                                      AppTheme.primary.withValues(alpha: 0.1),
+                                  child: Text(u.name[0].toUpperCase(),
+                                      style: const TextStyle(
+                                          color: AppTheme.primary,
+                                          fontWeight: FontWeight.bold)),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(u.name,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 12)),
+                                Text(u.role,
+                                    style: TextStyle(
+                                        color: context.textMutedColor,
+                                        fontSize: 10)),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 32),
+                    // Change Hub Button for Mobile
+                    if (!kIsWeb &&
+                        (defaultTargetPlatform == TargetPlatform.android ||
+                            defaultTargetPlatform == TargetPlatform.iOS))
+                      TextButton.icon(
+                        onPressed: () {
+                          context.read<SyncService>().disconnect();
+                        },
+                        icon: const Icon(Icons.hub),
+                        label: const Text('Change Hub'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppTheme.danger,
+                        ),
+                      ),
+                  ] else ...[
+                    // PIN Phase
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        ...[
-                          '1',
-                          '2',
-                          '3',
-                          '4',
-                          '5',
-                          '6',
-                          '7',
-                          '8',
-                          '9'
-                        ].map((d) => _PinBtn(label: d, onTap: () => _tap(d))),
-                        _PinBtn(
-                            label: '⌫',
-                            onTap: _backspace,
-                            color: context.textMutedColor),
-                        _PinBtn(label: '0', onTap: () => _tap('0')),
-                        _PinBtn(
-                            label: '✓',
-                            onTap: _isLoading ? () {} : _tryLogin,
-                            color: AppTheme.primary),
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back),
+                          onPressed: () => setState(() => _selectedUser = null),
+                          tooltip: 'Back to User Selection (Esc)',
+                        ),
+                        const SizedBox(width: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(_selectedUser!.name,
+                                style:
+                                    const TextStyle(fontWeight: FontWeight.bold)),
+                            Text(_selectedUser!.role,
+                                style: TextStyle(
+                                    color: context.textMutedColor, fontSize: 12)),
+                          ],
+                        ),
                       ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 32),
+                    // PIN Dots
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(4, (i) {
+                        final filled = i < _pin.length;
+                        return Container(
+                          margin: const EdgeInsets.all(8),
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: _error
+                                ? AppTheme.danger
+                                : filled
+                                    ? AppTheme.primary
+                                    : context.borderColor,
+                          ),
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 8),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      child: _isLoading
+                          ? const CircularProgressIndicator()
+                          : _error
+                              ? const Text('Incorrect PIN',
+                                  key: ValueKey('err'),
+                                  style: TextStyle(color: AppTheme.danger))
+                              : Text('Enter PIN for ${_selectedUser!.name}',
+                                  key: const ValueKey('prompt'),
+                                  style:
+                                      TextStyle(color: context.textMutedColor)),
+                    ),
+                    const SizedBox(height: 32),
 
-                const SizedBox(height: 24),
-                Text('Default PIN: 1234',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: context.textMutedColor)),
-              ],
+                    // Number Pad
+                    SizedBox(
+                      width: 320,
+                      child: GridView.count(
+                        shrinkWrap: true,
+                        crossAxisCount: 3,
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 12,
+                        childAspectRatio: 1.4,
+                        children: [
+                          ...[
+                            '1',
+                            '2',
+                            '3',
+                            '4',
+                            '5',
+                            '6',
+                            '7',
+                            '8',
+                            '9'
+                          ].map((d) => _PinBtn(label: d, onTap: () => _tap(d))),
+                          _PinBtn(
+                              label: '⌫',
+                              onTap: _backspace,
+                              color: context.textMutedColor),
+                          _PinBtn(label: '0', onTap: () => _tap('0')),
+                          _PinBtn(
+                              label: '✓',
+                              onTap: _isLoading ? () {} : _tryLogin,
+                              color: AppTheme.primary),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 24),
+                  Text('Default PIN: 1234',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: context.textMutedColor)),
+                ],
+              ),
             ),
           ),
         ),

@@ -26,7 +26,10 @@ class InventoryProvider extends ChangeNotifier {
   List<Medicine> get medicines => _filtered();
   List<PurchaseRecord> get purchaseHistory =>
       List.unmodifiable(_purchaseHistory);
-  int get lowStockCount => _medicines.where((m) => m.isLowStock).length;
+  int get lowStockCount {
+    final threshold = ObjectBoxService.instance.settings.lowStockThreshold;
+    return _medicines.where((m) => m.storeStock <= threshold).length;
+  }
   
   int get expiredCount => expiredMedicines.length;
   int get nearExpiryCount => nearExpiryMedicines.length;
@@ -40,7 +43,8 @@ class InventoryProvider extends ChangeNotifier {
 
   List<Medicine> get nearExpiryMedicines {
     final now = DateTime.now();
-    final threshold = now.add(const Duration(days: 90)); // 3 months
+    final thresholdDays = ObjectBoxService.instance.settings.nearExpiryThresholdDays;
+    final threshold = now.add(Duration(days: thresholdDays));
     return _medicines.where((m) => m.batches.any((b) => 
       b.expiryDate.isAfter(now) && 
       b.expiryDate.isBefore(threshold) && 
