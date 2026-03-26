@@ -206,7 +206,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     return Scaffold(
-      backgroundColor: context.surfaceColor,
+      backgroundColor: context.bgColor,
       appBar: AppBar(
         title: const Text('Warehouse Control'),
         elevation: 0,
@@ -217,9 +217,11 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
               padding: const EdgeInsets.only(right: 8),
               child: FilledButton.icon(
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.success.withValues(alpha: 0.1),
-                  foregroundColor: AppTheme.success,
-                  elevation: 0,
+                  backgroundColor: AppTheme.success,
+                  foregroundColor: Colors.white,
+                  elevation: 2,
+                  shadowColor: AppTheme.success.withValues(alpha: 0.3),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: () => _importExcel(context),
                 icon: const Icon(Icons.file_upload, size: 18),
@@ -230,9 +232,11 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
               padding: const EdgeInsets.only(right: 16),
               child: FilledButton.icon(
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-                  foregroundColor: AppTheme.primary,
-                  elevation: 0,
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 2,
+                  shadowColor: AppTheme.primary.withValues(alpha: 0.3),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: () => showDialog(
                   context: context,
@@ -299,43 +303,6 @@ class _StockLevelsTabState extends State<_StockLevelsTab> {
     });
   }
 
-  void _clearSelection() {
-    setState(() => _selectedIds.clear());
-  }
-
-  Future<void> _deleteSelected(InventoryProvider inv) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Selected Medicines?'),
-        content: Text(
-            'Are you sure you want to delete ${_selectedIds.length} medicines? This action cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      for (final id in _selectedIds.toList()) {
-        inv.deleteMedicine(id);
-      }
-      _clearSelection();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Selected medicines deleted.'),
-        ));
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -398,53 +365,11 @@ class _StockLevelsTabState extends State<_StockLevelsTab> {
                         'all': 'All Stock',
                         'low-stock': 'Low Stock Alert',
                         'main-empty': 'Main Hub Empty',
+                        'expired': 'Expired',
+                        'near-expiry': 'Near Expiry',
                       },
                       onChanged: (v) => inv.setFilter(v!),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  _SummaryStat(
-                    label: 'Main Warehouse Units',
-                    value: inv.medicines.fold(0, (s, m) => s + m.mainStock),
-                    icon: Icons.warehouse,
-                    color: const Color(0xFF6366F1),
-                  ),
-                  const SizedBox(width: 24),
-                  _SummaryStat(
-                    label: 'Store Front Units',
-                    value: inv.medicines.fold(0, (s, m) => s + m.storeStock),
-                    icon: Icons.storefront,
-                    color: const Color(0xFF14B8A6),
-                  ),
-                  const Spacer(),
-                  if (_selectedIds.isNotEmpty &&
-                      auth.hasInventoryWriteAccess) ...[
-                    OutlinedButton(
-                      onPressed: _clearSelection,
-                      child: const Text('Clear Selection'),
-                    ),
-                    const SizedBox(width: 12),
-                    FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppTheme.danger.withValues(alpha: 0.1),
-                        foregroundColor: AppTheme.danger,
-                        elevation: 0,
-                      ),
-                      onPressed: () => _deleteSelected(inv),
-                      icon: const Icon(Icons.delete_outline, size: 18),
-                      label: Text('Delete Selected (${_selectedIds.length})'),
-                    ),
-                    const SizedBox(width: 24),
-                  ],
-                  Text(
-                    'Showing ${inv.medicines.length} Medicines',
-                    style: TextStyle(
-                        color: context.textMutedColor,
-                        fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -452,23 +377,26 @@ class _StockLevelsTabState extends State<_StockLevelsTab> {
           ),
         ),
 
-        // Medicines List
+        // Medicines Grid
         Expanded(
-          child: ListView.builder(
+          child: GridView.builder(
             padding: const EdgeInsets.all(24),
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 400,
+              mainAxisSpacing: 16,
+              crossAxisSpacing: 16,
+              mainAxisExtent: 260, // Fixed height for consistency
+            ),
             itemCount: inv.medicines.length,
             itemBuilder: (ctx, i) {
               final m = inv.medicines[i];
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: _ModernMedicineCardWindows(
-                  medicine: m,
-                  wh: wh,
-                  auth: auth,
-                  inv: inv,
-                  isSelected: _selectedIds.contains(m.id),
-                  onSelect: (selected) => _toggleSelection(m.id),
-                ),
+              return _ModernMedicineCardWindows(
+                medicine: m,
+                wh: wh,
+                auth: auth,
+                inv: inv,
+                isSelected: _selectedIds.contains(m.id),
+                onSelect: (selected) => _toggleSelection(m.id),
               );
             },
           ),
@@ -502,278 +430,159 @@ class _ModernMedicineCardWindows extends StatefulWidget {
 
 class _ModernMedicineCardWindowsState
     extends State<_ModernMedicineCardWindows> {
-  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-            color: _expanded
-                ? AppTheme.primary.withValues(alpha: 0.5)
-                : context.borderColor.withValues(alpha: 0.5)),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4)),
         ],
       ),
       child: InkWell(
-        onTap: () => setState(() => _expanded = !_expanded),
-        borderRadius: BorderRadius.circular(16),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
+        onTap: () => _showBatchDetails(context, widget.medicine),
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (widget.auth.hasInventoryWriteAccess) ...[
-                    Checkbox(
-                      value: widget.isSelected,
-                      onChanged: widget.onSelect,
-                      activeColor: AppTheme.primary,
-                    ),
-                    const SizedBox(width: 12),
-                  ],
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: AppTheme.primary.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(Icons.vaccines,
-                        color: AppTheme.primary, size: 24),
+                        color: AppTheme.primary, size: 20),
                   ),
-                  const SizedBox(width: 20),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           widget.medicine.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              fontWeight: FontWeight.w800, fontSize: 18),
+                              fontWeight: FontWeight.w800, fontSize: 16),
                         ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Text(
-                              widget.medicine.category.isEmpty
-                                  ? 'General'
-                                  : widget.medicine.category,
-                              style: TextStyle(color: context.textMutedColor),
-                            ),
-                            const SizedBox(width: 12),
-                            if (widget.medicine.isLowStock)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color:
-                                      AppTheme.warning.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Text('LOW STOCK',
-                                    style: TextStyle(
-                                        color: AppTheme.warning,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w900)),
-                              ),
-                            if (widget.medicine.hasExpiredBatch)
-                              Container(
-                                margin: const EdgeInsets.only(left: 8),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color:
-                                      AppTheme.danger.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Text('EXPIRED',
-                                    style: TextStyle(
-                                        color: AppTheme.danger,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w900)),
-                              )
-                            else if (widget.medicine.hasNearExpiryBatch)
-                              Container(
-                                margin: const EdgeInsets.only(left: 8),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color:
-                                      AppTheme.danger.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Text('NEAR EXPIRY',
-                                    style: TextStyle(
-                                        color: AppTheme.danger,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w900)),
-                              ),
-                            if (widget.medicine.soonestExpiringBatch != null)
-                              Padding(
-                                padding: const EdgeInsets.only(left: 12),
-                                child: Text(
-                                  '#${widget.medicine.soonestExpiringBatch!.batchNo}',
-                                  style: TextStyle(
-                                      color: context.textMutedColor,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600),
-                                ),
-                              ),
-                          ],
+                        Text(
+                          widget.medicine.category.isEmpty
+                              ? 'General'
+                              : widget.medicine.category,
+                          style: TextStyle(
+                              color: context.textMutedColor, fontSize: 11),
                         ),
                       ],
                     ),
                   ),
-                  _MetricBlock(
-                    label: 'Main Hub',
-                    value: widget.medicine.mainStock,
-                    icon: Icons.warehouse,
-                    color: const Color(0xFF6366F1),
-                  ),
-                  const SizedBox(width: 40),
-                  _MetricBlock(
-                    label: 'Store Front',
-                    value: widget.medicine.storeStock,
-                    icon: Icons.storefront,
-                    color: const Color(0xFF14B8A6),
-                    isWarning: widget.medicine.isLowStock,
-                  ),
-                  const SizedBox(width: 40),
                   Text(
                     '₹${widget.medicine.sellingPrice.toStringAsFixed(0)}',
                     style: const TextStyle(
                         fontWeight: FontWeight.w900,
-                        fontSize: 20,
+                        fontSize: 18,
                         color: AppTheme.success),
-                  ),
-                  const SizedBox(width: 20),
-                  Icon(
-                    _expanded ? Icons.expand_less : Icons.expand_more,
-                    color: context.textMutedColor,
                   ),
                 ],
               ),
-            ),
-            if (_expanded)
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: context.bgColor.withValues(alpha: 0.3),
-                  borderRadius:
-                      const BorderRadius.vertical(bottom: Radius.circular(16)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (widget.medicine.batches.isNotEmpty) ...[
-                      const Text('Active Batches',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 13)),
-                      const SizedBox(height: 12),
-                      ...((widget.medicine.batches.toList()
-                            ..sort((a, b) =>
-                                a.expiryDate.compareTo(b.expiryDate)))
-                          .map((b) => Padding(
-                                padding: const EdgeInsets.only(bottom: 10),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                        flex: 2,
-                                        child: Text('Batch: ${b.batchNo}',
-                                            style: const TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600))),
-                                    Expanded(
-                                        flex: 2,
-                                        child: Text(
-                                            'Expiry: ${b.expiryDate.day}/${b.expiryDate.month}/${b.expiryDate.year}',
-                                            style: TextStyle(
-                                                fontSize: 12,
-                                                color: b.expiryDate.isBefore(
-                                                        DateTime.now())
-                                                    ? AppTheme.danger
-                                                    : context.textColor))),
-                                    Expanded(
-                                        flex: 1,
-                                        child: Text('Hub: ${b.mainStock}',
-                                            textAlign: TextAlign.right,
-                                            style:
-                                                const TextStyle(fontSize: 12))),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                        flex: 1,
-                                        child: Text('Store: ${b.storeStock}',
-                                            textAlign: TextAlign.right,
-                                            style:
-                                                const TextStyle(fontSize: 12))),
-                                    if (widget.auth.hasInventoryWriteAccess)
-                                      Padding(
-                                        padding: const EdgeInsets.only(left: 8),
-                                        child: IconButton(
-                                          icon: const Icon(Icons.delete_outline,
-                                              size: 16, color: AppTheme.danger),
-                                          onPressed: () =>
-                                              _confirmDeleteBatch(context, b),
-                                          visualDensity: VisualDensity.compact,
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ))),
-                      const Divider(height: 32),
-                    ],
-                    Row(
-                      children: [
-                        if (widget.auth.hasWarehouseWriteAccess) ...[
-                          _ActionButton(
-                            label: 'Send to Store',
-                            icon: Icons.arrow_forward_rounded,
-                            color: const Color(0xFF14B8A6),
-                            onTap: () => _showTransferDialog(context,
-                                widget.medicine, 'main', 'store', widget.wh),
-                          ),
-                          const SizedBox(width: 12),
-                          _ActionButton(
-                            label: 'Return to Hub',
-                            icon: Icons.arrow_back_rounded,
-                            color: const Color(0xFF6366F1),
-                            onTap: () => _showTransferDialog(context,
-                                widget.medicine, 'store', 'main', widget.wh),
-                          ),
-                        ],
-                        const Spacer(),
-                        if (widget.auth.hasInventoryWriteAccess) ...[
-                          TextButton.icon(
-                            onPressed: () => MedicineDialog.show(context,
-                                medicine: widget.medicine),
-                            icon: const Icon(Icons.edit_outlined),
-                            label: const Text('Edit'),
-                          ),
-                          const SizedBox(width: 8),
-                          TextButton.icon(
-                            onPressed: () =>
-                                _confirmDelete(context, widget.medicine),
-                            icon: const Icon(Icons.delete_outline,
-                                color: AppTheme.danger),
-                            label: const Text('Delete',
-                                style: TextStyle(color: AppTheme.danger)),
-                          ),
-                        ],
-                      ],
+              const Spacer(),
+              Row(
+                children: [
+                  Expanded(
+                    child: _MetricBlock(
+                      label: 'Hub',
+                      value: widget.medicine.mainStock,
+                      icon: Icons.warehouse,
+                      color: const Color(0xFF6366F1),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _MetricBlock(
+                      label: 'Store',
+                      value: widget.medicine.storeStock,
+                      icon: Icons.storefront,
+                      color: const Color(0xFF14B8A6),
+                      isWarning: widget.medicine.isLowStock,
+                    ),
+                  ),
+                ],
               ),
-          ],
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  if (widget.medicine.isLowStock)
+                    _StatusBadge(
+                        label: 'LOW STOCK', color: AppTheme.warning),
+                  if (widget.medicine.hasExpiredBatch)
+                    _StatusBadge(label: 'EXPIRED', color: AppTheme.danger)
+                  else if (widget.medicine.hasNearExpiryBatch)
+                    _StatusBadge(label: 'NEAR EXPIRY', color: AppTheme.danger),
+                  const Spacer(),
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert, color: context.textMutedColor),
+                    onSelected: (val) {
+                      if (val == 'edit') {
+                        MedicineDialog.show(context, medicine: widget.medicine);
+                      } else if (val == 'batches') {
+                        _showBatchDetails(context, widget.medicine);
+                      } else if (val == 'send') {
+                        _showTransferDialog(context, widget.medicine, 'main',
+                            'store', widget.wh);
+                      } else if (val == 'return') {
+                        _showTransferDialog(context, widget.medicine, 'store',
+                            'main', widget.wh);
+                      } else if (val == 'delete') {
+                        _confirmDelete(context, widget.medicine);
+                      }
+                    },
+                    itemBuilder: (ctx) => [
+                      const PopupMenuItem(
+                          value: 'edit',
+                          child:
+                              Row(children: [Icon(Icons.edit), Text(' Edit Info')])),
+                      const PopupMenuItem(
+                          value: 'batches',
+                          child: Row(children: [
+                            Icon(Icons.layers_outlined),
+                            Text(' Batch Details')
+                          ])),
+                      const PopupMenuItem(
+                          value: 'send',
+                          child: Row(children: [
+                            Icon(Icons.arrow_forward),
+                            Text(' Send to Store')
+                          ])),
+                      const PopupMenuItem(
+                          value: 'return',
+                          child: Row(children: [
+                            Icon(Icons.arrow_back),
+                            Text(' Return to Hub')
+                          ])),
+                      const PopupMenuItem(
+                          value: 'delete',
+                          child: Row(children: [
+                            Icon(Icons.delete, color: AppTheme.danger),
+                            Text(' Delete',
+                                style: TextStyle(color: AppTheme.danger))
+                          ])),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -801,31 +610,179 @@ class _ModernMedicineCardWindowsState
     );
   }
 
-  void _confirmDeleteBatch(BuildContext context, MedicineBatch batch) {
+  void _showBatchDetails(BuildContext context, Medicine m) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Batch?'),
-        content: Text(
-            'Are you sure you want to delete batch ${batch.batchNo}? This will also subtract its stock (${batch.mainStock + batch.storeStock}) from total.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
-            onPressed: () {
-              widget.inv.deleteBatch(widget.medicine, batch);
-              Navigator.pop(ctx);
-            },
-            child: const Text('Delete Batch'),
-          ),
-        ],
-      ),
+      builder: (_) => _BatchDetailsDialog(
+          medicine: m,
+          wh: widget.wh,
+          canTransfer: context.read<AuthProvider>().hasWarehouseWriteAccess),
     );
   }
 
   void _showTransferDialog(BuildContext context, Medicine m, String from,
       String to, WarehouseProvider wh) {
+    showDialog(
+      context: context,
+      builder: (_) => _TransferDialog(medicine: m, from: from, to: to, wh: wh),
+    );
+  }
+}
+
+
+class _BatchDetailsDialog extends StatelessWidget {
+  final Medicine medicine;
+  final WarehouseProvider wh;
+  final bool canTransfer;
+  const _BatchDetailsDialog({required this.medicine, required this.wh, required this.canTransfer});
+
+  @override
+  Widget build(BuildContext context) {
+    final sortedBatches = medicine.batches.toList()
+      ..sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
+
+    return AlertDialog(
+      title: Row(
+        children: [
+          const Icon(Icons.layers_outlined, color: AppTheme.primary),
+          const SizedBox(width: 12),
+          Expanded(child: Text('Batches: ${medicine.name}')),
+        ],
+      ),
+      content: SizedBox(
+        width: 600,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (sortedBatches.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Text('No active batches found for this medicine.'),
+              )
+            else
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 400),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: sortedBatches.length,
+                  itemBuilder: (ctx, i) {
+                    final b = sortedBatches[i];
+                    final isExpired = b.expiryDate.isBefore(DateTime.now());
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: context.bgColor.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: isExpired
+                                ? AppTheme.danger.withValues(alpha: 0.2)
+                                : context.borderColor.withValues(alpha: 0.5)),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Batch: ${b.batchNo}',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold)),
+                                Text(
+                                  'Expiry: ${b.expiryDate.day}/${b.expiryDate.month}/${b.expiryDate.year}',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: isExpired
+                                          ? AppTheme.danger
+                                          : context.textMutedColor),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: Column(
+                              children: [
+                                const Text('HUB',
+                                    style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold)),
+                                Text('${b.mainStock}',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 16)),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: Column(
+                              children: [
+                                const Text('STORE',
+                                    style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold)),
+                                Text('${b.storeStock}',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 16)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                if (canTransfer) ...[
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF14B8A6), // Teal
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _showTransfer(context, medicine, 'main', 'store', wh);
+                    },
+                    icon: const Icon(Icons.arrow_forward, size: 16),
+                    label: const Text('Send to Store'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF6366F1), // Indigo
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _showTransfer(context, medicine, 'store', 'main', wh);
+                    },
+                    icon: const Icon(Icons.arrow_back, size: 16),
+                    label: const Text('Return to Hub'),
+                  ),
+                ],
+                const Spacer(),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showTransfer(BuildContext context, Medicine m, String from, String to,
+      WarehouseProvider wh) {
     showDialog(
       context: context,
       builder: (_) => _TransferDialog(medicine: m, from: from, to: to, wh: wh),
@@ -851,54 +808,79 @@ class _MetricBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final finalColor = isWarning ? AppTheme.warning : color;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: context.textMutedColor),
-            const SizedBox(width: 6),
-            Text(label,
-                style: TextStyle(fontSize: 12, color: context.textMutedColor)),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text('$value',
-            style: TextStyle(
-                fontSize: 22, fontWeight: FontWeight.w900, color: finalColor)),
-      ],
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ActionButton(
-      {required this.label,
-      required this.icon,
-      required this.color,
-      required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 18),
-      label: Text(label),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: color,
-        side: BorderSide(color: color.withValues(alpha: 0.5)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: finalColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: finalColor.withValues(alpha: 0.1),
+            blurRadius: 15,
+            offset: const Offset(0, 6),
+          ),
+        ],
+        border: Border.all(color: finalColor.withValues(alpha: 0.2), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: finalColor,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 10, color: Colors.white),
+          ),
+          const SizedBox(height: 10),
+          Text(label.toUpperCase(),
+              style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2.5,
+                  color: finalColor)),
+          const SizedBox(height: 6),
+          Text('$value',
+              style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -1,
+                  color: finalColor)),
+        ],
       ),
     );
   }
 }
+
+class _StatusBadge extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _StatusBadge({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(right: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Text(label.toUpperCase(),
+          style: const TextStyle(
+              color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+    );
+  }
+}
+
 
 class _HorizontalDropdown extends StatelessWidget {
   final String label;
@@ -945,45 +927,6 @@ class _HorizontalDropdown extends StatelessWidget {
   }
 }
 
-class _SummaryStat extends StatelessWidget {
-  final String label;
-  final int value;
-  final IconData icon;
-  final Color color;
-
-  const _SummaryStat(
-      {required this.label,
-      required this.value,
-      required this.icon,
-      required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: color, size: 18),
-        ),
-        const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label,
-                style: TextStyle(fontSize: 12, color: context.textMutedColor)),
-            Text('$value Units',
-                style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w800, color: color)),
-          ],
-        ),
-      ],
-    );
-  }
-}
 
 class _TransferHistoryTab extends StatelessWidget {
   const _TransferHistoryTab();

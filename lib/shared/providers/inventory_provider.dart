@@ -62,7 +62,18 @@ class InventoryProvider extends ChangeNotifier {
           m.barcode.contains(_searchQuery);
       final matchesFilter = _filterWarehouse == 'all' ||
           (_filterWarehouse == 'low-stock' && m.isLowStock) ||
-          (_filterWarehouse == 'main-empty' && m.mainStock == 0);
+          (_filterWarehouse == 'main-empty' && m.mainStock == 0) ||
+          (_filterWarehouse == 'expired' &&
+              m.batches.any((b) =>
+                  b.expiryDate.isBefore(DateTime.now()) &&
+                  (b.mainStock > 0 || b.storeStock > 0))) ||
+          (_filterWarehouse == 'near-expiry' &&
+              m.batches.any((b) =>
+                  b.expiryDate.isAfter(DateTime.now()) &&
+                  b.expiryDate.isBefore(DateTime.now().add(Duration(
+                      days: ObjectBoxService.instance.settings
+                          .nearExpiryThresholdDays))) &&
+                  (b.mainStock > 0 || b.storeStock > 0)));
       return matchesQuery && matchesFilter;
     }).toList();
 
