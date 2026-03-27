@@ -479,19 +479,19 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: gradient,
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: gradient.first.withValues(alpha: 0.25),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+            color: gradient.first.withValues(alpha: 0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -500,12 +500,12 @@ class _StatCard extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(icon, color: Colors.white, size: 20),
+            child: Icon(icon, color: Colors.white, size: 22),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -513,18 +513,20 @@ class _StatCard extends StatelessWidget {
               Text(
                 value,
                 style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
                   color: Colors.white,
-                  letterSpacing: -0.5,
+                  letterSpacing: -1,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
-                title,
+                title.toUpperCase(),
                 style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.white.withValues(alpha: 0.8),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white.withAlpha(200),
+                  letterSpacing: 1,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

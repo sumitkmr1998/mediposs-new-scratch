@@ -26,62 +26,55 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
       ),
       body: Column(
         children: [
-          // Summary banner
+          // Advanced Financial Summary
           Container(
-            padding: const EdgeInsets.all(16),
-            color: AppTheme.primary.withValues(alpha: 0.1),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            decoration: BoxDecoration(
+              color: context.surfaceColor,
+              border: Border(bottom: BorderSide(color: context.borderColor)),
+            ),
             child: LayoutBuilder(builder: (ctx, constraints) {
-              final rangeLabel = _getRangeLabel(sales);
-
-              // Local calculations for filtered list
-              double grossSales = 0;
-              double returns = 0;
+              double grossSales = 0; double returns = 0;
               for (final s in sales.sales) {
-                if (s.isReturn) {
-                  returns += s.total.abs();
-                } else {
-                  grossSales += s.total;
-                }
+                if (s.isReturn) returns += s.total.abs();
+                else grossSales += s.total;
               }
               final netTotal = grossSales - returns;
 
               return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text('FINANCIAL PERFORMANCE', 
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: context.textMutedColor, letterSpacing: 1.5)),
+                  const SizedBox(height: 16),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _StatBadge(
-                          label: "Gross Sales",
+                      Expanded(
+                        child: _StatCard(
+                          label: "GROSS",
                           value: '₹${grossSales.toStringAsFixed(0)}',
-                          color: AppTheme.primary),
-                      _StatBadge(
-                          label: "Returns",
+                          color: AppTheme.primary,
+                          icon: Icons.trending_up_rounded,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _StatCard(
+                          label: "RETURNS",
                           value: '₹${returns.toStringAsFixed(0)}',
-                          color: AppTheme.danger),
-                      _StatBadge(
-                          label: "Net Total",
+                          color: AppTheme.danger,
+                          icon: Icons.assignment_return_rounded,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _StatCard(
+                          label: "NET",
                           value: '₹${netTotal.toStringAsFixed(0)}',
-                          color: AppTheme.success),
-                    ],
-                  ),
-                  const Divider(height: 24, thickness: 0.5),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _StatBadge(
-                          label: "$rangeLabel Sales",
-                          value:
-                              '${sales.sales.where((s) => !s.isReturn).length}',
-                          color: AppTheme.primaryLight),
-                      _StatBadge(
-                          label: "$rangeLabel Returns",
-                          value:
-                              '${sales.sales.where((s) => s.isReturn).length}',
-                          color: AppTheme.danger),
-                      _StatBadge(
-                          label: 'All-time Revenue',
-                          value: '₹${sales.totalRevenue.toStringAsFixed(0)}',
-                          color: AppTheme.accent),
+                          color: AppTheme.success,
+                          icon: Icons.account_balance_wallet_rounded,
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -148,15 +141,36 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
             ),
           ),
 
+          // Results Sub-header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Row(
+              children: [
+                Text('VERIFIED AUDIT LOG', 
+                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: context.textMutedColor, letterSpacing: 1)),
+                const Spacer(),
+                Text('${sales.sales.length} RECORDS', 
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: context.textMutedColor)),
+              ],
+            ),
+          ),
+
           // Sales list
           Expanded(
             child: sales.sales.isEmpty
                 ? Center(
-                    child: Text('No sales yet',
-                        style: TextStyle(color: context.textMutedColor)))
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.history_rounded, size: 48, color: context.borderColor),
+                        const SizedBox(height: 16),
+                        Text('No records found for this period',
+                            style: TextStyle(color: context.textMutedColor, fontWeight: FontWeight.w600)),
+                      ],
+                    ))
                 : ListView.builder(
                     itemCount: sales.sales.length,
-                    padding: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.only(bottom: 32),
                     itemBuilder: (ctx, i) =>
                         _SaleRow(sale: sales.sales[i], salesProvider: sales),
                   ),
@@ -164,21 +178,6 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
         ],
       ),
     );
-  }
-
-  String _getRangeLabel(SalesProvider sales) {
-    switch (sales.activeFilter) {
-      case SalesFilter.today:
-        return "Today's";
-      case SalesFilter.yesterday:
-        return "Yesterday's";
-      case SalesFilter.last7Days:
-        return "7 Days'";
-      case SalesFilter.allTime:
-        return "All-time";
-      case SalesFilter.custom:
-        return "Custom";
-    }
   }
 }
 
@@ -459,25 +458,41 @@ class _SaleRow extends StatelessWidget {
   }
 }
 
-class _StatBadge extends StatelessWidget {
+class _StatCard extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
+  final IconData icon;
 
-  const _StatBadge(
-      {required this.label, required this.value, required this.color});
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(value,
-            style: TextStyle(
-                fontSize: 20, fontWeight: FontWeight.w800, color: color)),
-        const SizedBox(height: 2),
-        Text(label,
-            style: TextStyle(fontSize: 11, color: context.textMutedColor)),
-      ],
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(height: 8),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.w900, color: color, letterSpacing: -0.5)),
+          const SizedBox(height: 2),
+          Text(label,
+              style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: context.textMutedColor, letterSpacing: 0.5)),
+        ],
+      ),
     );
   }
 }
