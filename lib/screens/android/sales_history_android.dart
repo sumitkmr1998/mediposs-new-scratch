@@ -22,16 +22,16 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sales History'),
+        title: const Text('Verified Audit Log'),
       ),
       body: Column(
         children: [
-          // Advanced Financial Summary
+          // 1. High-Density Financial Summary (Glassmorphic)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             decoration: BoxDecoration(
               color: context.surfaceColor,
-              border: Border(bottom: BorderSide(color: context.borderColor)),
+              border: Border(bottom: BorderSide(color: context.borderColor.withValues(alpha: 0.5))),
             ),
             child: LayoutBuilder(builder: (ctx, constraints) {
               double grossSales = 0; double returns = 0;
@@ -44,8 +44,16 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('FINANCIAL PERFORMANCE', 
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: context.textMutedColor, letterSpacing: 1.5)),
+                  Row(
+                    children: [
+                      Text('REVENUE COMPOSITION', 
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: context.textMutedColor, letterSpacing: 1.5)),
+                      const Spacer(),
+                      const Icon(Icons.verified_user, size: 12, color: AppTheme.success),
+                      const SizedBox(width: 4),
+                      Text('SENTRY PROTECTION ACTIVE', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppTheme.success.withValues(alpha: 0.8))),
+                    ],
+                  ),
                   const SizedBox(height: 16),
                   Row(
                     children: [
@@ -69,10 +77,11 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: _StatCard(
-                          label: "NET",
+                          label: "NET INCOME",
                           value: '₹${netTotal.toStringAsFixed(0)}',
                           color: AppTheme.success,
                           icon: Icons.account_balance_wallet_rounded,
+                          isProminent: true,
                         ),
                       ),
                     ],
@@ -82,80 +91,72 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
             }),
           ),
 
-          // Date Filter Bar
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                _FilterChip(
-                  label: 'Today',
-                  isSelected: sales.activeFilter == SalesFilter.today,
-                  onSelected: () => sales.setFilter(SalesFilter.today),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'Yesterday',
-                  isSelected: sales.activeFilter == SalesFilter.yesterday,
-                  onSelected: () => sales.setFilter(SalesFilter.yesterday),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'Last 7 Days',
-                  isSelected: sales.activeFilter == SalesFilter.last7Days,
-                  onSelected: () => sales.setFilter(SalesFilter.last7Days),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'All Time',
-                  isSelected: sales.activeFilter == SalesFilter.allTime,
-                  onSelected: () => sales.setFilter(SalesFilter.allTime),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'Custom',
-                  isSelected: sales.activeFilter == SalesFilter.custom,
-                  onSelected: () async {
-                    final range = await showDateRangePicker(
-                      context: context,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime.now(),
-                      builder: (ctx, child) {
-                        return Theme(
-                          data: Theme.of(context).copyWith(
-                            colorScheme: Theme.of(context).colorScheme.copyWith(
-                                  primary: AppTheme.primary,
-                                  onPrimary: Colors.white,
-                                ),
-                          ),
-                          child: child!,
-                        );
-                      },
-                    );
-                    if (range != null) {
-                      sales.setFilter(SalesFilter.custom, range: range);
-                    }
-                  },
-                ),
-              ],
+          // 2. Filter Bar
+          Container(
+            color: context.surfaceColor,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  _FilterChip(
+                    label: 'Today',
+                    isSelected: sales.activeFilter == SalesFilter.today,
+                    onSelected: () => sales.setFilter(SalesFilter.today),
+                  ),
+                  const SizedBox(width: 8),
+                  _FilterChip(
+                    label: 'Yesterday',
+                    isSelected: sales.activeFilter == SalesFilter.yesterday,
+                    onSelected: () => sales.setFilter(SalesFilter.yesterday),
+                  ),
+                  const SizedBox(width: 8),
+                  _FilterChip(
+                    label: 'Last 7 Days',
+                    isSelected: sales.activeFilter == SalesFilter.last7Days,
+                    onSelected: () => sales.setFilter(SalesFilter.last7Days),
+                  ),
+                  const SizedBox(width: 8),
+                  _FilterChip(
+                    label: 'History',
+                    isSelected: sales.activeFilter == SalesFilter.allTime,
+                    onSelected: () => sales.setFilter(SalesFilter.allTime),
+                  ),
+                  const SizedBox(width: 8),
+                  _FilterChip(
+                    label: 'Range',
+                    isSelected: sales.activeFilter == SalesFilter.custom,
+                    onSelected: () async {
+                      final range = await showDateRangePicker(
+                        context: context,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (range != null) {
+                        sales.setFilter(SalesFilter.custom, range: range);
+                      }
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
 
-          // Results Sub-header
+          // 3. Verified Stream Header
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
             child: Row(
               children: [
-                Text('VERIFIED AUDIT LOG', 
-                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: context.textMutedColor, letterSpacing: 1)),
+                Text('TRANSACTION STREAM', 
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: context.textMutedColor, letterSpacing: 1)),
                 const Spacer(),
-                Text('${sales.sales.length} RECORDS', 
+                Text('${sales.sales.length} LOGS', 
                   style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: context.textMutedColor)),
               ],
             ),
           ),
 
-          // Sales list
+          // list
           Expanded(
             child: sales.sales.isEmpty
                 ? Center(
@@ -164,13 +165,13 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
                       children: [
                         Icon(Icons.history_rounded, size: 48, color: context.borderColor),
                         const SizedBox(height: 16),
-                        Text('No records found for this period',
+                        Text('No verified logs found',
                             style: TextStyle(color: context.textMutedColor, fontWeight: FontWeight.w600)),
                       ],
                     ))
                 : ListView.builder(
                     itemCount: sales.sales.length,
-                    padding: const EdgeInsets.only(bottom: 32),
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 32),
                     itemBuilder: (ctx, i) =>
                         _SaleRow(sale: sales.sales[i], salesProvider: sales),
                   ),
@@ -194,23 +195,24 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChoiceChip(
-      label: Text(label,
-          style: TextStyle(
-            fontSize: 12,
-            color: isSelected ? Colors.white : context.textMutedColor,
-          )),
-      selected: isSelected,
-      onSelected: (_) => onSelected(),
-      selectedColor: AppTheme.primary,
-      backgroundColor: context.surfaceColor,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: isSelected ? AppTheme.primary : context.borderColor,
+    return GestureDetector(
+      onTap: onSelected,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primary : context.surfaceColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? AppTheme.primary : context.borderColor,
+          ),
         ),
+        child: Text(label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+              color: isSelected ? Colors.white : context.textMutedColor,
+            )),
       ),
-      showCheckmark: false,
     );
   }
 }
@@ -228,229 +230,183 @@ class _SaleRow extends StatelessWidget {
     final canProcessReturns = context.watch<AuthProvider>().canProcessReturns;
     final inv = context.read<InventoryProvider>();
 
-    return Card(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: context.borderColor),
-        ),
-        elevation: 0,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
         color: context.surfaceColor,
-        child: ExpansionTile(
-          shape: const Border(),
-          leading: CircleAvatar(
-            backgroundColor: sale.isReturn
-                ? AppTheme.danger.withValues(alpha: 0.1)
-                : AppTheme.primaryLight.withValues(alpha: 0.1),
-            child: Icon(
-              sale.isReturn ? Icons.assignment_return : Icons.receipt,
-              color: sale.isReturn ? AppTheme.danger : AppTheme.primaryLight,
-              size: 20,
-            ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        shape: const Border(),
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: (sale.isReturn ? AppTheme.danger : AppTheme.primaryLight).withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
           ),
-          title: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  sale.patientName.isEmpty ? 'Walk-in' : sale.patientName,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 16),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Text(
-                '₹${sale.total.toStringAsFixed(2)}',
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  color: sale.isReturn ? AppTheme.danger : AppTheme.success,
-                  fontSize: 16,
-                ),
-              ),
-            ],
+          child: Icon(
+            sale.isReturn ? Icons.assignment_return : Icons.receipt_long,
+            color: sale.isReturn ? AppTheme.danger : AppTheme.primaryLight,
+            size: 18,
           ),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Text(
-                    sale.invoiceNo,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                      color: AppTheme.primaryLight,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${dt.day}/${dt.month}/${dt.year}',
-                    style:
-                        TextStyle(fontSize: 12, color: context.textMutedColor),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  if (sale.isReturn)
-                    Container(
-                      margin: const EdgeInsets.only(right: 6),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppTheme.danger.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text('REFUND',
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.danger)),
-                    ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: context.borderColor,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      sale.paymentMethod.toUpperCase(),
-                      style: TextStyle(
-                          fontSize: 10, color: context.textMutedColor),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+        ),
+        title: Row(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ...salesProvider.getSaleItems(sale).map((item) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: Row(
-                          children: [
-                            Expanded(child: Text(item.medicineName)),
-                            Text(
-                                '${item.qty} × ₹${item.unitPrice.toStringAsFixed(2)}'),
-                            const SizedBox(width: 16),
-                            Text('₹${item.lineTotal.toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600)),
-                          ],
-                        ),
-                      )),
-                  const Divider(),
-                  if (sale.discount > 0)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Text('Discount: -₹${sale.discount.toStringAsFixed(2)}',
-                            style: const TextStyle(color: AppTheme.danger)),
-                      ],
-                    ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Text('Total: ₹${sale.total.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.primaryLight,
-                              fontSize: 16)),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          PrintingService.instance.printReceipt(context, sale);
-                        },
-                        icon: const Icon(Icons.print,
-                            color: AppTheme.primaryLight, size: 18),
-                        label: const Text('Print Receipt',
-                            style: TextStyle(color: AppTheme.primaryLight)),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: AppTheme.primaryLight),
-                        ),
-                      ),
-                      if (!sale.isReturn && canProcessReturns) ...[
-                        const SizedBox(width: 16),
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            showDialog(
-                              context: context,
-                              builder: (_) => ReturnDialog(originalSale: sale),
-                            );
-                          },
-                          icon: const Icon(Icons.assignment_return,
-                              color: AppTheme.danger, size: 18),
-                          label: const Text('Process Return',
-                              style: TextStyle(color: AppTheme.danger)),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: AppTheme.danger),
-                          ),
-                        ),
-                      ],
-                      if (canVoidSales) ...[
-                        const SizedBox(width: 16),
-                        OutlinedButton.icon(
-                          onPressed: () => _confirmDelete(context, inv),
-                          icon: const Icon(Icons.delete_forever,
-                              color: AppTheme.danger, size: 18),
-                          label: const Text('Void Sale',
-                              style: TextStyle(color: AppTheme.danger)),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: AppTheme.danger),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
+            Expanded(
+              child: Text(
+                sale.patientName.isEmpty ? 'Walk-in Guest' : sale.patientName,
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, letterSpacing: -0.3),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Text(
+              '₹${sale.total.toStringAsFixed(2)}',
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                color: sale.isReturn ? AppTheme.danger : AppTheme.primaryLight,
+                fontSize: 16,
               ),
             ),
           ],
-        ));
+        ),
+        subtitle: Row(
+          children: [
+            Text(
+              sale.invoiceNo,
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+                color: context.textMutedColor,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: AppTheme.success.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text('VERIFIED', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: AppTheme.success)),
+            ),
+            const Spacer(),
+            Text(
+              '${dt.hour}:${dt.minute.toString().padLeft(2, '0')}',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: context.textMutedColor),
+            ),
+          ],
+        ),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('LINE ITEMS', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: AppTheme.primaryLight)),
+                const SizedBox(height: 12),
+                ...salesProvider.getSaleItems(sale).map((item) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(item.medicineName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                                Text('${item.qty} units @ ₹${item.unitPrice.toStringAsFixed(2)}', 
+                                  style: TextStyle(fontSize: 11, color: context.textMutedColor)),
+                              ],
+                            ),
+                          ),
+                          Text('₹${item.lineTotal.toStringAsFixed(2)}',
+                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                        ],
+                      ),
+                    )),
+                const SizedBox(height: 12),
+                const Divider(),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('PAYMENT VIA ${sale.paymentMethod.toUpperCase()}', 
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: context.textMutedColor)),
+                    if (sale.discount > 0)
+                      Text('Disc: -₹${sale.discount.toStringAsFixed(2)}',
+                          style: const TextStyle(color: AppTheme.danger, fontWeight: FontWeight.w700, fontSize: 12)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          PrintingService.instance.printReceipt(context, sale);
+                        },
+                        icon: const Icon(Icons.print_rounded, size: 18),
+                        label: const Text('PRINT'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppTheme.primaryLight,
+                          side: const BorderSide(color: AppTheme.primaryLight),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (!sale.isReturn && canProcessReturns)
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            showDialog(context: context, builder: (_) => ReturnDialog(originalSale: sale));
+                          },
+                          icon: const Icon(Icons.assignment_return_rounded, size: 18),
+                          label: const Text('RETURN'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.danger,
+                            side: const BorderSide(color: AppTheme.danger),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+                    if (canVoidSales) ...[
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: () => _confirmDelete(context, inv),
+                        icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.danger),
+                        tooltip: 'Void Sale',
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _confirmDelete(BuildContext context, InventoryProvider inv) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title:
-            const Text('Void Sale', style: TextStyle(color: AppTheme.danger)),
-        content: Text(
-            'Are you sure you want to permanently delete receipt ${sale.invoiceNo}?\n\nThis will precisely refund all inventory quantities and completely remove this record from the sales ledger.'),
-        backgroundColor: context.surfaceColor,
+        title: const Text('Void Transaction', style: TextStyle(fontWeight: FontWeight.w900)),
+        content: Text('Permanently remove ${sale.invoiceNo} and restore inventory stock?'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child:
-                Text('Cancel', style: TextStyle(color: context.textMutedColor)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.danger,
-                foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger, foregroundColor: Colors.white),
             onPressed: () {
               salesProvider.deleteSale(sale, inv);
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Sale ${sale.invoiceNo} voided successfully.'),
-                  backgroundColor: AppTheme.success,
-                ),
-              );
             },
-            child: const Text('Yes, Void Sale'),
+            child: const Text('VOID SALE'),
           ),
         ],
       ),
@@ -463,12 +419,14 @@ class _StatCard extends StatelessWidget {
   final String value;
   final Color color;
   final IconData icon;
+  final bool isProminent;
 
   const _StatCard({
     required this.label,
     required this.value,
     required this.color,
     required this.icon,
+    this.isProminent = false,
   });
 
   @override
@@ -476,21 +434,28 @@ class _StatCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.05),
+        color: isProminent ? color : color.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: color.withValues(alpha: 0.1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: color),
+          Icon(icon, size: 14, color: isProminent ? Colors.white : color),
           const SizedBox(height: 8),
           Text(value,
               style: TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.w900, color: color, letterSpacing: -0.5)),
+                  fontSize: 15, 
+                  fontWeight: FontWeight.w900, 
+                  color: isProminent ? Colors.white : color, 
+                  letterSpacing: -0.5)),
           const SizedBox(height: 2),
           Text(label,
-              style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: context.textMutedColor, letterSpacing: 0.5)),
+              style: TextStyle(
+                  fontSize: 8, 
+                  fontWeight: FontWeight.w800, 
+                  color: isProminent ? Colors.white.withValues(alpha: 0.8) : context.textMutedColor, 
+                  letterSpacing: 0.5)),
         ],
       ),
     );

@@ -115,26 +115,28 @@ class _PatientRegistrationSheetState extends State<_PatientRegistrationSheet> {
       keyboardType: keyboardType,
       maxLines: maxLines,
       textInputAction: textInputAction,
+      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
       decoration: InputDecoration(
         labelText: labelText,
-        labelStyle: TextStyle(color: context.textMutedColor),
+        labelStyle: TextStyle(color: context.textMutedColor, fontWeight: FontWeight.w600, fontSize: 13),
         prefixIcon: prefixIcon != null
-            ? Icon(prefixIcon, color: AppTheme.primaryLight)
+            ? Icon(prefixIcon, color: AppTheme.primaryLight, size: 20)
             : null,
         suffixText: suffixText,
+        suffixStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: AppTheme.primaryLight),
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide:
-                BorderSide(color: context.borderColor.withValues(alpha: 0.5))),
+                BorderSide(color: context.borderColor.withValues(alpha: 0.3))),
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide:
-                BorderSide(color: context.borderColor.withValues(alpha: 0.5))),
+                BorderSide(color: context.borderColor.withValues(alpha: 0.3))),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: AppTheme.primary, width: 2)),
         filled: true,
-        fillColor: Theme.of(context).scaffoldBackgroundColor,
+        fillColor: context.textMutedColor.withValues(alpha: 0.03),
         isDense: true,
       ),
     );
@@ -334,6 +336,10 @@ class _PatientSearchSheetState extends State<_PatientSearchSheet> {
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
       padding: const EdgeInsets.only(top: 16),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       child: Column(
         children: [
           // Drag handle
@@ -341,24 +347,25 @@ class _PatientSearchSheetState extends State<_PatientSearchSheet> {
             width: 48,
             height: 5,
             decoration: BoxDecoration(
-                color: context.borderColor,
+                color: context.borderColor.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(4)),
           ),
           const SizedBox(height: 16),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Select Patient',
+                const Text('SELECT PATIENT',
                     style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1,
                         color: AppTheme.primaryLight)),
                 if (widget.showSkip)
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Skip / Walk-in'),
+                    child: Text('SKIP / WALK-IN', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: context.textMutedColor)),
                   ),
               ],
             ),
@@ -369,25 +376,26 @@ class _PatientSearchSheetState extends State<_PatientSearchSheet> {
             child: TextField(
               controller: _searchCtrl,
               autofocus: true,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
               decoration: InputDecoration(
-                hintText: 'Search by Name, Phone, Address...',
-                hintStyle: TextStyle(color: context.textMutedColor),
+                hintText: 'Search by Name, Phone, UHID...',
+                hintStyle: TextStyle(color: context.textMutedColor, fontSize: 14),
                 prefixIcon: const Icon(Icons.search_rounded,
-                    color: AppTheme.primaryLight),
+                    color: AppTheme.primaryLight, size: 22),
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
                     borderSide: BorderSide(
-                        color: context.borderColor.withValues(alpha: 0.5))),
+                        color: context.borderColor.withValues(alpha: 0.3))),
                 enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
                     borderSide: BorderSide(
-                        color: context.borderColor.withValues(alpha: 0.5))),
+                        color: context.borderColor.withValues(alpha: 0.3))),
                 focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
                     borderSide:
                         const BorderSide(color: AppTheme.primary, width: 2)),
                 filled: true,
-                fillColor: Theme.of(context).scaffoldBackgroundColor,
+                fillColor: context.textMutedColor.withValues(alpha: 0.03),
                 isDense: true,
               ),
               onChanged: (_) => setState(() {}),
@@ -396,66 +404,75 @@ class _PatientSearchSheetState extends State<_PatientSearchSheet> {
           const SizedBox(height: 16),
           Expanded(
             child: filtered.isEmpty
-                ? const Center(
+                ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.person_off_outlined,
-                            size: 64, color: Colors.grey),
-                        SizedBox(height: 16),
-                        Text('No matching patient found.',
+                        Icon(Icons.person_search_rounded,
+                            size: 64, color: context.borderColor.withValues(alpha: 0.2)),
+                        const SizedBox(height: 24),
+                        const Text('NO MATCHING RECORDS',
                             style: TextStyle(
                                 color: Colors.grey,
-                                fontWeight: FontWeight.bold)),
+                                letterSpacing: 1,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900)),
                       ],
                     ),
                   )
                 : ListView.builder(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     itemCount: filtered.length,
                     itemBuilder: (ctx, i) {
                       final p = filtered[i];
                       return Container(
-                        margin: const EdgeInsets.only(bottom: 8),
+                        margin: const EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
-                          color: context.surfaceColor,
-                          borderRadius: BorderRadius.circular(12),
+                          color: context.surfaceColor.withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))
+                          ],
                           border: Border.all(
                               color:
-                                  context.borderColor.withValues(alpha: 0.5)),
+                                  context.borderColor.withValues(alpha: 0.2)),
                         ),
                         child: ListTile(
                           contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 4),
-                          leading: CircleAvatar(
-                            backgroundColor:
-                                AppTheme.primary.withValues(alpha: 0.1),
-                            child: Text(p.name[0].toUpperCase(),
-                                style: const TextStyle(
-                                    color: AppTheme.primary,
-                                    fontWeight: FontWeight.bold)),
+                              horizontal: 16, vertical: 6),
+                          leading: Container(
+                            width: 44, height: 44,
+                            decoration: BoxDecoration(
+                              color: AppTheme.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Center(
+                              child: Text(p.name[0].toUpperCase(),
+                                  style: const TextStyle(
+                                      color: AppTheme.primary,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w900)),
+                            ),
                           ),
                           title: Text(p.name,
                               style:
-                                  const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text('${p.phone} • ${p.address}',
-                              style: TextStyle(color: context.textMutedColor)),
+                                  const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                          subtitle: Text('${p.phone} • ${p.address}'.toUpperCase(),
+                              style: TextStyle(color: context.textMutedColor, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
                           trailing: Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
+                                horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
-                              color: AppTheme.primary.withValues(alpha: 0.05),
+                              color: context.textMutedColor.withValues(alpha: 0.05),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(p.uhid,
                                 style: TextStyle(
-                                    fontSize: 10,
+                                    fontSize: 11,
                                     color: context.textMutedColor,
-                                    fontWeight: FontWeight.w600)),
+                                    fontWeight: FontWeight.w900)),
                           ),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
                           onTap: () {
                             Navigator.pop(context);
                             widget.onSelected(p);
@@ -501,29 +518,30 @@ class _AndroidPaymentChip extends StatelessWidget {
     final isSelected = selected == value;
     return Expanded(
       child: Material(
-        color: isSelected ? color.withOpacity(0.15) : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
+        color: isSelected ? color.withValues(alpha: 0.1) : Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           onTap: onTap,
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 14),
+            padding: const EdgeInsets.symmetric(vertical: 16),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: isSelected ? color : context.borderColor,
+                color: isSelected ? color : context.borderColor.withValues(alpha: 0.3),
                 width: isSelected ? 2 : 1,
               ),
             ),
             child: Column(
               children: [
-                Icon(icon, color: isSelected ? color : Colors.grey, size: 22),
-                const SizedBox(height: 6),
+                Icon(icon, color: isSelected ? color : Colors.grey, size: 24),
+                const SizedBox(height: 8),
                 Text(
-                  label,
+                  label.toUpperCase(),
                   style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 10,
+                    letterSpacing: 0.5,
+                    fontWeight: FontWeight.w900,
                     color: isSelected ? color : Colors.grey,
                   ),
                 ),
@@ -554,8 +572,12 @@ class _BookAppointmentSheetState extends State<_BookAppointmentSheet> {
         ? null
         : doctors.where((d) => d.id == _selectedDoctor!.id).firstOrNull;
 
-    return Padding(
-      padding: const EdgeInsets.all(20),
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).padding.bottom + 20),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -566,148 +588,159 @@ class _BookAppointmentSheetState extends State<_BookAppointmentSheet> {
               width: 48,
               height: 5,
               decoration: BoxDecoration(
-                  color: context.borderColor,
+                  color: context.borderColor.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(4)),
             ),
           ),
           const SizedBox(height: 24),
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Theme.of(context).scaffoldBackgroundColor,
-              borderRadius: BorderRadius.circular(16),
+              color: context.surfaceColor.withValues(alpha: 0.9),
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 20, offset: const Offset(0, 8))
+              ],
               border:
-                  Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+                  Border.all(color: context.borderColor.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
-                CircleAvatar(
-                  backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-                  radius: 24,
-                  child: Text(widget.patient.name[0].toUpperCase(),
-                      style: const TextStyle(
-                          color: AppTheme.primary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 20)),
+                Container(
+                  width: 52, height: 52,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Center(
+                    child: Text(widget.patient.name[0].toUpperCase(),
+                        style: const TextStyle(
+                            color: AppTheme.primary,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 22)),
+                  ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Book Appointment for',
+                      const Text('APPOINTMENT FOR',
                           style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 10,
+                              letterSpacing: 1,
                               color: AppTheme.primaryLight,
-                              fontWeight: FontWeight.bold)),
+                              fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 2),
                       Text(widget.patient.name,
                           style: const TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.w800)),
+                              fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
                     ],
                   ),
                 ),
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: AppTheme.primary.withValues(alpha: 0.05),
+                    color: context.textMutedColor.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(widget.patient.uhid,
                       style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 11,
                           color: context.textMutedColor,
-                          fontWeight: FontWeight.bold)),
+                          fontWeight: FontWeight.w900)),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 24),
           if (doctors.isEmpty)
-            const Center(
+            Center(
               child: Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text('No active doctors available.',
-                    style: TextStyle(
-                        color: AppTheme.danger, fontWeight: FontWeight.bold)),
+                padding: const EdgeInsets.all(24.0),
+                child: Text('NO ACTIVE DOCTORS AVAILABLE'.toUpperCase(),
+                    style: const TextStyle(
+                        color: AppTheme.danger, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1)),
               ),
             )
           else
             DropdownButtonFormField<Doctor>(
               value: resolvedDoctor,
               decoration: InputDecoration(
-                labelText: 'Select Doctor',
-                labelStyle: TextStyle(color: context.textMutedColor),
-                prefixIcon: const Icon(Icons.medical_services_outlined,
-                    color: AppTheme.primaryLight),
+                labelText: 'ASSIGN DOCTOR',
+                labelStyle: TextStyle(color: context.textMutedColor, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1),
+                prefixIcon: const Icon(Icons.medical_services_rounded,
+                    color: AppTheme.primaryLight, size: 20),
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
                     borderSide: BorderSide(
-                        color: context.borderColor.withValues(alpha: 0.5))),
+                        color: context.borderColor.withValues(alpha: 0.3))),
                 enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
                     borderSide: BorderSide(
-                        color: context.borderColor.withValues(alpha: 0.5))),
+                        color: context.borderColor.withValues(alpha: 0.3))),
                 focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
                     borderSide:
                         const BorderSide(color: AppTheme.primary, width: 2)),
                 filled: true,
-                fillColor: Theme.of(context).scaffoldBackgroundColor,
+                fillColor: context.textMutedColor.withValues(alpha: 0.03),
                 isDense: true,
               ),
               dropdownColor: context.surfaceColor,
               items: doctors
                   .map((d) =>
-                      DropdownMenuItem(value: d, child: Text('Dr. ${d.name}')))
+                      DropdownMenuItem(value: d, child: Text('Dr. ${d.name}', style: const TextStyle(fontWeight: FontWeight.w700))))
                   .toList(),
               onChanged: (d) => setState(() => _selectedDoctor = d),
             ),
           if (resolvedDoctor != null) ...[
             const SizedBox(height: 16),
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                   color: AppTheme.primary.withValues(alpha: 0.05),
                   border: Border.all(
                       color: AppTheme.primary.withValues(alpha: 0.2)),
-                  borderRadius: BorderRadius.circular(16)),
+                  borderRadius: BorderRadius.circular(20)),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Specialization',
-                          style: TextStyle(color: Colors.grey, fontSize: 12)),
+                      const Text('SPECIALIZATION',
+                          style: TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
                       const SizedBox(height: 4),
-                      Text(resolvedDoctor.specialization,
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
+                      Text(resolvedDoctor.specialization.toUpperCase(),
+                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
                     ],
                   ),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      const Text('Fee',
-                          style: TextStyle(color: Colors.grey, fontSize: 12)),
+                      const Text('CONSULTATION FEE',
+                          style: TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
                       const SizedBox(height: 4),
                       Text(
                           '₹${resolvedDoctor.consultationFee.toStringAsFixed(0)}',
                           style: const TextStyle(
                               fontWeight: FontWeight.w900,
                               color: AppTheme.primary,
-                              fontSize: 18)),
+                              fontSize: 22)),
                     ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
-            const Text('Payment Mode',
+            const SizedBox(height: 24),
+            const Text('PAYMENT INSTRUMENT',
                 style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF6B7B8D))),
+                    fontSize: 11,
+                    letterSpacing: 1,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.grey)),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -719,7 +752,7 @@ class _BookAppointmentSheetState extends State<_BookAppointmentSheet> {
                   color: AppTheme.success,
                   onTap: () => setState(() => _paymentMethod = 'cash'),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 12),
                 _AndroidPaymentChip(
                   icon: Icons.qr_code_2_rounded,
                   label: 'UPI',
@@ -728,7 +761,7 @@ class _BookAppointmentSheetState extends State<_BookAppointmentSheet> {
                   color: AppTheme.primary,
                   onTap: () => setState(() => _paymentMethod = 'upi'),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 12),
                 _AndroidPaymentChip(
                   icon: Icons.credit_card_rounded,
                   label: 'Card',
@@ -740,9 +773,9 @@ class _BookAppointmentSheetState extends State<_BookAppointmentSheet> {
               ],
             ),
           ],
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           SizedBox(
-            height: 56,
+            height: 60,
             child: ElevatedButton(
               onPressed: resolvedDoctor == null
                   ? null
@@ -762,7 +795,7 @@ class _BookAppointmentSheetState extends State<_BookAppointmentSheet> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                             content: Text(
-                                'Token #${appt.tokenNumber} booked for ${widget.patient.name}'),
+                                '✅ Token #${appt.tokenNumber} issued for ${widget.patient.name}'),
                             backgroundColor: AppTheme.success),
                       );
                     },
@@ -773,11 +806,11 @@ class _BookAppointmentSheetState extends State<_BookAppointmentSheet> {
                     borderRadius: BorderRadius.circular(16)),
                 elevation: 0,
               ),
-              child: const Text('Confirm Booking',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              child: const Text('CONFIRM & ISSUE TOKEN',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1)),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
         ],
       ),
     );

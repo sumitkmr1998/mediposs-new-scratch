@@ -169,26 +169,27 @@ class _UserFormSheetState extends State<_UserFormSheet> {
       maxLines: maxLines,
       textInputAction: textInputAction,
       validator: validator,
+      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
       decoration: InputDecoration(
-        labelText: labelText,
-        labelStyle: TextStyle(color: context.textMutedColor),
+        labelText: labelText.toUpperCase(),
+        labelStyle: TextStyle(color: context.textMutedColor, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.8),
         prefixIcon: prefixIcon != null
-            ? Icon(prefixIcon, color: AppTheme.primaryLight)
+            ? Icon(prefixIcon, color: AppTheme.primaryLight, size: 20)
             : null,
         suffixText: suffixText,
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide:
-                BorderSide(color: context.borderColor.withValues(alpha: 0.5))),
+                BorderSide(color: context.borderColor.withValues(alpha: 0.3))),
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide:
-                BorderSide(color: context.borderColor.withValues(alpha: 0.5))),
+                BorderSide(color: context.borderColor.withValues(alpha: 0.3))),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: AppTheme.primary, width: 2)),
         filled: true,
-        fillColor: Theme.of(context).scaffoldBackgroundColor,
+        fillColor: context.textMutedColor.withValues(alpha: 0.03),
         isDense: true,
       ),
     );
@@ -197,27 +198,29 @@ class _UserFormSheetState extends State<_UserFormSheet> {
   Widget _buildFormSection(
       {required String title, required List<Widget> children}) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
+        color: context.surfaceColor.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
-        border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+        border: Border.all(color: context.borderColor.withValues(alpha: 0.3)),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
           title: Text(
-            title,
+            title.toUpperCase(),
             style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 14,
+                fontWeight: FontWeight.w900,
+                fontSize: 12,
+                letterSpacing: 1,
                 color: AppTheme.primaryLight),
           ),
           children: children,
@@ -231,14 +234,14 @@ class _UserFormSheetState extends State<_UserFormSheet> {
     return SwitchListTile(
       title: Text(title,
           style:
-              TextStyle(color: context.textColor, fontWeight: FontWeight.w600)),
+              TextStyle(color: context.textColor, fontWeight: FontWeight.w800, fontSize: 14)),
       subtitle: Text(subtitle,
-          style: TextStyle(color: context.textMutedColor, fontSize: 12)),
+          style: TextStyle(color: context.textMutedColor, fontSize: 11, fontWeight: FontWeight.w600)),
       value: value,
-      activeColor: AppTheme.primaryLight,
-      activeTrackColor: AppTheme.primary.withValues(alpha: 0.3),
+      activeColor: AppTheme.success,
+      activeTrackColor: AppTheme.success.withValues(alpha: 0.2),
       inactiveThumbColor: context.textMutedColor,
-      inactiveTrackColor: context.borderColor,
+      inactiveTrackColor: context.borderColor.withValues(alpha: 0.3),
       onChanged: onChanged,
     );
   }

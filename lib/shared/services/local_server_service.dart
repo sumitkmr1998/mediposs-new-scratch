@@ -225,6 +225,21 @@ class LocalServerService {
             ..sellingPrice = (item['sellingPrice'] as num).toDouble()
             ..mainStock = item['mainStock']
             ..storeStock = item['storeStock'];
+
+          // Sync batches
+          if (item['batches'] != null) {
+            existing.batches.clear();
+            for (var bItem in item['batches']) {
+              existing.batches.add(MedicineBatch(
+                id: 0,
+                batchNo: bItem['batchNo'] ?? '',
+                expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now(),
+                mainStock: bItem['mainStock'] ?? 0,
+                storeStock: bItem['storeStock'] ?? 0,
+              ));
+            }
+          }
+
           ObjectBoxService.instance.medicineBox.put(existing);
           upserted++;
         }
@@ -240,6 +255,17 @@ class LocalServerService {
           storeStock: item['storeStock'] ?? 0,
           updatedAt: DateTime.tryParse(item['updatedAt'] ?? ''),
         );
+        if (item['batches'] != null) {
+          for (var bItem in item['batches']) {
+            m.batches.add(MedicineBatch(
+              id: 0,
+              batchNo: bItem['batchNo'] ?? '',
+              expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now(),
+              mainStock: bItem['mainStock'] ?? 0,
+              storeStock: bItem['storeStock'] ?? 0,
+            ));
+          }
+        }
         ObjectBoxService.instance.medicineBox.put(m);
         upserted++;
       }
@@ -271,6 +297,19 @@ class LocalServerService {
           ..storeStock = item['storeStock'] ?? 0
           ..lowStockThreshold = item['lowStockThreshold'] ?? 5
           ..updatedAt = DateTime.now();
+
+        if (item['batches'] != null) {
+          existing.batches.clear();
+          for (var bItem in item['batches']) {
+            existing.batches.add(MedicineBatch(
+              id: 0,
+              batchNo: bItem['batchNo'] ?? '',
+              expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now(),
+              mainStock: bItem['mainStock'] ?? 0,
+              storeStock: bItem['storeStock'] ?? 0,
+            ));
+          }
+        }
         box.put(existing);
       } else {
         final m = Medicine(
@@ -284,6 +323,17 @@ class LocalServerService {
           storeStock: item['storeStock'] ?? 0,
           lowStockThreshold: item['lowStockThreshold'] ?? 5,
         );
+        if (item['batches'] != null) {
+          for (var bItem in item['batches']) {
+            m.batches.add(MedicineBatch(
+              id: 0,
+              batchNo: bItem['batchNo'] ?? '',
+              expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now(),
+              mainStock: bItem['mainStock'] ?? 0,
+              storeStock: bItem['storeStock'] ?? 0,
+            ));
+          }
+        }
         box.put(m);
       }
 

@@ -114,34 +114,41 @@ class OpdReportAndroid extends StatelessWidget {
                     padding: const EdgeInsets.all(16),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: context.surfaceColor,
-                        borderRadius: BorderRadius.circular(16),
+                        color: context.surfaceColor.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.03),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
                           ),
                         ],
                         border: Border.all(
-                            color: context.borderColor.withValues(alpha: 0.5)),
+                            color: context.borderColor.withValues(alpha: 0.3)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Padding(
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(20),
                             child: Row(
                               children: [
-                                const Icon(Icons.analytics,
-                                    color: AppTheme.primary),
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primary.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(Icons.analytics_rounded,
+                                      color: AppTheme.primary, size: 20),
+                                ),
                                 const SizedBox(width: 12),
-                                Text('Top Diagnoses Today',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(
-                                            fontWeight: FontWeight.w800)),
+                                const Text('TOP DIAGNOSES',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 1,
+                                        color: AppTheme.primaryLight)),
                               ],
                             ),
                           ),
@@ -204,34 +211,41 @@ class OpdReportAndroid extends StatelessWidget {
                     padding: const EdgeInsets.all(16),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: context.surfaceColor,
-                        borderRadius: BorderRadius.circular(16),
+                        color: context.surfaceColor.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.03),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
                           ),
                         ],
                         border: Border.all(
-                            color: context.borderColor.withValues(alpha: 0.5)),
+                            color: context.borderColor.withValues(alpha: 0.3)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Padding(
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(20),
                             child: Row(
                               children: [
-                                const Icon(Icons.groups,
-                                    color: AppTheme.primary),
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primary.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(Icons.groups_rounded,
+                                      color: AppTheme.primary, size: 20),
+                                ),
                                 const SizedBox(width: 12),
-                                Text('Per Doctor Stats',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(
-                                            fontWeight: FontWeight.w800)),
+                                const Text('PER DOCTOR STATS',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 1,
+                                        color: AppTheme.primaryLight)),
                               ],
                             ),
                           ),
@@ -388,7 +402,7 @@ class OpdReportAndroid extends StatelessWidget {
       bg = AppTheme.primaryLight.withValues(alpha: 0.1);
       fg = AppTheme.primaryLight;
     } else if (status == kStatusPharmacy) {
-      bg = Color(0xFF7C3AED).withValues(alpha: 0.1);
+      bg = const Color(0xFF7C3AED).withValues(alpha: 0.1);
       fg = const Color(0xFF7C3AED);
     } else if (status == kStatusDone) {
       bg = AppTheme.success.withValues(alpha: 0.1);
@@ -399,14 +413,16 @@ class OpdReportAndroid extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: fg.withValues(alpha: 0.2)),
       ),
       child: Text(
         status.toUpperCase(),
         style: TextStyle(
           color: fg,
           fontSize: 10,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.5,
         ),
       ),
     );
@@ -428,24 +444,28 @@ class _FilterChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onSelected,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primary : context.surfaceColor,
-          borderRadius: BorderRadius.circular(20),
+          color: isSelected ? AppTheme.primary : context.surfaceColor.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected
                 ? AppTheme.primary
-                : context.borderColor.withValues(alpha: 0.5),
+                : context.borderColor.withValues(alpha: 0.3),
           ),
+          boxShadow: isSelected ? [
+            BoxShadow(color: AppTheme.primary.withValues(alpha: 0.2), blurRadius: 8, offset: const Offset(0, 2))
+          ] : null,
         ),
         child: Text(
-          label,
+          label.toUpperCase(),
           style: TextStyle(
             color: isSelected ? Colors.white : context.textMutedColor,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            fontSize: 13,
+            fontWeight: FontWeight.w900,
+            fontSize: 11,
+            letterSpacing: 0.5,
           ),
         ),
       ),

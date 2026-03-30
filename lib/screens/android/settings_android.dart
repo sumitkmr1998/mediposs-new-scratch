@@ -12,6 +12,7 @@ import '../../theme/app_theme.dart';
 import '../../shared/services/local_server_service.dart';
 import '../../shared/services/printing_service.dart';
 import 'package:printing/printing.dart';
+import 'package:flutter_displaymode/flutter_displaymode.dart';
 
 class SettingsAndroid extends StatefulWidget {
   const SettingsAndroid({super.key});
@@ -35,6 +36,8 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
   String _selectedPrinter = '';
   bool _autoPrint = false;
   String _paperSize = 'A6';
+  List<DisplayMode> _displayModes = [];
+  double _selectedFPS = -1.0;
 
   @override
   void initState() {
@@ -55,8 +58,25 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
     _selectedPrinter = s.defaultPrinterName;
     _autoPrint = s.autoPrintReceipt;
     _paperSize = s.receiptPaperSize;
+    _selectedFPS = s.preferredRefreshRate;
 
     _loadPrinters();
+    _loadDisplayModes();
+  }
+
+  Future<void> _loadDisplayModes() async {
+    if (Platform.isAndroid) {
+      try {
+        final modes = await FlutterDisplayMode.supported;
+        if (mounted) {
+          setState(() {
+            _displayModes = modes;
+          });
+        }
+      } catch (e) {
+        debugPrint('Failed to load display modes: $e');
+      }
+    }
   }
 
   Future<void> _loadPrinters() async {
@@ -88,14 +108,37 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
       ..defaultPrinterName = _selectedPrinter
       ..autoPrintReceipt = _autoPrint
       ..receiptPaperSize = _paperSize
-      ..serverPort = int.tryParse(_portCtrl.text) ?? 8080;
+      ..serverPort = int.tryParse(_portCtrl.text) ?? 8080
+      ..preferredRefreshRate = _selectedFPS;
 
     settingsProv.save(s);
+
+    // Apply FPS immediately on Android
+    if (Platform.isAndroid) {
+      _applyFPS(_selectedFPS);
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
       content: Text('✅ Settings saved'),
       backgroundColor: AppTheme.success,
     ));
+  }
+
+  Future<void> _applyFPS(double fps) async {
+    try {
+      if (fps <= 0.0) {
+        await FlutterDisplayMode.setHighRefreshRate();
+      } else {
+        final modes = await FlutterDisplayMode.supported;
+        final mode = modes.firstWhere(
+          (m) => m.refreshRate.toStringAsFixed(1) == fps.toStringAsFixed(1),
+          orElse: () => modes.first,
+        );
+        await FlutterDisplayMode.setPreferredMode(mode);
+      }
+    } catch (e) {
+      debugPrint('Error applying FPS: $e');
+    }
   }
 
   Future<void> _backupDatabase() async {
@@ -392,6 +435,46 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                       ),
                     ],
                   ),
+                  if (Platform.isAndroid && _displayModes.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Text('Display Refresh Rate',
+                            style: TextStyle(
+                                color: context.textMutedColor,
+                                fontWeight: FontWeight.w600)),
+                        const Spacer(),
+                        DropdownButton<double>(
+                          value: _displayModes.any((m) =>
+                                  m.refreshRate.toStringAsFixed(1) ==
+                                  _selectedFPS.toStringAsFixed(1))
+                              ? _selectedFPS
+                              : -1.0,
+                          dropdownColor: context.surfaceColor,
+                          underline: const SizedBox(),
+                          items: [
+                            const DropdownMenuItem<double>(
+                                value: -1.0, child: Text('Auto (Max)')),
+                            ..._displayModes
+                                .map((m) => m.refreshRate)
+                                .where((rate) => rate > 0.0)
+                                .toSet()
+                                .toList()
+                                .followedBy([]) 
+                                .map((rate) => DropdownMenuItem<double>(
+                                      value: rate,
+                                      child: Text('${rate.toInt()} Hz'),
+                                    ))
+                                .toList()
+                                ..sort((a, b) => b.value!.compareTo(a.value!)),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) setState(() => _selectedFPS = val);
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
               _buildSection(
@@ -448,25 +531,30 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                     children: [
                       Expanded(
                         child: ElevatedButton.icon(
-                          icon: const Icon(Icons.download),
-                          label: const Text('Backup DB'),
-                          style: ElevatedButton.styleFrom(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 16)),
                           onPressed: _backupDatabase,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            elevation: 0,
+                          ),
+                          icon: const Icon(Icons.backup_rounded, size: 20),
+                          label: const Text('BACKUP DB', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5)),
                         ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
                         child: OutlinedButton.icon(
-                          icon:
-                              const Icon(Icons.restore, color: AppTheme.danger),
-                          label: const Text('Restore DB',
-                              style: TextStyle(color: AppTheme.danger)),
-                          style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              side: const BorderSide(color: AppTheme.danger)),
                           onPressed: _restoreDatabase,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.danger,
+                            side: BorderSide(color: AppTheme.danger.withValues(alpha: 0.5)),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          icon: const Icon(Icons.restore_rounded, size: 20),
+                          label: const Text('RESTORE DB', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5)),
                         ),
                       ),
                     ],
@@ -478,35 +566,45 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                   'User Authentication',
                   children: [
                     ...auth.getAllUsers().map((u) => Container(
-                          margin: const EdgeInsets.only(bottom: 8),
+                          margin: const EdgeInsets.only(bottom: 12),
                           decoration: BoxDecoration(
+                            color: context.textMutedColor.withValues(alpha: 0.03),
                             border: Border.all(
                                 color:
-                                    context.borderColor.withValues(alpha: 0.5)),
-                            borderRadius: BorderRadius.circular(12),
+                                    context.borderColor.withValues(alpha: 0.3)),
+                            borderRadius: BorderRadius.circular(16),
                           ),
                           child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor:
-                                  AppTheme.primary.withValues(alpha: 0.15),
-                              child: Text(u.name[0].toUpperCase(),
-                                  style: const TextStyle(
-                                      color: AppTheme.primary,
-                                      fontWeight: FontWeight.bold)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                            leading: Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Center(
+                                child: Text(u.name[0].toUpperCase(),
+                                    style: const TextStyle(
+                                        color: AppTheme.primary,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w900)),
+                              ),
                             ),
                             title: Text(u.name,
                                 style: const TextStyle(
-                                    fontWeight: FontWeight.bold)),
-                            subtitle: Text('Role: ${u.role}',
+                                    fontWeight: FontWeight.w900, fontSize: 15)),
+                            subtitle: Text(u.role.toUpperCase(),
                                 style:
-                                    TextStyle(color: context.textMutedColor)),
+                                    TextStyle(color: context.textMutedColor, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
                             trailing: u.role == 'admin' ||
                                     auth.currentUser?.id == u.id
                                 ? TextButton.icon(
                                     onPressed: () =>
                                         _changePinDialog(context, u, auth),
-                                    icon: const Icon(Icons.password, size: 18),
-                                    label: const Text('Change PIN'),
+                                    style: TextButton.styleFrom(foregroundColor: AppTheme.primary),
+                                    icon: const Icon(Icons.password_rounded, size: 16),
+                                    label: const Text('PIN', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
                                   )
                                 : null,
                           ),
@@ -519,27 +617,32 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
         ),
       ),
       bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.only(left: 20, right: 20, top: 16, bottom: MediaQuery.of(context).padding.bottom + 16),
         decoration: BoxDecoration(
-          color: context.surfaceColor,
+          color: context.surfaceColor.withValues(alpha: 0.9),
+          border: Border(top: BorderSide(color: context.borderColor.withValues(alpha: 0.2))),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, -4),
+              blurRadius: 20,
+              offset: const Offset(0, -8),
             )
           ],
         ),
         child: ElevatedButton(
           onPressed: _save,
           style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              backgroundColor: AppTheme.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              elevation: 0,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12))),
-          child: const Text('Save All Settings',
+                  borderRadius: BorderRadius.circular(16))),
+          child: const Text('SAVE ALL SETTINGS',
               style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1,
                   color: Colors.white)),
         ),
       ),
@@ -549,32 +652,39 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
   Widget _buildSection(String title,
       {required List<Widget> children, bool initiallyExpanded = false}) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
+        color: context.surfaceColor.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
-        border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+        border: Border.all(color: context.borderColor.withValues(alpha: 0.3)),
       ),
       child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          initiallyExpanded: initiallyExpanded,
-          title: Text(
-            title,
-            style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 16,
-                color: AppTheme.primaryLight),
+        data: Theme.of(context).copyWith(
+          dividerColor: Colors.transparent,
+        ),
+        child: RepaintBoundary(
+          child: ExpansionTile(
+            initiallyExpanded: initiallyExpanded,
+            iconColor: AppTheme.primary,
+            collapsedIconColor: context.textMutedColor,
+            title: Text(
+              title.toUpperCase(),
+              style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12,
+                  letterSpacing: 1,
+                  color: AppTheme.primaryLight),
+            ),
+            childrenPadding: const EdgeInsets.all(24).copyWith(top: 0),
+            children: children,
           ),
-          childrenPadding: const EdgeInsets.all(20).copyWith(top: 0),
-          children: children,
         ),
       ),
     );
@@ -585,7 +695,26 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
     return TextField(
       controller: ctrl,
       keyboardType: keyboardType,
-      decoration: InputDecoration(labelText: label, isDense: true),
+      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: context.textMutedColor, fontWeight: FontWeight.w600, fontSize: 13),
+        isDense: true,
+        filled: true,
+        fillColor: context.textMutedColor.withValues(alpha: 0.03),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: context.borderColor.withValues(alpha: 0.3)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: context.borderColor.withValues(alpha: 0.3)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
+        ),
+      ),
     );
   }
 
@@ -594,28 +723,37 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text('Change PIN — ${user.name}'),
-        content: TextField(
-          controller: pinCtrl,
-          obscureText: true,
-          keyboardType: TextInputType.number,
-          maxLength: 6,
-          decoration: const InputDecoration(labelText: 'New PIN'),
+        backgroundColor: context.surfaceColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text('CHANGE PIN: ${user.name.toUpperCase()}',
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Enter a new 4 to 6 digit security PIN for this user.',
+                style: TextStyle(fontSize: 13, color: Colors.grey)),
+            const SizedBox(height: 20),
+            _field(pinCtrl, 'NEW PIN', keyboardType: TextInputType.number),
+          ],
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
+              child: Text('CANCEL', style: TextStyle(color: context.textMutedColor, fontWeight: FontWeight.w900))),
           ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
               onPressed: () {
                 if (pinCtrl.text.length >= 4) {
                   auth.updatePin(user.id, pinCtrl.text);
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('PIN updated')));
+                      const SnackBar(content: Text('✅ PIN updated successfully')));
                 }
               },
-              child: const Text('Update')),
+              child: const Text('UPDATE PIN', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white))),
         ],
       ),
     );

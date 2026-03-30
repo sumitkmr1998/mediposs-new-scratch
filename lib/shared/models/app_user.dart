@@ -176,6 +176,7 @@ class AppSettings {
   String? autoLoginPin; // Saved PIN for auto-login JWT refresh on Android
   int lowStockThreshold;
   int nearExpiryThresholdDays;
+  double preferredRefreshRate; // -1.0 = Auto/Max
 
   AppSettings({
     this.id = 0,
@@ -196,5 +197,6 @@ class AppSettings {
     this.autoLoginPin,
     this.lowStockThreshold = 10,
     this.nearExpiryThresholdDays = 90,
+    this.preferredRefreshRate = -1.0,
   });
 }

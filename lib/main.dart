@@ -18,9 +18,32 @@ import 'screens/login_screen.dart';
 import 'screens/app_shell.dart';
 import 'screens/connection_screen.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:io';
+import 'shared/services/local_server_service.dart';
+import 'shared/services/discovery_service.dart';
+import 'package:flutter_displaymode/flutter_displaymode.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Set high refresh rate for Android
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    try {
+      final preferredRate = ObjectBoxService.instance.settings.preferredRefreshRate;
+      if (preferredRate <= 0.0) {
+        await FlutterDisplayMode.setHighRefreshRate();
+      } else {
+        final modes = await FlutterDisplayMode.supported;
+        final mode = modes.firstWhere(
+          (m) => m.refreshRate.toStringAsFixed(1) == preferredRate.toStringAsFixed(1),
+          orElse: () => modes.first,
+        );
+        await FlutterDisplayMode.setPreferredMode(mode);
+      }
+    } catch (e) {
+      debugPrint('Failed to set refresh rate: $e');
+    }
+  }
 
   // 1. Initialize DB
   await ObjectBoxService.init();
@@ -52,6 +75,11 @@ void main() async {
           defaultTargetPlatform == TargetPlatform.iOS);
   if (isMobile) {
     await syncService.tryAutoConnect();
+  } else if (Platform.isWindows) {
+    // Start Hub server immediately on Windows launch (pre-login)
+    await LocalServerService.instance.start();
+    await DiscoveryService.startAdvertising(
+        ObjectBoxService.instance.settings.serverPort);
   }
 
   // Load initial data

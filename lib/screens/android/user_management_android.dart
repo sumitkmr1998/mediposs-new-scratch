@@ -80,38 +80,43 @@ class _UserManagementAndroidState extends State<UserManagementAndroid> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
+        color: context.surfaceColor.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
-        border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+        border: Border.all(color: context.borderColor.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             child: Row(
               children: [
                 Container(
-                  width: 50,
-                  height: 50,
+                  width: 56,
+                  height: 56,
                   decoration: BoxDecoration(
-                    color: AppTheme.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
+                    gradient: LinearGradient(
+                      colors: [AppTheme.primary.withValues(alpha: 0.2), AppTheme.primary.withValues(alpha: 0.05)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(18),
                   ),
                   child: Center(
                     child: Text(
                       user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
                       style: const TextStyle(
-                          color: AppTheme.primary,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900),
+                          color: AppTheme.primaryLight,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -1),
                     ),
                   ),
                 ),
@@ -122,78 +127,82 @@ class _UserManagementAndroidState extends State<UserManagementAndroid> {
                     children: [
                       Text(user.name,
                           style: const TextStyle(
-                              fontWeight: FontWeight.w800, fontSize: 16)),
+                              fontWeight: FontWeight.w900, fontSize: 17, letterSpacing: -0.2)),
                       const SizedBox(height: 4),
-                      Text('${user.role}  •  PIN: ${user.pin}',
-                          style: TextStyle(
-                              color: context.textMutedColor,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500)),
+                      Row(
+                        children: [
+                          _Badge(
+                            label: user.role.toUpperCase(),
+                            color: isAdmin ? AppTheme.primaryLight : context.textMutedColor,
+                            isGlass: true,
+                          ),
+                          const SizedBox(width: 8),
+                          Text('PIN: ${user.pin}',
+                              style: TextStyle(
+                                  color: context.textMutedColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1)),
+                        ],
+                      ),
                     ],
                   ),
                 ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: user.isActive
-                        ? AppTheme.success.withValues(alpha: 0.1)
-                        : AppTheme.danger.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    user.isActive ? 'Active' : 'Inactive',
-                    style: TextStyle(
-                      color: user.isActive ? AppTheme.success : AppTheme.danger,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
+                _StatusBadge(isActive: user.isActive),
               ],
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: 6,
+              runSpacing: 6,
               children: [
                 _permChip('POS', user.canAccessPOS || isAdmin),
-                _permChip('Inventory', user.canEditInventory || isAdmin),
+                _permChip('INVENTORY', user.canEditInventory || isAdmin),
                 _permChip('OPD', user.canAccessOPD || isAdmin),
-                _permChip('Reports',
-                    user.canViewDashboard || user.canViewOpdReports || isAdmin),
-                _permChip('Settings', user.canAccessSettings || isAdmin),
+                _permChip('REPORTS', user.canViewDashboard || user.canViewOpdReports || isAdmin),
+                _permChip('SETTINGS', user.canAccessSettings || isAdmin),
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           Container(
-            padding:
-                const EdgeInsets.only(top: 8, bottom: 8, right: 8, left: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(
-                    color: context.borderColor.withValues(alpha: 0.3)),
-              ),
+              color: context.textMutedColor.withValues(alpha: 0.03),
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+              border: Border(top: BorderSide(color: context.borderColor.withValues(alpha: 0.2))),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Permissions & Access',
+                const Text('STAFF ACCESS PERMISSIONS',
                     style: TextStyle(
-                        color: context.textMutedColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600)),
-                IconButton(
-                  icon: const Icon(Icons.edit_rounded, size: 20),
-                  color: const Color(0xFF6366F1),
-                  tooltip: 'Edit Permissions',
-                  onPressed: () {
-                    AndroidUserDialog.showUserSheet(context,
-                        existingUser: user);
-                  },
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1,
+                        color: AppTheme.primaryLight)),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => AndroidUserDialog.showUserSheet(context, existingUser: user),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.edit_rounded, size: 14, color: AppTheme.primary),
+                          SizedBox(width: 6),
+                          Text('EDIT', style: TextStyle(color: AppTheme.primary, fontSize: 11, fontWeight: FontWeight.w900)),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -209,28 +218,102 @@ class _UserManagementAndroidState extends State<UserManagementAndroid> {
       decoration: BoxDecoration(
         color: val
             ? AppTheme.success.withValues(alpha: 0.08)
-            : context.textMutedColor.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(20),
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: val
-              ? AppTheme.success.withValues(alpha: 0.3)
-              : context.borderColor.withValues(alpha: 0.5),
+              ? AppTheme.success.withValues(alpha: 0.2)
+              : context.borderColor.withValues(alpha: 0.2),
         ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            val ? Icons.check_circle_rounded : Icons.cancel_rounded,
-            color: val ? AppTheme.success : context.textMutedColor,
-            size: 14,
+            val ? Icons.check_circle_rounded : Icons.lock_outline_rounded,
+            color: val ? AppTheme.success : context.textMutedColor.withValues(alpha: 0.4),
+            size: 12,
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 6),
           Text(label,
               style: TextStyle(
-                  color: val ? AppTheme.success : context.textMutedColor,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700)),
+                  color: val ? AppTheme.success.withValues(alpha: 0.9) : context.textMutedColor.withValues(alpha: 0.5),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.5)),
+        ],
+      ),
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  final String label;
+  final Color color;
+  final bool isGlass;
+
+  const _Badge({required this.label, required this.color, this.isGlass = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: isGlass ? color.withValues(alpha: 0.08) : color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color.withValues(alpha: 0.9),
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final bool isActive;
+  const _StatusBadge({required this.isActive});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isActive ? AppTheme.success : AppTheme.danger;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 4, spreadRadius: 1),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            isActive ? 'ACTIVE' : 'INACTIVE',
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.5,
+            ),
+          ),
         ],
       ),
     );

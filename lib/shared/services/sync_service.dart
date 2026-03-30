@@ -219,9 +219,24 @@ class SyncService extends ChangeNotifier {
               ..storeStock = item['storeStock'] ?? 0
               ..lowStockThreshold = item['lowStockThreshold'] ?? 10
               ..updatedAt = updatedAt;
+
+            // Update Batches
+            if (item['batches'] != null) {
+              existing.batches.clear();
+              for (var bItem in item['batches']) {
+                existing.batches.add(MedicineBatch(
+                  id: 0,
+                  batchNo: bItem['batchNo'] ?? '',
+                  expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now(),
+                  mainStock: bItem['mainStock'] ?? 0,
+                  storeStock: bItem['storeStock'] ?? 0,
+                ));
+              }
+            }
+
             box.put(existing);
           } else {
-            box.put(Medicine(
+            final m = Medicine(
               id: 0, // Let ObjectBox auto-assign — never force Hub IDs
               name: name,
               barcode: barcode,
@@ -233,7 +248,19 @@ class SyncService extends ChangeNotifier {
               storeStock: item['storeStock'] ?? 0,
               lowStockThreshold: item['lowStockThreshold'] ?? 10,
               updatedAt: updatedAt,
-            ));
+            );
+            if (item['batches'] != null) {
+              for (var bItem in item['batches']) {
+                m.batches.add(MedicineBatch(
+                  id: 0,
+                  batchNo: bItem['batchNo'] ?? '',
+                  expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now(),
+                  mainStock: bItem['mainStock'] ?? 0,
+                  storeStock: bItem['storeStock'] ?? 0,
+                ));
+              }
+            }
+            box.put(m);
           }
         }
         // Remove locally any medicine not in Hub (deleted on Hub)
@@ -1059,6 +1086,15 @@ class SyncService extends ChangeNotifier {
         'storeStock': m.storeStock,
         'lowStockThreshold': m.lowStockThreshold,
         'updatedAt': m.updatedAt.toIso8601String(),
+        'batches': m.batches
+            .map((b) => {
+                  'id': 0, // Let server assign
+                  'batchNo': b.batchNo,
+                  'expiryDate': b.expiryDate.toIso8601String(),
+                  'mainStock': b.mainStock,
+                  'storeStock': b.storeStock,
+                })
+            .toList(),
       });
 
       final res = await http.post(url, headers: _authHeaders(), body: body);

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:ui';
 
 import 'package:provider/provider.dart';
 import '../../shared/providers/inventory_provider.dart';
@@ -193,8 +194,7 @@ class _PosAndroidState extends State<PosAndroid> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('New Sale'),
-        backgroundColor:
-            cart.isReturnMode ? AppTheme.danger.withValues(alpha: 0.8) : null,
+        backgroundColor: cart.isReturnMode ? AppTheme.danger.withValues(alpha: 0.8) : null,
         actions: [
           Row(
             children: [
@@ -203,8 +203,7 @@ class _PosAndroidState extends State<PosAndroid> {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color:
-                      cart.isReturnMode ? Colors.white : context.textMutedColor,
+                  color: cart.isReturnMode ? Colors.white : context.textMutedColor,
                 ),
               ),
               Switch(
@@ -233,13 +232,10 @@ class _PosAndroidState extends State<PosAndroid> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Theme.of(context).scaffoldBackgroundColor,
+              color: context.surfaceColor.withValues(alpha: 0.8),
+              border: Border(bottom: BorderSide(color: context.borderColor.withValues(alpha: 0.2))),
               boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
+                BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4)),
               ],
             ),
             child: Column(
@@ -248,33 +244,23 @@ class _PosAndroidState extends State<PosAndroid> {
                 if (cart.patientName.isNotEmpty)
                   Container(
                     margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
                       color: AppTheme.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: AppTheme.primary.withValues(alpha: 0.3)),
+                      border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.person,
-                            color: AppTheme.primary, size: 20),
+                        const Icon(Icons.person, color: AppTheme.primary, size: 20),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Patient attached',
-                                  style: TextStyle(
-                                      fontSize: 10,
-                                      color: context.textMutedColor,
-                                      fontWeight: FontWeight.bold)),
-                              Text(
-                                  '${cart.patientName} ${cart.patientPhone.isNotEmpty ? ' • ${cart.patientPhone}' : ''}',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      color: AppTheme.primaryLight)),
+                              Text('Patient attached', style: TextStyle(fontSize: 10, color: context.textMutedColor, fontWeight: FontWeight.bold)),
+                              Text('${cart.patientName} ${cart.patientPhone.isNotEmpty ? ' • ${cart.patientPhone}' : ''}',
+                                  style: const TextStyle(fontWeight: FontWeight.w800, color: AppTheme.primaryLight)),
                             ],
                           ),
                         ),
@@ -283,13 +269,11 @@ class _PosAndroidState extends State<PosAndroid> {
                             cart.setPatient(name: '', phone: '', id: 0);
                             _patientCtrl.clear();
                           },
-                          child: const Icon(Icons.close_rounded,
-                              color: AppTheme.danger, size: 20),
+                          child: const Icon(Icons.close_rounded, color: AppTheme.danger, size: 20),
                         ),
                       ],
                     ),
                   ),
-                // Medicine Search
                 Autocomplete<Medicine>(
                   displayStringForOption: (m) => m.name,
                   optionsBuilder: (TextEditingValue val) {
@@ -303,15 +287,13 @@ class _PosAndroidState extends State<PosAndroid> {
                   onSelected: (m) {
                     cart.addItem(m);
                     _searchCtrl.clear();
-                    _autocompleteCtrl
-                        ?.clear(); // Immediately clear the visual input
+                    _autocompleteCtrl?.clear();
                     _currentSearchFocusNode?.requestFocus();
                     _onMedicineAddedToCart(m.id);
                   },
                   fieldViewBuilder: (ctx, ctrl, focusNode, onFieldSubmitted) {
-                    _currentSearchFocusNode =
-                        focusNode; // Save a reference so we can focus it later
-                    _autocompleteCtrl = ctrl; // Save reference to clear later
+                    _currentSearchFocusNode = focusNode;
+                    _autocompleteCtrl = ctrl;
                     _searchCtrl.text = ctrl.text;
                     ctrl.addListener(() {
                       if (ctrl.text != _searchCtrl.text) {
@@ -320,44 +302,35 @@ class _PosAndroidState extends State<PosAndroid> {
                     });
                     return TextField(
                       controller: ctrl,
-                      focusNode:
-                          focusNode, // CRITICAL: Use Autocomplete's focus node!
-                      autofocus: true,
+                      focusNode: focusNode,
                       decoration: InputDecoration(
-                        hintText: 'Search medicine or scan barcode...',
-                        prefixIcon: const Icon(Icons.search),
+                        hintText: 'Search or Scan Barcode',
+                        prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.primary),
                         suffixIcon: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.person_add_alt_1),
-                              tooltip: 'Select Patient',
+                              icon: const Icon(Icons.person_search_rounded),
                               onPressed: _showPatientProactiveSearch,
                               color: AppTheme.primary,
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.receipt_long),
-                              tooltip: 'Load Prescription',
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content: Text(
-                                          'Load Prescription feature coming soon')),
-                                );
-                              },
-                              color: AppTheme.primary,
-                            ),
-                            const SizedBox(width: 8),
                           ],
                         ),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: context.borderColor),
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide(color: context.borderColor.withValues(alpha: 0.5)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide(color: context.borderColor.withValues(alpha: 0.3)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: const BorderSide(color: AppTheme.primary, width: 2),
                         ),
                         filled: true,
                         fillColor: context.surfaceColor,
-                        contentPadding:
-                            const EdgeInsets.symmetric(horizontal: 16),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       ),
                     );
                   },
@@ -376,46 +349,26 @@ class _PosAndroidState extends State<PosAndroid> {
                             shrinkWrap: true,
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             itemCount: options.length,
-                            separatorBuilder: (_, __) =>
-                                const Divider(height: 1),
+                            separatorBuilder: (_, __) => const Divider(height: 1),
                             itemBuilder: (ctx, i) {
                               final m = options.elementAt(i);
                               return ListTile(
                                 leading: Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color:
-                                        AppTheme.primary.withValues(alpha: 0.1),
+                                    color: AppTheme.primary.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
-                                  child: const Icon(Icons.medication,
-                                      color: AppTheme.primary, size: 20),
+                                  child: const Icon(Icons.medication, color: AppTheme.primary, size: 20),
                                 ),
-                                title: Text(
-                                  m.name,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold),
-                                ),
+                                title: Text(m.name, style: const TextStyle(fontWeight: FontWeight.bold)),
                                 subtitle: Text(m.unit),
                                 trailing: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
-                                    Text(
-                                      '₹${m.sellingPrice.toStringAsFixed(0)}',
-                                      style: const TextStyle(
-                                          color: AppTheme.primaryLight,
-                                          fontWeight: FontWeight.bold),
-                                    ),
-                                    Text(
-                                      'Stock: ${m.storeStock}',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: m.isLowStock
-                                            ? AppTheme.warning
-                                            : context.textMutedColor,
-                                      ),
-                                    ),
+                                    Text('₹${m.sellingPrice.toStringAsFixed(0)}', style: const TextStyle(color: AppTheme.primaryLight, fontWeight: FontWeight.bold)),
+                                    Text('Stock: ${m.storeStock}', style: TextStyle(fontSize: 11, color: m.isLowStock ? AppTheme.warning : context.textMutedColor)),
                                   ],
                                 ),
                                 onTap: () => onSelected(m),
@@ -430,33 +383,21 @@ class _PosAndroidState extends State<PosAndroid> {
               ],
             ),
           ),
-
-          // 2. Scrollable Cart & Checkout Section
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // --- CART LIST ---
                   if (cart.items.isEmpty)
                     Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 32),
+                      padding: const EdgeInsets.symmetric(vertical: 64),
                       child: Center(
                         child: Column(
                           children: [
-                            Icon(Icons.shopping_basket_outlined,
-                                size: 64, color: context.borderColor),
+                            Icon(Icons.shopping_basket_outlined, size: 80, color: context.borderColor.withValues(alpha: 0.3)),
                             const SizedBox(height: 16),
-                            Text('No items in cart',
-                                style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: context.textMutedColor)),
-                            const SizedBox(height: 8),
-                            Text('Search to add items',
-                                style:
-                                    TextStyle(color: context.textMutedColor)),
+                            Text('YOUR CART IS EMPTY', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: context.textMutedColor, letterSpacing: 1.5)),
                           ],
                         ),
                       ),
@@ -466,358 +407,394 @@ class _PosAndroidState extends State<PosAndroid> {
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: cart.items.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      separatorBuilder: (_, __) => Divider(height: 1, color: context.borderColor.withValues(alpha: 0.1)),
                       itemBuilder: (ctx, i) {
                         final item = cart.items[i];
-                        return Container(
-                          decoration: BoxDecoration(
-                            color: context.surfaceColor,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.03),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                            border: Border.all(
-                                color:
-                                    context.borderColor.withValues(alpha: 0.5)),
-                          ),
-                          padding: const EdgeInsets.all(12),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              // Qty Input
-                              Container(
-                                width: 50,
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  color:
-                                      AppTheme.primary.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Center(
-                                  child: TextField(
-                                    focusNode:
-                                        _getQtyFocusNode(item.medicine.id),
-                                    controller: _getQtyController(
-                                        item.medicine.id, item.qty),
-                                    keyboardType: TextInputType.number,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                        color: AppTheme.primary),
-                                    decoration: const InputDecoration(
-                                        border: InputBorder.none,
-                                        isDense: true,
-                                        contentPadding: EdgeInsets.zero),
-                                    onChanged: (val) {
-                                      final newQty = int.tryParse(val);
-                                      if (newQty != null && newQty > 0) {
-                                        int finalQty = newQty;
-                                        if (!cart.isReturnMode &&
-                                            finalQty >
-                                                item.medicine.storeStock) {
-                                          finalQty = item.medicine.storeStock;
-                                          final ctrl = _getQtyController(
-                                              item.medicine.id, item.qty);
-                                          ctrl.text = finalQty.toString();
-                                          ctrl.selection =
-                                              TextSelection.collapsed(
-                                                  offset: finalQty
-                                                      .toString()
-                                                      .length);
-                                        }
-                                        cart.updateQty(
-                                            item.medicine.id, finalQty);
-                                      }
-                                    },
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              // Item Details
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(item.medicine.name,
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                        '₹${item.medicine.sellingPrice.toStringAsFixed(2)} / ${item.medicine.unit}',
-                                        style: TextStyle(
-                                            fontSize: 12,
-                                            color: context.textMutedColor)),
-                                  ],
-                                ),
-                              ),
-                              // Price & Remove
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text('₹${item.lineTotal.toStringAsFixed(2)}',
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 16)),
-                                  const SizedBox(height: 8),
-                                  InkWell(
-                                    onTap: () =>
-                                        cart.removeItem(item.medicine.id),
-                                    child: const Text('Remove',
-                                        style: TextStyle(
-                                            color: AppTheme.danger,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold)),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
+                        return _CartItemTile(
+                          item: item,
+                          qtyFocusNode: _getQtyFocusNode(item.medicine.id),
+                          qtyController: _getQtyController(item.medicine.id, item.qty),
+                          onQtyChanged: (val) {
+                            final newQty = int.tryParse(val);
+                            if (newQty != null && newQty > 0) {
+                              cart.updateQty(item.medicine.id, newQty);
+                            }
+                          },
+                          onRemove: () => cart.removeItem(item.medicine.id),
                         );
                       },
                     ),
-
                   const SizedBox(height: 24),
-                  const Divider(),
-                  const SizedBox(height: 12),
-
-                  // --- CHECKOUT PANEL ---
-                  Container(
-                    decoration: BoxDecoration(
-                      color: context.surfaceColor,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.03),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                      border: Border.all(
-                          color: context.borderColor.withValues(alpha: 0.5)),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text('Checkout',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                    color: AppTheme.primaryLight)),
-                        const SizedBox(height: 12),
-
-                        // Discount
-                        TextField(
-                          controller: _discountCtrl,
-                          focusNode: _discountFocus,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: 'Discount (₹)',
-                            prefixIcon: const Icon(Icons.discount_outlined),
-                            border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12)),
-                            isDense: true,
-                            contentPadding:
-                                const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          onChanged: (val) {
-                            final discount = double.tryParse(val) ?? 0;
-                            cart.setDiscount(discount);
-                          },
-                          onSubmitted: (_) => _paymentFocus.requestFocus(),
-                        ),
-                        const SizedBox(height: 12),
-
-                        // Payment Method
-                        Text('Payment Method',
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: context.textMutedColor)),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            _PayChip('cash', 'Cash', _paymentMethod,
-                                (v) => setState(() => _paymentMethod = v)),
-                            _PayChip('upi', 'UPI', _paymentMethod,
-                                (v) => setState(() => _paymentMethod = v)),
-                            _PayChip('card', 'Card', _paymentMethod,
-                                (v) => setState(() => _paymentMethod = v)),
-                            _PayChip('mixed', 'Mixed', _paymentMethod,
-                                (v) => setState(() => _paymentMethod = v)),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                      child: Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: context.surfaceColor.withValues(alpha: 0.7),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 20, offset: const Offset(0, 10)),
                           ],
                         ),
-                        if (_paymentMethod == 'mixed') ...[
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                  child: _MixedField(
-                                      label: 'Cash',
-                                      controller: _mixCashCtrl,
-                                      focusNode: _mixCashFocus,
-                                      onSubmitted: () =>
-                                          _mixUpiFocus.requestFocus())),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                  child: _MixedField(
-                                      label: 'UPI',
-                                      controller: _mixUpiCtrl,
-                                      focusNode: _mixUpiFocus,
-                                      onSubmitted: () =>
-                                          _mixCardFocus.requestFocus())),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                  child: _MixedField(
-                                      label: 'Card',
-                                      controller: _mixCardCtrl,
-                                      focusNode: _mixCardFocus,
-                                      onSubmitted: () => _doCheckout(cart))),
-                            ],
-                          ),
-                        ],
-
-                        const SizedBox(height: 16),
-
-                        // Summary & Total
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                                color: AppTheme.primary.withValues(alpha: 0.2)),
-                          ),
-                          child: Column(
-                            children: [
-                              _TotalRow('Subtotal',
-                                  '₹${cart.subtotal.toStringAsFixed(2)}'),
-                              if (cart.discountAmount > 0)
-                                _TotalRow('Discount',
-                                    '-₹${cart.discountAmount.toStringAsFixed(2)}',
-                                    color: AppTheme.danger),
-                              if (cart.taxAmount > 0)
-                                _TotalRow('Tax',
-                                    '₹${cart.taxAmount.toStringAsFixed(2)}'),
-                              const Divider(),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text('TOTAL DUE',
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 14)),
-                                  Text(
-                                    cart.isReturnMode
-                                        ? '-₹${cart.totalRounded.toStringAsFixed(2)}'
-                                        : '₹${cart.totalRounded.toStringAsFixed(2)}',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 22,
-                                      color: cart.isReturnMode
-                                          ? AppTheme.danger
-                                          : AppTheme.primaryLight,
-                                    ),
-                                  ),
-                                ],
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text('TRANSACTION SUMMARY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: AppTheme.primaryLight, letterSpacing: 1)),
+                            const SizedBox(height: 16),
+                            _SummaryField(label: 'Subtotal', value: '₹${cart.subtotal.toStringAsFixed(2)}'),
+                            if (cart.discountAmount > 0)
+                              _SummaryField(label: 'Discount', value: '-₹${cart.discountAmount.toStringAsFixed(2)}', color: AppTheme.danger),
+                            const Divider(height: 32),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('TOTAL DUE', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                                Text('₹${cart.totalRounded.toStringAsFixed(0)}', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: AppTheme.primaryLight, letterSpacing: -1)),
+                              ],
+                            ),
+                            const SizedBox(height: 24),
+                            _PaymentSelector(
+                              selected: _paymentMethod,
+                              onSelected: (val) => setState(() => _paymentMethod = val),
+                            ),
+                            if (_paymentMethod == 'mixed') ...[
+                              const SizedBox(height: 16),
+                              _MixedPaymentInputs(
+                                cashCtrl: _mixCashCtrl,
+                                upiCtrl: _mixUpiCtrl,
+                                cardCtrl: _mixCardCtrl,
+                                cashFocus: _mixCashFocus,
+                                upiFocus: _mixUpiFocus,
+                                cardFocus: _mixCardFocus,
                               ),
                             ],
-                          ),
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        // Main Checkout Button
-                        SizedBox(
-                          height: 48,
-                          child: ElevatedButton.icon(
-                            onPressed: cart.items.isEmpty
-                                ? null
-                                : () => _doCheckout(cart),
-                            icon: Icon(
-                                cart.isReturnMode
-                                    ? Icons.assignment_return
-                                    : Icons.check_circle_outline,
-                                size: 20),
-                            label: Text(
-                              cart.isReturnMode
-                                  ? 'PROCESS RETURN'
-                                  : 'COMPLETE SALE',
-                              style: const TextStyle(
-                                  fontSize: 14, fontWeight: FontWeight.bold),
+                            const SizedBox(height: 24),
+                            SizedBox(
+                              height: 60,
+                              child: ElevatedButton(
+                                onPressed: cart.items.isEmpty ? null : () => _doCheckout(cart),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  padding: EdgeInsets.zero,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                ),
+                                child: Ink(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: cart.isReturnMode
+                                        ? [AppTheme.danger, const Color(0xFFB91C1C)]
+                                        : [AppTheme.primary, AppTheme.primaryLight],
+                                    ),
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                  child: Container(
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      cart.isReturnMode ? 'PROCESS RETURN' : 'COMPLETE CHECKOUT',
+                                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1.5, color: Colors.white),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: cart.isReturnMode
-                                  ? AppTheme.danger
-                                  : AppTheme.primary,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
-                            ),
-                          ),
+                          ],
                         ),
-                        const SizedBox(
-                            height:
-                                24), // Extra padding for bottom reachability
-                      ], // closes Checkout Column children
-                    ), // closes Checkout Column
-                  ), // closes Checkout Container
-                ], // closes Outer Column children
-              ), // closes Outer Column
-            ), // closes SingleChildScrollView
-          ), // closes Expanded
-        ], // closes Main Column children
-      ), // closes Main Column
-    ); // closes Scaffold
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 48),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryField extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? color;
+
+  const _SummaryField({
+    required this.label,
+    required this.value,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: context.textMutedColor,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              color: color ?? context.textColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentSelector extends StatelessWidget {
+  final String selected;
+  final ValueChanged<String> onSelected;
+
+  const _PaymentSelector({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Payment Method',
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: context.textMutedColor)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _PayChip(
+                id: 'cash',
+                label: 'Cash',
+                selected: selected,
+                onTap: onSelected),
+            _PayChip(
+                id: 'upi', label: 'UPI', selected: selected, onTap: onSelected),
+            _PayChip(
+                id: 'card',
+                label: 'Card',
+                selected: selected,
+                onTap: onSelected),
+            _PayChip(
+                id: 'mixed',
+                label: 'Mixed',
+                selected: selected,
+                onTap: onSelected),
+          ],
+        ),
+      ],
+    );
   }
 }
 
 class _PayChip extends StatelessWidget {
-  final String value;
+  final String id;
   final String label;
   final String selected;
-  final ValueChanged<String> onChanged;
+  final ValueChanged<String> onTap;
 
-  const _PayChip(this.value, this.label, this.selected, this.onChanged);
+  const _PayChip({
+    required this.id,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final isSelected = value == selected;
-    return InkWell(
-      onTap: () => onChanged(value),
-      borderRadius: BorderRadius.circular(8),
+    final isSelected = selected == id;
+    return GestureDetector(
+      onTap: () => onTap(id),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected
-              ? AppTheme.primary
-              : context.borderColor.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(12),
+          color: isSelected ? AppTheme.primary : context.surfaceColor,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+              color: isSelected ? AppTheme.primary : context.borderColor),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                      color: AppTheme.primary.withValues(alpha: 0.3),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2))
+                ]
+              : null,
         ),
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 14,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
             color: isSelected ? Colors.white : context.textMutedColor,
+            fontWeight: FontWeight.w800,
+            fontSize: 12,
           ),
         ),
       ),
+    );
+  }
+}
+
+class _MixedPaymentInputs extends StatelessWidget {
+  final TextEditingController cashCtrl, upiCtrl, cardCtrl;
+  final FocusNode cashFocus, upiFocus, cardFocus;
+
+  const _MixedPaymentInputs({
+    required this.cashCtrl,
+    required this.upiCtrl,
+    required this.cardCtrl,
+    required this.cashFocus,
+    required this.upiFocus,
+    required this.cardFocus,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+            child: _MixedField(
+                label: 'Cash',
+                controller: cashCtrl,
+                focusNode: cashFocus,
+                onSubmitted: () => upiFocus.requestFocus())),
+        const SizedBox(width: 8),
+        Expanded(
+            child: _MixedField(
+                label: 'UPI',
+                controller: upiCtrl,
+                focusNode: upiFocus,
+                onSubmitted: () => cardFocus.requestFocus())),
+        const SizedBox(width: 8),
+        Expanded(
+            child: _MixedField(
+          label: 'Card',
+          controller: cardCtrl,
+          focusNode: cardFocus,
+        )),
+      ],
+    );
+  }
+}
+
+class _CartItemTile extends StatelessWidget {
+  final CartItem item;
+  final FocusNode qtyFocusNode;
+  final TextEditingController qtyController;
+  final ValueChanged<String> onQtyChanged;
+  final VoidCallback onRemove;
+
+  const _CartItemTile({
+    required this.item,
+    required this.qtyFocusNode,
+    required this.qtyController,
+    required this.onQtyChanged,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Center(
+              child: TextField(
+                focusNode: qtyFocusNode,
+                controller: qtyController,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppTheme.primary),
+                decoration: const InputDecoration(border: InputBorder.none, isDense: true),
+                onChanged: onQtyChanged,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.medicine.name.toUpperCase(),
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    _Tag(label: '₹${item.medicine.sellingPrice.toStringAsFixed(0)}', color: context.textMutedColor),
+                    const SizedBox(width: 4),
+                    _Tag(label: 'BATCH: ${item.medicine.batches.isNotEmpty ? item.medicine.batches.first.batchNo : "N/A"}', color: AppTheme.accent),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('₹${item.lineTotal.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: -0.5)),
+              const SizedBox(height: 4),
+              GestureDetector(
+                onTap: onRemove,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.danger.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text('REMOVE', style: TextStyle(color: AppTheme.danger, fontSize: 9, fontWeight: FontWeight.w900)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Tag extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _Tag({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Text(label, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold)),
     );
   }
 }
@@ -826,13 +803,13 @@ class _MixedField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
   final FocusNode focusNode;
-  final VoidCallback onSubmitted;
+  final VoidCallback? onSubmitted;
 
   const _MixedField({
     required this.label,
     required this.controller,
     required this.focusNode,
-    required this.onSubmitted,
+    this.onSubmitted,
   });
 
   @override
@@ -841,46 +818,12 @@ class _MixedField extends StatelessWidget {
       controller: controller,
       focusNode: focusNode,
       keyboardType: TextInputType.number,
-      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-      textAlign: TextAlign.center,
-      onSubmitted: (_) => onSubmitted(),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(fontSize: 12),
         isDense: true,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
       ),
+      onSubmitted: (_) => onSubmitted?.call(),
     );
   }
-}
-
-class _TotalRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color? color;
-
-  const _TotalRow(this.label, this.value, {this.color});
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              label,
-              style: TextStyle(color: context.textMutedColor, fontSize: 14),
-            ),
-            Text(
-              value,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: color ?? context.textColor,
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
-      );
 }

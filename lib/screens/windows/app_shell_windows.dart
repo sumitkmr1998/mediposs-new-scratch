@@ -4,11 +4,9 @@ import 'package:provider/provider.dart';
 import '../../shared/providers/inventory_provider.dart';
 import '../../shared/providers/sales_provider.dart';
 import '../../shared/providers/patient_provider.dart';
-import '../../shared/services/objectbox_service.dart';
 import '../../shared/providers/warehouse_provider.dart';
 import '../../shared/services/local_server_service.dart';
 import '../../shared/services/sync_service.dart';
-import '../../shared/services/discovery_service.dart';
 import '../../shared/services/notification_service.dart';
 import '../../theme/app_theme.dart';
 import '../dashboard_screen.dart';
@@ -26,6 +24,7 @@ import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/opd_provider.dart';
 import '../../shared/providers/prescription_provider.dart';
 import '../../shared/providers/template_provider.dart';
+import '../../shared/widgets/interactive_hover.dart';
 
 class AppShellWindows extends StatefulWidget {
   const AppShellWindows({super.key});
@@ -167,12 +166,8 @@ class _AppShellWindowsState extends State<AppShellWindows> {
       context.read<OpdProvider>().loadAll();
       context.read<PrescriptionProvider>().load();
 
-      // Start hub server on Windows
+      // HUB server now starts in main.dart (pre-login)
       if (Platform.isWindows) {
-        await LocalServerService.instance.start();
-        await DiscoveryService.startAdvertising(
-            ObjectBoxService.instance.settings.serverPort);
-
         // Bug 4 Fix: Listen to incoming data pushes from Android and reload Windows providers
         LocalServerService.instance.incomingDataStream.listen((entityType) {
           if (!mounted) return;
@@ -285,19 +280,25 @@ class _AppShellWindowsState extends State<AppShellWindows> {
       body: isWide
           ? Row(
               children: [
-                _SideNav(
-                  selectedIndex: _selectedIndex,
-                  onDestinationSelected: (i) =>
-                      setState(() => _selectedIndex = i),
-                  destinations: dests,
-                  isWindowsHub: Platform.isWindows,
-                  isConnected: wsvc.connected,
-                  onConnectTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const ConnectionScreen())),
+                RepaintBoundary(
+                  child: _SideNav(
+                    selectedIndex: _selectedIndex,
+                    onDestinationSelected: (i) =>
+                        setState(() => _selectedIndex = i),
+                    destinations: dests,
+                    isWindowsHub: Platform.isWindows,
+                    isConnected: wsvc.connected,
+                    onConnectTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const ConnectionScreen())),
+                  ),
                 ),
-                Expanded(child: _screenForId(currentDestId)),
+                Expanded(
+                  child: RepaintBoundary(
+                    child: _screenForId(currentDestId),
+                  ),
+                ),
               ],
             )
           : Scaffold(
@@ -401,43 +402,41 @@ class _SideNav extends StatelessWidget {
               itemBuilder: (ctx, i) {
                 final d = destinations[i];
                 final selected = selectedIndex == i;
-                return Container(
-                  margin:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? AppTheme.primary.withValues(alpha: 0.15)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: InkWell(
-                    onTap: () => onDestinationSelected(i),
-                    borderRadius: BorderRadius.circular(10),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 12),
-                      child: Row(
-                        children: [
-                          Icon(selected ? d.selectedIcon : d.icon,
-                              color: selected
-                                  ? AppTheme.primary
-                                  : context.textMutedColor,
-                              size: 20),
-                          if (isExpanded) ...[
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(d.label,
-                                  style: TextStyle(
-                                      color: selected
-                                          ? AppTheme.primary
-                                          : context.textMutedColor,
-                                      fontWeight: selected
-                                          ? FontWeight.w700
-                                          : FontWeight.w400)),
-                            ),
-                          ],
+                return InteractiveHover(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => onDestinationSelected(i),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                    margin:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? AppTheme.primary.withValues(alpha: 0.15)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(selected ? d.selectedIcon : d.icon,
+                            color: selected
+                                ? AppTheme.primary
+                                : context.textMutedColor,
+                            size: 20),
+                        if (isExpanded) ...[
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(d.label,
+                                style: TextStyle(
+                                    color: selected
+                                        ? AppTheme.primary
+                                        : context.textMutedColor,
+                                    fontWeight: selected
+                                        ? FontWeight.w700
+                                        : FontWeight.w400)),
+                          ),
                         ],
-                      ),
+                      ],
                     ),
                   ),
                 );
