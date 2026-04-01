@@ -155,23 +155,27 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
             .firstOrNull;
 
         if (existing != null) {
-          // Update existing
-          final updatedMed = Medicine(
-            id: existing.id,
-            name: nameCell,
-            barcode: barcode.isNotEmpty ? barcode : existing.barcode,
-            category: category,
-            unit: unit,
-            purchasePrice:
-                purchasePrice > 0 ? purchasePrice : existing.purchasePrice,
-            sellingPrice:
-                sellingPrice > 0 ? sellingPrice : existing.sellingPrice,
-            mainStock: mainStock > 0 ? mainStock : existing.mainStock,
-            storeStock: storeStock > 0 ? storeStock : existing.storeStock,
-            lowStockThreshold: lowStock,
-            synced: false,
-          );
-          inv.updateMedicine(updatedMed);
+          // Update existing metadata
+          existing
+            ..barcode = barcode.isNotEmpty ? barcode : existing.barcode
+            ..category = category
+            ..unit = unit
+            ..purchasePrice = purchasePrice > 0 ? purchasePrice : existing.purchasePrice
+            ..sellingPrice = sellingPrice > 0 ? sellingPrice : existing.sellingPrice
+            ..lowStockThreshold = lowStock;
+          
+          inv.updateMedicine(existing);
+
+          // If stock is provided in Excel, add it as a new batch to avoid total drift
+          if (mainStock > 0 || storeStock > 0) {
+             inv.addBatchStock(
+               {existing.id: mainStock},
+               storeUpdates: {existing.id: storeStock},
+               batchNo: 'IMPORT-${DateTime.now().millisecondsSinceEpoch}',
+               expiryDate: DateTime.now().add(const Duration(days: 365 * 2)), // 2 year default
+               note: 'Imported from Excel',
+             );
+          }
           updated++;
         } else {
           // Add new
@@ -182,11 +186,21 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
             unit: unit,
             purchasePrice: purchasePrice,
             sellingPrice: sellingPrice,
-            mainStock: mainStock,
-            storeStock: storeStock,
+            mainStock: 0, // Will be updated by batch
+            storeStock: 0,
             lowStockThreshold: lowStock,
           );
           inv.addMedicine(newMed);
+          
+          if (mainStock > 0 || storeStock > 0) {
+            inv.addBatchStock(
+              {newMed.id: mainStock},
+              storeUpdates: {newMed.id: storeStock},
+              batchNo: 'IMPORT-${DateTime.now().millisecondsSinceEpoch}',
+              expiryDate: DateTime.now().add(const Duration(days: 365 * 2)),
+              note: 'Imported from Excel',
+            );
+          }
           added++;
         }
       }
@@ -370,6 +384,17 @@ class _StockLevelsTabState extends State<_StockLevelsTab> {
                       },
                       onChanged: (v) => inv.setFilter(v!),
                     ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: 'Reconcile Hub Quantity with Batches',
+                    icon: const Icon(Icons.rebase_edit, color: AppTheme.primary),
+                    onPressed: () {
+                      inv.reconcileAllStock();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Stock reconciled with batches successfully')),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -638,146 +663,171 @@ class _BatchDetailsDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sortedBatches = medicine.batches.toList()
-      ..sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
+    return Consumer<InventoryProvider>(
+      builder: (context, inv, _) {
+        // Refetch medicine to get latest batches
+        final m = inv.medicines.where((m) => m.id == medicine.id).firstOrNull ?? medicine;
+        final sortedBatches = m.batches.toList()
+          ..sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
 
-    return AlertDialog(
-      title: Row(
-        children: [
-          const Icon(Icons.layers_outlined, color: AppTheme.primary),
-          const SizedBox(width: 12),
-          Expanded(child: Text('Batches: ${medicine.name}')),
-        ],
-      ),
-      content: SizedBox(
-        width: 600,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (sortedBatches.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(20),
-                child: Text('No active batches found for this medicine.'),
-              )
-            else
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 400),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: sortedBatches.length,
-                  itemBuilder: (ctx, i) {
-                    final b = sortedBatches[i];
-                    final isExpired = b.expiryDate.isBefore(DateTime.now());
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: context.bgColor.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                            color: isExpired
-                                ? AppTheme.danger.withValues(alpha: 0.2)
-                                : context.borderColor.withValues(alpha: 0.5)),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            flex: 2,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Batch: ${b.batchNo}',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold)),
-                                Text(
-                                  'Expiry: ${b.expiryDate.day}/${b.expiryDate.month}/${b.expiryDate.year}',
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      color: isExpired
-                                          ? AppTheme.danger
-                                          : context.textMutedColor),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            child: Column(
-                              children: [
-                                const Text('HUB',
-                                    style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold)),
-                                Text('${b.mainStock}',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 16)),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            child: Column(
-                              children: [
-                                const Text('STORE',
-                                    style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold)),
-                                Text('${b.storeStock}',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 16)),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
+        return AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.layers_outlined, color: AppTheme.primary),
+              const SizedBox(width: 12),
+              Expanded(child: Text('Batches: ${m.name}')),
+              if (canTransfer)
+                IconButton(
+                  tooltip: 'Add New Batch',
+                  icon: const Icon(Icons.add_circle_outline, color: AppTheme.primary),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    MedicineDialog.show(context, medicine: m);
                   },
                 ),
-              ),
-            const SizedBox(height: 16),
-            const Divider(),
-            const SizedBox(height: 8),
-            Row(
+            ],
+          ),
+          content: SizedBox(
+            width: 600,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                if (canTransfer) ...[
-                  FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF14B8A6), // Teal
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                if (sortedBatches.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Text('No active batches found for this medicine.'),
+                  )
+                else
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 400),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: sortedBatches.length,
+                      itemBuilder: (ctx, i) {
+                        final b = sortedBatches[i];
+                        final isExpired = b.expiryDate.isBefore(DateTime.now());
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: context.bgColor.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: isExpired
+                                    ? AppTheme.danger.withValues(alpha: 0.2)
+                                    : context.borderColor.withValues(alpha: 0.5)),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Batch: ${b.batchNo}',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold)),
+                                    Text(
+                                      'Expiry: ${b.expiryDate.day}/${b.expiryDate.month}/${b.expiryDate.year}',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: isExpired
+                                              ? AppTheme.danger
+                                              : context.textMutedColor),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    const Text('HUB',
+                                        style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold)),
+                                    Text('${b.mainStock}',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 16)),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    const Text('STORE',
+                                        style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold)),
+                                    Text('${b.storeStock}',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 16)),
+                                  ],
+                                ),
+                              ),
+                              if (canTransfer)
+                                IconButton(
+                                  icon: const Icon(Icons.edit_outlined, size: 20),
+                                  onPressed: () {
+                                    showDialog(
+                                      context: context,
+                                      builder: (ctx) => _EditBatchDialog(medicine: m, batch: b),
+                                    );
+                                  },
+                                ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _showTransfer(context, medicine, 'main', 'store', wh);
-                    },
-                    icon: const Icon(Icons.arrow_forward, size: 16),
-                    label: const Text('Send to Store'),
                   ),
-                  const SizedBox(width: 8),
-                  FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF6366F1), // Indigo
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    if (canTransfer) ...[
+                      FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF14B8A6), // Teal
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _showTransfer(context, m, 'main', 'store', wh);
+                        },
+                        icon: const Icon(Icons.arrow_forward, size: 16),
+                        label: const Text('Send to Store'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF6366F1), // Indigo
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _showTransfer(context, m, 'store', 'main', wh);
+                        },
+                        icon: const Icon(Icons.arrow_back, size: 16),
+                        label: const Text('Return to Hub'),
+                      ),
+                    ],
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Close'),
                     ),
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _showTransfer(context, medicine, 'store', 'main', wh);
-                    },
-                    icon: const Icon(Icons.arrow_back, size: 16),
-                    label: const Text('Return to Hub'),
-                  ),
-                ],
-                const Spacer(),
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Close'),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -786,6 +836,103 @@ class _BatchDetailsDialog extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => _TransferDialog(medicine: m, from: from, to: to, wh: wh),
+    );
+  }
+}
+
+class _EditBatchDialog extends StatefulWidget {
+  final Medicine medicine;
+  final MedicineBatch batch;
+  const _EditBatchDialog({required this.medicine, required this.batch});
+
+  @override
+  State<_EditBatchDialog> createState() => _EditBatchDialogState();
+}
+
+class _EditBatchDialogState extends State<_EditBatchDialog> {
+  late final _batchNoCtrl = TextEditingController(text: widget.batch.batchNo);
+  late final _hubStockCtrl = TextEditingController(text: '${widget.batch.mainStock}');
+  late final _storeStockCtrl = TextEditingController(text: '${widget.batch.storeStock}');
+  late DateTime _expiryDate = widget.batch.expiryDate;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Edit Batch Details'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _batchNoCtrl,
+            decoration: const InputDecoration(labelText: 'Batch Number', isDense: true),
+          ),
+          const SizedBox(height: 12),
+          InkWell(
+            onTap: _pickDate,
+            child: InputDecorator(
+              decoration: const InputDecoration(labelText: 'Expiry Date', isDense: true),
+              child: Text('${_expiryDate.day}/${_expiryDate.month}/${_expiryDate.year}'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _hubStockCtrl,
+                  decoration: const InputDecoration(labelText: 'Hub Stock', isDense: true),
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _storeStockCtrl,
+                  decoration: const InputDecoration(labelText: 'Store Stock', isDense: true),
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        ElevatedButton(
+          onPressed: _save,
+          child: const Text('Save Changes'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickDate() async {
+    final d = await showDatePicker(
+      context: context,
+      initialDate: _expiryDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 365 * 5)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 10)),
+    );
+    if (d != null) setState(() => _expiryDate = d);
+  }
+
+  void _save() {
+    final inv = context.read<InventoryProvider>();
+    final sync = context.read<SyncService>();
+    
+    inv.updateBatchDetail(
+      widget.medicine,
+      widget.batch,
+      batchNo: _batchNoCtrl.text.trim(),
+      expiryDate: _expiryDate,
+      mainStock: int.tryParse(_hubStockCtrl.text) ?? widget.batch.mainStock,
+      storeStock: int.tryParse(_storeStockCtrl.text) ?? widget.batch.storeStock,
+      syncService: sync,
+    );
+    
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Batch details updated')),
     );
   }
 }

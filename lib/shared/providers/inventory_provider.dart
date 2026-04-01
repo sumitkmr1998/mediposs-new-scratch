@@ -55,6 +55,15 @@ class InventoryProvider extends ChangeNotifier {
   double get totalInventoryValue =>
       _medicines.fold(0, (sum, m) => sum + (m.storeStock * m.sellingPrice));
 
+  /// Reconciles cached aggregate stock with batch-level stock for all medicines.
+  void reconcileAllStock() {
+    for (final m in _medicines) {
+      m.recalculateStockFromBatches();
+      _box.put(m);
+    }
+    load();
+  }
+
   List<Medicine> _filtered() {
     var list = _medicines.where((m) {
       final matchesQuery = _searchQuery.isEmpty ||
@@ -345,6 +354,15 @@ class InventoryProvider extends ChangeNotifier {
       final diff = newQty - p.qty;
       m.mainStock += diff;
       m.updatedAt = DateTime.now();
+
+      // Also try to adjust a batch to keep them in sync
+      if (m.batches.isNotEmpty) {
+        final latest = m.batches.toList()..sort((a,b) => b.id.compareTo(a.id));
+        final batch = latest.first;
+        batch.mainStock += diff;
+        _batchBox.put(batch);
+      }
+
       _box.put(m);
 
       // Update purchase record
@@ -365,8 +383,18 @@ class InventoryProvider extends ChangeNotifier {
     final m = _box.get(p.medicineId);
     if (m != null) {
       // Revert stock
-      m.mainStock = (m.mainStock - p.qty).clamp(0, 999999);
+      final diff = -p.qty;
+      m.mainStock = (m.mainStock + diff).clamp(0, 999999);
       m.updatedAt = DateTime.now();
+
+      // Also adjust batch
+      if (m.batches.isNotEmpty) {
+        final latest = m.batches.toList()..sort((a,b) => b.id.compareTo(a.id));
+        final batch = latest.first;
+        batch.mainStock = (batch.mainStock + diff).clamp(0, 999999);
+        _batchBox.put(batch);
+      }
+
       _box.put(m);
 
       _purchaseBox.remove(p.id);
@@ -394,6 +422,34 @@ class InventoryProvider extends ChangeNotifier {
     // 3. Delete the batch entity itself
     _batchBox.remove(batch.id);
 
+    load();
+
+    if (Platform.isWindows && LocalServerService.instance.isRunning) {
+      LocalServerService.instance.broadcast({'event': 'medicines_updated'});
+    }
+    if (Platform.isAndroid && syncService != null) {
+      syncService.pushMedicine(m);
+    }
+  }
+
+  void updateBatchDetail(Medicine m, MedicineBatch batch, {
+    required String batchNo,
+    required DateTime expiryDate,
+    required int mainStock,
+    required int storeStock,
+    SyncService? syncService,
+  }) {
+    batch.batchNo = batchNo;
+    batch.expiryDate = expiryDate;
+    batch.mainStock = mainStock.clamp(0, 999999);
+    batch.storeStock = storeStock.clamp(0, 999999);
+    
+    _batchBox.put(batch);
+    
+    // Core Fix: Recalculate medicine totals now that batch has changed
+    m.recalculateStockFromBatches();
+    _box.put(m);
+    
     load();
 
     if (Platform.isWindows && LocalServerService.instance.isRunning) {

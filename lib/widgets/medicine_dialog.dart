@@ -99,11 +99,13 @@ class _MedicineDialogState extends State<MedicineDialog> {
                 Row(children: [
                   Expanded(
                       child: _field(_mainStockCtrl, widget.medicine != null ? 'Main Hub Stock' : 'Add to Main Hub',
-                          keyboardType: TextInputType.number)),
+                          keyboardType: TextInputType.number,
+                          readOnly: widget.medicine != null)),
                   const SizedBox(width: 12),
                   Expanded(
                       child: _field(_storeStockCtrl, widget.medicine != null ? 'Store Stock' : 'Add to Store',
-                          keyboardType: TextInputType.number)),
+                          keyboardType: TextInputType.number,
+                          readOnly: widget.medicine != null)),
                 ]),
                 const SizedBox(height: 12),
                 const Divider(),
@@ -204,12 +206,15 @@ class _MedicineDialogState extends State<MedicineDialog> {
   }
 
   Widget _field(TextEditingController ctrl, String label,
-      {TextInputType? keyboardType, String? Function(String?)? validator}) {
+      {TextInputType? keyboardType,
+      String? Function(String?)? validator,
+      bool readOnly = false}) {
     return TextFormField(
       controller: ctrl,
       keyboardType: keyboardType,
       validator: validator,
-      decoration: InputDecoration(labelText: label, isDense: true),
+      readOnly: readOnly,
+      decoration: InputDecoration(labelText: label, isDense: true, filled: readOnly, fillColor: readOnly ? Colors.grey.shade100 : null),
     );
   }
 
@@ -228,8 +233,7 @@ class _MedicineDialogState extends State<MedicineDialog> {
       ..unit = _unitCtrl.text.trim()
       ..purchasePrice = double.tryParse(_purchaseCtrl.text) ?? 0
       ..sellingPrice = double.tryParse(_sellCtrl.text) ?? 0
-      ..mainStock = int.tryParse(_mainStockCtrl.text) ?? m.mainStock
-      ..storeStock = int.tryParse(_storeStockCtrl.text) ?? m.storeStock
+      // We no longer update mainStock/storeStock here to prevent desync with batches
       ..lowStockThreshold = int.tryParse(_thresholdCtrl.text) ?? 10;
 
     inv.updateMedicine(m, syncService: sync);

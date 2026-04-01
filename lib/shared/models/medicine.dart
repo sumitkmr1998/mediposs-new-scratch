@@ -41,6 +41,19 @@ class Medicine {
     DateTime? updatedAt,
     this.synced = false,
   }) : updatedAt = updatedAt ?? DateTime.now();
+ 
+  /// Recalculates aggregate stock fields from individual batches.
+  void recalculateStockFromBatches() {
+    int totalMain = 0;
+    int totalStore = 0;
+    for (final batch in batches) {
+      totalMain += batch.mainStock;
+      totalStore += batch.storeStock;
+    }
+    mainStock = totalMain.clamp(0, 999999);
+    storeStock = totalStore.clamp(0, 999999);
+    updatedAt = DateTime.now();
+  }
 
   bool get isLowStock => storeStock <= lowStockThreshold;
   int get totalStock => mainStock + storeStock;
