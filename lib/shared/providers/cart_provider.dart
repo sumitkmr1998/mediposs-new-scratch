@@ -23,6 +23,38 @@ class CartItem {
   double get lineTotal => medicine.sellingPrice * qty;
 }
 
+class PendingCart {
+  final List<CartItem> items;
+  final double discountAmount;
+  final String patientName;
+  final String patientPhone;
+  final int patientId;
+  final String paymentMethod;
+  final double mixedCash;
+  final double mixedUpi;
+  final double mixedCard;
+  final int? linkedPrescriptionId;
+  final bool isReturnMode;
+  final DateTime heldAt;
+
+  PendingCart({
+    required this.items,
+    required this.discountAmount,
+    required this.patientName,
+    required this.patientPhone,
+    required this.patientId,
+    required this.paymentMethod,
+    required this.mixedCash,
+    required this.mixedUpi,
+    required this.mixedCard,
+    this.linkedPrescriptionId,
+    required this.isReturnMode,
+    required this.heldAt,
+  });
+
+  double get total => items.fold(0.0, (sum, item) => sum + item.lineTotal) - discountAmount;
+}
+
 class CartProvider extends ChangeNotifier {
   final InventoryProvider _inventoryProvider;
   final SalesProvider _salesProvider;
@@ -49,8 +81,10 @@ class CartProvider extends ChangeNotifier {
   double _mixedCard = 0;
 
   int? _linkedPrescriptionId;
+  final List<PendingCart> _pendingCarts = [];
 
   List<CartItem> get items => List.unmodifiable(_items);
+  List<PendingCart> get pendingCarts => List.unmodifiable(_pendingCarts);
   double get discountAmount => _discountAmount;
   String get patientName => _patientName;
   String get patientNameStr => _patientName;
@@ -58,6 +92,10 @@ class CartProvider extends ChangeNotifier {
   int get patientId => _patientId;
   String get paymentMethod => _paymentMethod;
   bool get isReturnMode => _isReturnMode;
+
+  double get mixedCash => _mixedCash;
+  double get mixedUpi => _mixedUpi;
+  double get mixedCard => _mixedCard;
 
   double get subtotal => _items.fold(0.0, (sum, item) => sum + item.lineTotal);
 
@@ -159,6 +197,47 @@ class CartProvider extends ChangeNotifier {
     _mixedUpi = 0;
     _mixedCard = 0;
     _linkedPrescriptionId = null;
+    notifyListeners();
+  }
+
+  void holdCurrentCart() {
+    if (_items.isEmpty) return;
+    _pendingCarts.add(PendingCart(
+      items: _items.map((i) => CartItem(medicine: i.medicine, qty: i.qty)).toList(),
+      discountAmount: _discountAmount,
+      patientName: _patientName,
+      patientPhone: _patientPhone,
+      patientId: _patientId,
+      paymentMethod: _paymentMethod,
+      mixedCash: _mixedCash,
+      mixedUpi: _mixedUpi,
+      mixedCard: _mixedCard,
+      linkedPrescriptionId: _linkedPrescriptionId,
+      isReturnMode: _isReturnMode,
+      heldAt: DateTime.now(),
+    ));
+    clearCart();
+  }
+
+  void restoreCart(PendingCart pending) {
+    _items.clear();
+    _items.addAll(pending.items);
+    _discountAmount = pending.discountAmount;
+    _patientName = pending.patientName;
+    _patientPhone = pending.patientPhone;
+    _patientId = pending.patientId;
+    _paymentMethod = pending.paymentMethod;
+    _mixedCash = pending.mixedCash;
+    _mixedUpi = pending.mixedUpi;
+    _mixedCard = pending.mixedCard;
+    _linkedPrescriptionId = pending.linkedPrescriptionId;
+    _isReturnMode = pending.isReturnMode;
+    _pendingCarts.remove(pending);
+    notifyListeners();
+  }
+
+  void deletePendingCart(PendingCart pending) {
+    _pendingCarts.remove(pending);
     notifyListeners();
   }
 

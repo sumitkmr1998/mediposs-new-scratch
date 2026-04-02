@@ -173,6 +173,8 @@ class _PosWindowsState extends State<PosWindows> {
             );
           }
         },
+        const SingleActivator(LogicalKeyboardKey.f4): () => _handleHoldCart(),
+        const SingleActivator(LogicalKeyboardKey.f8): () => _showPendingCartsDialog(),
       },
       child: Focus(
         autofocus: true,
@@ -234,6 +236,29 @@ class _PosWindowsState extends State<PosWindows> {
                   ),
                   onPressed: _handleManualClear,
                 ),
+              const SizedBox(width: 8),
+              if (cart.items.isNotEmpty)
+                IconButton(
+                  icon: Icon(
+                    Icons.pause_circle_outline,
+                    color: cart.isReturnMode ? Colors.white : AppTheme.primaryLight,
+                  ),
+                  tooltip: 'Hold Cart [F4]',
+                  onPressed: _handleHoldCart,
+                ),
+              Badge(
+                label: Text(cart.pendingCarts.length.toString()),
+                isLabelVisible: cart.pendingCarts.isNotEmpty,
+                child: IconButton(
+                  icon: Icon(
+                    Icons.history_outlined,
+                    color: cart.isReturnMode ? Colors.white : AppTheme.primaryLight,
+                  ),
+                  tooltip: 'Pending Carts [F8]',
+                  onPressed: _showPendingCartsDialog,
+                ),
+              ),
+              const SizedBox(width: 12),
             ],
           ),
           body: Container(
@@ -440,7 +465,160 @@ class _PosWindowsState extends State<PosWindows> {
     final cart = context.read<CartProvider>();
     cart.clearCart();
     _patientCtrl.clear();
+    _discountCtrl.clear();
     _showPatientProactiveSearch();
+  }
+
+  void _syncControllersWithCart() {
+    final cart = context.read<CartProvider>();
+    _patientCtrl.text = cart.patientName;
+    _discountCtrl.text =
+        cart.discountAmount > 0 ? cart.discountAmount.toStringAsFixed(0) : '';
+
+    setState(() {
+      _paymentMethod = cart.paymentMethod;
+      _mixCashCtrl.text = cart.mixedCash.toStringAsFixed(0);
+      _mixUpiCtrl.text = cart.mixedUpi.toStringAsFixed(0);
+      _mixCardCtrl.text = cart.mixedCard.toStringAsFixed(0);
+    });
+
+    _searchCtrl.clear();
+    _searchFocus.requestFocus();
+  }
+
+  void _handleHoldCart() {
+    final cart = context.read<CartProvider>();
+    if (cart.items.isEmpty) return;
+
+    // Sync current UI values to provider before holding
+    cart.setPatient(name: _patientCtrl.text.trim(), id: cart.patientId);
+    cart.setDiscount(double.tryParse(_discountCtrl.text) ?? 0);
+    cart.setPaymentMethod(_paymentMethod);
+    if (_paymentMethod == 'mixed') {
+      cart.setMixedAmounts(
+        double.tryParse(_mixCashCtrl.text) ?? 0,
+        double.tryParse(_mixUpiCtrl.text) ?? 0,
+        double.tryParse(_mixCardCtrl.text) ?? 0,
+      );
+    }
+
+    cart.holdCurrentCart();
+    _syncControllersWithCart();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('✅ Cart put on hold'),
+        backgroundColor: AppTheme.primary,
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void _showPendingCartsDialog() {
+    final cart = context.read<CartProvider>();
+    if (cart.pendingCarts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No pending carts available.')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.history, color: AppTheme.primary),
+                SizedBox(width: 8),
+                Text('Pending Carts'),
+              ],
+            ),
+            content: SizedBox(
+              width: 500,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Select a cart to restore or discard',
+                    style:
+                        TextStyle(color: context.textMutedColor, fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  if (cart.pendingCarts.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(20),
+                      child: Text('No more pending carts.'),
+                    )
+                  else
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: cart.pendingCarts.length,
+                        itemBuilder: (_, i) {
+                          final pc = cart.pendingCarts[i];
+                          final timeAgo = DateTime.now().difference(pc.heldAt);
+                          final timeStr = timeAgo.inMinutes > 0
+                              ? '${timeAgo.inMinutes}m ago'
+                              : 'Just now';
+
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: ListTile(
+                              title: Text(
+                                pc.patientName.isEmpty
+                                    ? 'Walk-in Customer'
+                                    : pc.patientName,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: Text(
+                                '${pc.items.length} items • Total: ₹${pc.total.toStringAsFixed(2)} • $timeStr',
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline,
+                                        color: AppTheme.danger),
+                                    onPressed: () {
+                                      cart.deletePendingCart(pc);
+                                      if (cart.pendingCarts.isEmpty) {
+                                        Navigator.pop(ctx);
+                                      } else {
+                                        setDialogState(() {});
+                                      }
+                                    },
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      Navigator.pop(ctx);
+                                      cart.restoreCart(pc);
+                                      _syncControllersWithCart();
+                                    },
+                                    child: const Text('Restore'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   void _showPatientProactiveSearch() {
