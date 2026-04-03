@@ -10,6 +10,8 @@ import '../../shared/services/sync_service.dart';
 import '../../theme/app_theme.dart';
 import 'package:intl/intl.dart';
 import '../../widgets/android/medicine_dialog_android.dart';
+import '../../shared/widgets/app_status_badge.dart';
+import '../../shared/widgets/app_empty_state.dart';
 
 class WarehouseAndroid extends StatefulWidget {
   const WarehouseAndroid({super.key});
@@ -51,7 +53,7 @@ class _WarehouseAndroidState extends State<WarehouseAndroid>
               label: const Text('NEW MEDICINE',
                   style: TextStyle(
                       color: Colors.white,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: 1)),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16)),
@@ -90,7 +92,7 @@ class _WarehouseAndroidState extends State<WarehouseAndroid>
                   labelColor: AppTheme.primaryLight,
                   unselectedLabelColor: context.textMutedColor,
                   labelStyle: const TextStyle(
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                       fontSize: 13,
                       letterSpacing: 0.5),
                   tabs: const [
@@ -127,7 +129,7 @@ class _StockLevelsTab extends StatelessWidget {
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -237,7 +239,7 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
             ),
             title: Text(widget.medicine.name,
                 style: const TextStyle(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     fontSize: 15,
                     letterSpacing: -0.5)),
             subtitle: Row(
@@ -252,17 +254,12 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
                         fontWeight: FontWeight.w600)),
                 if (widget.medicine.isLowStock) ...[
                   const SizedBox(width: 8),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                    decoration: BoxDecoration(
-                        color: AppTheme.warning.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(4)),
-                    child: const Text('LOW STOCK',
-                        style: TextStyle(
-                            fontSize: 8,
-                            fontWeight: FontWeight.w900,
-                            color: AppTheme.warning)),
+                  AppStatusBadge(
+                    label: 'LOW STOCK',
+                    color: AppTheme.warning,
+                    style: AppStatusBadgeStyle.text,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
                   ),
                 ],
               ],
@@ -273,7 +270,7 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
               children: [
                 Text('₹${widget.medicine.sellingPrice.toStringAsFixed(0)}',
                     style: const TextStyle(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w800,
                         color: AppTheme.primaryLight,
                         fontSize: 16)),
                 Icon(
@@ -339,8 +336,8 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
                       padding: EdgeInsets.only(left: 4, bottom: 8),
                       child: Text('REGISTERED BATCHES',
                           style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w900,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
                               color: AppTheme.primaryLight,
                               letterSpacing: 1)),
                     ),
@@ -358,7 +355,7 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
                           icon: const Icon(Icons.edit_note_rounded, size: 20),
                           label: const Text('MANAGE BATCHES',
                               style: TextStyle(
-                                  fontWeight: FontWeight.w900, fontSize: 11)),
+                                  fontWeight: FontWeight.w700, fontSize: 11)),
                         ),
                         const SizedBox(width: 8),
                         IconButton(
@@ -384,7 +381,7 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Delete Medicine',
-            style: TextStyle(fontWeight: FontWeight.w900)),
+            style: TextStyle(fontWeight: FontWeight.w800)),
         content: Text('Permanently remove "${m.name}"?'),
         actions: [
           TextButton(
@@ -442,8 +439,8 @@ class _StockIndicator extends StatelessWidget {
         children: [
           Text(label,
               style: TextStyle(
-                  fontSize: 8,
-                  fontWeight: FontWeight.w900,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
                   color: context.textMutedColor,
                   letterSpacing: 0.5)),
           const SizedBox(height: 4),
@@ -491,7 +488,7 @@ class _ActionButton extends StatelessWidget {
             Text(label,
                 style: TextStyle(
                     color: color,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     fontSize: 10,
                     letterSpacing: 0.5)),
           ],
@@ -546,7 +543,7 @@ class _TransferDialogState extends State<_TransferDialog> {
           const SizedBox(height: 16),
           Text('Stock Transfer',
               style:
-                  const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                  const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
           Text(widget.medicine.name,
               style: TextStyle(
                   fontSize: 13,
@@ -580,7 +577,7 @@ class _TransferDialogState extends State<_TransferDialog> {
               controller: _qtyCtrl,
               keyboardType: TextInputType.number,
               autofocus: true,
-              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20),
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
               decoration: InputDecoration(
                 labelText: 'TRANSFER QUANTITY',
                 suffixText: 'AVAL: $available',
@@ -633,7 +630,7 @@ class _TransferDialogState extends State<_TransferDialog> {
             }
           },
           child: const Text('CONFIRM',
-              style: TextStyle(fontWeight: FontWeight.w900)),
+              style: TextStyle(fontWeight: FontWeight.w700)),
         ),
       ],
     );
@@ -652,7 +649,7 @@ class _LocLabel extends StatelessWidget {
         Text(label,
             style: TextStyle(
                 fontSize: 10,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w800,
                 color: activeColor ?? context.textMutedColor,
                 letterSpacing: 1)),
         if (activeColor != null)
@@ -703,20 +700,10 @@ class _TransferHistoryTab extends StatelessWidget {
           ),
         ),
         wh.transfers.isEmpty
-            ? SliverFillRemaining(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.swap_horiz_rounded,
-                          size: 48, color: context.borderColor),
-                      const SizedBox(height: 16),
-                      Text('No transfer records',
-                          style: TextStyle(
-                              color: context.textMutedColor,
-                              fontWeight: FontWeight.bold)),
-                    ],
-                  ),
+            ? const SliverFillRemaining(
+                child: AppEmptyState(
+                  icon: Icons.swap_horiz_rounded,
+                  title: 'No transfer records',
                 ),
               )
             : SliverPadding(
@@ -730,7 +717,7 @@ class _TransferHistoryTab extends StatelessWidget {
                           isSendOut ? AppTheme.success : AppTheme.indigo;
                       return Container(
                         margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
                           color: context.surfaceColor,
                           borderRadius: BorderRadius.circular(16),
@@ -775,13 +762,13 @@ class _TransferHistoryTab extends StatelessWidget {
                               children: [
                                 Text('${isSendOut ? "-" : "+"}${t.qty}',
                                     style: TextStyle(
-                                        fontWeight: FontWeight.w900,
+                                        fontWeight: FontWeight.w800,
                                         color: accentColor,
                                         fontSize: 16)),
                                 Text(isSendOut ? 'OUT' : 'IN',
                                     style: TextStyle(
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.w900,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
                                         color: context.textMutedColor,
                                         letterSpacing: 0.5)),
                               ],
@@ -902,22 +889,22 @@ class _SimpleBatchRow extends StatelessWidget {
               children: [
                 Text(batch.batchNo,
                     style: const TextStyle(
-                        fontWeight: FontWeight.w900, fontSize: 12)),
+                        fontWeight: FontWeight.w700, fontSize: 12)),
                 Text('EXP ${DateFormat('MMM yyyy').format(batch.expiryDate)}',
                     style: TextStyle(
-                        fontSize: 9,
+                        fontSize: 10,
                         color: statusColor,
-                        fontWeight: FontWeight.w800)),
+                        fontWeight: FontWeight.w700)),
               ],
             ),
           ),
           Text('${batch.mainStock + batch.storeStock}',
               style:
-                  const TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+                  const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
           const SizedBox(width: 4),
           Text('PCS',
               style: TextStyle(
-                  fontSize: 8,
+                  fontSize: 10,
                   color: context.textMutedColor,
                   fontWeight: FontWeight.w700)),
         ],
@@ -942,7 +929,7 @@ class _FilterChip extends StatelessWidget {
       label: Text(label,
           style: TextStyle(
               fontSize: 11,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               color: isSelected ? Colors.white : context.textMutedColor)),
       selected: isSelected,
       onSelected: (_) => onSelected(),

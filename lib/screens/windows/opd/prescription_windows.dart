@@ -179,7 +179,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(28),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -529,7 +529,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
   Widget _buildCard({required bool isDark, required Widget child}) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(28),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkCard : Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -1303,8 +1303,8 @@ class _MedicineListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkBg : AppTheme.inputBg,
         borderRadius: BorderRadius.circular(12),

@@ -4,6 +4,10 @@ import '../../../shared/models/patient.dart';
 import '../../../shared/providers/patient_provider.dart';
 import '../../../shared/services/sync_service.dart';
 import '../../../theme/app_theme.dart';
+import '../../../shared/widgets/app_kpi_card.dart';
+import '../../../shared/widgets/app_filter_chip.dart';
+import '../../../shared/widgets/app_empty_state.dart';
+import '../../../shared/widgets/app_status_badge.dart';
 import '../../opd/patient_details_screen.dart';
 import '../../../widgets/patient_dialogs.dart';
 
@@ -16,6 +20,7 @@ class PatientListWindows extends StatefulWidget {
 
 class _PatientListWindowsState extends State<PatientListWindows> {
   final _searchCtrl = TextEditingController();
+  String _filter = 'all';
 
   @override
   void initState() {
@@ -39,221 +44,30 @@ class _PatientListWindowsState extends State<PatientListWindows> {
 
     final maleCount = allPatients.where((p) => p.gender == 'Male').length;
     final femaleCount = allPatients.where((p) => p.gender == 'Female').length;
+    final otherCount = allPatients.length - maleCount - femaleCount;
+
+    final filteredList = _filter == 'all'
+        ? list
+        : _filter == 'male'
+            ? list.where((p) => p.gender == 'Male').toList()
+            : _filter == 'female'
+                ? list.where((p) => p.gender == 'Female').toList()
+                : list
+                    .where((p) => p.gender != 'Male' && p.gender != 'Female')
+                    .toList();
 
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppTheme.primary.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.people_rounded,
-                  color: AppTheme.primary, size: 22),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Patients',
-                    style:
-                        TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-                Text('${allPatients.length} registered',
-                    style:
-                        TextStyle(fontSize: 12, color: context.textMutedColor)),
-              ],
-            ),
-          ],
-        ),
-      ),
+      appBar: _buildAppBar(allPatients.length),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Stats Row
-            LayoutBuilder(builder: (ctx, constraints) {
-              final cols = constraints.maxWidth > 800
-                  ? 3
-                  : (constraints.maxWidth > 500 ? 2 : 1);
-              const spacing = 12.0;
-              final cardWidth =
-                  (constraints.maxWidth - (cols - 1) * spacing) / cols;
-
-              return Wrap(
-                spacing: spacing,
-                runSpacing: spacing,
-                children: [
-                  _StatCard(
-                    label: 'Total Patients',
-                    value: '${allPatients.length}',
-                    icon: Icons.groups_rounded,
-                    color: AppTheme.primary,
-                    width: cardWidth,
-                  ),
-                  _StatCard(
-                    label: 'Male',
-                    value: '$maleCount',
-                    icon: Icons.male_rounded,
-                    color: AppTheme.primaryLight,
-                    width: cardWidth,
-                  ),
-                  _StatCard(
-                    label: 'Female',
-                    value: '$femaleCount',
-                    icon: Icons.female_rounded,
-                    color: AppTheme.danger,
-                    width: cardWidth,
-                  ),
-                ],
-              );
-            }),
-
+            _buildKpiSection(allPatients.length, maleCount, femaleCount),
             const SizedBox(height: 24),
-
-            // Search
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchCtrl,
-                    onChanged: (v) => patients.setSearch(v),
-                    style: const TextStyle(fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Search by name, phone, or UHID...',
-                      hintStyle: TextStyle(
-                          fontSize: 13, color: context.textMutedColor),
-                      prefixIcon: Icon(Icons.search_rounded,
-                          size: 20, color: context.textMutedColor),
-                      suffixIcon: _searchCtrl.text.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.close_rounded, size: 18),
-                              onPressed: () {
-                                _searchCtrl.clear();
-                                patients.setSearch('');
-                              },
-                            )
-                          : null,
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  '${list.length} results',
-                  style: TextStyle(fontSize: 12, color: context.textMutedColor),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 20),
-
-            // Bento Table
-            Container(
-              decoration: BoxDecoration(
-                color: context.surfaceColor,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                    color: context.borderColor.withValues(alpha: 0.5)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 24,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  // Table Header
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 14),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                            width: 140,
-                            child: Text('UHID', style: _headerStyle(context))),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                            flex: 3,
-                            child: Text('NAME',
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 1.5,
-                                    color: AppTheme.primaryLight))),
-                        const SizedBox(
-                            width: 80,
-                            child: Center(
-                                child: Text('GENDER',
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: 1.5,
-                                        color: AppTheme.primaryLight)))),
-                        const SizedBox(
-                            width: 70,
-                            child: Center(
-                                child: Text('AGE',
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: 1.5,
-                                        color: AppTheme.primaryLight)))),
-                        const SizedBox(
-                            width: 140,
-                            child: Text('PHONE',
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 1.5,
-                                    color: AppTheme.primaryLight))),
-                        const SizedBox(
-                            width: 140,
-                            child: Align(
-                                alignment: Alignment.centerRight,
-                                child: Text('ACTIONS',
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: 1.5,
-                                        color: AppTheme.primaryLight)))),
-                      ],
-                    ),
-                  ),
-
-                  Divider(height: 1, color: context.borderColor),
-
-                  const SizedBox(height: 4),
-
-                  // Patient Rows
-                  if (list.isEmpty)
-                    _EmptyState(hasSearch: _searchCtrl.text.isNotEmpty)
-                  else
-                    ...list.map((p) => _PatientRow(
-                          patient: p,
-                          onEdit: () => _showPatientDialog(context, patient: p),
-                          onBook: () => _showBookAppointmentDialog(context, p),
-                          onView: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (ctx) =>
-                                  PatientDetailsScreen(patientId: p.id),
-                            ),
-                          ),
-                        )),
-                ],
-              ),
-            ),
+            _buildFilterSearchCard(context, patients),
+            const SizedBox(height: 24),
+            _buildDataTable(context, filteredList, patients),
           ],
         ),
       ),
@@ -267,11 +81,277 @@ class _PatientListWindowsState extends State<PatientListWindows> {
     );
   }
 
-  TextStyle _headerStyle(BuildContext context) => TextStyle(
+  PreferredSizeWidget _buildAppBar(int total) {
+    return AppBar(
+      title: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.people_rounded,
+                color: AppTheme.primary, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Patients',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+              Text('$total registered',
+                  style:
+                      TextStyle(fontSize: 12, color: context.textMutedColor)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKpiSection(int total, int male, int female) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('OVERVIEW',
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.5,
+                color: context.textMutedColor)),
+        const SizedBox(height: 12),
+        LayoutBuilder(builder: (ctx, constraints) {
+          final cols = constraints.maxWidth > 800
+              ? 3
+              : (constraints.maxWidth > 500 ? 2 : 1);
+          const spacing = 16.0;
+          final cardWidth =
+              (constraints.maxWidth - (cols - 1) * spacing) / cols;
+
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: [
+              AppKpiCard(
+                label: 'Total Patients',
+                value: '$total',
+                icon: Icons.groups_rounded,
+                color: AppTheme.primary,
+                width: cardWidth,
+              ),
+              AppKpiCard(
+                label: 'Male',
+                value: '$male',
+                icon: Icons.male_rounded,
+                color: AppTheme.primaryLight,
+                width: cardWidth,
+              ),
+              AppKpiCard(
+                label: 'Female',
+                value: '$female',
+                icon: Icons.female_rounded,
+                color: AppTheme.danger,
+                width: cardWidth,
+              ),
+            ],
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildFilterSearchCard(
+      BuildContext context, PatientProvider patients) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+        border: Border.all(color: context.borderColor),
+        boxShadow: AppTheme.subtleShadow,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  AppFilterChip(
+                    label: 'All',
+                    icon: Icons.groups_rounded,
+                    isSelected: _filter == 'all',
+                    onTap: () => setState(() => _filter = 'all'),
+                  ),
+                  const SizedBox(width: 8),
+                  AppFilterChip(
+                    label: 'Male',
+                    icon: Icons.male_rounded,
+                    isSelected: _filter == 'male',
+                    onTap: () => setState(() => _filter = 'male'),
+                    activeColor: AppTheme.primaryLight,
+                  ),
+                  const SizedBox(width: 8),
+                  AppFilterChip(
+                    label: 'Female',
+                    icon: Icons.female_rounded,
+                    isSelected: _filter == 'female',
+                    onTap: () => setState(() => _filter = 'female'),
+                    activeColor: AppTheme.danger,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          SizedBox(
+            width: 260,
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (v) => patients.setSearch(v),
+              style: const TextStyle(fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Search patients...',
+                hintStyle:
+                    TextStyle(fontSize: 13, color: context.textMutedColor),
+                prefixIcon: Icon(Icons.search_rounded,
+                    size: 20, color: context.textMutedColor),
+                suffixIcon: _searchCtrl.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          patients.setSearch('');
+                        },
+                      )
+                    : null,
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataTable(
+      BuildContext context, List<Patient> list, PatientProvider patients) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12, left: 4),
+          child: Text(
+            'FOUND ${list.length} PATIENTS',
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: context.textMutedColor,
+                letterSpacing: 1.5),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: context.surfaceColor,
+            borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+            border:
+                Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 8,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              _buildTableHeader(),
+              Divider(height: 1, color: context.borderColor),
+              if (list.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(40),
+                  child: AppEmptyState(
+                    icon: _searchCtrl.text.isNotEmpty
+                        ? Icons.search_off_rounded
+                        : Icons.people_outline_rounded,
+                    title: _searchCtrl.text.isNotEmpty
+                        ? 'No patients found'
+                        : 'No patients registered yet',
+                    subtitle: _searchCtrl.text.isNotEmpty
+                        ? 'Try adjusting your search query'
+                        : 'Add a patient using the button below',
+                    iconColor: AppTheme.primary,
+                  ),
+                )
+              else
+                ...list.map((p) => _PatientRow(
+                      patient: p,
+                      onEdit: () => _showPatientDialog(context, patient: p),
+                      onBook: () => _showBookAppointmentDialog(context, p),
+                      onView: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (ctx) =>
+                              PatientDetailsScreen(patientId: p.id),
+                        ),
+                      ),
+                    )),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTableHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: 0.04),
+        borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(AppTheme.radiusCard)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+              width: 140, child: Text('UHID', style: _headerStyle(context))),
+          const SizedBox(width: 12),
+          Expanded(flex: 3, child: Text('NAME', style: _headerStyle(context))),
+          const SizedBox(width: 12),
+          SizedBox(
+              width: 80,
+              child:
+                  Center(child: Text('GENDER', style: _headerStyle(context)))),
+          const SizedBox(width: 12),
+          SizedBox(
+              width: 70,
+              child: Center(child: Text('AGE', style: _headerStyle(context)))),
+          const SizedBox(width: 12),
+          SizedBox(
+              width: 140, child: Text('PHONE', style: _headerStyle(context))),
+          const SizedBox(width: 12),
+          SizedBox(
+              width: 140,
+              child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Text('ACTIONS', style: _headerStyle(context)))),
+        ],
+      ),
+    );
+  }
+
+  TextStyle _headerStyle([BuildContext? ctx]) => TextStyle(
       fontSize: 11,
       fontWeight: FontWeight.w700,
       letterSpacing: 1.5,
-      color: context.textMutedColor);
+      color: ctx?.textMutedColor ?? context.textMutedColor);
 
   void _showPatientDialog(BuildContext context, {Patient? patient}) {
     showDialog(
@@ -284,62 +364,6 @@ class _PatientListWindowsState extends State<PatientListWindows> {
     showDialog(
       context: context,
       builder: (ctx) => BookAppointmentDialog(patient: p),
-    );
-  }
-}
-
-// ── Stat Card ───────────────────────────────────────────────────────────────
-
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final double width;
-
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-    required this.width,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: width,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: color, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(value,
-                      style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: color)),
-                  Text(label,
-                      style: TextStyle(
-                          fontSize: 12, color: context.textMutedColor)),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -363,14 +387,12 @@ class _PatientRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: BoxDecoration(
         color: AppTheme.primary.withValues(alpha: 0.02),
-        borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
-          // UHID
           SizedBox(
             width: 140,
             child: Text(patient.uhid,
@@ -381,7 +403,6 @@ class _PatientRow extends StatelessWidget {
                     color: AppTheme.primary)),
           ),
           const SizedBox(width: 12),
-          // Name + avatar
           Expanded(
             flex: 3,
             child: InkWell(
@@ -416,37 +437,22 @@ class _PatientRow extends StatelessWidget {
               ),
             ),
           ),
-          // Gender
           SizedBox(
             width: 80,
             child: Center(
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: patient.gender == 'Male'
-                      ? AppTheme.primary.withValues(alpha: 0.1)
-                      : patient.gender == 'Female'
-                          ? AppTheme.danger.withValues(alpha: 0.1)
-                          : Colors.grey.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  patient.gender,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: patient.gender == 'Male'
-                        ? AppTheme.primary
-                        : patient.gender == 'Female'
-                            ? AppTheme.danger
-                            : Colors.grey,
-                  ),
-                ),
+              child: AppStatusBadge(
+                label: patient.gender,
+                color: patient.gender == 'Male'
+                    ? AppTheme.primary
+                    : patient.gender == 'Female'
+                        ? AppTheme.danger
+                        : Colors.grey,
+                style: AppStatusBadgeStyle.text,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
-          // Age
           SizedBox(
             width: 70,
             child: Center(
@@ -459,7 +465,6 @@ class _PatientRow extends StatelessWidget {
               ),
             ),
           ),
-          // Phone
           SizedBox(
             width: 140,
             child: Text(
@@ -470,7 +475,6 @@ class _PatientRow extends StatelessWidget {
                   fontFamily: patient.phone.isNotEmpty ? 'monospace' : null),
             ),
           ),
-          // Actions
           SizedBox(
             width: 140,
             child: Row(
@@ -607,53 +611,6 @@ class _ActionBtn extends StatelessWidget {
             child: Icon(icon, size: 16, color: color),
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ── Empty State ─────────────────────────────────────────────────────────────
-
-class _EmptyState extends StatelessWidget {
-  final bool hasSearch;
-  const _EmptyState({required this.hasSearch});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(60),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withValues(alpha: 0.08),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              hasSearch
-                  ? Icons.search_off_rounded
-                  : Icons.people_outline_rounded,
-              size: 40,
-              color: AppTheme.primary.withValues(alpha: 0.5),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            hasSearch ? 'No patients found' : 'No patients registered yet',
-            style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: context.textColor),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            hasSearch
-                ? 'Try adjusting your search query'
-                : 'Add a patient using the button below',
-            style: TextStyle(fontSize: 13, color: context.textMutedColor),
-          ),
-        ],
       ),
     );
   }

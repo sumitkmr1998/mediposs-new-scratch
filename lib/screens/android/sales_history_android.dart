@@ -7,6 +7,8 @@ import '../../shared/models/sale.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/return_dialog.dart';
 import '../../shared/services/printing_service.dart';
+import '../../shared/widgets/app_empty_state.dart';
+import '../../shared/widgets/app_filter_chip.dart';
 
 class SalesHistoryAndroid extends StatefulWidget {
   const SalesHistoryAndroid({super.key});
@@ -31,13 +33,18 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             decoration: BoxDecoration(
               color: context.surfaceColor,
-              border: Border(bottom: BorderSide(color: context.borderColor.withValues(alpha: 0.5))),
+              border: Border(
+                  bottom: BorderSide(
+                      color: context.borderColor.withValues(alpha: 0.5))),
             ),
             child: LayoutBuilder(builder: (ctx, constraints) {
-              double grossSales = 0; double returns = 0;
+              double grossSales = 0;
+              double returns = 0;
               for (final s in sales.sales) {
-                if (s.isReturn) returns += s.total.abs();
-                else grossSales += s.total;
+                if (s.isReturn)
+                  returns += s.total.abs();
+                else
+                  grossSales += s.total;
               }
               final netTotal = grossSales - returns;
 
@@ -46,12 +53,21 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
                 children: [
                   Row(
                     children: [
-                      Text('REVENUE COMPOSITION', 
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: context.textMutedColor, letterSpacing: 1.5)),
+                      Text('REVENUE COMPOSITION',
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: context.textMutedColor,
+                              letterSpacing: 1.5)),
                       const Spacer(),
-                      const Icon(Icons.verified_user, size: 12, color: AppTheme.success),
+                      const Icon(Icons.verified_user,
+                          size: 12, color: AppTheme.success),
                       const SizedBox(width: 4),
-                      Text('SENTRY PROTECTION ACTIVE', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppTheme.success.withValues(alpha: 0.8))),
+                      Text('SENTRY PROTECTION ACTIVE',
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.success.withValues(alpha: 0.8))),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -99,34 +115,38 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
-                  _FilterChip(
+                  AppFilterChip(
                     label: 'Today',
                     isSelected: sales.activeFilter == SalesFilter.today,
-                    onSelected: () => sales.setFilter(SalesFilter.today),
+                    onTap: () => sales.setFilter(SalesFilter.today),
+                    style: AppFilterChipStyle.filled,
                   ),
                   const SizedBox(width: 8),
-                  _FilterChip(
+                  AppFilterChip(
                     label: 'Yesterday',
                     isSelected: sales.activeFilter == SalesFilter.yesterday,
-                    onSelected: () => sales.setFilter(SalesFilter.yesterday),
+                    onTap: () => sales.setFilter(SalesFilter.yesterday),
+                    style: AppFilterChipStyle.filled,
                   ),
                   const SizedBox(width: 8),
-                  _FilterChip(
+                  AppFilterChip(
                     label: 'Last 7 Days',
                     isSelected: sales.activeFilter == SalesFilter.last7Days,
-                    onSelected: () => sales.setFilter(SalesFilter.last7Days),
+                    onTap: () => sales.setFilter(SalesFilter.last7Days),
+                    style: AppFilterChipStyle.filled,
                   ),
                   const SizedBox(width: 8),
-                  _FilterChip(
+                  AppFilterChip(
                     label: 'History',
                     isSelected: sales.activeFilter == SalesFilter.allTime,
-                    onSelected: () => sales.setFilter(SalesFilter.allTime),
+                    onTap: () => sales.setFilter(SalesFilter.allTime),
+                    style: AppFilterChipStyle.filled,
                   ),
                   const SizedBox(width: 8),
-                  _FilterChip(
+                  AppFilterChip(
                     label: 'Range',
                     isSelected: sales.activeFilter == SalesFilter.custom,
-                    onSelected: () async {
+                    onTap: () async {
                       final range = await showDateRangePicker(
                         context: context,
                         firstDate: DateTime(2020),
@@ -136,6 +156,7 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
                         sales.setFilter(SalesFilter.custom, range: range);
                       }
                     },
+                    style: AppFilterChipStyle.filled,
                   ),
                 ],
               ),
@@ -147,11 +168,18 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
             child: Row(
               children: [
-                Text('TRANSACTION STREAM', 
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: context.textMutedColor, letterSpacing: 1)),
+                Text('TRANSACTION STREAM',
+                    style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: context.textMutedColor,
+                        letterSpacing: 1)),
                 const Spacer(),
-                Text('${sales.sales.length} LOGS', 
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: context.textMutedColor)),
+                Text('${sales.sales.length} LOGS',
+                    style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: context.textMutedColor)),
               ],
             ),
           ),
@@ -159,16 +187,10 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
           // list
           Expanded(
             child: sales.sales.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.history_rounded, size: 48, color: context.borderColor),
-                        const SizedBox(height: 16),
-                        Text('No verified logs found',
-                            style: TextStyle(color: context.textMutedColor, fontWeight: FontWeight.w600)),
-                      ],
-                    ))
+                ? const AppEmptyState(
+                    icon: Icons.history_rounded,
+                    title: 'No verified logs found',
+                  )
                 : ListView.builder(
                     itemCount: sales.sales.length,
                     padding: const EdgeInsets.fromLTRB(12, 0, 12, 32),
@@ -177,41 +199,6 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
                   ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final VoidCallback onSelected;
-
-  const _FilterChip({
-    required this.label,
-    required this.isSelected,
-    required this.onSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onSelected,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primary : context.surfaceColor,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected ? AppTheme.primary : context.borderColor,
-          ),
-        ),
-        child: Text(label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-              color: isSelected ? Colors.white : context.textMutedColor,
-            )),
       ),
     );
   }
@@ -237,7 +224,10 @@ class _SaleRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2)),
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 4,
+              offset: const Offset(0, 2)),
         ],
       ),
       child: ExpansionTile(
@@ -247,7 +237,8 @@ class _SaleRow extends StatelessWidget {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: (sale.isReturn ? AppTheme.danger : AppTheme.primaryLight).withValues(alpha: 0.1),
+            color: (sale.isReturn ? AppTheme.danger : AppTheme.primaryLight)
+                .withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(
@@ -261,14 +252,17 @@ class _SaleRow extends StatelessWidget {
             Expanded(
               child: Text(
                 sale.patientName.isEmpty ? 'Walk-in Guest' : sale.patientName,
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, letterSpacing: -0.3),
+                style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                    letterSpacing: -0.3),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
             Text(
               '₹${sale.total.toStringAsFixed(2)}',
               style: TextStyle(
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w800,
                 color: sale.isReturn ? AppTheme.danger : AppTheme.primaryLight,
                 fontSize: 16,
               ),
@@ -292,12 +286,19 @@ class _SaleRow extends StatelessWidget {
                 color: AppTheme.success.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: const Text('VERIFIED', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: AppTheme.success)),
+              child: const Text('VERIFIED',
+                  style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.success)),
             ),
             const Spacer(),
             Text(
               '${dt.hour}:${dt.minute.toString().padLeft(2, '0')}',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: context.textMutedColor),
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: context.textMutedColor),
             ),
           ],
         ),
@@ -307,7 +308,11 @@ class _SaleRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('LINE ITEMS', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: AppTheme.primaryLight)),
+                const Text('LINE ITEMS',
+                    style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.primaryLight)),
                 const SizedBox(height: 12),
                 ...salesProvider.getSaleItems(sale).map((item) => Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -317,14 +322,21 @@ class _SaleRow extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(item.medicineName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                                Text('${item.qty} units @ ₹${item.unitPrice.toStringAsFixed(2)}', 
-                                  style: TextStyle(fontSize: 11, color: context.textMutedColor)),
+                                Text(item.medicineName,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13)),
+                                Text(
+                                    '${item.qty} units @ ₹${item.unitPrice.toStringAsFixed(2)}',
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: context.textMutedColor)),
                               ],
                             ),
                           ),
                           Text('₹${item.lineTotal.toStringAsFixed(2)}',
-                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w800, fontSize: 13)),
                         ],
                       ),
                     )),
@@ -334,11 +346,17 @@ class _SaleRow extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('PAYMENT VIA ${sale.paymentMethod.toUpperCase()}', 
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: context.textMutedColor)),
+                    Text('PAYMENT VIA ${sale.paymentMethod.toUpperCase()}',
+                        style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: context.textMutedColor)),
                     if (sale.discount > 0)
                       Text('Disc: -₹${sale.discount.toStringAsFixed(2)}',
-                          style: const TextStyle(color: AppTheme.danger, fontWeight: FontWeight.w700, fontSize: 12)),
+                          style: const TextStyle(
+                              color: AppTheme.danger,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12)),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -354,7 +372,8 @@ class _SaleRow extends StatelessWidget {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppTheme.primaryLight,
                           side: const BorderSide(color: AppTheme.primaryLight),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
                         ),
                       ),
                     ),
@@ -363,14 +382,19 @@ class _SaleRow extends StatelessWidget {
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: () {
-                            showDialog(context: context, builder: (_) => ReturnDialog(originalSale: sale));
+                            showDialog(
+                                context: context,
+                                builder: (_) =>
+                                    ReturnDialog(originalSale: sale));
                           },
-                          icon: const Icon(Icons.assignment_return_rounded, size: 18),
+                          icon: const Icon(Icons.assignment_return_rounded,
+                              size: 18),
                           label: const Text('RETURN'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppTheme.danger,
                             side: const BorderSide(color: AppTheme.danger),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
                           ),
                         ),
                       ),
@@ -378,7 +402,8 @@ class _SaleRow extends StatelessWidget {
                       const SizedBox(width: 8),
                       IconButton(
                         onPressed: () => _confirmDelete(context, inv),
-                        icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.danger),
+                        icon: const Icon(Icons.delete_outline_rounded,
+                            color: AppTheme.danger),
                         tooltip: 'Void Sale',
                       ),
                     ],
@@ -396,12 +421,17 @@ class _SaleRow extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Void Transaction', style: TextStyle(fontWeight: FontWeight.w900)),
-        content: Text('Permanently remove ${sale.invoiceNo} and restore inventory stock?'),
+        title: const Text('Void Transaction',
+            style: TextStyle(fontWeight: FontWeight.w800)),
+        content: Text(
+            'Permanently remove ${sale.invoiceNo} and restore inventory stock?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.danger,
+                foregroundColor: Colors.white),
             onPressed: () {
               salesProvider.deleteSale(sale, inv);
               Navigator.pop(ctx);
@@ -445,16 +475,18 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(value,
               style: TextStyle(
-                  fontSize: 15, 
-                  fontWeight: FontWeight.w900, 
-                  color: isProminent ? Colors.white : color, 
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  color: isProminent ? Colors.white : color,
                   letterSpacing: -0.5)),
           const SizedBox(height: 2),
           Text(label,
               style: TextStyle(
-                  fontSize: 8, 
-                  fontWeight: FontWeight.w800, 
-                  color: isProminent ? Colors.white.withValues(alpha: 0.8) : context.textMutedColor, 
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: isProminent
+                      ? Colors.white.withValues(alpha: 0.8)
+                      : context.textMutedColor,
                   letterSpacing: 0.5)),
         ],
       ),

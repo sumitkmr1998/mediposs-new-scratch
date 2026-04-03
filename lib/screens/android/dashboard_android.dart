@@ -13,6 +13,8 @@ import '../sales_history_screen.dart';
 import '../settings_screen.dart';
 import '../connection_screen.dart';
 import '../../shared/services/sync_service.dart';
+import '../../shared/widgets/app_kpi_card.dart';
+import '../../shared/widgets/app_filter_chip.dart';
 
 class DashboardAndroid extends StatelessWidget {
   const DashboardAndroid({super.key});
@@ -130,12 +132,12 @@ class DashboardAndroid extends StatelessWidget {
                   // Welcome Section
                   _WelcomeSection(auth: auth, cs: cs),
 
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
 
                   // Sentry Security Indicator
                   _SecurityStatusIndicator(cs: cs),
 
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
 
                   // Date Filter
                   _DateFilterBar(sales: sales, cs: cs),
@@ -151,7 +153,7 @@ class DashboardAndroid extends StatelessWidget {
                     cs: cs,
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
                   // Revenue Breakdown
                   _RevenueBreakdown(
@@ -161,7 +163,7 @@ class DashboardAndroid extends StatelessWidget {
                     cs: cs,
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
                   // Quick Actions
                   _QuickActionsCard(cs: cs),
@@ -171,11 +173,11 @@ class DashboardAndroid extends StatelessWidget {
                   // Inventory Alerts
                   if (inv.lowStockCount > 0) ...[
                     _LowStockCard(inv: inv, cs: cs),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
                   ],
                   if (inv.nearExpiryCount > 0) ...[
                     _NearExpiryCard(inv: inv, cs: cs),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
                   ],
                   if (inv.expiredCount > 0) ...[
                     _ExpiredCard(inv: inv, cs: cs),
@@ -280,30 +282,38 @@ class _DateFilterBar extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
-            _FilterChip(
+            AppFilterChip(
               label: 'Today',
               isSelected: sales.activeFilter == SalesFilter.today,
-              onSelected: () => sales.setFilter(SalesFilter.today),
+              onTap: () => sales.setFilter(SalesFilter.today),
+              style: AppFilterChipStyle.filled,
             ),
-            _FilterChip(
+            const SizedBox(width: 4),
+            AppFilterChip(
               label: 'Yesterday',
               isSelected: sales.activeFilter == SalesFilter.yesterday,
-              onSelected: () => sales.setFilter(SalesFilter.yesterday),
+              onTap: () => sales.setFilter(SalesFilter.yesterday),
+              style: AppFilterChipStyle.filled,
             ),
-            _FilterChip(
+            const SizedBox(width: 4),
+            AppFilterChip(
               label: '7 Days',
               isSelected: sales.activeFilter == SalesFilter.last7Days,
-              onSelected: () => sales.setFilter(SalesFilter.last7Days),
+              onTap: () => sales.setFilter(SalesFilter.last7Days),
+              style: AppFilterChipStyle.filled,
             ),
-            _FilterChip(
+            const SizedBox(width: 4),
+            AppFilterChip(
               label: 'All',
               isSelected: sales.activeFilter == SalesFilter.allTime,
-              onSelected: () => sales.setFilter(SalesFilter.allTime),
+              onTap: () => sales.setFilter(SalesFilter.allTime),
+              style: AppFilterChipStyle.filled,
             ),
-            _FilterChip(
+            const SizedBox(width: 4),
+            AppFilterChip(
               label: 'Custom',
               isSelected: sales.activeFilter == SalesFilter.custom,
-              onSelected: () async {
+              onTap: () async {
                 final range = await showDateRangePicker(
                   context: context,
                   firstDate: DateTime(2020),
@@ -324,53 +334,9 @@ class _DateFilterBar extends StatelessWidget {
                   sales.setFilter(SalesFilter.custom, range: range);
                 }
               },
+              style: AppFilterChipStyle.filled,
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final VoidCallback onSelected;
-
-  const _FilterChip({
-    required this.label,
-    required this.isSelected,
-    required this.onSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onSelected,
-          borderRadius: BorderRadius.circular(10),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            decoration: BoxDecoration(
-              color: isSelected ? AppTheme.primary : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                color: isSelected
-                    ? Colors.white
-                    : cs.onSurface.withValues(alpha: 0.6),
-              ),
-            ),
-          ),
         ),
       ),
     );
@@ -432,39 +398,39 @@ class _PrimaryStats extends StatelessWidget {
           crossAxisSpacing: 14,
           childAspectRatio: 1.1,
           children: [
-            _StatCard(
-              title: 'Today\'s Revenue',
+            AppKpiCard(
+              label: 'Today\'s Revenue',
               value: '₹${totalToday.toStringAsFixed(0)}',
               icon: Icons.trending_up_rounded,
-              gradient: [AppTheme.emerald, AppTheme.emeraldDark],
+              color: AppTheme.emerald,
             ),
-            _StatCard(
-              title: 'OPD Today',
+            AppKpiCard(
+              label: 'OPD Today',
               value: '${opd.todayQueue.length}',
               icon: Icons.people_alt_rounded,
-              gradient: [AppTheme.primary, AppTheme.primaryLight],
+              color: AppTheme.primary,
             ),
-            _StatCard(
-              title: 'Low Stock',
+            AppKpiCard(
+              label: 'Low Stock',
               value: '${inv.lowStockCount}',
               icon: Icons.warning_amber_rounded,
-              gradient: [AppTheme.warning, AppTheme.warningDark],
+              color: AppTheme.warning,
               onTap: () => _showMedicineList(context, 'Low Stock',
                   inv.medicines.where((m) => m.isLowStock).toList()),
             ),
-            _StatCard(
-              title: 'Near Expiry',
+            AppKpiCard(
+              label: 'Near Expiry',
               value: '${inv.nearExpiryCount}',
               icon: Icons.timer_rounded,
-              gradient: [AppTheme.orange, AppTheme.amberDark],
+              color: AppTheme.orange,
               onTap: () => _showMedicineList(
                   context, 'Near Expiry', inv.nearExpiryMedicines),
             ),
-            _StatCard(
-              title: 'Expired',
+            AppKpiCard(
+              label: 'Expired',
               value: '${inv.expiredCount}',
               icon: Icons.event_busy_rounded,
-              gradient: [AppTheme.danger, AppTheme.redDark],
+              color: AppTheme.danger,
               onTap: () => _showMedicineList(
                   context, 'Expired Items', inv.expiredMedicines),
             ),
@@ -539,104 +505,6 @@ class _PrimaryStats extends StatelessWidget {
                         );
                       },
                     ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final List<Color> gradient;
-  final VoidCallback? onTap;
-
-  const _StatCard({
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.gradient,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: gradient,
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-          boxShadow: [
-            BoxShadow(
-              color: gradient.first.withValues(alpha: 0.4),
-              blurRadius: 12,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            Positioned(
-              right: -20,
-              top: -20,
-              child: Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.1),
-                ),
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(icon, color: Colors.white, size: 22),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      value,
-                      style: const TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                        letterSpacing: -1,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      title.toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white.withAlpha(200),
-                        letterSpacing: 1,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ],
             ),
           ],
         ),
@@ -792,8 +660,8 @@ class _TodayTotalBadge extends StatelessWidget {
             'TODAY: ',
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.8),
-              fontSize: 9,
-              fontWeight: FontWeight.w800,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
               letterSpacing: 0.5,
             ),
           ),
@@ -828,7 +696,7 @@ class _BreakdownCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: BorderRadius.circular(14),
@@ -886,7 +754,7 @@ class _QuickActionsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: BorderRadius.circular(16),
@@ -1037,7 +905,7 @@ class _LowStockCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppTheme.warning.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
@@ -1174,7 +1042,7 @@ class _NearExpiryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     if (inv.nearExpiryCount == 0) return const SizedBox.shrink();
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppTheme.orange.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
@@ -1246,7 +1114,7 @@ class _ExpiredCard extends StatelessWidget {
   Widget build(BuildContext context) {
     if (inv.expiredCount == 0) return const SizedBox.shrink();
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppTheme.danger.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
@@ -1435,7 +1303,7 @@ class _SecurityStatusIndicator extends StatelessWidget {
             'SENTRY ACTIVE',
             style: TextStyle(
               fontSize: 10,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
               color: AppTheme.primary,
               letterSpacing: 1.2,
             ),
@@ -1535,8 +1403,8 @@ class _CompLabel extends StatelessWidget {
         Text(
           '$label ${(pct * 100).toStringAsFixed(0)}%',
           style: TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.bold,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
               color: Theme.of(context)
                   .colorScheme
                   .onSurface

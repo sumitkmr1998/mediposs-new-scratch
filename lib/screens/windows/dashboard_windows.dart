@@ -14,6 +14,8 @@ import '../sales_history_screen.dart';
 import '../settings_screen.dart';
 import 'opd/opd_queue_windows.dart';
 import '../../shared/widgets/interactive_hover.dart';
+import '../../shared/widgets/app_filter_chip.dart';
+import '../../shared/widgets/app_kpi_card.dart';
 
 class DashboardWindows extends StatelessWidget {
   const DashboardWindows({super.key});
@@ -38,23 +40,23 @@ class DashboardWindows extends StatelessWidget {
               RepaintBoundary(
                   child: _DashboardHeader(auth: auth, sales: sales)),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
 
               // 2. High-Density KPI Grid (Now Row 1)
               RepaintBoundary(
                   child: _KPIGrid(sales: sales, inv: inv, opd: opd)),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
 
               // 3. Quick Actions (Now Horizontal Row 2/3)
               RepaintBoundary(child: _QuickActions()),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
 
               // 4. Financial Performance (Restored Colorful Style)
               RepaintBoundary(child: _RevenueBreakdown(sales: sales, opd: opd)),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
 
               // 5. Inventory Health Row (Subdued Glass)
               const RepaintBoundary(child: _InventoryAlertSection()),
@@ -159,88 +161,30 @@ class _ModernFilterChips extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _FilterChipBtn(
+        AppFilterChip(
           label: 'Today',
           icon: Icons.today_rounded,
           isSelected: sales.activeFilter == SalesFilter.today,
           onTap: () => sales.setFilter(SalesFilter.today),
+          style: AppFilterChipStyle.filled,
         ),
-        _FilterChipBtn(
+        const SizedBox(width: 8),
+        AppFilterChip(
           label: '7 Days',
           icon: Icons.date_range_rounded,
           isSelected: sales.activeFilter == SalesFilter.last7Days,
           onTap: () => sales.setFilter(SalesFilter.last7Days),
+          style: AppFilterChipStyle.filled,
         ),
-        _FilterChipBtn(
+        const SizedBox(width: 8),
+        AppFilterChip(
           label: 'All Time',
           icon: Icons.all_inclusive_rounded,
           isSelected: sales.activeFilter == SalesFilter.allTime,
           onTap: () => sales.setFilter(SalesFilter.allTime),
+          style: AppFilterChipStyle.filled,
         ),
       ],
-    );
-  }
-}
-
-class _FilterChipBtn extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _FilterChipBtn({
-    required this.label,
-    required this.icon,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Padding(
-      padding: const EdgeInsets.only(left: 8),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? AppTheme.primary
-                  : (isDark ? Colors.white12 : Colors.grey.shade100),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: isSelected
-                    ? AppTheme.primary
-                    : (isDark ? Colors.white24 : Colors.grey.shade300),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: 14,
-                  color: isSelected ? Colors.white : Colors.grey.shade600,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: isSelected ? Colors.white : Colors.grey.shade700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -280,46 +224,46 @@ class _KPIGrid extends StatelessWidget {
         mainAxisSpacing: 16,
         childAspectRatio: 2.8,
         children: [
-          _KPICard(
+          AppKpiCard(
             label: "Today's Revenue",
             value: '₹${totalTodayRevenue.toStringAsFixed(0)}',
             icon: Icons.trending_up_rounded,
-            color: AppTheme.emerald, // Green
+            color: AppTheme.emerald,
             subtitle: 'Incl. OPD Fees',
           ),
-          _KPICard(
+          AppKpiCard(
             label: "Today's Sales",
             value: '${sales.todaySalesCount}',
             icon: Icons.shopping_bag_rounded,
-            color: const Color(0xFF14B8A6), // Teal
+            color: const Color(0xFF14B8A6),
           ),
-          _KPICard(
+          AppKpiCard(
             label: "OPD Today",
             value:
                 '${opd.appointments.where((a) => _isToday(a.scheduledAt)).length}',
             icon: Icons.medical_services_rounded,
             color: AppTheme.primary,
           ),
-          _KPICard(
+          AppKpiCard(
             label: "Near Expiry",
             value: '${inv.nearExpiryCount}',
             icon: Icons.history_rounded,
-            color: AppTheme.indigo, // Indigo
-            showBadge: inv.nearExpiryCount > 0,
+            color: AppTheme.indigo,
+            count: inv.nearExpiryCount,
           ),
-          _KPICard(
+          AppKpiCard(
             label: "Expired Stock",
             value: '${inv.expiredCount}',
             icon: Icons.event_busy_rounded,
-            color: const Color(0xFFEF4444), // Red
-            showBadge: inv.expiredCount > 0,
+            color: const Color(0xFFEF4444),
+            count: inv.expiredCount,
           ),
-          _KPICard(
+          AppKpiCard(
             label: "Low Stock Items",
             value: '${inv.lowStockCount}',
             icon: Icons.warning_amber_rounded,
-            color: AppTheme.orange, // Orange
-            showBadge: inv.lowStockCount > 0,
+            color: AppTheme.orange,
+            count: inv.lowStockCount,
           ),
         ],
       );
@@ -329,134 +273,6 @@ class _KPIGrid extends StatelessWidget {
   bool _isToday(DateTime dt) {
     final now = DateTime.now();
     return dt.year == now.year && dt.month == now.month && dt.day == now.day;
-  }
-}
-
-class _KPICard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final String? subtitle;
-  final bool showBadge;
-
-  const _KPICard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-    this.subtitle,
-    this.showBadge = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return InteractiveHover(
-      borderRadius: BorderRadius.circular(24),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-        decoration: BoxDecoration(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.05)
-              : Colors.black.withValues(alpha: 0.03),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.08)
-                : Colors.black.withValues(alpha: 0.05),
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: isDark
-                  ? Colors.black26
-                  : Colors.black.withValues(alpha: 0.05),
-              blurRadius: 15,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Stack(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(icon, color: color, size: 26),
-                ),
-                if (showBadge)
-                  Positioned(
-                    top: -2,
-                    right: -2,
-                    child: Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: AppTheme.danger,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(width: 20),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    value,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          color: cs.onSurface,
-                          letterSpacing: -1,
-                        ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    label.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      color: cs.onSurface.withValues(alpha: 0.5),
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                  if (subtitle != null) ...[
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        subtitle!,
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          color: color,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 
@@ -497,7 +313,7 @@ class _RevenueBreakdown extends StatelessWidget {
             .fold(0.0, (sum, a) => sum + a.consultationFee);
 
     return Container(
-      padding: const EdgeInsets.all(28),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkCard : Colors.white,
         borderRadius: BorderRadius.circular(24),
@@ -526,7 +342,7 @@ class _RevenueBreakdown extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1295,7 +1111,7 @@ class _EmptyAlertState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppTheme.emerald.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),

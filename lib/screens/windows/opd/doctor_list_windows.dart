@@ -4,6 +4,10 @@ import '../../../shared/models/doctor.dart';
 import '../../../shared/providers/opd_provider.dart';
 import '../../../shared/services/sync_service.dart';
 import '../../../theme/app_theme.dart';
+import '../../../shared/widgets/app_kpi_card.dart';
+import '../../../shared/widgets/app_filter_chip.dart';
+import '../../../shared/widgets/app_empty_state.dart';
+import '../../../shared/widgets/app_status_badge.dart';
 
 class DoctorListWindows extends StatefulWidget {
   const DoctorListWindows({super.key});
@@ -14,8 +18,9 @@ class DoctorListWindows extends StatefulWidget {
 
 class _DoctorListWindowsState extends State<DoctorListWindows> {
   final _searchCtrl = TextEditingController();
-  bool _isGridView = false;
+  String _searchQuery = '';
   String _filter = 'all';
+  bool _isGridView = false;
 
   @override
   void initState() {
@@ -37,11 +42,9 @@ class _DoctorListWindowsState extends State<DoctorListWindows> {
     final allDoctors = opd.doctors;
 
     final filteredDoctors = allDoctors.where((d) {
-      final matchesSearch = _searchCtrl.text.isEmpty ||
-          d.name.toLowerCase().contains(_searchCtrl.text.toLowerCase()) ||
-          d.specialization
-              .toLowerCase()
-              .contains(_searchCtrl.text.toLowerCase());
+      final matchesSearch = _searchQuery.isEmpty ||
+          d.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          d.specialization.toLowerCase().contains(_searchQuery.toLowerCase());
 
       switch (_filter) {
         case 'active':
@@ -57,91 +60,17 @@ class _DoctorListWindowsState extends State<DoctorListWindows> {
     final inactiveCount = allDoctors.where((d) => !d.isActive).length;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppTheme.primary.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.medical_services_rounded,
-                  color: AppTheme.primary, size: 22),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Doctors',
-                    style:
-                        TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-                Text('Clinic consultants',
-                    style:
-                        TextStyle(fontSize: 12, color: context.textMutedColor)),
-              ],
-            ),
-          ],
-        ),
-        actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            width: 280,
-            child: TextField(
-              controller: _searchCtrl,
-              decoration: InputDecoration(
-                hintText: 'Search doctors...',
-                prefixIcon: const Icon(Icons.search, size: 20),
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
-                ),
-                filled: true,
-                fillColor: context.surfaceColor,
-              ),
-              onChanged: (_) => setState(() {}),
-            ),
-          ),
-        ],
-      ),
+      appBar: _buildAppBar(),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _StatsRow(
-                    allCount: allDoctors.length,
-                    activeCount: activeCount,
-                    inactiveCount: inactiveCount,
-                    filter: _filter,
-                    onFilterChanged: (f) => setState(() => _filter = f),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                _ViewToggle(
-                  isGrid: _isGridView,
-                  onToggle: () => setState(() => _isGridView = !_isGridView),
-                ),
-              ],
-            ),
+            _buildKpiSection(allDoctors.length, activeCount, inactiveCount),
             const SizedBox(height: 24),
-            if (_isGridView)
-              _DoctorGrid(
-                doctors: filteredDoctors,
-                onEdit: (d) => _showDoctorDialog(context, doctor: d),
-                onDelete: (d) => _confirmDelete(context, d),
-              )
-            else
-              _DoctorTable(
-                doctors: filteredDoctors,
-                onEdit: (d) => _showDoctorDialog(context, doctor: d),
-                onDelete: (d) => _confirmDelete(context, d),
-              ),
+            _buildFilterSearchCard(context),
+            const SizedBox(height: 24),
+            _buildDataTable(context, filteredDoctors),
           ],
         ),
       ),
@@ -154,6 +83,300 @@ class _DoctorListWindowsState extends State<DoctorListWindows> {
       ),
     );
   }
+
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      title: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.medical_services_rounded,
+                color: AppTheme.primary, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Doctors',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+              Text('Clinic consultants',
+                  style:
+                      TextStyle(fontSize: 12, color: context.textMutedColor)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKpiSection(int total, int active, int inactive) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('OVERVIEW',
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.5,
+                color: context.textMutedColor)),
+        const SizedBox(height: 12),
+        LayoutBuilder(builder: (ctx, constraints) {
+          final cols = constraints.maxWidth > 800
+              ? 3
+              : (constraints.maxWidth > 500 ? 2 : 1);
+          const spacing = 16.0;
+          final cardWidth =
+              (constraints.maxWidth - (cols - 1) * spacing) / cols;
+
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: [
+              AppKpiCard(
+                label: 'Total Doctors',
+                value: '$total',
+                icon: Icons.groups_rounded,
+                color: AppTheme.primary,
+                width: cardWidth,
+              ),
+              AppKpiCard(
+                label: 'Active',
+                value: '$active',
+                icon: Icons.check_circle_rounded,
+                color: AppTheme.success,
+                width: cardWidth,
+              ),
+              AppKpiCard(
+                label: 'Inactive',
+                value: '$inactive',
+                icon: Icons.cancel_rounded,
+                color: Colors.grey,
+                width: cardWidth,
+              ),
+            ],
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildFilterSearchCard(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+        border: Border.all(color: context.borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  AppFilterChip(
+                    label: 'All',
+                    icon: Icons.groups_rounded,
+                    isSelected: _filter == 'all',
+                    onTap: () => setState(() => _filter = 'all'),
+                  ),
+                  const SizedBox(width: 8),
+                  AppFilterChip(
+                    label: 'Active',
+                    icon: Icons.check_circle_rounded,
+                    isSelected: _filter == 'active',
+                    onTap: () => setState(() => _filter = 'active'),
+                    activeColor: AppTheme.success,
+                  ),
+                  const SizedBox(width: 8),
+                  AppFilterChip(
+                    label: 'Inactive',
+                    icon: Icons.cancel_rounded,
+                    isSelected: _filter == 'inactive',
+                    onTap: () => setState(() => _filter = 'inactive'),
+                    activeColor: Colors.grey,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: context.surfaceColor,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: context.borderColor),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _ToggleBtn(
+                  icon: Icons.view_list_rounded,
+                  isSelected: !_isGridView,
+                  onTap: () => setState(() => _isGridView = false),
+                ),
+                _ToggleBtn(
+                  icon: Icons.grid_view_rounded,
+                  isSelected: _isGridView,
+                  onTap: () => setState(() => _isGridView = true),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          SizedBox(
+            width: 260,
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (v) => setState(() => _searchQuery = v),
+              style: const TextStyle(fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Search doctors...',
+                hintStyle:
+                    TextStyle(fontSize: 13, color: context.textMutedColor),
+                prefixIcon: Icon(Icons.search_rounded,
+                    size: 20, color: context.textMutedColor),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataTable(BuildContext context, List<Doctor> doctors) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12, left: 4),
+          child: Text(
+            'FOUND ${doctors.length} DOCTORS',
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: context.textMutedColor,
+                letterSpacing: 1.5),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: context.surfaceColor,
+            borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+            border:
+                Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 8,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          child: _isGridView
+              ? _DoctorGrid(
+                  doctors: doctors,
+                  onEdit: (d) => _showDoctorDialog(context, doctor: d),
+                  onDelete: (d) => _confirmDelete(context, d),
+                )
+              : Column(
+                  children: [
+                    _buildTableHeader(),
+                    Divider(height: 1, color: context.borderColor),
+                    if (doctors.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(40),
+                        child: AppEmptyState(
+                          icon: Icons.medical_services_outlined,
+                          title: 'No doctors found',
+                          subtitle: 'Try adjusting your search or filters',
+                          iconColor: AppTheme.primary,
+                        ),
+                      )
+                    else
+                      ...doctors.map((d) => _DoctorTableRow(
+                            doctor: d,
+                            onEdit: () => _showDoctorDialog(context, doctor: d),
+                            onDelete: () => _confirmDelete(context, d),
+                          )),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTableHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: 0.04),
+        borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(AppTheme.radiusCard)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+              flex: 3, child: Text('DOCTOR', style: _headerStyle(context))),
+          const SizedBox(width: 12),
+          SizedBox(
+              width: 150,
+              child: Text('SPECIALIZATION', style: _headerStyle(context))),
+          const SizedBox(width: 12),
+          SizedBox(
+              width: 100,
+              child: Center(child: Text('FEE', style: _headerStyle(context)))),
+          const SizedBox(width: 12),
+          SizedBox(
+              width: 130, child: Text('PHONE', style: _headerStyle(context))),
+          const SizedBox(width: 12),
+          SizedBox(
+              width: 130,
+              child:
+                  Center(child: Text('STATUS', style: _headerStyle(context)))),
+          const SizedBox(width: 12),
+          SizedBox(
+              width: 100,
+              child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Text('ACTIONS', style: _headerStyle(context)))),
+        ],
+      ),
+    );
+  }
+
+  TextStyle _headerStyle(BuildContext context) => TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 1.5,
+      color: context.textMutedColor);
 
   void _confirmDelete(BuildContext context, Doctor d) {
     showDialog(
@@ -225,150 +448,7 @@ class _DoctorListWindowsState extends State<DoctorListWindows> {
   }
 }
 
-class _StatsRow extends StatelessWidget {
-  final int allCount;
-  final int activeCount;
-  final int inactiveCount;
-  final String filter;
-  final ValueChanged<String> onFilterChanged;
-
-  const _StatsRow({
-    required this.allCount,
-    required this.activeCount,
-    required this.inactiveCount,
-    required this.filter,
-    required this.onFilterChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _FilterChip(
-          label: 'All',
-          count: allCount,
-          isSelected: filter == 'all',
-          color: AppTheme.primary,
-          onTap: () => onFilterChanged('all'),
-        ),
-        const SizedBox(width: 8),
-        _FilterChip(
-          label: 'Active',
-          count: activeCount,
-          isSelected: filter == 'active',
-          color: AppTheme.success,
-          onTap: () => onFilterChanged('active'),
-        ),
-        const SizedBox(width: 8),
-        _FilterChip(
-          label: 'Inactive',
-          count: inactiveCount,
-          isSelected: filter == 'inactive',
-          color: Colors.grey,
-          onTap: () => onFilterChanged('inactive'),
-        ),
-      ],
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final int count;
-  final bool isSelected;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _FilterChip({
-    required this.label,
-    required this.count,
-    required this.isSelected,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: isSelected ? color.withValues(alpha: 0.15) : Colors.transparent,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isSelected ? color : context.borderColor,
-              width: isSelected ? 1.5 : 1,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  color: isSelected ? color : context.textMutedColor,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isSelected ? color : context.borderColor,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '$count',
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : context.textMutedColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ViewToggle extends StatelessWidget {
-  final bool isGrid;
-  final VoidCallback onToggle;
-
-  const _ViewToggle({required this.isGrid, required this.onToggle});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _ToggleBtn(
-            icon: Icons.view_list_rounded,
-            isSelected: !isGrid,
-            onTap: onToggle,
-          ),
-          _ToggleBtn(
-            icon: Icons.grid_view_rounded,
-            isSelected: isGrid,
-            onTap: onToggle,
-          ),
-        ],
-      ),
-    );
-  }
-}
+// ── View Toggle ─────────────────────────────────────────────────────────────
 
 class _ToggleBtn extends StatelessWidget {
   final IconData icon;
@@ -402,106 +482,7 @@ class _ToggleBtn extends StatelessWidget {
   }
 }
 
-class _DoctorTable extends StatelessWidget {
-  final List<Doctor> doctors;
-  final Function(Doctor) onEdit;
-  final Function(Doctor) onDelete;
-
-  const _DoctorTable({
-    required this.doctors,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-            child: Row(
-              children: [
-                const Expanded(
-                  flex: 3,
-                  child: Text('DOCTOR',
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.5,
-                          color: AppTheme.primaryLight)),
-                ),
-                const SizedBox(
-                    width: 150,
-                    child: Text('SPECIALIZATION',
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.5,
-                            color: AppTheme.primaryLight))),
-                const SizedBox(
-                    width: 100,
-                    child: Text('FEE',
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.5,
-                            color: AppTheme.primaryLight))),
-                const SizedBox(
-                    width: 130,
-                    child: Text('PHONE',
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.5,
-                            color: AppTheme.primaryLight))),
-                const SizedBox(
-                    width: 130,
-                    child: Text('STATUS',
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.5,
-                            color: AppTheme.primaryLight))),
-                const SizedBox(
-                    width: 100,
-                    child: Align(
-                        alignment: Alignment.centerRight,
-                        child: Text('ACTIONS',
-                            style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 1.5,
-                                color: AppTheme.primaryLight)))),
-              ],
-            ),
-          ),
-          Divider(height: 1, color: context.borderColor),
-          if (doctors.isEmpty)
-            _EmptyState(onAdd: () {})
-          else
-            ...doctors.map((d) => _DoctorTableRow(
-                  doctor: d,
-                  onEdit: () => onEdit(d),
-                  onDelete: () => onDelete(d),
-                )),
-        ],
-      ),
-    );
-  }
-}
+// ── Doctor Table Row ────────────────────────────────────────────────────────
 
 class _DoctorTableRow extends StatefulWidget {
   final Doctor doctor;
@@ -596,12 +577,13 @@ class _DoctorTableRowState extends State<_DoctorTableRow> {
                 ],
               ),
             ),
+            const SizedBox(width: 12),
             SizedBox(
               width: 150,
               child: _SpecializationBadge(
                   specialization: widget.doctor.specialization),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             SizedBox(
               width: 100,
               child: Text(
@@ -612,6 +594,7 @@ class _DoctorTableRowState extends State<_DoctorTableRow> {
                     color: isInactive ? Colors.grey : AppTheme.success),
               ),
             ),
+            const SizedBox(width: 12),
             SizedBox(
               width: 130,
               child: Text(
@@ -623,10 +606,12 @@ class _DoctorTableRowState extends State<_DoctorTableRow> {
                         widget.doctor.phone.isNotEmpty ? 'monospace' : null),
               ),
             ),
+            const SizedBox(width: 12),
             SizedBox(
               width: 130,
               child: _StatusToggle(doctor: widget.doctor),
             ),
+            const SizedBox(width: 12),
             SizedBox(
               width: 100,
               child: Row(
@@ -655,6 +640,8 @@ class _DoctorTableRowState extends State<_DoctorTableRow> {
   }
 }
 
+// ── Doctor Avatar ───────────────────────────────────────────────────────────
+
 class _DoctorAvatar extends StatelessWidget {
   final String name;
   final bool isActive;
@@ -663,37 +650,24 @@ class _DoctorAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = isActive
-        ? [AppTheme.primary, AppTheme.primaryLight]
-        : [
-            context.textMutedColor,
-            context.textMutedColor.withValues(alpha: 0.7)
-          ];
-
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: colors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Center(
-        child: Text(
-          name.isNotEmpty ? name[0].toUpperCase() : 'D',
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
+    return CircleAvatar(
+      radius: 16,
+      backgroundColor: isActive
+          ? AppTheme.primary.withValues(alpha: 0.1)
+          : context.textMutedColor.withValues(alpha: 0.1),
+      child: Text(
+        name.isNotEmpty ? name[0].toUpperCase() : 'D',
+        style: TextStyle(
+          color: isActive ? AppTheme.primary : context.textMutedColor,
+          fontWeight: FontWeight.w700,
+          fontSize: 13,
         ),
       ),
     );
   }
 }
+
+// ── Specialization Badge ────────────────────────────────────────────────────
 
 class _SpecializationBadge extends StatelessWidget {
   final String specialization;
@@ -724,6 +698,8 @@ class _SpecializationBadge extends StatelessWidget {
     );
   }
 }
+
+// ── Status Toggle ───────────────────────────────────────────────────────────
 
 class _StatusToggle extends StatelessWidget {
   final Doctor doctor;
@@ -757,17 +733,19 @@ class _StatusToggle extends StatelessWidget {
   }
 }
 
-class _AnimatedKey extends StatefulWidget {
+// ── Animated Switch ─────────────────────────────────────────────────────────
+
+class _AnimatedSwitch extends StatefulWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
 
-  const _AnimatedKey({required this.value, required this.onChanged});
+  const _AnimatedSwitch({required this.value, required this.onChanged});
 
   @override
-  State<_AnimatedKey> createState() => _AnimatedKeyState();
+  State<_AnimatedSwitch> createState() => _AnimatedSwitchState();
 }
 
-class _AnimatedKeyState extends State<_AnimatedKey>
+class _AnimatedSwitchState extends State<_AnimatedSwitch>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
@@ -786,7 +764,7 @@ class _AnimatedKeyState extends State<_AnimatedKey>
   }
 
   @override
-  void didUpdateWidget(_AnimatedKey oldWidget) {
+  void didUpdateWidget(_AnimatedSwitch oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.value != oldWidget.value) {
       if (widget.value) {
@@ -848,17 +826,7 @@ class _AnimatedKeyState extends State<_AnimatedKey>
   }
 }
 
-class _AnimatedSwitch extends StatelessWidget {
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  const _AnimatedSwitch({required this.value, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return _AnimatedKey(value: value, onChanged: onChanged);
-  }
-}
+// ── Icon Action Button ──────────────────────────────────────────────────────
 
 class _IconActionBtn extends StatelessWidget {
   final IconData icon;
@@ -893,6 +861,8 @@ class _IconActionBtn extends StatelessWidget {
   }
 }
 
+// ── Doctor Grid ─────────────────────────────────────────────────────────────
+
 class _DoctorGrid extends StatelessWidget {
   final List<Doctor> doctors;
   final Function(Doctor) onEdit;
@@ -907,7 +877,15 @@ class _DoctorGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (doctors.isEmpty) {
-      return _EmptyState(onAdd: () {});
+      return const Padding(
+        padding: EdgeInsets.all(40),
+        child: AppEmptyState(
+          icon: Icons.medical_services_outlined,
+          title: 'No doctors found',
+          subtitle: 'Try adjusting your search or filters',
+          iconColor: AppTheme.primary,
+        ),
+      );
     }
 
     return LayoutBuilder(
@@ -919,6 +897,7 @@ class _DoctorGrid extends StatelessWidget {
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
             crossAxisSpacing: 16,
@@ -936,6 +915,8 @@ class _DoctorGrid extends StatelessWidget {
     );
   }
 }
+
+// ── Doctor Card ─────────────────────────────────────────────────────────────
 
 class _DoctorCard extends StatefulWidget {
   final Doctor doctor;
@@ -968,12 +949,12 @@ class _DoctorCardState extends State<_DoctorCard> {
             ? (Matrix4.identity()..translate(0, -4, 0))
             : Matrix4.identity(),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: _isHovered
                 ? AppTheme.primary.withValues(alpha: 0.3)
-                : AppTheme.lightBorder.withValues(alpha: 0.3),
+                : context.borderColor.withValues(alpha: 0.3),
           ),
           boxShadow: [
             BoxShadow(
@@ -1001,7 +982,9 @@ class _DoctorCardState extends State<_DoctorCard> {
                       style: TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
-                          color: isInactive ? Colors.grey : Colors.black87),
+                          color: isInactive
+                              ? context.textMutedColor
+                              : context.textColor),
                       textAlign: TextAlign.center),
                   const SizedBox(height: 4),
                   _SpecializationBadge(
@@ -1015,7 +998,9 @@ class _DoctorCardState extends State<_DoctorCard> {
                         style: TextStyle(
                             fontWeight: FontWeight.w800,
                             fontSize: 18,
-                            color: isInactive ? Colors.grey : AppTheme.success),
+                            color: isInactive
+                                ? context.textMutedColor
+                                : AppTheme.success),
                       ),
                       Text('/visit',
                           style: TextStyle(
@@ -1071,6 +1056,8 @@ class _DoctorCardState extends State<_DoctorCard> {
   }
 }
 
+// ── Card Action Button ──────────────────────────────────────────────────────
+
 class _CardActionBtn extends StatelessWidget {
   final IconData icon;
   final Color color;
@@ -1099,39 +1086,7 @@ class _CardActionBtn extends StatelessWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  final VoidCallback onAdd;
-  const _EmptyState({required this.onAdd});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(60),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withValues(alpha: 0.08),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.medical_services_outlined,
-                size: 40, color: AppTheme.primary.withValues(alpha: 0.5)),
-          ),
-          const SizedBox(height: 16),
-          const Text('No doctors found',
-              style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A2332))),
-          const SizedBox(height: 6),
-          Text('Try adjusting your search or filters',
-              style: TextStyle(fontSize: 13, color: context.textMutedColor)),
-        ],
-      ),
-    );
-  }
-}
+// ── Doctor Dialog ───────────────────────────────────────────────────────────
 
 class _DoctorDialog extends StatefulWidget {
   final Doctor? doctor;
@@ -1178,7 +1133,7 @@ class _DoctorDialogState extends State<_DoctorDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: Container(
         width: 480,
-        padding: const EdgeInsets.all(28),
+        padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1353,6 +1308,8 @@ class _DoctorDialogState extends State<_DoctorDialog> {
     );
   }
 }
+
+// ── Modern Text Field ───────────────────────────────────────────────────────
 
 class _ModernTextField extends StatelessWidget {
   final TextEditingController controller;

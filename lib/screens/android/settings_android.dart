@@ -460,13 +460,13 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                                 .where((rate) => rate > 0.0)
                                 .toSet()
                                 .toList()
-                                .followedBy([]) 
+                                .followedBy([])
                                 .map((rate) => DropdownMenuItem<double>(
                                       value: rate,
                                       child: Text('${rate.toInt()} Hz'),
                                     ))
                                 .toList()
-                                ..sort((a, b) => b.value!.compareTo(a.value!)),
+                              ..sort((a, b) => b.value!.compareTo(a.value!)),
                           ],
                           onChanged: (val) {
                             if (val != null) setState(() => _selectedFPS = val);
@@ -536,11 +536,16 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                             backgroundColor: AppTheme.primary,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
                             elevation: 0,
                           ),
                           icon: const Icon(Icons.backup_rounded, size: 20),
-                          label: const Text('BACKUP DB', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5)),
+                          label: const Text('BACKUP DB',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 11,
+                                  letterSpacing: 0.5)),
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -549,12 +554,18 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                           onPressed: _restoreDatabase,
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppTheme.danger,
-                            side: BorderSide(color: AppTheme.danger.withValues(alpha: 0.5)),
+                            side: BorderSide(
+                                color: AppTheme.danger.withValues(alpha: 0.5)),
                             padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
                           ),
                           icon: const Icon(Icons.restore_rounded, size: 20),
-                          label: const Text('RESTORE DB', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5)),
+                          label: const Text('RESTORE DB',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 11,
+                                  letterSpacing: 0.5)),
                         ),
                       ),
                     ],
@@ -568,14 +579,16 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                     ...auth.getAllUsers().map((u) => Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           decoration: BoxDecoration(
-                            color: context.textMutedColor.withValues(alpha: 0.03),
+                            color:
+                                context.textMutedColor.withValues(alpha: 0.03),
                             border: Border.all(
                                 color:
                                     context.borderColor.withValues(alpha: 0.3)),
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 4),
                             leading: Container(
                               width: 44,
                               height: 44,
@@ -588,23 +601,31 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                                     style: const TextStyle(
                                         color: AppTheme.primary,
                                         fontSize: 18,
-                                        fontWeight: FontWeight.w900)),
+                                        fontWeight: FontWeight.w700)),
                               ),
                             ),
                             title: Text(u.name,
                                 style: const TextStyle(
-                                    fontWeight: FontWeight.w900, fontSize: 15)),
+                                    fontWeight: FontWeight.w700, fontSize: 15)),
                             subtitle: Text(u.role.toUpperCase(),
-                                style:
-                                    TextStyle(color: context.textMutedColor, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+                                style: TextStyle(
+                                    color: context.textMutedColor,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.5)),
                             trailing: u.role == 'admin' ||
                                     auth.currentUser?.id == u.id
                                 ? TextButton.icon(
                                     onPressed: () =>
                                         _changePinDialog(context, u, auth),
-                                    style: TextButton.styleFrom(foregroundColor: AppTheme.primary),
-                                    icon: const Icon(Icons.password_rounded, size: 16),
-                                    label: const Text('PIN', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+                                    style: TextButton.styleFrom(
+                                        foregroundColor: AppTheme.primary),
+                                    icon: const Icon(Icons.password_rounded,
+                                        size: 16),
+                                    label: const Text('PIN',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 11)),
                                   )
                                 : null,
                           ),
@@ -617,10 +638,16 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
         ),
       ),
       bottomNavigationBar: Container(
-        padding: EdgeInsets.only(left: 20, right: 20, top: 16, bottom: MediaQuery.of(context).padding.bottom + 16),
+        padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 16,
+            bottom: MediaQuery.of(context).padding.bottom + 16),
         decoration: BoxDecoration(
           color: context.surfaceColor.withValues(alpha: 0.9),
-          border: Border(top: BorderSide(color: context.borderColor.withValues(alpha: 0.2))),
+          border: Border(
+              top: BorderSide(
+                  color: context.borderColor.withValues(alpha: 0.2))),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.05),
@@ -641,7 +668,7 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
           child: const Text('SAVE ALL SETTINGS',
               style: TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   letterSpacing: 1,
                   color: Colors.white)),
         ),
@@ -677,7 +704,7 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
             title: Text(
               title.toUpperCase(),
               style: const TextStyle(
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                   fontSize: 12,
                   letterSpacing: 1,
                   color: AppTheme.primaryLight),
@@ -698,17 +725,22 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: context.textMutedColor, fontWeight: FontWeight.w600, fontSize: 13),
+        labelStyle: TextStyle(
+            color: context.textMutedColor,
+            fontWeight: FontWeight.w600,
+            fontSize: 13),
         isDense: true,
         filled: true,
         fillColor: context.textMutedColor.withValues(alpha: 0.03),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: context.borderColor.withValues(alpha: 0.3)),
+          borderSide:
+              BorderSide(color: context.borderColor.withValues(alpha: 0.3)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: context.borderColor.withValues(alpha: 0.3)),
+          borderSide:
+              BorderSide(color: context.borderColor.withValues(alpha: 0.3)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -726,7 +758,8 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
         backgroundColor: context.surfaceColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: Text('CHANGE PIN: ${user.name.toUpperCase()}',
-            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1)),
+            style: const TextStyle(
+                fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: 1)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -739,21 +772,27 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text('CANCEL', style: TextStyle(color: context.textMutedColor, fontWeight: FontWeight.w900))),
+              child: Text('CANCEL',
+                  style: TextStyle(
+                      color: context.textMutedColor,
+                      fontWeight: FontWeight.w700))),
           ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primary,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
               onPressed: () {
                 if (pinCtrl.text.length >= 4) {
                   auth.updatePin(user.id, pinCtrl.text);
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('✅ PIN updated successfully')));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('✅ PIN updated successfully')));
                 }
               },
-              child: const Text('UPDATE PIN', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white))),
+              child: const Text('UPDATE PIN',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700, color: Colors.white))),
         ],
       ),
     );

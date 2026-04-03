@@ -194,7 +194,8 @@ class _PosAndroidState extends State<PosAndroid> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('New Sale'),
-        backgroundColor: cart.isReturnMode ? AppTheme.danger.withValues(alpha: 0.8) : null,
+        backgroundColor:
+            cart.isReturnMode ? AppTheme.danger.withValues(alpha: 0.8) : null,
         actions: [
           Row(
             children: [
@@ -203,7 +204,8 @@ class _PosAndroidState extends State<PosAndroid> {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: cart.isReturnMode ? Colors.white : context.textMutedColor,
+                  color:
+                      cart.isReturnMode ? Colors.white : context.textMutedColor,
                 ),
               ),
               Switch(
@@ -233,9 +235,14 @@ class _PosAndroidState extends State<PosAndroid> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: context.surfaceColor.withValues(alpha: 0.8),
-              border: Border(bottom: BorderSide(color: context.borderColor.withValues(alpha: 0.2))),
+              border: Border(
+                  bottom: BorderSide(
+                      color: context.borderColor.withValues(alpha: 0.2))),
               boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4)),
+                BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4)),
               ],
             ),
             child: Column(
@@ -244,23 +251,33 @@ class _PosAndroidState extends State<PosAndroid> {
                 if (cart.patientName.isNotEmpty)
                   Container(
                     margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
                       color: AppTheme.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+                      border: Border.all(
+                          color: AppTheme.primary.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.person, color: AppTheme.primary, size: 20),
+                        const Icon(Icons.person,
+                            color: AppTheme.primary, size: 20),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Patient attached', style: TextStyle(fontSize: 10, color: context.textMutedColor, fontWeight: FontWeight.bold)),
-                              Text('${cart.patientName} ${cart.patientPhone.isNotEmpty ? ' • ${cart.patientPhone}' : ''}',
-                                  style: const TextStyle(fontWeight: FontWeight.w800, color: AppTheme.primaryLight)),
+                              Text('Patient attached',
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      color: context.textMutedColor,
+                                      fontWeight: FontWeight.bold)),
+                              Text(
+                                  '${cart.patientName} ${cart.patientPhone.isNotEmpty ? ' • ${cart.patientPhone}' : ''}',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      color: AppTheme.primaryLight)),
                             ],
                           ),
                         ),
@@ -269,7 +286,8 @@ class _PosAndroidState extends State<PosAndroid> {
                             cart.setPatient(name: '', phone: '', id: 0);
                             _patientCtrl.clear();
                           },
-                          child: const Icon(Icons.close_rounded, color: AppTheme.danger, size: 20),
+                          child: const Icon(Icons.close_rounded,
+                              color: AppTheme.danger, size: 20),
                         ),
                       ],
                     ),
@@ -305,7 +323,8 @@ class _PosAndroidState extends State<PosAndroid> {
                       focusNode: focusNode,
                       decoration: InputDecoration(
                         hintText: 'Search or Scan Barcode',
-                        prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.primary),
+                        prefixIcon: const Icon(Icons.search_rounded,
+                            color: AppTheme.primary),
                         suffixIcon: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -318,19 +337,25 @@ class _PosAndroidState extends State<PosAndroid> {
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide(color: context.borderColor.withValues(alpha: 0.5)),
+                          borderSide: BorderSide(
+                              color:
+                                  context.borderColor.withValues(alpha: 0.5)),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide(color: context.borderColor.withValues(alpha: 0.3)),
+                          borderSide: BorderSide(
+                              color:
+                                  context.borderColor.withValues(alpha: 0.3)),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(20),
-                          borderSide: const BorderSide(color: AppTheme.primary, width: 2),
+                          borderSide: const BorderSide(
+                              color: AppTheme.primary, width: 2),
                         ),
                         filled: true,
                         fillColor: context.surfaceColor,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 12),
                       ),
                     );
                   },
@@ -349,26 +374,40 @@ class _PosAndroidState extends State<PosAndroid> {
                             shrinkWrap: true,
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             itemCount: options.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
                             itemBuilder: (ctx, i) {
                               final m = options.elementAt(i);
                               return ListTile(
                                 leading: Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color: AppTheme.primary.withValues(alpha: 0.1),
+                                    color:
+                                        AppTheme.primary.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
-                                  child: const Icon(Icons.medication, color: AppTheme.primary, size: 20),
+                                  child: const Icon(Icons.medication,
+                                      color: AppTheme.primary, size: 20),
                                 ),
-                                title: Text(m.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                title: Text(m.name,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold)),
                                 subtitle: Text(m.unit),
                                 trailing: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
-                                    Text('₹${m.sellingPrice.toStringAsFixed(0)}', style: const TextStyle(color: AppTheme.primaryLight, fontWeight: FontWeight.bold)),
-                                    Text('Stock: ${m.storeStock}', style: TextStyle(fontSize: 11, color: m.isLowStock ? AppTheme.warning : context.textMutedColor)),
+                                    Text(
+                                        '₹${m.sellingPrice.toStringAsFixed(0)}',
+                                        style: const TextStyle(
+                                            color: AppTheme.primaryLight,
+                                            fontWeight: FontWeight.bold)),
+                                    Text('Stock: ${m.storeStock}',
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color: m.isLowStock
+                                                ? AppTheme.warning
+                                                : context.textMutedColor)),
                                   ],
                                 ),
                                 onTap: () => onSelected(m),
@@ -395,9 +434,17 @@ class _PosAndroidState extends State<PosAndroid> {
                       child: Center(
                         child: Column(
                           children: [
-                            Icon(Icons.shopping_basket_outlined, size: 80, color: context.borderColor.withValues(alpha: 0.3)),
+                            Icon(Icons.shopping_basket_outlined,
+                                size: 80,
+                                color:
+                                    context.borderColor.withValues(alpha: 0.3)),
                             const SizedBox(height: 16),
-                            Text('YOUR CART IS EMPTY', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: context.textMutedColor, letterSpacing: 1.5)),
+                            Text('YOUR CART IS EMPTY',
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: context.textMutedColor,
+                                    letterSpacing: 1.5)),
                           ],
                         ),
                       ),
@@ -407,13 +454,16 @@ class _PosAndroidState extends State<PosAndroid> {
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: cart.items.length,
-                      separatorBuilder: (_, __) => Divider(height: 1, color: context.borderColor.withValues(alpha: 0.1)),
+                      separatorBuilder: (_, __) => Divider(
+                          height: 1,
+                          color: context.borderColor.withValues(alpha: 0.1)),
                       itemBuilder: (ctx, i) {
                         final item = cart.items[i];
                         return _CartItemTile(
                           item: item,
                           qtyFocusNode: _getQtyFocusNode(item.medicine.id),
-                          qtyController: _getQtyController(item.medicine.id, item.qty),
+                          qtyController:
+                              _getQtyController(item.medicine.id, item.qty),
                           onQtyChanged: (val) {
                             final newQty = int.tryParse(val);
                             if (newQty != null && newQty > 0) {
@@ -434,31 +484,56 @@ class _PosAndroidState extends State<PosAndroid> {
                         decoration: BoxDecoration(
                           color: context.surfaceColor.withValues(alpha: 0.7),
                           borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                          border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.2)),
                           boxShadow: [
-                            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 20, offset: const Offset(0, 10)),
+                            BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 20,
+                                offset: const Offset(0, 10)),
                           ],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Text('TRANSACTION SUMMARY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: AppTheme.primaryLight, letterSpacing: 1)),
+                            Text('TRANSACTION SUMMARY',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppTheme.primaryLight,
+                                    letterSpacing: 1)),
                             const SizedBox(height: 16),
-                            _SummaryField(label: 'Subtotal', value: '₹${cart.subtotal.toStringAsFixed(2)}'),
+                            _SummaryField(
+                                label: 'Subtotal',
+                                value: '₹${cart.subtotal.toStringAsFixed(2)}'),
                             if (cart.discountAmount > 0)
-                              _SummaryField(label: 'Discount', value: '-₹${cart.discountAmount.toStringAsFixed(2)}', color: AppTheme.danger),
+                              _SummaryField(
+                                  label: 'Discount',
+                                  value:
+                                      '-₹${cart.discountAmount.toStringAsFixed(2)}',
+                                  color: AppTheme.danger),
                             const Divider(height: 32),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text('TOTAL DUE', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-                                Text('₹${cart.totalRounded.toStringAsFixed(0)}', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: AppTheme.primaryLight, letterSpacing: -1)),
+                                const Text('TOTAL DUE',
+                                    style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.5)),
+                                Text('₹${cart.totalRounded.toStringAsFixed(0)}',
+                                    style: const TextStyle(
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.w900,
+                                        color: AppTheme.primaryLight,
+                                        letterSpacing: -1)),
                               ],
                             ),
                             const SizedBox(height: 24),
                             _PaymentSelector(
                               selected: _paymentMethod,
-                              onSelected: (val) => setState(() => _paymentMethod = val),
+                              onSelected: (val) =>
+                                  setState(() => _paymentMethod = val),
                             ),
                             if (_paymentMethod == 'mixed') ...[
                               const SizedBox(height: 16),
@@ -475,27 +550,42 @@ class _PosAndroidState extends State<PosAndroid> {
                             SizedBox(
                               height: 60,
                               child: ElevatedButton(
-                                onPressed: cart.items.isEmpty ? null : () => _doCheckout(cart),
+                                onPressed: cart.items.isEmpty
+                                    ? null
+                                    : () => _doCheckout(cart),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.transparent,
                                   shadowColor: Colors.transparent,
                                   padding: EdgeInsets.zero,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(18)),
                                 ),
                                 child: Ink(
                                   decoration: BoxDecoration(
                                     gradient: LinearGradient(
                                       colors: cart.isReturnMode
-                                        ? [AppTheme.danger, const Color(0xFFB91C1C)]
-                                        : [AppTheme.primary, AppTheme.primaryLight],
+                                          ? [
+                                              AppTheme.danger,
+                                              const Color(0xFFB91C1C)
+                                            ]
+                                          : [
+                                              AppTheme.primary,
+                                              AppTheme.primaryLight
+                                            ],
                                     ),
                                     borderRadius: BorderRadius.circular(18),
                                   ),
                                   child: Container(
                                     alignment: Alignment.center,
                                     child: Text(
-                                      cart.isReturnMode ? 'PROCESS RETURN' : 'COMPLETE CHECKOUT',
-                                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1.5, color: Colors.white),
+                                      cart.isReturnMode
+                                          ? 'PROCESS RETURN'
+                                          : 'COMPLETE CHECKOUT',
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 16,
+                                          letterSpacing: 1.5,
+                                          color: Colors.white),
                                     ),
                                   ),
                                 ),
@@ -547,7 +637,7 @@ class _SummaryField extends StatelessWidget {
             value,
             style: TextStyle(
               fontSize: 14,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
               color: color ?? context.textColor,
             ),
           ),
@@ -728,8 +818,12 @@ class _CartItemTile extends StatelessWidget {
                 controller: qtyController,
                 keyboardType: TextInputType.number,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppTheme.primary),
-                decoration: const InputDecoration(border: InputBorder.none, isDense: true),
+                style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                    color: AppTheme.primary),
+                decoration: const InputDecoration(
+                    border: InputBorder.none, isDense: true),
                 onChanged: onQtyChanged,
               ),
             ),
@@ -741,16 +835,25 @@ class _CartItemTile extends StatelessWidget {
               children: [
                 Text(
                   item.medicine.name.toUpperCase(),
-                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      letterSpacing: 0.5),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    _Tag(label: '₹${item.medicine.sellingPrice.toStringAsFixed(0)}', color: context.textMutedColor),
+                    _Tag(
+                        label:
+                            '₹${item.medicine.sellingPrice.toStringAsFixed(0)}',
+                        color: context.textMutedColor),
                     const SizedBox(width: 4),
-                    _Tag(label: 'BATCH: ${item.medicine.batches.isNotEmpty ? item.medicine.batches.first.batchNo : "N/A"}', color: AppTheme.accent),
+                    _Tag(
+                        label:
+                            'BATCH: ${item.medicine.batches.isNotEmpty ? item.medicine.batches.first.batchNo : "N/A"}',
+                        color: AppTheme.accent),
                   ],
                 ),
               ],
@@ -759,17 +862,26 @@ class _CartItemTile extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('₹${item.lineTotal.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: -0.5)),
+              Text('₹${item.lineTotal.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18,
+                      letterSpacing: -0.5)),
               const SizedBox(height: 4),
               GestureDetector(
                 onTap: onRemove,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: AppTheme.danger.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: const Text('REMOVE', style: TextStyle(color: AppTheme.danger, fontSize: 9, fontWeight: FontWeight.w900)),
+                  child: const Text('REMOVE',
+                      style: TextStyle(
+                          color: AppTheme.danger,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700)),
                 ),
               ),
             ],
@@ -794,7 +906,9 @@ class _Tag extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
         border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
-      child: Text(label, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold)),
+      child: Text(label,
+          style: TextStyle(
+              color: color, fontSize: 10, fontWeight: FontWeight.w700)),
     );
   }
 }

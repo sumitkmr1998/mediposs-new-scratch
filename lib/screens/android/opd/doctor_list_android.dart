@@ -4,6 +4,7 @@ import '../../../shared/models/doctor.dart';
 import '../../../shared/providers/opd_provider.dart';
 import '../../../shared/services/sync_service.dart';
 import '../../../theme/app_theme.dart';
+import '../../../shared/widgets/app_empty_state.dart';
 
 class DoctorListAndroid extends StatefulWidget {
   const DoctorListAndroid({super.key});
@@ -46,31 +47,15 @@ class _DoctorListAndroidState extends State<DoctorListAndroid> {
           ),
         ],
         body: opd.doctors.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.medical_services_outlined,
-                        size: 72, color: context.textMutedColor),
-                    const SizedBox(height: 16),
-                    Text('No doctors added yet',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(
-                                color: context.textMutedColor,
-                                fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.add),
-                      label: const Text('Add First Doctor'),
-                      onPressed: () => _showDoctorDialog(context),
-                    ),
-                  ],
-                ),
+            ? AppEmptyState(
+                icon: Icons.medical_services_outlined,
+                title: 'No doctors added yet',
+                ctaLabel: 'Add First Doctor',
+                ctaIcon: Icons.add,
+                onCtaTap: () => _showDoctorDialog(context),
               )
             : ListView.builder(
-                padding: const EdgeInsets.all(16).copyWith(bottom: 100),
+                padding: const EdgeInsets.all(20).copyWith(bottom: 100),
                 itemCount: opd.doctors.length,
                 itemBuilder: (ctx, i) {
                   final d = opd.doctors[i];
@@ -90,7 +75,7 @@ class _DoctorListAndroidState extends State<DoctorListAndroid> {
                           color: context.borderColor.withValues(alpha: 0.5)),
                     ),
                     child: Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -104,8 +89,18 @@ class _DoctorListAndroidState extends State<DoctorListAndroid> {
                                       AppTheme.primary.withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(14),
                                 ),
-                                child: const Icon(Icons.person,
-                                    color: AppTheme.primary, size: 28),
+                                child: Center(
+                                  child: Text(
+                                    d.name.isNotEmpty
+                                        ? d.name[0].toUpperCase()
+                                        : 'D',
+                                    style: const TextStyle(
+                                      color: AppTheme.primary,
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
                               ),
                               const SizedBox(width: 16),
                               Expanded(
@@ -220,10 +215,12 @@ class _DoctorListAndroidState extends State<DoctorListAndroid> {
                 },
               ),
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showDoctorDialog(context),
         backgroundColor: AppTheme.primary,
-        child: const Icon(Icons.person_add, color: Colors.white),
+        icon: const Icon(Icons.person_add, color: Colors.white),
+        label: const Text('Add Doctor',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
       ),
     );
   }

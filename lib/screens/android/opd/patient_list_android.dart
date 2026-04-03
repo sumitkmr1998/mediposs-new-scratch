@@ -7,6 +7,7 @@ import '../../../shared/services/sync_service.dart';
 import '../../../theme/app_theme.dart';
 import '../../opd/patient_details_screen.dart';
 import '../../../widgets/android/patient_dialogs_android.dart';
+import '../../../shared/widgets/app_empty_state.dart';
 
 class PatientListAndroid extends StatefulWidget {
   const PatientListAndroid({super.key});
@@ -90,25 +91,12 @@ class _PatientListAndroidState extends State<PatientListAndroid> {
           ),
         ],
         body: patients.filtered.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.people_outline,
-                        size: 72, color: context.textMutedColor),
-                    const SizedBox(height: 16),
-                    Text('No patients found',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(
-                                color: context.textMutedColor,
-                                fontWeight: FontWeight.w600)),
-                  ],
-                ),
+            ? const AppEmptyState(
+                icon: Icons.people_outline,
+                title: 'No patients found',
               )
             : ListView.builder(
-                padding: const EdgeInsets.all(16).copyWith(bottom: 100),
+                padding: const EdgeInsets.all(20).copyWith(bottom: 100),
                 itemCount: patients.filtered.length,
                 itemBuilder: (ctx, i) {
                   final p = patients.filtered[i];
@@ -123,10 +111,12 @@ class _PatientListAndroidState extends State<PatientListAndroid> {
                 },
               ),
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showPatientDialog(context),
         backgroundColor: AppTheme.primary,
-        child: const Icon(Icons.person_add, color: Colors.white),
+        icon: const Icon(Icons.person_add, color: Colors.white),
+        label: const Text('Add Patient',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
       ),
     );
   }
@@ -181,7 +171,7 @@ class _ModernPatientTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(20),
                 child: Row(
                   children: [
                     Container(
@@ -199,7 +189,7 @@ class _ModernPatientTile extends StatelessWidget {
                           style: const TextStyle(
                             color: AppTheme.primary,
                             fontSize: 22,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),

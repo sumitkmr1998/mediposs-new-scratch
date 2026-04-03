@@ -38,6 +38,38 @@ class AppTheme {
   static const double paddingCard = 20.0;
   static const double sectionSpacing = 16.0;
 
+  // Spacing Scale
+  static const double spacingXs = 4.0;
+  static const double spacingSm = 8.0;
+  static const double spacingMd = 12.0;
+  static const double spacingLg = 16.0;
+  static const double spacingXl = 20.0;
+  static const double spacingXxl = 24.0;
+  static const double spacingXxxl = 32.0;
+
+  // Shadow Presets
+  static List<BoxShadow> get cardShadow => [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.04),
+          blurRadius: 12,
+          offset: const Offset(0, 2),
+        ),
+      ];
+  static List<BoxShadow> get elevatedShadow => [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.08),
+          blurRadius: 24,
+          offset: const Offset(0, 4),
+        ),
+      ];
+  static List<BoxShadow> get subtleShadow => [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.02),
+          blurRadius: 8,
+          offset: const Offset(0, 1),
+        ),
+      ];
+
   // Dark theme
   static const Color darkBg = Color(0xFF0F1923);
   static const Color darkSurface = Color(0xFF162130);

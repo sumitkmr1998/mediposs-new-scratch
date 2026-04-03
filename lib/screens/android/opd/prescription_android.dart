@@ -315,7 +315,7 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
                   ),
                   const SizedBox(height: 20),
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       color: AppTheme.primary.withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(12),
@@ -1170,7 +1170,7 @@ class _MedicineListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkBg : const Color(0xFFF7F9FB),
         borderRadius: BorderRadius.circular(12),

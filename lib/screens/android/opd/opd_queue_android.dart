@@ -8,6 +8,8 @@ import '../../../shared/models/patient.dart';
 import '../../../widgets/android/patient_dialogs_android.dart';
 import '../../../shared/services/sync_service.dart';
 import '../../opd/prescription_screen.dart';
+import '../../../shared/widgets/app_empty_state.dart';
+import '../../../shared/widgets/app_status_badge.dart';
 
 class OpdQueueAndroid extends StatefulWidget {
   const OpdQueueAndroid({super.key});
@@ -175,20 +177,9 @@ class _QueueList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (queue.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.queue_play_next,
-                size: 64, color: context.textMutedColor),
-            const SizedBox(height: 16),
-            Text('No patients in this list',
-                style: TextStyle(
-                    color: context.textMutedColor,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600)),
-          ],
-        ),
+      return const AppEmptyState(
+        icon: Icons.queue_play_next,
+        title: 'No patients in this list',
       );
     }
     return ListView.builder(
@@ -298,8 +289,8 @@ class _ModernQueueCard extends StatelessWidget {
                     children: [
                       const Text('TOKEN',
                           style: TextStyle(
-                              fontSize: 8,
-                              fontWeight: FontWeight.w900,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
                               letterSpacing: 1,
                               color: Colors.grey)),
                       Text(
@@ -323,16 +314,18 @@ class _ModernQueueCard extends StatelessWidget {
                     children: [
                       Text(appointment.patientName,
                           style: const TextStyle(
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w700,
                               fontSize: 17,
                               letterSpacing: -0.2)),
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          _StatusBadge(
-                              status: appointment.status,
-                              color: color,
-                              label: _statusLabel(appointment.status)),
+                          AppStatusBadge(
+                            label: _statusLabel(appointment.status),
+                            color: color,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             'DR. ${appointment.doctorName.toUpperCase()}',
@@ -410,46 +403,6 @@ class _ModernQueueCard extends StatelessWidget {
   }
 }
 
-class _StatusBadge extends StatelessWidget {
-  final String status;
-  final Color color;
-  final String label;
-
-  const _StatusBadge(
-      {required this.status, required this.color, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 5,
-            height: 5,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-                color: color,
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0.5),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ActionBtn extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -487,7 +440,7 @@ class _ActionBtn extends StatelessWidget {
                   style: TextStyle(
                       color: color,
                       fontSize: 11,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: 0.5)),
             ],
           ),
@@ -516,7 +469,7 @@ class _StatBadge extends StatelessWidget {
           style: TextStyle(
               color: color,
               fontSize: 12,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               letterSpacing: 0.2)),
     );
   }

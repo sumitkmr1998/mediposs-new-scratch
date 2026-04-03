@@ -23,7 +23,7 @@ class _UserManagementAndroidState extends State<UserManagementAndroid> {
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
-            title: const Text('User Management'),
+            title: const Text('Staff Management'),
             pinned: true,
             floating: true,
             forceElevated: innerBoxIsScrolled,
@@ -59,7 +59,7 @@ class _UserManagementAndroidState extends State<UserManagementAndroid> {
                 ),
               )
             : ListView.builder(
-                padding: const EdgeInsets.all(16).copyWith(bottom: 100),
+                padding: const EdgeInsets.all(20).copyWith(bottom: 100),
                 itemCount: users.length,
                 itemBuilder: (ctx, i) =>
                     _buildUserCard(context, users[i], auth),
@@ -103,7 +103,10 @@ class _UserManagementAndroidState extends State<UserManagementAndroid> {
                   height: 56,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [AppTheme.primary.withValues(alpha: 0.2), AppTheme.primary.withValues(alpha: 0.05)],
+                      colors: [
+                        AppTheme.primary.withValues(alpha: 0.2),
+                        AppTheme.primary.withValues(alpha: 0.05)
+                      ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -115,7 +118,7 @@ class _UserManagementAndroidState extends State<UserManagementAndroid> {
                       style: const TextStyle(
                           color: AppTheme.primaryLight,
                           fontSize: 24,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                           letterSpacing: -1),
                     ),
                   ),
@@ -127,13 +130,17 @@ class _UserManagementAndroidState extends State<UserManagementAndroid> {
                     children: [
                       Text(user.name,
                           style: const TextStyle(
-                              fontWeight: FontWeight.w900, fontSize: 17, letterSpacing: -0.2)),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 17,
+                              letterSpacing: -0.2)),
                       const SizedBox(height: 4),
                       Row(
                         children: [
                           _Badge(
                             label: user.role.toUpperCase(),
-                            color: isAdmin ? AppTheme.primaryLight : context.textMutedColor,
+                            color: isAdmin
+                                ? AppTheme.primaryLight
+                                : context.textMutedColor,
                             isGlass: true,
                           ),
                           const SizedBox(width: 8),
@@ -161,7 +168,8 @@ class _UserManagementAndroidState extends State<UserManagementAndroid> {
                 _permChip('POS', user.canAccessPOS || isAdmin),
                 _permChip('INVENTORY', user.canEditInventory || isAdmin),
                 _permChip('OPD', user.canAccessOPD || isAdmin),
-                _permChip('REPORTS', user.canViewDashboard || user.canViewOpdReports || isAdmin),
+                _permChip('REPORTS',
+                    user.canViewDashboard || user.canViewOpdReports || isAdmin),
                 _permChip('SETTINGS', user.canAccessSettings || isAdmin),
               ],
             ),
@@ -171,8 +179,11 @@ class _UserManagementAndroidState extends State<UserManagementAndroid> {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             decoration: BoxDecoration(
               color: context.textMutedColor.withValues(alpha: 0.03),
-              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
-              border: Border(top: BorderSide(color: context.borderColor.withValues(alpha: 0.2))),
+              borderRadius:
+                  const BorderRadius.vertical(bottom: Radius.circular(24)),
+              border: Border(
+                  top: BorderSide(
+                      color: context.borderColor.withValues(alpha: 0.2))),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -180,25 +191,32 @@ class _UserManagementAndroidState extends State<UserManagementAndroid> {
                 const Text('STAFF ACCESS PERMISSIONS',
                     style: TextStyle(
                         fontSize: 10,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w800,
                         letterSpacing: 1,
                         color: AppTheme.primaryLight)),
                 Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    onTap: () => AndroidUserDialog.showUserSheet(context, existingUser: user),
+                    onTap: () => AndroidUserDialog.showUserSheet(context,
+                        existingUser: user),
                     borderRadius: BorderRadius.circular(12),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
                         color: AppTheme.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Row(
                         children: [
-                          Icon(Icons.edit_rounded, size: 14, color: AppTheme.primary),
+                          Icon(Icons.edit_rounded,
+                              size: 14, color: AppTheme.primary),
                           SizedBox(width: 6),
-                          Text('EDIT', style: TextStyle(color: AppTheme.primary, fontSize: 11, fontWeight: FontWeight.w900)),
+                          Text('EDIT',
+                              style: TextStyle(
+                                  color: AppTheme.primary,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700)),
                         ],
                       ),
                     ),
@@ -216,9 +234,8 @@ class _UserManagementAndroidState extends State<UserManagementAndroid> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: val
-            ? AppTheme.success.withValues(alpha: 0.08)
-            : Colors.transparent,
+        color:
+            val ? AppTheme.success.withValues(alpha: 0.08) : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: val
@@ -231,15 +248,19 @@ class _UserManagementAndroidState extends State<UserManagementAndroid> {
         children: [
           Icon(
             val ? Icons.check_circle_rounded : Icons.lock_outline_rounded,
-            color: val ? AppTheme.success : context.textMutedColor.withValues(alpha: 0.4),
+            color: val
+                ? AppTheme.success
+                : context.textMutedColor.withValues(alpha: 0.4),
             size: 12,
           ),
           const SizedBox(width: 6),
           Text(label,
               style: TextStyle(
-                  color: val ? AppTheme.success.withValues(alpha: 0.9) : context.textMutedColor.withValues(alpha: 0.5),
+                  color: val
+                      ? AppTheme.success.withValues(alpha: 0.9)
+                      : context.textMutedColor.withValues(alpha: 0.5),
                   fontSize: 10,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   letterSpacing: 0.5)),
         ],
       ),
@@ -252,14 +273,17 @@ class _Badge extends StatelessWidget {
   final Color color;
   final bool isGlass;
 
-  const _Badge({required this.label, required this.color, this.isGlass = false});
+  const _Badge(
+      {required this.label, required this.color, this.isGlass = false});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: isGlass ? color.withValues(alpha: 0.08) : color.withValues(alpha: 0.12),
+        color: isGlass
+            ? color.withValues(alpha: 0.08)
+            : color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
@@ -268,7 +292,7 @@ class _Badge extends StatelessWidget {
         style: TextStyle(
           color: color.withValues(alpha: 0.9),
           fontSize: 10,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
           letterSpacing: 0.5,
         ),
       ),
@@ -300,7 +324,10 @@ class _StatusBadge extends StatelessWidget {
               color: color,
               shape: BoxShape.circle,
               boxShadow: [
-                BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 4, spreadRadius: 1),
+                BoxShadow(
+                    color: color.withValues(alpha: 0.4),
+                    blurRadius: 4,
+                    spreadRadius: 1),
               ],
             ),
           ),
@@ -310,7 +337,7 @@ class _StatusBadge extends StatelessWidget {
             style: TextStyle(
               color: color,
               fontSize: 11,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               letterSpacing: 0.5,
             ),
           ),

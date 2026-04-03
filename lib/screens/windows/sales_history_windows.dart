@@ -7,6 +7,10 @@ import '../../shared/models/sale.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/return_dialog.dart';
 import '../../shared/services/printing_service.dart';
+import '../../shared/widgets/app_kpi_card.dart';
+import '../../shared/widgets/app_filter_chip.dart';
+import '../../shared/widgets/app_empty_state.dart';
+import '../../shared/widgets/app_status_badge.dart';
 
 class SalesHistoryWindows extends StatefulWidget {
   const SalesHistoryWindows({super.key});
@@ -56,319 +60,358 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
     final rangeLabel = _getRangeLabel(sales);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppTheme.primary.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.receipt_long_rounded,
-                  color: AppTheme.primary, size: 22),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Sales History',
-                    style:
-                        TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-                Text('$rangeLabel overview',
-                    style:
-                        TextStyle(fontSize: 12, color: context.textMutedColor)),
-              ],
-            ),
-          ],
-        ),
-      ),
+      appBar: _buildAppBar(rangeLabel),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Advanced Analytics Row
-            LayoutBuilder(builder: (ctx, constraints) {
-              final cols = constraints.maxWidth > 1200
-                  ? 4
-                  : (constraints.maxWidth > 800 ? 2 : 1);
-              const spacing = 16.0;
-              final cardWidth =
-                  (constraints.maxWidth - (cols - 1) * spacing) / cols;
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('ANALYTICS OVERVIEW',
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.5,
-                          color: context.textMutedColor)),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: spacing,
-                    runSpacing: spacing,
-                    children: [
-                      _GlassKpiCard(
-                        label: 'Gross Sales',
-                        value: '₹${grossSales.toStringAsFixed(0)}',
-                        icon: Icons.trending_up_rounded,
-                        color: AppTheme.primary,
-                        count: '$saleCount transactions',
-                        width: cardWidth,
-                      ),
-                      _GlassKpiCard(
-                        label: 'Refunds',
-                        value: '₹${returns.toStringAsFixed(0)}',
-                        icon: Icons.keyboard_return_rounded,
-                        color: AppTheme.danger,
-                        count: '$returnCount entries',
-                        width: cardWidth,
-                      ),
-                      _GlassKpiCard(
-                        label: 'Net Revenue',
-                        value: '₹${netTotal.toStringAsFixed(0)}',
-                        icon: Icons.account_balance_wallet_rounded,
-                        color: AppTheme.success,
-                        count: '$rangeLabel performance',
-                        width: cardWidth,
-                      ),
-                      _GlassKpiCard(
-                        label: 'Total Collected',
-                        value: '₹${sales.totalRevenue.toStringAsFixed(0)}',
-                        icon: Icons.auto_graph_rounded,
-                        color: AppTheme.accent,
-                        count: 'Lifetime summary',
-                        width: cardWidth,
-                      ),
-                    ],
-                  ),
-                ],
-              );
-            }),
-
+            _buildKpiSection(grossSales, returns, netTotal, sales, saleCount,
+                returnCount, rangeLabel),
             const SizedBox(height: 24),
-
-            // Filter + Search Bar Area
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: context.surfaceColor,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: context.borderColor),
-              ),
-              child: Row(
-                children: [
-                  _buildQuickFilters(sales),
-                  const Spacer(),
-                  const SizedBox(width: 16),
-                  _buildSearchInput(),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // Results Summary & Data Grid
-            if (displayed.isEmpty)
-              _EmptyState(hasQuery: _searchQuery.isNotEmpty)
-            else
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Results count
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12, left: 4),
-                    child: Text(
-                      'FOUND ${displayed.length} AUDIT LOG ENTRIES',
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                          color: context.textMutedColor,
-                          letterSpacing: 1),
-                    ),
-                  ),
-
-                  // Enhanced Table Header
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 16),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primary.withValues(alpha: 0.05),
-                      borderRadius:
-                          const BorderRadius.vertical(top: Radius.circular(20)),
-                      border: Border.all(color: context.borderColor),
-                    ),
-                    child: Row(
-                      children: [
-                        const SizedBox(width: 48), // Padding for expansion icon
-                        SizedBox(
-                            width: 140,
-                            child: Text('INVOICE ID',
-                                style: _headerStyle(context))),
-                        Expanded(
-                            flex: 3,
-                            child: Text('CUSTOMER NAME',
-                                style: _headerStyle(context))),
-                        SizedBox(
-                            width: 110,
-                            child: Center(
-                                child: Text('METHOD',
-                                    style: _headerStyle(context)))),
-                        SizedBox(
-                            width: 120,
-                            child: Center(
-                                child: Text('TOTAL AMOUNT',
-                                    style: _headerStyle(context)))),
-                        SizedBox(
-                            width: 120,
-                            child: Text('DATE & TIME',
-                                style: _headerStyle(context))),
-                        const SizedBox(width: 40),
-                      ],
-                    ),
-                  ),
-
-                  // Sale List
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: displayed.length,
-                    itemBuilder: (ctx, i) {
-                      final sale = displayed[i];
-                      return Container(
-                        decoration: BoxDecoration(
-                          color: i.isEven
-                              ? Colors.transparent
-                              : AppTheme.primary.withValues(alpha: 0.02),
-                          border: Border(
-                            left: BorderSide(color: context.borderColor),
-                            right: BorderSide(color: context.borderColor),
-                            bottom: BorderSide(color: context.borderColor),
-                          ),
-                          borderRadius: i == displayed.length - 1
-                              ? const BorderRadius.vertical(
-                                  bottom: Radius.circular(20))
-                              : null,
-                        ),
-                        child: _SaleRow(sale: sale, salesProvider: sales),
-                      );
-                    },
-                  ),
-
-                  // Load More (Fixed into a clean floating style button)
-                  if (sales.hasMore)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 16),
-                      child: Center(
-                        child: OutlinedButton.icon(
-                          onPressed: () => sales.loadMore(),
-                          icon: const Icon(Icons.refresh_rounded, size: 16),
-                          label: Text(
-                              'SHOW NEXT ${sales.totalCount - displayed.length} ENTRIES'),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 32, vertical: 16),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-
+            _buildFilterSearchCard(sales),
             const SizedBox(height: 24),
+            _buildDataTable(context, displayed, sales),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildQuickFilters(SalesProvider sales) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
+  PreferredSizeWidget _buildAppBar(String rangeLabel) {
+    return AppBar(
+      title: Row(
         children: [
-          _FilterChip(
-            label: 'Today',
-            icon: Icons.today_rounded,
-            isSelected: sales.activeFilter == SalesFilter.today,
-            onTap: () => sales.setFilter(SalesFilter.today),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.receipt_long_rounded,
+                color: AppTheme.primary, size: 22),
           ),
-          const SizedBox(width: 8),
-          _FilterChip(
-            label: 'Yesterday',
-            icon: Icons.history_rounded,
-            isSelected: sales.activeFilter == SalesFilter.yesterday,
-            onTap: () => sales.setFilter(SalesFilter.yesterday),
-          ),
-          const SizedBox(width: 8),
-          _FilterChip(
-            label: 'Last 7 Days',
-            icon: Icons.date_range_rounded,
-            isSelected: sales.activeFilter == SalesFilter.last7Days,
-            onTap: () => sales.setFilter(SalesFilter.last7Days),
-          ),
-          const SizedBox(width: 8),
-          _FilterChip(
-            label: 'All Time',
-            icon: Icons.all_inbox_rounded,
-            isSelected: sales.activeFilter == SalesFilter.allTime,
-            onTap: () => sales.setFilter(SalesFilter.allTime),
-          ),
-          const SizedBox(width: 8),
-          _FilterChip(
-            label: 'Custom Range',
-            icon: Icons.calendar_month_rounded,
-            isSelected: sales.activeFilter == SalesFilter.custom,
-            onTap: () async {
-              final range = await showDateRangePicker(
-                context: context,
-                firstDate: DateTime(2020),
-                lastDate: DateTime.now(),
-              );
-              if (range != null)
-                sales.setFilter(SalesFilter.custom, range: range);
-            },
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Sales History',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+              Text('$rangeLabel overview',
+                  style:
+                      TextStyle(fontSize: 12, color: context.textMutedColor)),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSearchInput() {
+  Widget _buildKpiSection(double grossSales, double returns, double netTotal,
+      SalesProvider sales, int saleCount, int returnCount, String rangeLabel) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('OVERVIEW',
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.5,
+                color: context.textMutedColor)),
+        const SizedBox(height: 12),
+        LayoutBuilder(builder: (ctx, constraints) {
+          final cols = constraints.maxWidth > 1000
+              ? 4
+              : (constraints.maxWidth > 700 ? 2 : 1);
+          const spacing = 16.0;
+          final cardWidth =
+              (constraints.maxWidth - (cols - 1) * spacing) / cols;
+
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: [
+              AppKpiCard(
+                label: 'Gross Sales',
+                value: '₹${grossSales.toStringAsFixed(0)}',
+                icon: Icons.trending_up_rounded,
+                color: AppTheme.primary,
+                subtitle: '$saleCount transactions',
+                width: cardWidth,
+              ),
+              AppKpiCard(
+                label: 'Refunds',
+                value: '₹${returns.toStringAsFixed(0)}',
+                icon: Icons.keyboard_return_rounded,
+                color: AppTheme.danger,
+                subtitle: '$returnCount entries',
+                width: cardWidth,
+              ),
+              AppKpiCard(
+                label: 'Net Revenue',
+                value: '₹${netTotal.toStringAsFixed(0)}',
+                icon: Icons.account_balance_wallet_rounded,
+                color: AppTheme.success,
+                subtitle: '$rangeLabel performance',
+                width: cardWidth,
+              ),
+              AppKpiCard(
+                label: 'Total Collected',
+                value: '₹${sales.totalRevenue.toStringAsFixed(0)}',
+                icon: Icons.auto_graph_rounded,
+                color: AppTheme.accent,
+                subtitle: 'Lifetime summary',
+                width: cardWidth,
+              ),
+            ],
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildFilterSearchCard(SalesProvider sales) {
     return Container(
-      width: 320,
-      height: 44,
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: context.bgColor.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(12),
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
         border: Border.all(color: context.borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
-      child: TextField(
-        controller: _searchCtrl,
-        onChanged: (v) => setState(() => _searchQuery = v),
-        style: const TextStyle(fontSize: 13),
-        decoration: InputDecoration(
-          hintText: 'Search ID, customer, or method...',
-          prefixIcon: const Icon(Icons.search_rounded, size: 18),
-          border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  AppFilterChip(
+                    label: 'Today',
+                    icon: Icons.today_rounded,
+                    isSelected: sales.activeFilter == SalesFilter.today,
+                    onTap: () => sales.setFilter(SalesFilter.today),
+                    style: AppFilterChipStyle.filled,
+                  ),
+                  const SizedBox(width: 8),
+                  AppFilterChip(
+                    label: 'Yesterday',
+                    icon: Icons.history_rounded,
+                    isSelected: sales.activeFilter == SalesFilter.yesterday,
+                    onTap: () => sales.setFilter(SalesFilter.yesterday),
+                    style: AppFilterChipStyle.filled,
+                  ),
+                  const SizedBox(width: 8),
+                  AppFilterChip(
+                    label: 'Last 7 Days',
+                    icon: Icons.date_range_rounded,
+                    isSelected: sales.activeFilter == SalesFilter.last7Days,
+                    onTap: () => sales.setFilter(SalesFilter.last7Days),
+                    style: AppFilterChipStyle.filled,
+                  ),
+                  const SizedBox(width: 8),
+                  AppFilterChip(
+                    label: 'All Time',
+                    icon: Icons.all_inbox_rounded,
+                    isSelected: sales.activeFilter == SalesFilter.allTime,
+                    onTap: () => sales.setFilter(SalesFilter.allTime),
+                    style: AppFilterChipStyle.filled,
+                  ),
+                  const SizedBox(width: 8),
+                  AppFilterChip(
+                    label: 'Custom',
+                    icon: Icons.calendar_month_rounded,
+                    isSelected: sales.activeFilter == SalesFilter.custom,
+                    onTap: () async {
+                      final range = await showDateRangePicker(
+                        context: context,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (range != null)
+                        sales.setFilter(SalesFilter.custom, range: range);
+                    },
+                    style: AppFilterChipStyle.filled,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          SizedBox(
+            width: 260,
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (v) => setState(() => _searchQuery = v),
+              style: const TextStyle(fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Search sales...',
+                hintStyle:
+                    TextStyle(fontSize: 13, color: context.textMutedColor),
+                prefixIcon: Icon(Icons.search_rounded,
+                    size: 20, color: context.textMutedColor),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataTable(
+      BuildContext context, List<Sale> displayed, SalesProvider sales) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12, left: 4),
+          child: Text(
+            'FOUND ${displayed.length} AUDIT LOG ENTRIES',
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: context.textMutedColor,
+                letterSpacing: 1.5),
+          ),
         ),
+        Container(
+          decoration: BoxDecoration(
+            color: context.surfaceColor,
+            borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+            border:
+                Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 8,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          child: displayed.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.all(40),
+                  child: AppEmptyState(
+                    icon: _searchQuery.isNotEmpty
+                        ? Icons.search_off_rounded
+                        : Icons.receipt_long_rounded,
+                    title: _searchQuery.isNotEmpty
+                        ? 'No matching sales found'
+                        : 'No sales recorded yet',
+                    subtitle: _searchQuery.isNotEmpty
+                        ? 'Try adjusting your search query'
+                        : 'Sales will appear here once transactions are made',
+                    iconColor: AppTheme.primary,
+                  ),
+                )
+              : Column(
+                  children: [
+                    _buildTableHeader(),
+                    Divider(height: 1, color: context.borderColor),
+                    ...displayed.asMap().entries.map((e) {
+                      final sale = e.value;
+                      final isLast = e.key == displayed.length - 1;
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: e.key.isEven
+                              ? Colors.transparent
+                              : AppTheme.primary.withValues(alpha: 0.02),
+                          borderRadius: isLast
+                              ? const BorderRadius.vertical(
+                                  bottom: Radius.circular(AppTheme.radiusCard))
+                              : null,
+                        ),
+                        child: _SaleRow(sale: sale, salesProvider: sales),
+                      );
+                    }),
+                    if (sales.hasMore)
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Center(
+                          child: OutlinedButton.icon(
+                            onPressed: () => sales.loadMore(),
+                            icon: const Icon(Icons.refresh_rounded, size: 16),
+                            label: Text(
+                                'SHOW NEXT ${sales.totalCount - displayed.length} ENTRIES'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 32, vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTableHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: 0.04),
+        borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(AppTheme.radiusCard)),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(width: 48),
+          SizedBox(
+              width: 140,
+              child: Text('INVOICE ID', style: _headerStyle(context))),
+          Expanded(
+              flex: 3,
+              child: Text('CUSTOMER NAME', style: _headerStyle(context))),
+          const SizedBox(width: 12),
+          SizedBox(
+              width: 110,
+              child:
+                  Center(child: Text('METHOD', style: _headerStyle(context)))),
+          const SizedBox(width: 12),
+          SizedBox(
+              width: 120,
+              child: Center(
+                  child: Text('TOTAL AMOUNT', style: _headerStyle(context)))),
+          const SizedBox(width: 12),
+          SizedBox(
+              width: 120,
+              child: Text('DATE & TIME', style: _headerStyle(context))),
+          const SizedBox(width: 40),
+        ],
       ),
     );
   }
 
   TextStyle _headerStyle(BuildContext context) => TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w800,
-        color: context.textMutedColor,
-        letterSpacing: 1,
-      );
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 1.5,
+      color: context.textMutedColor);
 
   String _getRangeLabel(SalesProvider sales) {
     switch (sales.activeFilter) {
@@ -383,128 +426,6 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
       case SalesFilter.custom:
         return "Custom";
     }
-  }
-}
-
-// ── KPI Card ────────────────────────────────────────────────────────────────
-
-class _GlassKpiCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final String count;
-  final double width;
-
-  const _GlassKpiCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-    required this.count,
-    required this.width,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: context.borderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(icon, color: color, size: 24),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1,
-                      color: context.textMutedColor,
-                    )),
-                const SizedBox(height: 4),
-                Text(value,
-                    style: const TextStyle(
-                        fontSize: 24, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 2),
-                Text(count,
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: context.textMutedColor,
-                        fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isSelected;
-  final VoidCallback onTap;
-  const _FilterChip(
-      {required this.label,
-      required this.icon,
-      required this.isSelected,
-      required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppTheme.primary
-              : context.bgColor.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: isSelected ? AppTheme.primary : context.borderColor),
-        ),
-        child: Row(
-          children: [
-            Icon(icon,
-                size: 16,
-                color: isSelected ? Colors.white : context.textMutedColor),
-            const SizedBox(width: 8),
-            Text(label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: isSelected ? Colors.white : context.textColor,
-                )),
-          ],
-        ),
-      ),
-    );
   }
 }
 
@@ -589,26 +510,30 @@ class _SaleRow extends StatelessWidget {
                 ],
               ),
             ),
+            const SizedBox(width: 12),
             SizedBox(
               width: 110,
-              child: Center(child: _PaymentBadge(method: sale.paymentMethod)),
+              child: Center(
+                  child: _buildPaymentBadge(sale.paymentMethod, context)),
             ),
+            const SizedBox(width: 12),
             SizedBox(
-              width: 110,
+              width: 120,
               child: Center(
                 child: Text(
                   '₹${sale.total.toStringAsFixed(2)}',
                   style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
                     color: sale.isReturn ? AppTheme.danger : AppTheme.success,
                     fontFamily: 'monospace',
                   ),
                 ),
               ),
             ),
+            const SizedBox(width: 12),
             SizedBox(
-              width: 110,
+              width: 120,
               child: Text(
                 '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}',
                 style: TextStyle(
@@ -617,6 +542,7 @@ class _SaleRow extends StatelessWidget {
                     color: context.textMutedColor),
               ),
             ),
+            const SizedBox(width: 40),
           ],
         ),
         children: [
@@ -640,7 +566,6 @@ class _SaleRow extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Left Column: Items and Totals
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -768,16 +693,12 @@ class _SaleRow extends StatelessWidget {
                     ],
                   ),
                 ),
-
-                // Vertical Divider
                 Container(
                   width: 1,
-                  height: 140, // Approximate height to match content
+                  height: 140,
                   margin: const EdgeInsets.symmetric(horizontal: 32),
                   color: context.borderColor.withValues(alpha: 0.5),
                 ),
-
-                // Right Column: Action Buttons
                 SizedBox(
                   width: 180,
                   child: Column(
@@ -821,6 +742,28 @@ class _SaleRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPaymentBadge(String method, BuildContext context) {
+    final (Color color, IconData icon) = switch (method.toLowerCase()) {
+      'cash' => (AppTheme.success, Icons.payments_rounded),
+      'upi' => (AppTheme.primary, Icons.qr_code_2_rounded),
+      'card' => (AppTheme.accent, Icons.credit_card_rounded),
+      'mixed' => (AppTheme.purple, Icons.account_balance_rounded),
+      _ => (
+          Theme.of(context).textTheme.bodyMedium?.color ?? Colors.grey,
+          Icons.payments_outlined
+        ),
+    };
+
+    return AppStatusBadge(
+      label: method.toUpperCase(),
+      color: color,
+      icon: icon,
+      style: AppStatusBadgeStyle.icon,
+      fontSize: 10,
+      fontWeight: FontWeight.w700,
     );
   }
 
@@ -889,48 +832,6 @@ class _SaleRow extends StatelessWidget {
   }
 }
 
-// ── Payment Badge ───────────────────────────────────────────────────────────
-
-class _PaymentBadge extends StatelessWidget {
-  final String method;
-  const _PaymentBadge({required this.method});
-
-  @override
-  Widget build(BuildContext context) {
-    final (Color color, IconData icon) = switch (method.toLowerCase()) {
-      'cash' => (AppTheme.success, Icons.payments_rounded),
-      'upi' => (AppTheme.primary, Icons.qr_code_2_rounded),
-      'card' => (AppTheme.accent, Icons.credit_card_rounded),
-      'mixed' => (AppTheme.purple, Icons.account_balance_rounded),
-      _ => (context.textMutedColor, Icons.payments_outlined),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 5),
-          Text(
-            method.toUpperCase(),
-            style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: color,
-                letterSpacing: 0.5),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ── Action Button ───────────────────────────────────────────────────────────
 
 class _ActionButton extends StatelessWidget {
@@ -973,65 +874,10 @@ class _ActionButton extends StatelessWidget {
               const SizedBox(width: 10),
               Text(label,
                   style: TextStyle(
-                      color: color, fontSize: 13, fontWeight: FontWeight.bold)),
+                      color: color, fontSize: 13, fontWeight: FontWeight.w700)),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ── Empty State ─────────────────────────────────────────────────────────────
-
-class _EmptyState extends StatelessWidget {
-  final bool hasQuery;
-  const _EmptyState({required this.hasQuery});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(60),
-      decoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(color: context.borderColor),
-          right: BorderSide(color: context.borderColor),
-          bottom: BorderSide(color: context.borderColor),
-        ),
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withValues(alpha: 0.08),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              hasQuery ? Icons.search_off_rounded : Icons.receipt_long_rounded,
-              size: 40,
-              color: AppTheme.primary.withValues(alpha: 0.5),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            hasQuery ? 'No matching sales found' : 'No sales recorded yet',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: context.textColor,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            hasQuery
-                ? 'Try adjusting your search query'
-                : 'Sales will appear here once transactions are made',
-            style: TextStyle(fontSize: 13, color: context.textMutedColor),
-          ),
-        ],
       ),
     );
   }

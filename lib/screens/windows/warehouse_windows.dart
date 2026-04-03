@@ -12,6 +12,9 @@ import '../../shared/models/purchase_record.dart';
 import '../../shared/services/sync_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/medicine_dialog.dart';
+import '../../shared/widgets/app_status_badge.dart';
+import '../../shared/widgets/app_empty_state.dart';
+import '../../shared/widgets/app_filter_chip.dart';
 
 class WarehouseWindows extends StatefulWidget {
   const WarehouseWindows({super.key});
@@ -412,11 +415,11 @@ class _StockLevelsTabState extends State<_StockLevelsTab> {
         // Medicines Grid
         Expanded(
           child: GridView.builder(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(20),
             gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
               maxCrossAxisExtent: 400,
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 16,
+              mainAxisSpacing: 24,
+              crossAxisSpacing: 24,
               mainAxisExtent: 260, // Fixed height for consistency
             ),
             itemCount: inv.medicines.length,
@@ -550,15 +553,24 @@ class _ModernMedicineCardWindowsState
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
               Row(
                 children: [
                   if (widget.medicine.isLowStock)
-                    _StatusBadge(label: 'LOW STOCK', color: AppTheme.warning),
+                    AppStatusBadge(
+                        label: 'LOW STOCK',
+                        color: AppTheme.warning,
+                        style: AppStatusBadgeStyle.text),
                   if (widget.medicine.hasExpiredBatch)
-                    _StatusBadge(label: 'EXPIRED', color: AppTheme.danger)
+                    AppStatusBadge(
+                        label: 'EXPIRED',
+                        color: AppTheme.danger,
+                        style: AppStatusBadgeStyle.text)
                   else if (widget.medicine.hasNearExpiryBatch)
-                    _StatusBadge(label: 'NEAR EXPIRY', color: AppTheme.danger),
+                    AppStatusBadge(
+                        label: 'NEAR EXPIRY',
+                        color: AppTheme.danger,
+                        style: AppStatusBadgeStyle.text),
                   const Spacer(),
                   PopupMenuButton<String>(
                     icon: Icon(Icons.more_vert, color: context.textMutedColor),
@@ -794,7 +806,7 @@ class _BatchDetailsDialog extends StatelessWidget {
                       },
                     ),
                   ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
                 const Divider(),
                 const SizedBox(height: 8),
                 Row(
@@ -1023,37 +1035,6 @@ class _MetricBlock extends StatelessWidget {
   }
 }
 
-class _StatusBadge extends StatelessWidget {
-  final String label;
-  final Color color;
-  const _StatusBadge({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(right: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Text(label.toUpperCase(),
-          style: const TextStyle(
-              color: Colors.white,
-              fontSize: 9,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.5)),
-    );
-  }
-}
-
 class _HorizontalDropdown extends StatelessWidget {
   final String label;
   final String value;
@@ -1121,34 +1102,38 @@ class _TransferHistoryTab extends StatelessWidget {
             children: [
               const Icon(Icons.filter_list, size: 20),
               const SizedBox(width: 16),
-              _FilterChip(
+              AppFilterChip(
                 label: 'Today',
                 isSelected: wh.activeFilter == SalesFilter.today,
-                onSelected: () => wh.setFilter(SalesFilter.today),
+                onTap: () => wh.setFilter(SalesFilter.today),
+                style: AppFilterChipStyle.filled,
               ),
               const SizedBox(width: 8),
-              _FilterChip(
+              AppFilterChip(
                 label: 'Yesterday',
                 isSelected: wh.activeFilter == SalesFilter.yesterday,
-                onSelected: () => wh.setFilter(SalesFilter.yesterday),
+                onTap: () => wh.setFilter(SalesFilter.yesterday),
+                style: AppFilterChipStyle.filled,
               ),
               const SizedBox(width: 8),
-              _FilterChip(
+              AppFilterChip(
                 label: 'Last 7 Days',
                 isSelected: wh.activeFilter == SalesFilter.last7Days,
-                onSelected: () => wh.setFilter(SalesFilter.last7Days),
+                onTap: () => wh.setFilter(SalesFilter.last7Days),
+                style: AppFilterChipStyle.filled,
               ),
               const SizedBox(width: 8),
-              _FilterChip(
+              AppFilterChip(
                 label: 'All Time',
                 isSelected: wh.activeFilter == SalesFilter.allTime,
-                onSelected: () => wh.setFilter(SalesFilter.allTime),
+                onTap: () => wh.setFilter(SalesFilter.allTime),
+                style: AppFilterChipStyle.filled,
               ),
               const SizedBox(width: 8),
-              _FilterChip(
+              AppFilterChip(
                 label: 'Custom Range',
                 isSelected: wh.activeFilter == SalesFilter.custom,
-                onSelected: () async {
+                onTap: () async {
                   final range = await showDateRangePicker(
                     context: context,
                     firstDate: DateTime(2020),
@@ -1169,26 +1154,19 @@ class _TransferHistoryTab extends StatelessWidget {
                     wh.setFilter(SalesFilter.custom, range: range);
                   }
                 },
+                style: AppFilterChipStyle.filled,
               ),
             ],
           ),
         ),
         Expanded(
           child: wh.transfers.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.history,
-                          size: 48, color: context.textMutedColor),
-                      const SizedBox(height: 16),
-                      Text('No transfers recorded in this period',
-                          style: TextStyle(color: context.textMutedColor)),
-                    ],
-                  ),
+              ? const AppEmptyState(
+                  icon: Icons.history,
+                  title: 'No transfers recorded in this period',
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(20),
                   itemCount: wh.transfers.length,
                   itemBuilder: (ctx, i) {
                     final t = wh.transfers[i];
@@ -1273,41 +1251,6 @@ class _TransferHistoryTab extends StatelessWidget {
                 ),
         ),
       ],
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final VoidCallback onSelected;
-
-  const _FilterChip({
-    required this.label,
-    required this.isSelected,
-    required this.onSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ChoiceChip(
-      label: Text(label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color: isSelected ? Colors.white : context.textMutedColor,
-          )),
-      selected: isSelected,
-      onSelected: (_) => onSelected(),
-      selectedColor: AppTheme.primary,
-      backgroundColor: context.bgColor.withValues(alpha: 0.5),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: BorderSide(
-          color: isSelected ? AppTheme.primary : Colors.transparent,
-        ),
-      ),
-      showCheckmark: false,
     );
   }
 }
@@ -1401,7 +1344,7 @@ class _TransferDialogState extends State<_TransferDialog> {
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             Text('Available to transfer: $available ${widget.medicine.unit}',
                 style: TextStyle(
                     color: context.textMutedColor,
@@ -1604,7 +1547,7 @@ class _BulkStockEntryDialogState extends State<_BulkStockEntryDialog> {
                           'Selected Items (${_selectedItems.length})',
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 24),
                         Expanded(
                           child: _selectedItems.isEmpty
                               ? Center(
@@ -1848,7 +1791,7 @@ class _PurchaseHistoryTab extends StatelessWidget {
                     children: [
                       Icon(Icons.inventory_2_outlined,
                           size: 64, color: context.textMutedColor),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 24),
                       Text('No purchase records yet',
                           style: TextStyle(
                               color: context.textMutedColor, fontSize: 16)),

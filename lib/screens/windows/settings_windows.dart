@@ -488,9 +488,25 @@ class _SettingsWindowsState extends State<SettingsWindows> {
             child: Column(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(20),
                   child: Row(
                     children: [
+                      if (ModalRoute.of(context)?.canPop == true) ...[
+                        InkWell(
+                          onTap: () => Navigator.pop(context),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.arrow_back_rounded,
+                                color: AppTheme.primary, size: 20),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                      ],
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
@@ -605,7 +621,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
             child: Container(
               color: context.bgColor,
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

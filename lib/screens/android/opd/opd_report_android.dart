@@ -5,6 +5,7 @@ import '../../../shared/models/appointment.dart';
 import '../../../shared/providers/opd_provider.dart';
 import '../../../shared/providers/prescription_provider.dart';
 import '../../../theme/app_theme.dart';
+import '../../../shared/widgets/app_status_badge.dart';
 
 class OpdReportAndroid extends StatelessWidget {
   const OpdReportAndroid({super.key});
@@ -111,7 +112,7 @@ class OpdReportAndroid extends StatelessWidget {
                 ),
                 if (sortedDiagnoses.isNotEmpty) ...[
                   Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(20),
                     child: Container(
                       decoration: BoxDecoration(
                         color: context.surfaceColor.withValues(alpha: 0.9),
@@ -147,7 +148,7 @@ class OpdReportAndroid extends StatelessWidget {
                                 const Text('TOP DIAGNOSES',
                                     style: TextStyle(
                                         fontSize: 12,
-                                        fontWeight: FontWeight.w900,
+                                        fontWeight: FontWeight.w800,
                                         letterSpacing: 1,
                                         color: AppTheme.primaryLight)),
                               ],
@@ -158,7 +159,7 @@ class OpdReportAndroid extends StatelessWidget {
                               color:
                                   context.borderColor.withValues(alpha: 0.3)),
                           Padding(
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(20),
                             child: Column(
                               children: sortedDiagnoses
                                   .take(10)
@@ -209,7 +210,7 @@ class OpdReportAndroid extends StatelessWidget {
                 // Per-doctor stats
                 if (opd.activeDoctors.isNotEmpty) ...[
                   Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(20),
                     child: Container(
                       decoration: BoxDecoration(
                         color: context.surfaceColor.withValues(alpha: 0.9),
@@ -245,7 +246,7 @@ class OpdReportAndroid extends StatelessWidget {
                                 const Text('PER DOCTOR STATS',
                                     style: TextStyle(
                                         fontSize: 12,
-                                        fontWeight: FontWeight.w900,
+                                        fontWeight: FontWeight.w800,
                                         letterSpacing: 1,
                                         color: AppTheme.primaryLight)),
                               ],
@@ -262,7 +263,7 @@ class OpdReportAndroid extends StatelessWidget {
                             final docRevenue = docAppts.fold(
                                 0.0, (s, a) => s + a.consultationFee);
                             return Padding(
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.all(20),
                               child: Row(
                                 children: [
                                   Container(
@@ -394,39 +395,24 @@ class OpdReportAndroid extends StatelessWidget {
   }
 
   Widget _buildStatusChip(String status) {
-    Color bg = Colors.grey.withValues(alpha: 0.1);
-    Color fg = Colors.grey;
+    Color color = Colors.grey;
 
     if (status == kStatusWaiting) {
-      bg = AppTheme.warning.withValues(alpha: 0.1);
-      fg = AppTheme.warningDark;
+      color = AppTheme.warningDark;
     } else if (status == kStatusWithDoctor) {
-      bg = AppTheme.primaryLight.withValues(alpha: 0.1);
-      fg = AppTheme.primaryLight;
+      color = AppTheme.primaryLight;
     } else if (status == kStatusPharmacy) {
-      bg = AppTheme.purple.withValues(alpha: 0.1);
-      fg = AppTheme.purple;
+      color = AppTheme.purple;
     } else if (status == kStatusDone) {
-      bg = AppTheme.success.withValues(alpha: 0.1);
-      fg = AppTheme.success;
+      color = AppTheme.success;
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: fg.withValues(alpha: 0.2)),
-      ),
-      child: Text(
-        status.toUpperCase(),
-        style: TextStyle(
-          color: fg,
-          fontSize: 10,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 0.5,
-        ),
-      ),
+    return AppStatusBadge(
+      label: status.toUpperCase(),
+      color: color,
+      style: AppStatusBadgeStyle.text,
+      fontSize: 10,
+      fontWeight: FontWeight.w700,
     );
   }
 }
@@ -472,7 +458,7 @@ class _FilterChip extends StatelessWidget {
           label.toUpperCase(),
           style: TextStyle(
             color: isSelected ? Colors.white : context.textMutedColor,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
             fontSize: 11,
             letterSpacing: 0.5,
           ),

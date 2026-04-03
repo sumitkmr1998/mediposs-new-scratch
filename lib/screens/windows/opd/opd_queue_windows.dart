@@ -7,10 +7,13 @@ import '../../../shared/providers/prescription_provider.dart';
 import '../../../shared/providers/patient_provider.dart';
 import '../../../theme/app_theme.dart';
 import '../../../shared/models/patient.dart';
+import '../../../shared/widgets/app_status_badge.dart';
 import '../../../widgets/patient_dialogs.dart';
 import '../../../shared/services/sync_service.dart';
 import '../../opd/prescription_screen.dart';
 import '../../opd/patient_details_screen.dart';
+import '../../../shared/widgets/app_empty_state.dart';
+import '../../../shared/widgets/app_kpi_card.dart';
 
 class OpdQueueWindows extends StatefulWidget {
   const OpdQueueWindows({super.key});
@@ -73,7 +76,7 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -90,14 +93,14 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                 spacing: spacing,
                 runSpacing: spacing,
                 children: [
-                  _StatCard(
+                  AppKpiCard(
                     label: 'OPD Today',
                     value: '${queue.length}',
                     icon: Icons.groups_rounded,
                     color: AppTheme.primary,
                     width: cardWidth,
                   ),
-                  _StatCard(
+                  AppKpiCard(
                     label: 'Tokens Left',
                     value:
                         '${waiting.length + withDoctor.length + pharmacy.length}',
@@ -105,14 +108,14 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                     color: AppTheme.warning,
                     width: cardWidth,
                   ),
-                  _StatCard(
+                  AppKpiCard(
                     label: 'With Doctor',
                     value: '${withDoctor.length}',
                     icon: Icons.healing_rounded,
                     color: AppTheme.primaryLight,
                     width: cardWidth,
                   ),
-                  _StatCard(
+                  AppKpiCard(
                     label: 'Completed',
                     value: '${done.length}',
                     icon: Icons.check_circle_rounded,
@@ -207,7 +210,11 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
 
                   // Queue Rows (sequential 1, 2, 3...)
                   if (sortedQueue.isEmpty)
-                    const _EmptyQueue()
+                    const AppEmptyState(
+                      icon: Icons.people_outline_rounded,
+                      title: 'No patients in queue today',
+                      subtitle: 'Add a patient using the button below',
+                    )
                   else
                     ...sortedQueue.map((appt) => _QueueRow(
                           appointment: appt,
@@ -350,62 +357,6 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
   }
 }
 
-// ── Stat Card ───────────────────────────────────────────────────────────────
-
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final double width;
-
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-    required this.width,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: width,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: color, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(value,
-                      style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: color)),
-                  Text(label,
-                      style: TextStyle(
-                          fontSize: 12, color: context.textMutedColor)),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // ── Queue Row ───────────────────────────────────────────────────────────────
 
 class _QueueRow extends StatefulWidget {
@@ -518,7 +469,7 @@ class _QueueRowState extends State<_QueueRow> {
       return Opacity(
         opacity: 0.4,
         child: Container(
-          margin: const EdgeInsets.only(bottom: 4),
+          margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           decoration: BoxDecoration(
             color: context.cardColor.withValues(alpha: 0.5),
@@ -582,19 +533,12 @@ class _QueueRowState extends State<_QueueRow> {
               SizedBox(
                 width: 180,
                 child: Center(
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: context.borderColor,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text('DONE',
-                        style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1,
-                            color: context.textMutedColor)),
+                  child: AppStatusBadge(
+                    label: 'DONE',
+                    color: context.borderColor,
+                    style: AppStatusBadgeStyle.text,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -769,7 +713,7 @@ class _QueueRowState extends State<_QueueRow> {
     // ── AT PHARMACY: Light highlight ──
     if (isPharmacy) {
       return Container(
-        margin: const EdgeInsets.only(bottom: 4),
+        margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
         decoration: BoxDecoration(
           color: AppTheme.success.withValues(alpha: 0.04),
@@ -844,19 +788,11 @@ class _QueueRowState extends State<_QueueRow> {
             SizedBox(
               width: 180,
               child: Center(
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: AppTheme.success.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Text('AT PHARMACY',
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1,
-                          color: AppTheme.success)),
+                child: AppStatusBadge(
+                  label: 'AT PHARMACY',
+                  color: AppTheme.success,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -882,7 +818,7 @@ class _QueueRowState extends State<_QueueRow> {
 
     // ── WAITING: Normal ──
     return Container(
-      margin: const EdgeInsets.only(bottom: 4),
+      margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
       decoration: BoxDecoration(
         color: AppTheme.primary.withValues(alpha: 0.03),
@@ -953,19 +889,11 @@ class _QueueRowState extends State<_QueueRow> {
           SizedBox(
             width: 180,
             child: Center(
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppTheme.warning.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Text('WAITING',
-                    style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1,
-                        color: AppTheme.warningDark)),
+              child: AppStatusBadge(
+                label: 'WAITING',
+                color: AppTheme.warningDark,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -1278,34 +1206,6 @@ class _PaymentOption extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ── Empty Queue ─────────────────────────────────────────────────────────────
-
-class _EmptyQueue extends StatelessWidget {
-  const _EmptyQueue();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(60),
-      child: Column(
-        children: [
-          Icon(Icons.people_outline_rounded,
-              size: 48, color: context.textMutedColor),
-          const SizedBox(height: 16),
-          Text('No patients in queue today',
-              style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: context.textMutedColor)),
-          const SizedBox(height: 4),
-          Text('Add a patient using the button below',
-              style: TextStyle(fontSize: 13, color: context.textMutedColor)),
-        ],
       ),
     );
   }

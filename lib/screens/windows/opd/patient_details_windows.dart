@@ -202,7 +202,7 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
           // ── Full Screen 2x2 Grid ──
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
                   Expanded(
