@@ -232,7 +232,7 @@ class _ModernQueueCard extends StatelessWidget {
       case kStatusWithDoctor:
         return AppTheme.primary;
       case kStatusPharmacy:
-        return const Color(0xFF7C3AED);
+        return AppTheme.purple;
       case kStatusDone:
         return AppTheme.success;
       default:
@@ -284,7 +284,10 @@ class _ModernQueueCard extends StatelessWidget {
                   height: 56,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [color.withValues(alpha: 0.2), color.withValues(alpha: 0.05)],
+                      colors: [
+                        color.withValues(alpha: 0.2),
+                        color.withValues(alpha: 0.05)
+                      ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -293,7 +296,12 @@ class _ModernQueueCard extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text('TOKEN', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 1, color: Colors.grey)),
+                      const Text('TOKEN',
+                          style: TextStyle(
+                              fontSize: 8,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1,
+                              color: Colors.grey)),
                       Text(
                         '${appointment.tokenNumber}',
                         style: TextStyle(
@@ -315,11 +323,16 @@ class _ModernQueueCard extends StatelessWidget {
                     children: [
                       Text(appointment.patientName,
                           style: const TextStyle(
-                              fontWeight: FontWeight.w900, fontSize: 17, letterSpacing: -0.2)),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 17,
+                              letterSpacing: -0.2)),
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          _StatusBadge(status: appointment.status, color: color, label: _statusLabel(appointment.status)),
+                          _StatusBadge(
+                              status: appointment.status,
+                              color: color,
+                              label: _statusLabel(appointment.status)),
                           const SizedBox(width: 8),
                           Text(
                             'DR. ${appointment.doctorName.toUpperCase()}',
@@ -342,8 +355,11 @@ class _ModernQueueCard extends StatelessWidget {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: context.textMutedColor.withValues(alpha: 0.03),
-                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
-                border: Border(top: BorderSide(color: context.borderColor.withValues(alpha: 0.2))),
+                borderRadius:
+                    const BorderRadius.vertical(bottom: Radius.circular(24)),
+                border: Border(
+                    top: BorderSide(
+                        color: context.borderColor.withValues(alpha: 0.2))),
               ),
               child: Row(
                 children: [
@@ -370,7 +386,7 @@ class _ModernQueueCard extends StatelessWidget {
                       child: _ActionBtn(
                         label: 'TO PHARMACY',
                         icon: Icons.arrow_forward_rounded,
-                        color: const Color(0xFF7C3AED),
+                        color: AppTheme.purple,
                         onTap: () => onStatusChange(kStatusPharmacy),
                       ),
                     ),
@@ -399,7 +415,8 @@ class _StatusBadge extends StatelessWidget {
   final Color color;
   final String label;
 
-  const _StatusBadge({required this.status, required this.color, required this.label});
+  const _StatusBadge(
+      {required this.status, required this.color, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -468,7 +485,10 @@ class _ActionBtn extends StatelessWidget {
               const SizedBox(width: 8),
               Text(label,
                   style: TextStyle(
-                      color: color, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                      color: color,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5)),
             ],
           ),
         ),
@@ -494,7 +514,10 @@ class _StatBadge extends StatelessWidget {
       ),
       child: Text(label,
           style: TextStyle(
-              color: color, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 0.2)),
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.2)),
     );
   }
 }

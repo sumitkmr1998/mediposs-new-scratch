@@ -65,7 +65,8 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                     style:
                         TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
                 Text('Today\'s live queue',
-                    style: TextStyle(fontSize: 12, color: context.textMutedColor)),
+                    style:
+                        TextStyle(fontSize: 12, color: context.textMutedColor)),
               ],
             ),
           ],
@@ -159,7 +160,7 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
                                     letterSpacing: 1.5,
-                                    color: Color(0xFF94A3B8)))),
+                                    color: AppTheme.primaryLight))),
                         const Expanded(
                             flex: 2,
                             child: Text('ASSIGNED CONSULTANT',
@@ -167,7 +168,7 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
                                     letterSpacing: 1.5,
-                                    color: Color(0xFF94A3B8)))),
+                                    color: AppTheme.primaryLight))),
                         const SizedBox(
                             width: 180,
                             child: Center(
@@ -176,7 +177,7 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                                         fontSize: 11,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 1.5,
-                                        color: Color(0xFF94A3B8))))),
+                                        color: AppTheme.primaryLight)))),
                         const SizedBox(
                             width: 180,
                             child: Center(
@@ -185,7 +186,7 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                                         fontSize: 11,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 1.5,
-                                        color: Color(0xFF94A3B8))))),
+                                        color: AppTheme.primaryLight)))),
                         const SizedBox(
                             width: 180,
                             child: Align(
@@ -195,7 +196,7 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                                         fontSize: 11,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 1.5,
-                                        color: Color(0xFF94A3B8))))),
+                                        color: AppTheme.primaryLight)))),
                       ],
                     ),
                   ),
@@ -225,8 +226,8 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                             }
                           },
                           onStatusChange: (newStatus) {
-                            context.read<OpdProvider>().updateStatus(
-                                appt.id, newStatus, context.read<SyncService>());
+                            context.read<OpdProvider>().updateStatus(appt.id,
+                                newStatus, context.read<SyncService>());
                             if (newStatus == kStatusDone) {
                               context
                                   .read<PrescriptionProvider>()
@@ -552,7 +553,9 @@ class _QueueRowState extends State<_QueueRow> {
                                 color: context.textMutedColor)),
                         Text('ID: P-${a.patientId}',
                             style: TextStyle(
-                                fontSize: 10, color: context.textMutedColor.withValues(alpha: 0.7))),
+                                fontSize: 10,
+                                color: context.textMutedColor
+                                    .withValues(alpha: 0.7))),
                       ],
                     ),
                   ),
@@ -600,7 +603,8 @@ class _QueueRowState extends State<_QueueRow> {
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: Icon(Icons.more_vert_rounded,
-                      color: context.textMutedColor.withValues(alpha: 0.5), size: 20),
+                      color: context.textMutedColor.withValues(alpha: 0.5),
+                      size: 20),
                 ),
               ),
             ],
@@ -634,7 +638,6 @@ class _QueueRowState extends State<_QueueRow> {
               width: 60,
               child: Text('#${a.tokenNumber.toString().padLeft(2, '0')}',
                   style: const TextStyle(
-                      fontFamily: 'Manrope',
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
                       color: AppTheme.primary)),
@@ -780,11 +783,10 @@ class _QueueRowState extends State<_QueueRow> {
             SizedBox(
               width: 60,
               child: Text('#${a.tokenNumber.toString().padLeft(2, '0')}',
-                  style: const TextStyle(
-                      fontFamily: 'Manrope',
+                  style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
-                      color: AppTheme.primary)),
+                      color: context.textMutedColor)),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -892,7 +894,6 @@ class _QueueRowState extends State<_QueueRow> {
             width: 60,
             child: Text('#${a.tokenNumber.toString().padLeft(2, '0')}',
                 style: const TextStyle(
-                    fontFamily: 'Manrope',
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: AppTheme.primary)),
@@ -1061,7 +1062,6 @@ class _ActionBtn extends StatelessWidget {
     );
   }
 }
-
 
 // ── Payment Mode Dialog ──────────────────────────────────────────────────────
 
@@ -1330,8 +1330,8 @@ class _EditPatientBtn extends StatelessWidget {
             width: 1,
           ),
         ),
-        child: const Icon(Icons.edit_rounded,
-            size: 14, color: AppTheme.primary),
+        child:
+            const Icon(Icons.edit_rounded, size: 14, color: AppTheme.primary),
       ),
     );
   }

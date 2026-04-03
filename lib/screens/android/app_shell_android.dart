@@ -26,6 +26,7 @@ import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/opd_provider.dart';
 import '../../shared/providers/prescription_provider.dart';
 import '../../shared/providers/template_provider.dart';
+import '../../shared/widgets/interactive_hover.dart';
 
 class AppShellAndroid extends StatefulWidget {
   const AppShellAndroid({super.key});
@@ -356,42 +357,46 @@ class _SideNav extends StatelessWidget {
               itemBuilder: (ctx, i) {
                 final d = destinations[i];
                 final selected = selectedIndex == i;
-                return Container(
-                  margin:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? AppTheme.primary.withValues(alpha: 0.15)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: InkWell(
-                    onTap: () => onDestinationSelected(i),
-                    borderRadius: BorderRadius.circular(10),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 12),
-                      child: Row(
-                        children: [
-                          Icon(selected ? d.selectedIcon : d.icon,
-                              color: selected
-                                  ? AppTheme.primary
-                                  : context.textMutedColor,
-                              size: 20),
-                          if (isExpanded) ...[
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(d.label,
-                                  style: TextStyle(
-                                      color: selected
-                                          ? AppTheme.primary
-                                          : context.textMutedColor,
-                                      fontWeight: selected
-                                          ? FontWeight.w700
-                                          : FontWeight.w400)),
-                            ),
+                return InteractiveHover(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => onDestinationSelected(i),
+                  child: Container(
+                    margin:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? AppTheme.primary.withValues(alpha: 0.15)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: InkWell(
+                      onTap: () => onDestinationSelected(i),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 12),
+                        child: Row(
+                          children: [
+                            Icon(selected ? d.selectedIcon : d.icon,
+                                color: selected
+                                    ? AppTheme.primary
+                                    : context.textMutedColor,
+                                size: 20),
+                            if (isExpanded) ...[
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(d.label,
+                                    style: TextStyle(
+                                        color: selected
+                                            ? AppTheme.primary
+                                            : context.textMutedColor,
+                                        fontWeight: selected
+                                            ? FontWeight.w700
+                                            : FontWeight.w400)),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   ),

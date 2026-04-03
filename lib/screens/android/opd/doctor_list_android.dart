@@ -195,7 +195,7 @@ class _DoctorListAndroidState extends State<DoctorListAndroid> {
                                     IconButton(
                                       icon: const Icon(Icons.edit_rounded,
                                           size: 20),
-                                      color: const Color(0xFF6366F1),
+                                      color: AppTheme.indigo,
                                       onPressed: () =>
                                           _showDoctorDialog(context, doctor: d),
                                       tooltip: 'Edit Doctor',

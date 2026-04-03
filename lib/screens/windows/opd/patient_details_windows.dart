@@ -55,9 +55,9 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  Color(0xFF0A5D5F),
+                  const Color(0xFF0A5D5F),
                   AppTheme.primary,
-                  Color(0xFF14A085)
+                  AppTheme.primaryLight
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -221,7 +221,7 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
                           child: _SectionCard(
                             title: 'Gallery',
                             icon: Icons.photo_library_rounded,
-                            accentColor: const Color(0xFF7C3AED),
+                            accentColor: AppTheme.purple,
                             badge:
                                 photos.isNotEmpty ? '${photos.length}' : null,
                             trailing: _AddPhotoBtn(
@@ -653,7 +653,7 @@ class _AddPhotoBtn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+      color: AppTheme.purple.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
@@ -661,7 +661,7 @@ class _AddPhotoBtn extends StatelessWidget {
         child: const Padding(
           padding: EdgeInsets.all(6),
           child: Icon(Icons.add_photo_alternate_rounded,
-              size: 18, color: Color(0xFF7C3AED)),
+              size: 18, color: AppTheme.purple),
         ),
       ),
     );
@@ -772,22 +772,21 @@ class _GalleryContent extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF7C3AED).withValues(alpha: 0.08),
+              color: AppTheme.purple.withValues(alpha: 0.08),
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.add_a_photo_rounded,
-                size: 32,
-                color: const Color(0xFF7C3AED).withValues(alpha: 0.5)),
+                size: 32, color: AppTheme.purple.withValues(alpha: 0.5)),
           ),
           const SizedBox(height: 12),
-          const Text('No photos yet',
+          Text('No photos yet',
               style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF94A3B8))),
+                  color: context.textMutedColor)),
           const SizedBox(height: 4),
-          const Text('Click + to add photos',
-              style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+          Text('Click + to add photos',
+              style: TextStyle(fontSize: 11, color: context.textMutedColor)),
         ]),
       );
     }
@@ -1006,33 +1005,37 @@ class _ExpandablePrescriptionState extends State<_ExpandablePrescription> {
                               style: TextStyle(
                                   fontSize: 11, color: context.textMutedColor)),
                           const SizedBox(height: 6),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: p.dispensed
-                                        ? AppTheme.success.withValues(alpha: 0.1)
-                                        : AppTheme.warning.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(p.dispensed ? 'DISPENSED' : 'PENDING',
-                                      style: TextStyle(
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 0.5,
-                                          color: p.dispensed
-                                              ? AppTheme.success
-                                              : AppTheme.warningDark)),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: p.dispensed
+                                      ? AppTheme.success.withValues(alpha: 0.1)
+                                      : AppTheme.warning.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(20),
                                 ),
-                                if (widget.pProvider.getImages(p).isNotEmpty) ...[
-                                  const SizedBox(width: 8),
-                                  Icon(Icons.image_rounded, size: 14, color: AppTheme.primaryLight.withValues(alpha: 0.6)),
-                                ],
+                                child: Text(
+                                    p.dispensed ? 'DISPENSED' : 'PENDING',
+                                    style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.5,
+                                        color: p.dispensed
+                                            ? AppTheme.success
+                                            : AppTheme.warningDark)),
+                              ),
+                              if (widget.pProvider.getImages(p).isNotEmpty) ...[
+                                const SizedBox(width: 8),
+                                Icon(Icons.image_rounded,
+                                    size: 14,
+                                    color: AppTheme.primaryLight
+                                        .withValues(alpha: 0.6)),
                               ],
-                            ),
+                            ],
+                          ),
                         ],
                       ),
                       const SizedBox(width: 8),
@@ -1161,8 +1164,8 @@ class _ExpandablePrescriptionState extends State<_ExpandablePrescription> {
                             letterSpacing: 0.5)),
                     const SizedBox(height: 4),
                     Text(p.notes,
-                        style: const TextStyle(
-                            fontSize: 12, color: Color(0xFF475569))),
+                        style: TextStyle(
+                            fontSize: 12, color: context.textMutedColor)),
                   ],
                   // Images
                   if (widget.pProvider.getImages(p).isNotEmpty) ...[
@@ -1177,32 +1180,40 @@ class _ExpandablePrescriptionState extends State<_ExpandablePrescription> {
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: widget.pProvider.getImages(p).map((path) => GestureDetector(
-                        onTap: () => _viewPrescriptionImage(context, path),
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AppTheme.primaryLight.withValues(alpha: 0.2)),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.file(
-                                File(path),
-                                width: 60,
-                                height: 60,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  width: 60, height: 60,
-                                  color: Colors.grey.shade200,
-                                  child: const Icon(Icons.broken_image, size: 20, color: Colors.grey),
+                      children: widget.pProvider
+                          .getImages(p)
+                          .map((path) => GestureDetector(
+                                onTap: () =>
+                                    _viewPrescriptionImage(context, path),
+                                child: MouseRegion(
+                                  cursor: SystemMouseCursors.click,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: AppTheme.primaryLight
+                                              .withValues(alpha: 0.2)),
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.file(
+                                        File(path),
+                                        width: 60,
+                                        height: 60,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => Container(
+                                          width: 60,
+                                          height: 60,
+                                          color: Colors.grey.shade200,
+                                          child: const Icon(Icons.broken_image,
+                                              size: 20, color: Colors.grey),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      )).toList(),
+                              ))
+                          .toList(),
                     ),
                   ],
                 ],

@@ -160,21 +160,24 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
             ..barcode = barcode.isNotEmpty ? barcode : existing.barcode
             ..category = category
             ..unit = unit
-            ..purchasePrice = purchasePrice > 0 ? purchasePrice : existing.purchasePrice
-            ..sellingPrice = sellingPrice > 0 ? sellingPrice : existing.sellingPrice
+            ..purchasePrice =
+                purchasePrice > 0 ? purchasePrice : existing.purchasePrice
+            ..sellingPrice =
+                sellingPrice > 0 ? sellingPrice : existing.sellingPrice
             ..lowStockThreshold = lowStock;
-          
+
           inv.updateMedicine(existing);
 
           // If stock is provided in Excel, add it as a new batch to avoid total drift
           if (mainStock > 0 || storeStock > 0) {
-             inv.addBatchStock(
-               {existing.id: mainStock},
-               storeUpdates: {existing.id: storeStock},
-               batchNo: 'IMPORT-${DateTime.now().millisecondsSinceEpoch}',
-               expiryDate: DateTime.now().add(const Duration(days: 365 * 2)), // 2 year default
-               note: 'Imported from Excel',
-             );
+            inv.addBatchStock(
+              {existing.id: mainStock},
+              storeUpdates: {existing.id: storeStock},
+              batchNo: 'IMPORT-${DateTime.now().millisecondsSinceEpoch}',
+              expiryDate: DateTime.now()
+                  .add(const Duration(days: 365 * 2)), // 2 year default
+              note: 'Imported from Excel',
+            );
           }
           updated++;
         } else {
@@ -191,7 +194,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
             lowStockThreshold: lowStock,
           );
           inv.addMedicine(newMed);
-          
+
           if (mainStock > 0 || storeStock > 0) {
             inv.addBatchStock(
               {newMed.id: mainStock},
@@ -235,7 +238,8 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
                   foregroundColor: Colors.white,
                   elevation: 2,
                   shadowColor: AppTheme.success.withValues(alpha: 0.3),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: () => _importExcel(context),
                 icon: const Icon(Icons.file_upload, size: 18),
@@ -250,7 +254,8 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
                   foregroundColor: Colors.white,
                   elevation: 2,
                   shadowColor: AppTheme.primary.withValues(alpha: 0.3),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: () => showDialog(
                   context: context,
@@ -316,7 +321,6 @@ class _StockLevelsTabState extends State<_StockLevelsTab> {
       }
     });
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -388,11 +392,14 @@ class _StockLevelsTabState extends State<_StockLevelsTab> {
                   const SizedBox(width: 8),
                   IconButton(
                     tooltip: 'Reconcile Hub Quantity with Batches',
-                    icon: const Icon(Icons.rebase_edit, color: AppTheme.primary),
+                    icon:
+                        const Icon(Icons.rebase_edit, color: AppTheme.primary),
                     onPressed: () {
                       inv.reconcileAllStock();
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Stock reconciled with batches successfully')),
+                        const SnackBar(
+                            content: Text(
+                                'Stock reconciled with batches successfully')),
                       );
                     },
                   ),
@@ -455,7 +462,6 @@ class _ModernMedicineCardWindows extends StatefulWidget {
 
 class _ModernMedicineCardWindowsState
     extends State<_ModernMedicineCardWindows> {
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -529,7 +535,7 @@ class _ModernMedicineCardWindowsState
                       label: 'Hub',
                       value: widget.medicine.mainStock,
                       icon: Icons.warehouse,
-                      color: const Color(0xFF6366F1),
+                      color: AppTheme.indigo,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -548,8 +554,7 @@ class _ModernMedicineCardWindowsState
               Row(
                 children: [
                   if (widget.medicine.isLowStock)
-                    _StatusBadge(
-                        label: 'LOW STOCK', color: AppTheme.warning),
+                    _StatusBadge(label: 'LOW STOCK', color: AppTheme.warning),
                   if (widget.medicine.hasExpiredBatch)
                     _StatusBadge(label: 'EXPIRED', color: AppTheme.danger)
                   else if (widget.medicine.hasNearExpiryBatch)
@@ -575,8 +580,10 @@ class _ModernMedicineCardWindowsState
                     itemBuilder: (ctx) => [
                       const PopupMenuItem(
                           value: 'edit',
-                          child:
-                              Row(children: [Icon(Icons.edit), Text(' Edit Info')])),
+                          child: Row(children: [
+                            Icon(Icons.edit),
+                            Text(' Edit Info')
+                          ])),
                       const PopupMenuItem(
                           value: 'batches',
                           child: Row(children: [
@@ -654,19 +661,20 @@ class _ModernMedicineCardWindowsState
   }
 }
 
-
 class _BatchDetailsDialog extends StatelessWidget {
   final Medicine medicine;
   final WarehouseProvider wh;
   final bool canTransfer;
-  const _BatchDetailsDialog({required this.medicine, required this.wh, required this.canTransfer});
+  const _BatchDetailsDialog(
+      {required this.medicine, required this.wh, required this.canTransfer});
 
   @override
   Widget build(BuildContext context) {
     return Consumer<InventoryProvider>(
       builder: (context, inv, _) {
         // Refetch medicine to get latest batches
-        final m = inv.medicines.where((m) => m.id == medicine.id).firstOrNull ?? medicine;
+        final m = inv.medicines.where((m) => m.id == medicine.id).firstOrNull ??
+            medicine;
         final sortedBatches = m.batches.toList()
           ..sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
 
@@ -679,7 +687,8 @@ class _BatchDetailsDialog extends StatelessWidget {
               if (canTransfer)
                 IconButton(
                   tooltip: 'Add New Batch',
-                  icon: const Icon(Icons.add_circle_outline, color: AppTheme.primary),
+                  icon: const Icon(Icons.add_circle_outline,
+                      color: AppTheme.primary),
                   onPressed: () {
                     Navigator.pop(context);
                     MedicineDialog.show(context, medicine: m);
@@ -715,7 +724,8 @@ class _BatchDetailsDialog extends StatelessWidget {
                             border: Border.all(
                                 color: isExpired
                                     ? AppTheme.danger.withValues(alpha: 0.2)
-                                    : context.borderColor.withValues(alpha: 0.5)),
+                                    : context.borderColor
+                                        .withValues(alpha: 0.5)),
                           ),
                           child: Row(
                             children: [
@@ -768,11 +778,13 @@ class _BatchDetailsDialog extends StatelessWidget {
                               ),
                               if (canTransfer)
                                 IconButton(
-                                  icon: const Icon(Icons.edit_outlined, size: 20),
+                                  icon:
+                                      const Icon(Icons.edit_outlined, size: 20),
                                   onPressed: () {
                                     showDialog(
                                       context: context,
-                                      builder: (ctx) => _EditBatchDialog(medicine: m, batch: b),
+                                      builder: (ctx) => _EditBatchDialog(
+                                          medicine: m, batch: b),
                                     );
                                   },
                                 ),
@@ -792,7 +804,8 @@ class _BatchDetailsDialog extends StatelessWidget {
                         style: FilledButton.styleFrom(
                           backgroundColor: const Color(0xFF14B8A6), // Teal
                           foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
                         ),
                         onPressed: () {
                           Navigator.pop(context);
@@ -804,9 +817,10 @@ class _BatchDetailsDialog extends StatelessWidget {
                       const SizedBox(width: 8),
                       FilledButton.icon(
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF6366F1), // Indigo
+                          backgroundColor: AppTheme.indigo, // Indigo
                           foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
                         ),
                         onPressed: () {
                           Navigator.pop(context);
@@ -851,8 +865,10 @@ class _EditBatchDialog extends StatefulWidget {
 
 class _EditBatchDialogState extends State<_EditBatchDialog> {
   late final _batchNoCtrl = TextEditingController(text: widget.batch.batchNo);
-  late final _hubStockCtrl = TextEditingController(text: '${widget.batch.mainStock}');
-  late final _storeStockCtrl = TextEditingController(text: '${widget.batch.storeStock}');
+  late final _hubStockCtrl =
+      TextEditingController(text: '${widget.batch.mainStock}');
+  late final _storeStockCtrl =
+      TextEditingController(text: '${widget.batch.storeStock}');
   late DateTime _expiryDate = widget.batch.expiryDate;
 
   @override
@@ -864,14 +880,17 @@ class _EditBatchDialogState extends State<_EditBatchDialog> {
         children: [
           TextField(
             controller: _batchNoCtrl,
-            decoration: const InputDecoration(labelText: 'Batch Number', isDense: true),
+            decoration:
+                const InputDecoration(labelText: 'Batch Number', isDense: true),
           ),
           const SizedBox(height: 12),
           InkWell(
             onTap: _pickDate,
             child: InputDecorator(
-              decoration: const InputDecoration(labelText: 'Expiry Date', isDense: true),
-              child: Text('${_expiryDate.day}/${_expiryDate.month}/${_expiryDate.year}'),
+              decoration: const InputDecoration(
+                  labelText: 'Expiry Date', isDense: true),
+              child: Text(
+                  '${_expiryDate.day}/${_expiryDate.month}/${_expiryDate.year}'),
             ),
           ),
           const SizedBox(height: 12),
@@ -880,7 +899,8 @@ class _EditBatchDialogState extends State<_EditBatchDialog> {
               Expanded(
                 child: TextField(
                   controller: _hubStockCtrl,
-                  decoration: const InputDecoration(labelText: 'Hub Stock', isDense: true),
+                  decoration: const InputDecoration(
+                      labelText: 'Hub Stock', isDense: true),
                   keyboardType: TextInputType.number,
                 ),
               ),
@@ -888,7 +908,8 @@ class _EditBatchDialogState extends State<_EditBatchDialog> {
               Expanded(
                 child: TextField(
                   controller: _storeStockCtrl,
-                  decoration: const InputDecoration(labelText: 'Store Stock', isDense: true),
+                  decoration: const InputDecoration(
+                      labelText: 'Store Stock', isDense: true),
                   keyboardType: TextInputType.number,
                 ),
               ),
@@ -897,7 +918,9 @@ class _EditBatchDialogState extends State<_EditBatchDialog> {
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel')),
         ElevatedButton(
           onPressed: _save,
           child: const Text('Save Changes'),
@@ -919,7 +942,7 @@ class _EditBatchDialogState extends State<_EditBatchDialog> {
   void _save() {
     final inv = context.read<InventoryProvider>();
     final sync = context.read<SyncService>();
-    
+
     inv.updateBatchDetail(
       widget.medicine,
       widget.batch,
@@ -929,7 +952,7 @@ class _EditBatchDialogState extends State<_EditBatchDialog> {
       storeStock: int.tryParse(_storeStockCtrl.text) ?? widget.batch.storeStock,
       syncService: sync,
     );
-    
+
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Batch details updated')),
@@ -1023,11 +1046,13 @@ class _StatusBadge extends StatelessWidget {
       ),
       child: Text(label.toUpperCase(),
           style: const TextStyle(
-              color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.5)),
     );
   }
 }
-
 
 class _HorizontalDropdown extends StatelessWidget {
   final String label;
@@ -1073,7 +1098,6 @@ class _HorizontalDropdown extends StatelessWidget {
     );
   }
 }
-
 
 class _TransferHistoryTab extends StatelessWidget {
   const _TransferHistoryTab();
@@ -1169,9 +1193,8 @@ class _TransferHistoryTab extends StatelessWidget {
                   itemBuilder: (ctx, i) {
                     final t = wh.transfers[i];
                     final isToStore = t.toWarehouse.toLowerCase() == 'store';
-                    final accentColor = isToStore
-                        ? const Color(0xFF14B8A6)
-                        : const Color(0xFF6366F1);
+                    final accentColor =
+                        isToStore ? const Color(0xFF14B8A6) : AppTheme.indigo;
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),

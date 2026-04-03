@@ -138,7 +138,7 @@ class _OpdReportWindowsState extends State<OpdReportWindows> {
                     label: 'Active Doctors',
                     value: '${opd.activeDoctors.length}',
                     icon: Icons.medical_services_rounded,
-                    color: const Color(0xFF7C3AED),
+                    color: AppTheme.purple,
                     count: 'On duty',
                     width: cardWidth,
                   ),
@@ -751,10 +751,7 @@ class _StatusBadge extends StatelessWidget {
     final (Color color, IconData icon) = switch (status) {
       kStatusWaiting => (AppTheme.warningDark, Icons.hourglass_top_rounded),
       kStatusWithDoctor => (AppTheme.primaryLight, Icons.healing_rounded),
-      kStatusPharmacy => (
-          const Color(0xFF7C3AED),
-          Icons.local_pharmacy_rounded
-        ),
+      kStatusPharmacy => (AppTheme.purple, Icons.local_pharmacy_rounded),
       kStatusDone => (AppTheme.success, Icons.check_circle_rounded),
       _ => (Colors.grey, Icons.circle_outlined),
     };

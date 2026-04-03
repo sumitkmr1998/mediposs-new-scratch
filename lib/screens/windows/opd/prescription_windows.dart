@@ -255,9 +255,8 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
                           decoration: InputDecoration(
                             hintText: 'e.g. Severe headache for 2 days...',
                             filled: true,
-                            fillColor: isDark
-                                ? AppTheme.darkBg
-                                : const Color(0xFFF7F9FB),
+                            fillColor:
+                                isDark ? AppTheme.darkBg : AppTheme.inputBg,
                             border: InputBorder.none,
                             enabledBorder: InputBorder.none,
                             focusedBorder: OutlineInputBorder(
@@ -280,9 +279,8 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
                           decoration: InputDecoration(
                             hintText: 'e.g. Viral Syndrome',
                             filled: true,
-                            fillColor: isDark
-                                ? AppTheme.darkBg
-                                : const Color(0xFFF7F9FB),
+                            fillColor:
+                                isDark ? AppTheme.darkBg : AppTheme.inputBg,
                             border: InputBorder.none,
                             enabledBorder: InputBorder.none,
                             focusedBorder: OutlineInputBorder(
@@ -305,9 +303,8 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
                           decoration: InputDecoration(
                             hintText: 'Additional observations...',
                             filled: true,
-                            fillColor: isDark
-                                ? AppTheme.darkBg
-                                : const Color(0xFFF7F9FB),
+                            fillColor:
+                                isDark ? AppTheme.darkBg : AppTheme.inputBg,
                             border: InputBorder.none,
                             enabledBorder: InputBorder.none,
                             focusedBorder: OutlineInputBorder(
@@ -402,9 +399,8 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
                                 prefixIcon: Icon(Icons.search,
                                     color: context.textMutedColor, size: 20),
                                 filled: true,
-                                fillColor: isDark
-                                    ? AppTheme.darkBg
-                                    : const Color(0xFFF7F9FB),
+                                fillColor:
+                                    isDark ? AppTheme.darkBg : AppTheme.inputBg,
                                 border: InputBorder.none,
                                 enabledBorder: InputBorder.none,
                                 focusedBorder: OutlineInputBorder(
@@ -540,7 +536,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
         border: Border.all(
           color: isDark
               ? AppTheme.darkBorder.withValues(alpha: 0.5)
-              : const Color(0xFFE8ECF0),
+              : AppTheme.lightBorder,
         ),
         boxShadow: [
           BoxShadow(
@@ -1006,7 +1002,6 @@ class _MedicineAdderState extends State<_MedicineAdder> {
       isAvailable: isAvailable,
     ));
 
- 
     setState(() {
       _selectedId = null;
       _selectedName = null;
@@ -1146,7 +1141,7 @@ class _MedicineAdderState extends State<_MedicineAdder> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                   const _FormLabel('Dosage'),
+                  const _FormLabel('Dosage'),
                   const SizedBox(height: 6),
                   TextField(
                     controller: widget.dosageCtrl,
@@ -1202,24 +1197,26 @@ class _MedicineAdderState extends State<_MedicineAdder> {
                           ? AppTheme.primary
                           : Colors.grey.withValues(alpha: 0.3),
                       shape: BoxShape.circle,
-                      boxShadow: _selectedName != null ? [
-                        BoxShadow(
-                          color: AppTheme.primary.withValues(alpha: 0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        )
-                      ] : null,
+                      boxShadow: _selectedName != null
+                          ? [
+                              BoxShadow(
+                                color: AppTheme.primary.withValues(alpha: 0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              )
+                            ]
+                          : null,
                     ),
                     child: Material(
                       color: Colors.transparent,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(24),
                         onTap: _selectedName != null ? _addItem : null,
-                        child: Icon(
-                          Icons.add_rounded, 
-                          color: _selectedName != null ? Colors.white : Colors.grey.shade600, 
-                          size: 28
-                        ),
+                        child: Icon(Icons.add_rounded,
+                            color: _selectedName != null
+                                ? Colors.white
+                                : Colors.grey.shade600,
+                            size: 28),
                       ),
                     ),
                   ),
@@ -1309,7 +1306,7 @@ class _MedicineListItem extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkBg : const Color(0xFFF7F9FB),
+        color: isDark ? AppTheme.darkBg : AppTheme.inputBg,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(

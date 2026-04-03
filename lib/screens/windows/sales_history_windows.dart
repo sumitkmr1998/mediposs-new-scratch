@@ -90,16 +90,22 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
           children: [
             // Advanced Analytics Row
             LayoutBuilder(builder: (ctx, constraints) {
-              final cols = constraints.maxWidth > 1200 ? 4 : (constraints.maxWidth > 800 ? 2 : 1);
+              final cols = constraints.maxWidth > 1200
+                  ? 4
+                  : (constraints.maxWidth > 800 ? 2 : 1);
               const spacing = 16.0;
-              final cardWidth = (constraints.maxWidth - (cols - 1) * spacing) / cols;
+              final cardWidth =
+                  (constraints.maxWidth - (cols - 1) * spacing) / cols;
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('ANALYTICS OVERVIEW', style: TextStyle(
-                    fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: context.textMutedColor
-                  )),
+                  Text('ANALYTICS OVERVIEW',
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.5,
+                          color: context.textMutedColor)),
                   const SizedBox(height: 16),
                   Wrap(
                     spacing: spacing,
@@ -155,10 +161,10 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
               ),
               child: Row(
                 children: [
-                   _buildQuickFilters(sales),
-                   const Spacer(),
-                   const SizedBox(width: 16),
-                   _buildSearchInput(),
+                  _buildQuickFilters(sales),
+                  const Spacer(),
+                  const SizedBox(width: 16),
+                  _buildSearchInput(),
                 ],
               ),
             ),
@@ -177,26 +183,49 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
                     padding: const EdgeInsets.only(bottom: 12, left: 4),
                     child: Text(
                       'FOUND ${displayed.length} AUDIT LOG ENTRIES',
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: context.textMutedColor, letterSpacing: 1),
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          color: context.textMutedColor,
+                          letterSpacing: 1),
                     ),
                   ),
 
                   // Enhanced Table Header
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 16),
                     decoration: BoxDecoration(
                       color: AppTheme.primary.withValues(alpha: 0.05),
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                      borderRadius:
+                          const BorderRadius.vertical(top: Radius.circular(20)),
                       border: Border.all(color: context.borderColor),
                     ),
                     child: Row(
                       children: [
                         const SizedBox(width: 48), // Padding for expansion icon
-                        SizedBox(width: 140, child: Text('INVOICE ID', style: _headerStyle(context))),
-                        Expanded(flex: 3, child: Text('CUSTOMER NAME', style: _headerStyle(context))),
-                        SizedBox(width: 110, child: Center(child: Text('METHOD', style: _headerStyle(context)))),
-                        SizedBox(width: 120, child: Center(child: Text('TOTAL AMOUNT', style: _headerStyle(context)))),
-                        SizedBox(width: 120, child: Text('DATE & TIME', style: _headerStyle(context))),
+                        SizedBox(
+                            width: 140,
+                            child: Text('INVOICE ID',
+                                style: _headerStyle(context))),
+                        Expanded(
+                            flex: 3,
+                            child: Text('CUSTOMER NAME',
+                                style: _headerStyle(context))),
+                        SizedBox(
+                            width: 110,
+                            child: Center(
+                                child: Text('METHOD',
+                                    style: _headerStyle(context)))),
+                        SizedBox(
+                            width: 120,
+                            child: Center(
+                                child: Text('TOTAL AMOUNT',
+                                    style: _headerStyle(context)))),
+                        SizedBox(
+                            width: 120,
+                            child: Text('DATE & TIME',
+                                style: _headerStyle(context))),
                         const SizedBox(width: 40),
                       ],
                     ),
@@ -211,13 +240,18 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
                       final sale = displayed[i];
                       return Container(
                         decoration: BoxDecoration(
-                          color: i.isEven ? Colors.transparent : AppTheme.primary.withValues(alpha: 0.02),
+                          color: i.isEven
+                              ? Colors.transparent
+                              : AppTheme.primary.withValues(alpha: 0.02),
                           border: Border(
                             left: BorderSide(color: context.borderColor),
                             right: BorderSide(color: context.borderColor),
                             bottom: BorderSide(color: context.borderColor),
                           ),
-                          borderRadius: i == displayed.length - 1 ? const BorderRadius.vertical(bottom: Radius.circular(20)) : null,
+                          borderRadius: i == displayed.length - 1
+                              ? const BorderRadius.vertical(
+                                  bottom: Radius.circular(20))
+                              : null,
                         ),
                         child: _SaleRow(sale: sale, salesProvider: sales),
                       );
@@ -232,10 +266,13 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
                         child: OutlinedButton.icon(
                           onPressed: () => sales.loadMore(),
                           icon: const Icon(Icons.refresh_rounded, size: 16),
-                          label: Text('SHOW NEXT ${sales.totalCount - displayed.length} ENTRIES'),
+                          label: Text(
+                              'SHOW NEXT ${sales.totalCount - displayed.length} ENTRIES'),
                           style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 32, vertical: 16),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
                           ),
                         ),
                       ),
@@ -293,7 +330,8 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
                 firstDate: DateTime(2020),
                 lastDate: DateTime.now(),
               );
-              if (range != null) sales.setFilter(SalesFilter.custom, range: range);
+              if (range != null)
+                sales.setFilter(SalesFilter.custom, range: range);
             },
           ),
         ],
@@ -318,7 +356,8 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
           hintText: 'Search ID, customer, or method...',
           prefixIcon: const Icon(Icons.search_rounded, size: 18),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
       ),
     );
@@ -411,7 +450,10 @@ class _GlassKpiCard extends StatelessWidget {
                         fontSize: 24, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 2),
                 Text(count,
-                    style: TextStyle(fontSize: 11, color: context.textMutedColor, fontWeight: FontWeight.bold)),
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: context.textMutedColor,
+                        fontWeight: FontWeight.bold)),
               ],
             ),
           ),
@@ -426,7 +468,11 @@ class _FilterChip extends StatelessWidget {
   final IconData icon;
   final bool isSelected;
   final VoidCallback onTap;
-  const _FilterChip({required this.label, required this.icon, required this.isSelected, required this.onTap});
+  const _FilterChip(
+      {required this.label,
+      required this.icon,
+      required this.isSelected,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -436,19 +482,25 @@ class _FilterChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primary : context.bgColor.withValues(alpha: 0.5),
+          color: isSelected
+              ? AppTheme.primary
+              : context.bgColor.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isSelected ? AppTheme.primary : context.borderColor),
+          border: Border.all(
+              color: isSelected ? AppTheme.primary : context.borderColor),
         ),
         child: Row(
           children: [
-            Icon(icon, size: 16, color: isSelected ? Colors.white : context.textMutedColor),
+            Icon(icon,
+                size: 16,
+                color: isSelected ? Colors.white : context.textMutedColor),
             const SizedBox(width: 8),
-            Text(label, style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: isSelected ? Colors.white : context.textColor,
-            )),
+            Text(label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: isSelected ? Colors.white : context.textColor,
+                )),
           ],
         ),
       ),
@@ -575,7 +627,8 @@ class _SaleRow extends StatelessWidget {
                   ? AppTheme.darkBg.withValues(alpha: 0.7)
                   : Colors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: context.borderColor.withValues(alpha: 0.8)),
+              border:
+                  Border.all(color: context.borderColor.withValues(alpha: 0.8)),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.03),
@@ -674,11 +727,13 @@ class _SaleRow extends StatelessWidget {
                             children: [
                               Text('Total Discount',
                                   style: TextStyle(
-                                      fontSize: 13, color: context.textMutedColor)),
+                                      fontSize: 13,
+                                      color: context.textMutedColor)),
                               const SizedBox(width: 32),
                               SizedBox(
                                 width: 100,
-                                child: Text('-₹${sale.discount.toStringAsFixed(2)}',
+                                child: Text(
+                                    '-₹${sale.discount.toStringAsFixed(2)}',
                                     style: const TextStyle(
                                         color: AppTheme.danger,
                                         fontWeight: FontWeight.w700,
@@ -732,8 +787,8 @@ class _SaleRow extends StatelessWidget {
                         label: 'Print Receipt',
                         color: AppTheme.primary,
                         isFullWidth: true,
-                        onTap: () =>
-                            PrintingService.instance.printReceipt(context, sale),
+                        onTap: () => PrintingService.instance
+                            .printReceipt(context, sale),
                       ),
                       if (!sale.isReturn && canProcessReturns) ...[
                         const SizedBox(height: 12),
@@ -765,7 +820,6 @@ class _SaleRow extends StatelessWidget {
             ),
           ),
         ],
-
       ),
     );
   }
@@ -847,7 +901,7 @@ class _PaymentBadge extends StatelessWidget {
       'cash' => (AppTheme.success, Icons.payments_rounded),
       'upi' => (AppTheme.primary, Icons.qr_code_2_rounded),
       'card' => (AppTheme.accent, Icons.credit_card_rounded),
-      'mixed' => (const Color(0xFF7C3AED), Icons.account_balance_rounded),
+      'mixed' => (AppTheme.purple, Icons.account_balance_rounded),
       _ => (context.textMutedColor, Icons.payments_outlined),
     };
 
@@ -911,7 +965,9 @@ class _ActionButton extends StatelessWidget {
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: isFullWidth ? MainAxisAlignment.center : MainAxisAlignment.start,
+            mainAxisAlignment: isFullWidth
+                ? MainAxisAlignment.center
+                : MainAxisAlignment.start,
             children: [
               Icon(icon, color: color, size: 18),
               const SizedBox(width: 10),

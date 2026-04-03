@@ -77,7 +77,8 @@ class _DoctorListWindowsState extends State<DoctorListWindows> {
                     style:
                         TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
                 Text('Clinic consultants',
-                    style: TextStyle(fontSize: 12, color: context.textMutedColor)),
+                    style:
+                        TextStyle(fontSize: 12, color: context.textMutedColor)),
               ],
             ),
           ],
@@ -440,7 +441,7 @@ class _DoctorTable extends StatelessWidget {
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 1.5,
-                          color: Color(0xFF6B7B8D))),
+                          color: AppTheme.primaryLight)),
                 ),
                 const SizedBox(
                     width: 150,
@@ -449,7 +450,7 @@ class _DoctorTable extends StatelessWidget {
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.5,
-                            color: Color(0xFF94A3B8)))),
+                            color: AppTheme.primaryLight))),
                 const SizedBox(
                     width: 100,
                     child: Text('FEE',
@@ -457,7 +458,7 @@ class _DoctorTable extends StatelessWidget {
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.5,
-                            color: Color(0xFF94A3B8)))),
+                            color: AppTheme.primaryLight))),
                 const SizedBox(
                     width: 130,
                     child: Text('PHONE',
@@ -465,7 +466,7 @@ class _DoctorTable extends StatelessWidget {
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.5,
-                            color: Color(0xFF94A3B8)))),
+                            color: AppTheme.primaryLight))),
                 const SizedBox(
                     width: 130,
                     child: Text('STATUS',
@@ -473,7 +474,7 @@ class _DoctorTable extends StatelessWidget {
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.5,
-                            color: Color(0xFF94A3B8)))),
+                            color: AppTheme.primaryLight))),
                 const SizedBox(
                     width: 100,
                     child: Align(
@@ -483,7 +484,7 @@ class _DoctorTable extends StatelessWidget {
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 1.5,
-                                color: Color(0xFF94A3B8))))),
+                                color: AppTheme.primaryLight)))),
               ],
             ),
           ),
@@ -534,7 +535,9 @@ class _DoctorTableRowState extends State<_DoctorTableRow> {
         decoration: BoxDecoration(
           color: _isHovered
               ? AppTheme.primary.withValues(alpha: 0.1)
-              : (isInactive ? context.borderColor.withValues(alpha: 0.2) : Colors.transparent),
+              : (isInactive
+                  ? context.borderColor.withValues(alpha: 0.2)
+                  : Colors.transparent),
           borderRadius: BorderRadius.circular(12),
           border: _isHovered
               ? Border.all(color: AppTheme.primary.withValues(alpha: 0.2))
@@ -662,7 +665,10 @@ class _DoctorAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = isActive
         ? [AppTheme.primary, AppTheme.primaryLight]
-        : [context.textMutedColor, context.textMutedColor.withValues(alpha: 0.7)];
+        : [
+            context.textMutedColor,
+            context.textMutedColor.withValues(alpha: 0.7)
+          ];
 
     return Container(
       width: 40,
@@ -679,10 +685,10 @@ class _DoctorAvatar extends StatelessWidget {
         child: Text(
           name.isNotEmpty ? name[0].toUpperCase() : 'D',
           style: const TextStyle(
-              color: Colors.white,
-          fontWeight: FontWeight.bold,
-          fontSize: 16,
-        ),
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
         ),
       ),
     );
@@ -701,8 +707,8 @@ class _SpecializationBadge extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            const Color(0xFF14A085).withValues(alpha: 0.1),
-            const Color(0xFF14A085).withValues(alpha: 0.05),
+            AppTheme.primaryLight.withValues(alpha: 0.1),
+            AppTheme.primaryLight.withValues(alpha: 0.05),
           ],
         ),
         borderRadius: BorderRadius.circular(20),
@@ -712,7 +718,7 @@ class _SpecializationBadge extends StatelessWidget {
         style: const TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF14A085)),
+            color: AppTheme.primaryLight),
         overflow: TextOverflow.ellipsis,
       ),
     );
@@ -743,7 +749,8 @@ class _StatusToggle extends StatelessWidget {
           style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: doctor.isActive ? AppTheme.success : context.textMutedColor),
+              color:
+                  doctor.isActive ? AppTheme.success : context.textMutedColor),
         ),
       ],
     );
@@ -809,7 +816,7 @@ class _AnimatedKeyState extends State<_AnimatedKey>
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               color: Color.lerp(
-                  const Color(0xFFCBD5E1), AppTheme.primary, _animation.value),
+                  context.borderColor, AppTheme.primary, _animation.value),
             ),
             child: Stack(
               children: [

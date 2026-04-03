@@ -104,7 +104,7 @@ class _PatientListWindowsState extends State<PatientListWindows> {
                     label: 'Female',
                     value: '$femaleCount',
                     icon: Icons.female_rounded,
-                    color: const Color(0xFFE63946),
+                    color: AppTheme.danger,
                     width: cardWidth,
                   ),
                 ],
@@ -190,7 +190,7 @@ class _PatientListWindowsState extends State<PatientListWindows> {
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
                                     letterSpacing: 1.5,
-                                    color: Color(0xFF94A3B8)))),
+                                    color: AppTheme.primaryLight))),
                         const SizedBox(
                             width: 80,
                             child: Center(
@@ -199,7 +199,7 @@ class _PatientListWindowsState extends State<PatientListWindows> {
                                         fontSize: 11,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 1.5,
-                                        color: Color(0xFF94A3B8))))),
+                                        color: AppTheme.primaryLight)))),
                         const SizedBox(
                             width: 70,
                             child: Center(
@@ -208,7 +208,7 @@ class _PatientListWindowsState extends State<PatientListWindows> {
                                         fontSize: 11,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 1.5,
-                                        color: Color(0xFF94A3B8))))),
+                                        color: AppTheme.primaryLight)))),
                         const SizedBox(
                             width: 140,
                             child: Text('PHONE',
@@ -216,7 +216,7 @@ class _PatientListWindowsState extends State<PatientListWindows> {
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
                                     letterSpacing: 1.5,
-                                    color: Color(0xFF94A3B8)))),
+                                    color: AppTheme.primaryLight))),
                         const SizedBox(
                             width: 140,
                             child: Align(
@@ -226,7 +226,7 @@ class _PatientListWindowsState extends State<PatientListWindows> {
                                         fontSize: 11,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 1.5,
-                                        color: Color(0xFF94A3B8))))),
+                                        color: AppTheme.primaryLight)))),
                       ],
                     ),
                   ),
@@ -267,11 +267,11 @@ class _PatientListWindowsState extends State<PatientListWindows> {
     );
   }
 
-  TextStyle _headerStyle(BuildContext context) => const TextStyle(
+  TextStyle _headerStyle(BuildContext context) => TextStyle(
       fontSize: 11,
       fontWeight: FontWeight.w700,
       letterSpacing: 1.5,
-      color: Color(0xFF94A3B8));
+      color: context.textMutedColor);
 
   void _showPatientDialog(BuildContext context, {Patient? patient}) {
     showDialog(
@@ -427,7 +427,7 @@ class _PatientRow extends StatelessWidget {
                   color: patient.gender == 'Male'
                       ? AppTheme.primary.withValues(alpha: 0.1)
                       : patient.gender == 'Female'
-                          ? const Color(0xFFE63946).withValues(alpha: 0.1)
+                          ? AppTheme.danger.withValues(alpha: 0.1)
                           : Colors.grey.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
@@ -439,7 +439,7 @@ class _PatientRow extends StatelessWidget {
                     color: patient.gender == 'Male'
                         ? AppTheme.primary
                         : patient.gender == 'Female'
-                            ? const Color(0xFFE63946)
+                            ? AppTheme.danger
                             : Colors.grey,
                   ),
                 ),

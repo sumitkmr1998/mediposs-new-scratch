@@ -44,11 +44,17 @@ class _WarehouseAndroidState extends State<WarehouseAndroid>
       backgroundColor: context.surfaceColor,
       floatingActionButton: auth.hasInventoryWriteAccess
           ? FloatingActionButton.extended(
-              onPressed: () => AndroidMedicineDialog.show(context, medicine: null),
+              onPressed: () =>
+                  AndroidMedicineDialog.show(context, medicine: null),
               backgroundColor: AppTheme.primary,
               icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('NEW MEDICINE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 1)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              label: const Text('NEW MEDICINE',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
             )
           : null,
       body: NestedScrollView(
@@ -75,12 +81,18 @@ class _WarehouseAndroidState extends State<WarehouseAndroid>
                     color: context.surfaceColor,
                     borderRadius: BorderRadius.circular(8),
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2)),
+                      BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2)),
                     ],
                   ),
                   labelColor: AppTheme.primaryLight,
                   unselectedLabelColor: context.textMutedColor,
-                  labelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5),
+                  labelStyle: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13,
+                      letterSpacing: 0.5),
                   tabs: const [
                     Tab(text: 'STOCK LEVELS'),
                     Tab(text: 'TRANSFERS'),
@@ -123,22 +135,28 @@ class _StockLevelsTab extends StatelessWidget {
                   onChanged: inv.setSearch,
                   decoration: InputDecoration(
                     hintText: 'Filter inventory...',
-                    prefixIcon: const Icon(Icons.search_rounded, size: 20, color: AppTheme.primaryLight),
+                    prefixIcon: const Icon(Icons.search_rounded,
+                        size: 20, color: AppTheme.primaryLight),
                     filled: true,
                     fillColor: context.borderColor.withValues(alpha: 0.05),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                       borderSide: BorderSide.none,
                     ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
                   ),
                 ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(child: _SortDropdown(onChanged: (v) { if (v != null) inv.setSort(v); })),
+                    Expanded(child: _SortDropdown(onChanged: (v) {
+                      if (v != null) inv.setSort(v);
+                    })),
                     const SizedBox(width: 8),
-                    Expanded(child: _FilterDropdownLoc(onChanged: (v) { if (v != null) inv.setFilter(v); })),
+                    Expanded(child: _FilterDropdownLoc(onChanged: (v) {
+                      if (v != null) inv.setFilter(v);
+                    })),
                   ],
                 ),
               ],
@@ -153,7 +171,8 @@ class _StockLevelsTab extends StatelessWidget {
                 final m = inv.medicines[i];
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: _ModernMedicineCard(medicine: m, wh: wh, auth: auth, inv: inv),
+                  child: _ModernMedicineCard(
+                      medicine: m, wh: wh, auth: auth, inv: inv),
                 );
               },
               childCount: inv.medicines.length,
@@ -172,7 +191,11 @@ class _ModernMedicineCard extends StatefulWidget {
   final AuthProvider auth;
   final InventoryProvider inv;
 
-  const _ModernMedicineCard({required this.medicine, required this.wh, required this.auth, required this.inv});
+  const _ModernMedicineCard(
+      {required this.medicine,
+      required this.wh,
+      required this.auth,
+      required this.inv});
 
   @override
   State<_ModernMedicineCard> createState() => _ModernMedicineCardState();
@@ -187,9 +210,15 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
       decoration: BoxDecoration(
         color: context.surfaceColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _expanded ? AppTheme.primaryLight.withValues(alpha: 0.3) : context.borderColor.withValues(alpha: 0.5)),
+        border: Border.all(
+            color: _expanded
+                ? AppTheme.primaryLight.withValues(alpha: 0.3)
+                : context.borderColor.withValues(alpha: 0.5)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4)),
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 4)),
         ],
       ),
       child: Column(
@@ -203,19 +232,37 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
                 color: AppTheme.primaryLight.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.medication_liquid_rounded, color: AppTheme.primaryLight, size: 22),
+              child: const Icon(Icons.medication_liquid_rounded,
+                  color: AppTheme.primaryLight, size: 22),
             ),
-            title: Text(widget.medicine.name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: -0.5)),
+            title: Text(widget.medicine.name,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                    letterSpacing: -0.5)),
             subtitle: Row(
               children: [
-                Text(widget.medicine.category.isEmpty ? 'General' : widget.medicine.category, 
-                  style: TextStyle(fontSize: 11, color: context.textMutedColor, fontWeight: FontWeight.w600)),
+                Text(
+                    widget.medicine.category.isEmpty
+                        ? 'General'
+                        : widget.medicine.category,
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: context.textMutedColor,
+                        fontWeight: FontWeight.w600)),
                 if (widget.medicine.isLowStock) ...[
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                    decoration: BoxDecoration(color: AppTheme.warning.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
-                    child: const Text('LOW STOCK', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: AppTheme.warning)),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                        color: AppTheme.warning.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4)),
+                    child: const Text('LOW STOCK',
+                        style: TextStyle(
+                            fontSize: 8,
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.warning)),
                   ),
                 ],
               ],
@@ -224,9 +271,17 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text('₹${widget.medicine.sellingPrice.toStringAsFixed(0)}', 
-                  style: const TextStyle(fontWeight: FontWeight.w900, color: AppTheme.primaryLight, fontSize: 16)),
-                Icon(_expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded, size: 20, color: context.textMutedColor),
+                Text('₹${widget.medicine.sellingPrice.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.primaryLight,
+                        fontSize: 16)),
+                Icon(
+                    _expanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    size: 20,
+                    color: context.textMutedColor),
               ],
             ),
           ),
@@ -234,9 +289,18 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: Row(
               children: [
-                Expanded(child: _StockIndicator(label: 'MAIN HUB', value: widget.medicine.mainStock, color: const Color(0xFF6366F1))),
+                Expanded(
+                    child: _StockIndicator(
+                        label: 'MAIN HUB',
+                        value: widget.medicine.mainStock,
+                        color: AppTheme.indigo)),
                 const SizedBox(width: 12),
-                Expanded(child: _StockIndicator(label: 'STORE FRONT', value: widget.medicine.storeStock, color: AppTheme.success, isLow: widget.medicine.isLowStock)),
+                Expanded(
+                    child: _StockIndicator(
+                        label: 'STORE FRONT',
+                        value: widget.medicine.storeStock,
+                        color: AppTheme.success,
+                        isLow: widget.medicine.isLowStock)),
               ],
             ),
           ),
@@ -249,18 +313,22 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
                   if (widget.auth.hasWarehouseWriteAccess)
                     Row(
                       children: [
-                        Expanded(child: _ActionButton(
-                          label: 'TO STORE', 
-                          icon: Icons.storefront_rounded, 
+                        Expanded(
+                            child: _ActionButton(
+                          label: 'TO STORE',
+                          icon: Icons.storefront_rounded,
                           color: AppTheme.success,
-                          onPressed: () => _showTransferDialog(context, widget.medicine, 'main', 'store', widget.wh),
+                          onPressed: () => _showTransferDialog(context,
+                              widget.medicine, 'main', 'store', widget.wh),
                         )),
                         const SizedBox(width: 8),
-                        Expanded(child: _ActionButton(
-                          label: 'BACK TO HUB', 
-                          icon: Icons.hub_rounded, 
-                          color: const Color(0xFF6366F1),
-                          onPressed: () => _showTransferDialog(context, widget.medicine, 'store', 'main', widget.wh),
+                        Expanded(
+                            child: _ActionButton(
+                          label: 'BACK TO HUB',
+                          icon: Icons.hub_rounded,
+                          color: AppTheme.indigo,
+                          onPressed: () => _showTransferDialog(context,
+                              widget.medicine, 'store', 'main', widget.wh),
                         )),
                       ],
                     ),
@@ -269,24 +337,35 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
                     alignment: Alignment.centerLeft,
                     child: Padding(
                       padding: EdgeInsets.only(left: 4, bottom: 8),
-                      child: Text('REGISTERED BATCHES', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: AppTheme.primaryLight, letterSpacing: 1)),
+                      child: Text('REGISTERED BATCHES',
+                          style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              color: AppTheme.primaryLight,
+                              letterSpacing: 1)),
                     ),
                   ),
-                  ...widget.medicine.batches.map((b) => _SimpleBatchRow(batch: b)),
+                  ...widget.medicine.batches
+                      .map((b) => _SimpleBatchRow(batch: b)),
                   if (widget.auth.hasInventoryWriteAccess) ...[
                     const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         TextButton.icon(
-                          onPressed: () => AndroidMedicineDialog.show(context, medicine: widget.medicine),
+                          onPressed: () => AndroidMedicineDialog.show(context,
+                              medicine: widget.medicine),
                           icon: const Icon(Icons.edit_note_rounded, size: 20),
-                          label: const Text('MANAGE BATCHES', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+                          label: const Text('MANAGE BATCHES',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w900, fontSize: 11)),
                         ),
                         const SizedBox(width: 8),
                         IconButton(
-                          onPressed: () => _confirmDelete(context, widget.medicine, widget.inv),
-                          icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.danger, size: 20),
+                          onPressed: () => _confirmDelete(
+                              context, widget.medicine, widget.inv),
+                          icon: const Icon(Icons.delete_outline_rounded,
+                              color: AppTheme.danger, size: 20),
                         ),
                       ],
                     ),
@@ -304,14 +383,20 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Delete Medicine', style: TextStyle(fontWeight: FontWeight.w900)),
+        title: const Text('Delete Medicine',
+            style: TextStyle(fontWeight: FontWeight.w900)),
         content: Text('Permanently remove "${m.name}"?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('CANCEL')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.danger,
+                foregroundColor: Colors.white),
             onPressed: () {
-              inv.deleteMedicine(m.id, syncService: context.read<SyncService>());
+              inv.deleteMedicine(m.id,
+                  syncService: context.read<SyncService>());
               Navigator.pop(context);
             },
             child: const Text('DELETE'),
@@ -321,8 +406,12 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
     );
   }
 
-  void _showTransferDialog(BuildContext context, Medicine m, String from, String to, WarehouseProvider wh) {
-    showDialog(context: context, builder: (_) => _TransferDialog(medicine: m, from: from, to: to, wh: wh));
+  void _showTransferDialog(BuildContext context, Medicine m, String from,
+      String to, WarehouseProvider wh) {
+    showDialog(
+        context: context,
+        builder: (_) =>
+            _TransferDialog(medicine: m, from: from, to: to, wh: wh));
   }
 }
 
@@ -332,7 +421,11 @@ class _StockIndicator extends StatelessWidget {
   final Color color;
   final bool isLow;
 
-  const _StockIndicator({required this.label, required this.value, required this.color, this.isLow = false});
+  const _StockIndicator(
+      {required this.label,
+      required this.value,
+      required this.color,
+      this.isLow = false});
 
   @override
   Widget build(BuildContext context) {
@@ -347,9 +440,19 @@ class _StockIndicator extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: context.textMutedColor, letterSpacing: 0.5)),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 8,
+                  fontWeight: FontWeight.w900,
+                  color: context.textMutedColor,
+                  letterSpacing: 0.5)),
           const SizedBox(height: 4),
-          Text(value.toString(), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: finalColor, letterSpacing: -0.5)),
+          Text(value.toString(),
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: finalColor,
+                  letterSpacing: -0.5)),
         ],
       ),
     );
@@ -362,7 +465,11 @@ class _ActionButton extends StatelessWidget {
   final Color color;
   final VoidCallback onPressed;
 
-  const _ActionButton({required this.label, required this.icon, required this.color, required this.onPressed});
+  const _ActionButton(
+      {required this.label,
+      required this.icon,
+      required this.color,
+      required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
@@ -381,7 +488,12 @@ class _ActionButton extends StatelessWidget {
           children: [
             Icon(icon, size: 16, color: color),
             const SizedBox(width: 8),
-            Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 0.5)),
+            Text(label,
+                style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 10,
+                    letterSpacing: 0.5)),
           ],
         ),
       ),
@@ -395,7 +507,11 @@ class _TransferDialog extends StatefulWidget {
   final String to;
   final WarehouseProvider wh;
 
-  const _TransferDialog({required this.medicine, required this.from, required this.to, required this.wh});
+  const _TransferDialog(
+      {required this.medicine,
+      required this.from,
+      required this.to,
+      required this.wh});
 
   @override
   State<_TransferDialog> createState() => _TransferDialogState();
@@ -408,8 +524,10 @@ class _TransferDialogState extends State<_TransferDialog> {
   @override
   Widget build(BuildContext context) {
     final toStore = widget.to == 'store';
-    final accentColor = toStore ? AppTheme.success : const Color(0xFF6366F1);
-    final available = widget.from == 'main' ? widget.medicine.mainStock : widget.medicine.storeStock;
+    final accentColor = toStore ? AppTheme.success : AppTheme.indigo;
+    final available = widget.from == 'main'
+        ? widget.medicine.mainStock
+        : widget.medicine.storeStock;
 
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -417,12 +535,23 @@ class _TransferDialogState extends State<_TransferDialog> {
         children: [
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: accentColor.withValues(alpha: 0.1), shape: BoxShape.circle),
-            child: Icon(toStore ? Icons.local_shipping_rounded : Icons.hub_rounded, color: accentColor, size: 28),
+            decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.1),
+                shape: BoxShape.circle),
+            child: Icon(
+                toStore ? Icons.local_shipping_rounded : Icons.hub_rounded,
+                color: accentColor,
+                size: 28),
           ),
           const SizedBox(height: 16),
-          Text('Stock Transfer', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-          Text(widget.medicine.name, style: TextStyle(fontSize: 13, color: context.textMutedColor, fontWeight: FontWeight.w600)),
+          Text('Stock Transfer',
+              style:
+                  const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+          Text(widget.medicine.name,
+              style: TextStyle(
+                  fontSize: 13,
+                  color: context.textMutedColor,
+                  fontWeight: FontWeight.w600)),
         ],
       ),
       content: SingleChildScrollView(
@@ -431,13 +560,18 @@ class _TransferDialogState extends State<_TransferDialog> {
           children: [
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: context.borderColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(
+                  color: context.borderColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12)),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _LocLabel(label: widget.from == 'main' ? 'HUB' : 'STORE'),
-                  Icon(Icons.arrow_forward_rounded, size: 18, color: context.textMutedColor),
-                  _LocLabel(label: widget.to == 'main' ? 'HUB' : 'STORE', activeColor: accentColor),
+                  Icon(Icons.arrow_forward_rounded,
+                      size: 18, color: context.textMutedColor),
+                  _LocLabel(
+                      label: widget.to == 'main' ? 'HUB' : 'STORE',
+                      activeColor: accentColor),
                 ],
               ),
             ),
@@ -450,7 +584,8 @@ class _TransferDialogState extends State<_TransferDialog> {
               decoration: InputDecoration(
                 labelText: 'TRANSFER QUANTITY',
                 suffixText: 'AVAL: $available',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                 floatingLabelBehavior: FloatingLabelBehavior.always,
               ),
             ),
@@ -460,20 +595,24 @@ class _TransferDialogState extends State<_TransferDialog> {
               decoration: InputDecoration(
                 labelText: 'AUDIT NOTE (OPTIONAL)',
                 hintText: 'e.g. Weekly Restock',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
               ),
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('CANCEL')),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
             backgroundColor: accentColor,
             foregroundColor: Colors.white,
             minimumSize: const Size(120, 44),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           onPressed: () async {
             final qty = int.tryParse(_qtyCtrl.text) ?? 0;
@@ -486,12 +625,15 @@ class _TransferDialogState extends State<_TransferDialog> {
               syncService: context.read<SyncService>(),
             );
             if (!context.mounted) return;
-            if (err == null) Navigator.pop(context);
+            if (err == null)
+              Navigator.pop(context);
             else {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err), backgroundColor: AppTheme.danger));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(err), backgroundColor: AppTheme.danger));
             }
           },
-          child: const Text('CONFIRM', style: TextStyle(fontWeight: FontWeight.w900)),
+          child: const Text('CONFIRM',
+              style: TextStyle(fontWeight: FontWeight.w900)),
         ),
       ],
     );
@@ -507,8 +649,18 @@ class _LocLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: activeColor ?? context.textMutedColor, letterSpacing: 1)),
-        if (activeColor != null) Container(margin: const EdgeInsets.only(top: 2), width: 20, height: 2, color: activeColor),
+        Text(label,
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                color: activeColor ?? context.textMutedColor,
+                letterSpacing: 1)),
+        if (activeColor != null)
+          Container(
+              margin: const EdgeInsets.only(top: 2),
+              width: 20,
+              height: 2,
+              color: activeColor),
       ],
     );
   }
@@ -556,9 +708,13 @@ class _TransferHistoryTab extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.swap_horiz_rounded, size: 48, color: context.borderColor),
+                      Icon(Icons.swap_horiz_rounded,
+                          size: 48, color: context.borderColor),
                       const SizedBox(height: 16),
-                      Text('No transfer records', style: TextStyle(color: context.textMutedColor, fontWeight: FontWeight.bold)),
+                      Text('No transfer records',
+                          style: TextStyle(
+                              color: context.textMutedColor,
+                              fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
@@ -570,40 +726,64 @@ class _TransferHistoryTab extends StatelessWidget {
                     (context, i) {
                       final t = wh.transfers[i];
                       final isSendOut = t.fromWarehouse == 'main';
-                      final accentColor = isSendOut ? AppTheme.success : const Color(0xFF6366F1);
+                      final accentColor =
+                          isSendOut ? AppTheme.success : AppTheme.indigo;
                       return Container(
                         margin: const EdgeInsets.only(bottom: 10),
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: context.surfaceColor,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+                          border: Border.all(
+                              color:
+                                  context.borderColor.withValues(alpha: 0.5)),
                         ),
                         child: Row(
                           children: [
                             Container(
                               padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(color: accentColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-                              child: Icon(isSendOut ? Icons.outbox_rounded : Icons.move_to_inbox_rounded, color: accentColor, size: 20),
+                              decoration: BoxDecoration(
+                                  color: accentColor.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(12)),
+                              child: Icon(
+                                  isSendOut
+                                      ? Icons.outbox_rounded
+                                      : Icons.move_to_inbox_rounded,
+                                  color: accentColor,
+                                  size: 20),
                             ),
                             const SizedBox(width: 16),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(t.medicineName, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
-                                  Text('${t.fromWarehouse.toUpperCase()} → ${t.toWarehouse.toUpperCase()} • ${t.transferredAt.day}/${t.transferredAt.month}', 
-                                    style: TextStyle(fontSize: 11, color: context.textMutedColor, fontWeight: FontWeight.w600)),
+                                  Text(t.medicineName,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 14)),
+                                  Text(
+                                      '${t.fromWarehouse.toUpperCase()} → ${t.toWarehouse.toUpperCase()} • ${t.transferredAt.day}/${t.transferredAt.month}',
+                                      style: TextStyle(
+                                          fontSize: 11,
+                                          color: context.textMutedColor,
+                                          fontWeight: FontWeight.w600)),
                                 ],
                               ),
                             ),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                Text('${isSendOut ? "-" : "+"}${t.qty}', 
-                                  style: TextStyle(fontWeight: FontWeight.w900, color: accentColor, fontSize: 16)),
-                                Text(isSendOut ? 'OUT' : 'IN', 
-                                  style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: context.textMutedColor, letterSpacing: 0.5)),
+                                Text('${isSendOut ? "-" : "+"}${t.qty}',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        color: accentColor,
+                                        fontSize: 16)),
+                                Text(isSendOut ? 'OUT' : 'IN',
+                                    style: TextStyle(
+                                        fontSize: 8,
+                                        fontWeight: FontWeight.w900,
+                                        color: context.textMutedColor,
+                                        letterSpacing: 0.5)),
                               ],
                             ),
                           ],
@@ -635,8 +815,12 @@ class _SortDropdown extends StatelessWidget {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           isExpanded: true,
-          hint: const Text('Sort By', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-          style: TextStyle(fontSize: 12, color: context.textMutedColor, fontWeight: FontWeight.w600),
+          hint: const Text('Sort By',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          style: TextStyle(
+              fontSize: 12,
+              color: context.textMutedColor,
+              fontWeight: FontWeight.w600),
           items: const [
             DropdownMenuItem(value: 'name', child: Text('Medicine Name')),
             DropdownMenuItem(value: 'stock_low', child: Text('Lowest Stock')),
@@ -664,8 +848,12 @@ class _FilterDropdownLoc extends StatelessWidget {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           isExpanded: true,
-          hint: const Text('Filter Area', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-          style: TextStyle(fontSize: 12, color: context.textMutedColor, fontWeight: FontWeight.w600),
+          hint: const Text('Filter Area',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          style: TextStyle(
+              fontSize: 12,
+              color: context.textMutedColor,
+              fontWeight: FontWeight.w600),
           items: const [
             DropdownMenuItem(value: 'all', child: Text('All Stock')),
             DropdownMenuItem(value: 'low', child: Text('Low Stock Alert')),
@@ -685,8 +873,11 @@ class _SimpleBatchRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isExpired = batch.expiryDate.isBefore(DateTime.now());
-    final isNear = batch.expiryDate.isBefore(DateTime.now().add(const Duration(days: 90)));
-    final Color statusColor = isExpired ? AppTheme.danger : (isNear ? AppTheme.warning : AppTheme.success);
+    final isNear =
+        batch.expiryDate.isBefore(DateTime.now().add(const Duration(days: 90)));
+    final Color statusColor = isExpired
+        ? AppTheme.danger
+        : (isNear ? AppTheme.warning : AppTheme.success);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
@@ -699,7 +890,9 @@ class _SimpleBatchRow extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), shape: BoxShape.circle),
+            decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.1),
+                shape: BoxShape.circle),
             child: Icon(Icons.circle, color: statusColor, size: 8),
           ),
           const SizedBox(width: 12),
@@ -707,15 +900,26 @@ class _SimpleBatchRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(batch.batchNo, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
-                Text('EXP ${DateFormat('MMM yyyy').format(batch.expiryDate)}', 
-                  style: TextStyle(fontSize: 9, color: statusColor, fontWeight: FontWeight.w800)),
+                Text(batch.batchNo,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w900, fontSize: 12)),
+                Text('EXP ${DateFormat('MMM yyyy').format(batch.expiryDate)}',
+                    style: TextStyle(
+                        fontSize: 9,
+                        color: statusColor,
+                        fontWeight: FontWeight.w800)),
               ],
             ),
           ),
-          Text('${batch.mainStock + batch.storeStock}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+          Text('${batch.mainStock + batch.storeStock}',
+              style:
+                  const TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
           const SizedBox(width: 4),
-          Text('PCS', style: TextStyle(fontSize: 8, color: context.textMutedColor, fontWeight: FontWeight.w700)),
+          Text('PCS',
+              style: TextStyle(
+                  fontSize: 8,
+                  color: context.textMutedColor,
+                  fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -727,12 +931,19 @@ class _FilterChip extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onSelected;
 
-  const _FilterChip({required this.label, required this.isSelected, required this.onSelected});
+  const _FilterChip(
+      {required this.label,
+      required this.isSelected,
+      required this.onSelected});
 
   @override
   Widget build(BuildContext context) {
     return ChoiceChip(
-      label: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: isSelected ? Colors.white : context.textMutedColor)),
+      label: Text(label,
+          style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              color: isSelected ? Colors.white : context.textMutedColor)),
       selected: isSelected,
       onSelected: (_) => onSelected(),
       selectedColor: AppTheme.primary,

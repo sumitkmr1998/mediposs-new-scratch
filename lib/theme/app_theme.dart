@@ -11,6 +11,33 @@ class AppTheme {
   static const Color warning = Color(0xFFF4A261);
   static const Color warningDark = Color(0xFFD97706);
 
+  // Extended palette for uniform design language
+  static const Color purple = Color(0xFF7C3AED);
+  static const Color indigo = Color(0xFF6366F1);
+  static const Color emerald = Color(0xFF10B981);
+  static const Color emeraldDark = Color(0xFF059669);
+  static const Color teal = Color(0xFF14B8A6);
+  static const Color violet = Color(0xFF8B5CF6);
+  static const Color sky = Color(0xFF0EA5E9);
+  static const Color orange = Color(0xFFF59E0B);
+  static const Color redDark = Color(0xFFB91C1C);
+  static const Color amberDark = Color(0xFFD97706);
+
+  // Utility colors
+  static const Color inputBg = Color(0xFFF7F9FB);
+  static const Color inputBgDark = Color(0xFF1A2A3A);
+
+  // Design Tokens
+  static const double radiusCard = 16.0;
+  static const double radiusInput = 12.0;
+  static const double radiusButton = 12.0;
+  static const double radiusDialog = 24.0;
+  static const double radiusChip = 10.0;
+  static const double radiusAvatar = 14.0;
+  static const double paddingScreen = 16.0;
+  static const double paddingCard = 20.0;
+  static const double sectionSpacing = 16.0;
+
   // Dark theme
   static const Color darkBg = Color(0xFF0F1923);
   static const Color darkSurface = Color(0xFF162130);

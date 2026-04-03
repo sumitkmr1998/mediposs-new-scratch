@@ -436,7 +436,7 @@ class _PrimaryStats extends StatelessWidget {
               title: 'Today\'s Revenue',
               value: '₹${totalToday.toStringAsFixed(0)}',
               icon: Icons.trending_up_rounded,
-              gradient: [const Color(0xFF10B981), const Color(0xFF059669)],
+              gradient: [AppTheme.emerald, AppTheme.emeraldDark],
             ),
             _StatCard(
               title: 'OPD Today',
@@ -449,21 +449,24 @@ class _PrimaryStats extends StatelessWidget {
               value: '${inv.lowStockCount}',
               icon: Icons.warning_amber_rounded,
               gradient: [AppTheme.warning, AppTheme.warningDark],
-              onTap: () => _showMedicineList(context, 'Low Stock', inv.medicines.where((m) => m.isLowStock).toList()),
+              onTap: () => _showMedicineList(context, 'Low Stock',
+                  inv.medicines.where((m) => m.isLowStock).toList()),
             ),
             _StatCard(
               title: 'Near Expiry',
               value: '${inv.nearExpiryCount}',
               icon: Icons.timer_rounded,
-              gradient: [const Color(0xFFF59E0B), const Color(0xFFD97706)],
-              onTap: () => _showMedicineList(context, 'Near Expiry', inv.nearExpiryMedicines),
+              gradient: [AppTheme.orange, AppTheme.amberDark],
+              onTap: () => _showMedicineList(
+                  context, 'Near Expiry', inv.nearExpiryMedicines),
             ),
             _StatCard(
               title: 'Expired',
               value: '${inv.expiredCount}',
               icon: Icons.event_busy_rounded,
-              gradient: [AppTheme.danger, const Color(0xFFB91C1C)],
-              onTap: () => _showMedicineList(context, 'Expired Items', inv.expiredMedicines),
+              gradient: [AppTheme.danger, AppTheme.redDark],
+              onTap: () => _showMedicineList(
+                  context, 'Expired Items', inv.expiredMedicines),
             ),
           ],
         ),
@@ -471,7 +474,8 @@ class _PrimaryStats extends StatelessWidget {
     );
   }
 
-  void _showMedicineList(BuildContext context, String title, List<model.Medicine> meds) {
+  void _showMedicineList(
+      BuildContext context, String title, List<model.Medicine> meds) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -485,38 +489,56 @@ class _PrimaryStats extends StatelessWidget {
         child: Column(
           children: [
             const SizedBox(height: 12),
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.withAlpha(100), borderRadius: BorderRadius.circular(2))),
+            Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: Colors.grey.withAlpha(100),
+                    borderRadius: BorderRadius.circular(2))),
             Padding(
               padding: const EdgeInsets.all(20),
               child: Row(
                 children: [
-                  Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  Text(title,
+                      style: const TextStyle(
+                          fontSize: 20, fontWeight: FontWeight.bold)),
                   const Spacer(),
-                  Text('${meds.length} items', style: TextStyle(color: context.textMutedColor, fontWeight: FontWeight.w600)),
+                  Text('${meds.length} items',
+                      style: TextStyle(
+                          color: context.textMutedColor,
+                          fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
             Expanded(
-              child: meds.isEmpty 
-                ? Center(child: Text('No items found', style: TextStyle(color: context.textMutedColor)))
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    itemCount: meds.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (ctx, i) {
-                      final m = meds[i];
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(m.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: Text('${m.category} • ${m.storeStock} in stock', style: TextStyle(fontSize: 12, color: context.textMutedColor)),
-                        trailing: Icon(Icons.chevron_right, color: context.textMutedColor, size: 20),
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          // We should show the detail or edit dialog
-                        },
-                      );
-                    },
-                  ),
+              child: meds.isEmpty
+                  ? Center(
+                      child: Text('No items found',
+                          style: TextStyle(color: context.textMutedColor)))
+                  : ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      itemCount: meds.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (ctx, i) {
+                        final m = meds[i];
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(m.name,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600)),
+                          subtitle: Text(
+                              '${m.category} • ${m.storeStock} in stock',
+                              style: TextStyle(
+                                  fontSize: 12, color: context.textMutedColor)),
+                          trailing: Icon(Icons.chevron_right,
+                              color: context.textMutedColor, size: 20),
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            // We should show the detail or edit dialog
+                          },
+                        );
+                      },
+                    ),
             ),
           ],
         ),
@@ -641,7 +663,7 @@ class _RevenueBreakdown extends StatelessWidget {
     final now = DateTime.now();
     // Calculate breakdown
     double cash = 0, upi = 0, card = 0;
-    
+
     // Product Sales
     for (final s in sales.sales) {
       if (s.createdAt.year == now.year &&
@@ -697,10 +719,11 @@ class _RevenueBreakdown extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
-        
+
         // Visual Composition Bar
         if (total > 0) ...[
-          _RevenueCompositionBar(cash: cash, upi: upi, card: card, total: total),
+          _RevenueCompositionBar(
+              cash: cash, upi: upi, card: card, total: total),
           const SizedBox(height: 16),
         ],
 
@@ -711,7 +734,7 @@ class _RevenueBreakdown extends StatelessWidget {
                 title: 'Cash',
                 value: '₹${cash.toStringAsFixed(0)}',
                 icon: Icons.payments_rounded,
-                color: const Color(0xFF10B981),
+                color: AppTheme.emerald,
               ),
             ),
             const SizedBox(width: 12),
@@ -749,14 +772,14 @@ class _TodayTotalBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF10B981), Color(0xFF059669)],
+          colors: [AppTheme.emerald, AppTheme.emeraldDark],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(10),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF10B981).withValues(alpha: 0.2),
+            color: AppTheme.emerald.withValues(alpha: 0.2),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -923,7 +946,7 @@ class _QuickActionsCard extends StatelessWidget {
               _ActionChip(
                 icon: Icons.warehouse_rounded,
                 label: 'Warehouse',
-                color: Color(0xFF8B5CF6),
+                color: AppTheme.violet,
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const WarehouseScreen()),
@@ -1153,10 +1176,10 @@ class _NearExpiryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFFF59E0B).withValues(alpha: 0.05),
+        color: AppTheme.orange.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+          color: AppTheme.orange.withValues(alpha: 0.15),
         ),
       ),
       child: Column(
@@ -1167,12 +1190,12 @@ class _NearExpiryCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                  color: AppTheme.orange.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
                   Icons.timer_rounded,
-                  color: Color(0xFFF59E0B),
+                  color: AppTheme.orange,
                   size: 16,
                 ),
               ),
@@ -1189,13 +1212,13 @@ class _NearExpiryCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                  color: AppTheme.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   '${inv.nearExpiryCount}',
                   style: const TextStyle(
-                    color: Color(0xFFD97706),
+                    color: AppTheme.amberDark,
                     fontWeight: FontWeight.w700,
                     fontSize: 12,
                   ),
@@ -1294,16 +1317,21 @@ class _ExpiryItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final color = isExpired ? AppTheme.danger : const Color(0xFFF59E0B);
-    
+    final color = isExpired ? AppTheme.danger : AppTheme.orange;
+
     // Get the earliest problematic date
     final now = DateTime.now();
     DateTime? displayDate;
     if (isExpired) {
-      displayDate = medicine.batches.firstWhere((b) => b.expiryDate.isBefore(now)).expiryDate;
+      displayDate = medicine.batches
+          .firstWhere((b) => b.expiryDate.isBefore(now))
+          .expiryDate;
     } else {
       final threshold = now.add(const Duration(days: 90));
-      displayDate = medicine.batches.firstWhere((b) => b.expiryDate.isAfter(now) && b.expiryDate.isBefore(threshold)).expiryDate;
+      displayDate = medicine.batches
+          .firstWhere((b) =>
+              b.expiryDate.isAfter(now) && b.expiryDate.isBefore(threshold))
+          .expiryDate;
     }
 
     return Container(
@@ -1399,7 +1427,8 @@ class _SecurityStatusIndicator extends StatelessWidget {
               color: AppTheme.primary,
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.shield_rounded, color: Colors.white, size: 12),
+            child:
+                const Icon(Icons.shield_rounded, color: Colors.white, size: 12),
           ),
           const SizedBox(width: 10),
           Text(
@@ -1455,7 +1484,7 @@ class _RevenueCompositionBar extends StatelessWidget {
               if (cash > 0)
                 Expanded(
                   flex: (cash / total * 100).round(),
-                  child: Container(color: const Color(0xFF10B981)),
+                  child: Container(color: AppTheme.emerald),
                 ),
               if (upi > 0)
                 Expanded(
@@ -1474,9 +1503,11 @@ class _RevenueCompositionBar extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _CompLabel(label: 'CASH', color: const Color(0xFF10B981), pct: cash / total),
+            _CompLabel(
+                label: 'CASH', color: AppTheme.emerald, pct: cash / total),
             _CompLabel(label: 'UPI', color: AppTheme.primary, pct: upi / total),
-            _CompLabel(label: 'CARD', color: AppTheme.accent, pct: card / total),
+            _CompLabel(
+                label: 'CARD', color: AppTheme.accent, pct: card / total),
           ],
         ),
       ],
@@ -1488,21 +1519,30 @@ class _CompLabel extends StatelessWidget {
   final String label;
   final Color color;
   final double pct;
-  const _CompLabel({required this.label, required this.color, required this.pct});
+  const _CompLabel(
+      {required this.label, required this.color, required this.pct});
 
   @override
   Widget build(BuildContext context) {
     if (pct == 0) return const SizedBox.shrink();
     return Row(
       children: [
-        Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 4),
         Text(
           '$label ${(pct * 100).toStringAsFixed(0)}%',
-          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4)),
+          style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.4)),
         ),
       ],
     );
   }
 }
-

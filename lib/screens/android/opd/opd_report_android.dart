@@ -136,7 +136,8 @@ class OpdReportAndroid extends StatelessWidget {
                                 Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
-                                    color: AppTheme.primary.withValues(alpha: 0.1),
+                                    color:
+                                        AppTheme.primary.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: const Icon(Icons.analytics_rounded,
@@ -233,7 +234,8 @@ class OpdReportAndroid extends StatelessWidget {
                                 Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
-                                    color: AppTheme.primary.withValues(alpha: 0.1),
+                                    color:
+                                        AppTheme.primary.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: const Icon(Icons.groups_rounded,
@@ -402,8 +404,8 @@ class OpdReportAndroid extends StatelessWidget {
       bg = AppTheme.primaryLight.withValues(alpha: 0.1);
       fg = AppTheme.primaryLight;
     } else if (status == kStatusPharmacy) {
-      bg = const Color(0xFF7C3AED).withValues(alpha: 0.1);
-      fg = const Color(0xFF7C3AED);
+      bg = AppTheme.purple.withValues(alpha: 0.1);
+      fg = AppTheme.purple;
     } else if (status == kStatusDone) {
       bg = AppTheme.success.withValues(alpha: 0.1);
       fg = AppTheme.success;
@@ -448,16 +450,23 @@ class _FilterChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primary : context.surfaceColor.withValues(alpha: 0.5),
+          color: isSelected
+              ? AppTheme.primary
+              : context.surfaceColor.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected
                 ? AppTheme.primary
                 : context.borderColor.withValues(alpha: 0.3),
           ),
-          boxShadow: isSelected ? [
-            BoxShadow(color: AppTheme.primary.withValues(alpha: 0.2), blurRadius: 8, offset: const Offset(0, 2))
-          ] : null,
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                      color: AppTheme.primary.withValues(alpha: 0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2))
+                ]
+              : null,
         ),
         child: Text(
           label.toUpperCase(),

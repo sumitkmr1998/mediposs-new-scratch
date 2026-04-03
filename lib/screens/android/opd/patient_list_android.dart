@@ -252,7 +252,7 @@ class _ModernPatientTile extends StatelessWidget {
                       child: _ActionBtn(
                         label: 'Edit',
                         icon: Icons.edit_rounded,
-                        color: const Color(0xFF6366F1),
+                        color: AppTheme.indigo,
                         onTap: onEdit,
                       ),
                     ),

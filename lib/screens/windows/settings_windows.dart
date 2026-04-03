@@ -55,7 +55,8 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     _currencyCtrl = TextEditingController(text: s.currencySymbol);
     _portCtrl = TextEditingController(text: '${s.serverPort}');
     _lowStockCtrl = TextEditingController(text: '${s.lowStockThreshold}');
-    _nearExpiryCtrl = TextEditingController(text: '${s.nearExpiryThresholdDays}');
+    _nearExpiryCtrl =
+        TextEditingController(text: '${s.nearExpiryThresholdDays}');
     _selectedTheme = ['system', 'light', 'dark'].contains(s.themeMode)
         ? s.themeMode
         : 'system';
@@ -467,7 +468,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     final sections = [
       _NavItem(Icons.store_rounded, 'Store Details', AppTheme.primary),
       _NavItem(Icons.print_rounded, 'Printing', AppTheme.accent),
-      _NavItem(Icons.palette_rounded, 'Appearance', const Color(0xFF7C3AED)),
+      _NavItem(Icons.palette_rounded, 'Appearance', AppTheme.purple),
       _NavItem(Icons.wifi_rounded, 'Networking', const Color(0xFF0EA5E9)),
       _NavItem(Icons.inventory_2_rounded, 'Inventory', Colors.orange),
       _NavItem(Icons.folder_rounded, 'Data', AppTheme.warning),
@@ -774,7 +775,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     return _SettingsCard(
       title: 'UI Theme',
       icon: Icons.palette_rounded,
-      accentColor: const Color(0xFF7C3AED),
+      accentColor: AppTheme.purple,
       children: [
         Row(children: [
           Text('Theme Mode', style: TextStyle(color: context.textMutedColor)),

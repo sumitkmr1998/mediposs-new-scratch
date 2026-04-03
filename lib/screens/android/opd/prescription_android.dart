@@ -492,7 +492,7 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
         border: Border.all(
           color: isDark
               ? AppTheme.darkBorder.withValues(alpha: 0.5)
-              : const Color(0xFFE8ECF0),
+              : AppTheme.lightBorder,
         ),
         boxShadow: [
           BoxShadow(

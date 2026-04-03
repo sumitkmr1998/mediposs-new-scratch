@@ -35,12 +35,14 @@ class DashboardWindows extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // 1. Redesigned Header
-              RepaintBoundary(child: _DashboardHeader(auth: auth, sales: sales)),
+              RepaintBoundary(
+                  child: _DashboardHeader(auth: auth, sales: sales)),
 
               const SizedBox(height: 32),
 
               // 2. High-Density KPI Grid (Now Row 1)
-              RepaintBoundary(child: _KPIGrid(sales: sales, inv: inv, opd: opd)),
+              RepaintBoundary(
+                  child: _KPIGrid(sales: sales, inv: inv, opd: opd)),
 
               const SizedBox(height: 32),
 
@@ -260,9 +262,13 @@ class _KPIGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     // Calculate total today's COLLECTED revenue (Sales + OPD)
     final double opdCollected = opd.appointments
-        .where((a) => _isToday(a.scheduledAt) && a.status != 'cancelled' && a.paymentMethod != 'pending')
+        .where((a) =>
+            _isToday(a.scheduledAt) &&
+            a.status != 'cancelled' &&
+            a.paymentMethod != 'pending')
         .fold(0.0, (sum, a) => sum + a.consultationFee);
-    final double salesCollected = sales.todayCashRevenue + sales.todayUpiRevenue + sales.todayCardRevenue;
+    final double salesCollected =
+        sales.todayCashRevenue + sales.todayUpiRevenue + sales.todayCardRevenue;
     final double totalTodayRevenue = salesCollected + opdCollected;
 
     return LayoutBuilder(builder: (context, constraints) {
@@ -278,7 +284,7 @@ class _KPIGrid extends StatelessWidget {
             label: "Today's Revenue",
             value: '₹${totalTodayRevenue.toStringAsFixed(0)}',
             icon: Icons.trending_up_rounded,
-            color: const Color(0xFF10B981), // Green
+            color: AppTheme.emerald, // Green
             subtitle: 'Incl. OPD Fees',
           ),
           _KPICard(
@@ -289,7 +295,8 @@ class _KPIGrid extends StatelessWidget {
           ),
           _KPICard(
             label: "OPD Today",
-            value: '${opd.appointments.where((a) => _isToday(a.scheduledAt)).length}',
+            value:
+                '${opd.appointments.where((a) => _isToday(a.scheduledAt)).length}',
             icon: Icons.medical_services_rounded,
             color: AppTheme.primary,
           ),
@@ -297,7 +304,7 @@ class _KPIGrid extends StatelessWidget {
             label: "Near Expiry",
             value: '${inv.nearExpiryCount}',
             icon: Icons.history_rounded,
-            color: const Color(0xFF6366F1), // Indigo
+            color: AppTheme.indigo, // Indigo
             showBadge: inv.nearExpiryCount > 0,
           ),
           _KPICard(
@@ -311,7 +318,7 @@ class _KPIGrid extends StatelessWidget {
             label: "Low Stock Items",
             value: '${inv.lowStockCount}',
             icon: Icons.warning_amber_rounded,
-            color: const Color(0xFFF59E0B), // Orange
+            color: AppTheme.orange, // Orange
             showBadge: inv.lowStockCount > 0,
           ),
         ],
@@ -352,15 +359,21 @@ class _KPICard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
         decoration: BoxDecoration(
-          color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.03),
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.05)
+              : Colors.black.withValues(alpha: 0.03),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05),
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.black.withValues(alpha: 0.05),
             width: 1.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: isDark ? Colors.black26 : Colors.black.withValues(alpha: 0.05),
+              color: isDark
+                  ? Colors.black26
+                  : Colors.black.withValues(alpha: 0.05),
               blurRadius: 15,
               offset: const Offset(0, 8),
             ),
@@ -402,12 +415,11 @@ class _KPICard extends StatelessWidget {
                 children: [
                   Text(
                     value,
-                    style: GoogleFonts.manrope(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w900,
-                      color: cs.onSurface,
-                      letterSpacing: -1,
-                    ),
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: cs.onSurface,
+                          letterSpacing: -1,
+                        ),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -422,7 +434,8 @@ class _KPICard extends StatelessWidget {
                   if (subtitle != null) ...[
                     const SizedBox(height: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: color.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
@@ -461,14 +474,27 @@ class _RevenueBreakdown extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Collected revenue only
-    final productSales = sales.todayCashRevenue + sales.todayUpiRevenue + sales.todayCardRevenue;
-    final opdAppts = opd.appointments.where((a) => _isToday(a.scheduledAt) && a.status != 'cancelled' && a.paymentMethod != 'pending');
+    final productSales =
+        sales.todayCashRevenue + sales.todayUpiRevenue + sales.todayCardRevenue;
+    final opdAppts = opd.appointments.where((a) =>
+        _isToday(a.scheduledAt) &&
+        a.status != 'cancelled' &&
+        a.paymentMethod != 'pending');
     final opdRev = opdAppts.fold(0.0, (sum, a) => sum + a.consultationFee);
     final total = productSales + opdRev;
 
-    final totalCash = sales.todayCashRevenue + opdAppts.where((a) => a.paymentMethod == 'cash').fold(0.0, (sum, a) => sum + a.consultationFee);
-    final totalUpi = sales.todayUpiRevenue + opdAppts.where((a) => a.paymentMethod == 'upi').fold(0.0, (sum, a) => sum + a.consultationFee);
-    final totalCard = sales.todayCardRevenue + opdAppts.where((a) => a.paymentMethod == 'card').fold(0.0, (sum, a) => sum + a.consultationFee);
+    final totalCash = sales.todayCashRevenue +
+        opdAppts
+            .where((a) => a.paymentMethod == 'cash')
+            .fold(0.0, (sum, a) => sum + a.consultationFee);
+    final totalUpi = sales.todayUpiRevenue +
+        opdAppts
+            .where((a) => a.paymentMethod == 'upi')
+            .fold(0.0, (sum, a) => sum + a.consultationFee);
+    final totalCard = sales.todayCardRevenue +
+        opdAppts
+            .where((a) => a.paymentMethod == 'card')
+            .fold(0.0, (sum, a) => sum + a.consultationFee);
 
     return Container(
       padding: const EdgeInsets.all(28),
@@ -493,11 +519,10 @@ class _RevenueBreakdown extends StatelessWidget {
               const SizedBox(width: 10),
               Text(
                 'Financial Performance',
-                style: GoogleFonts.manrope(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: cs.onSurface,
-                ),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: cs.onSurface,
+                    ),
               ),
             ],
           ),
@@ -527,7 +552,7 @@ class _RevenueBreakdown extends StatelessWidget {
                       label: 'Product Sales',
                       amount: productSales,
                       total: total > 0 ? total : 1.0,
-                      color: const Color(0xFF10B981),
+                      color: AppTheme.emerald,
                     ),
                     const SizedBox(height: 24),
                     _BreakdownRow(
@@ -570,7 +595,7 @@ class _RevenueBreakdown extends StatelessWidget {
                             title: 'Cash',
                             value: '₹${totalCash.toStringAsFixed(0)}',
                             icon: Icons.payments_rounded,
-                            color: const Color(0xFF10B981),
+                            color: AppTheme.emerald,
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -619,14 +644,14 @@ class _RevenueTotalBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 80),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF10B981), Color(0xFF059669)],
+          colors: [AppTheme.emerald, AppTheme.emeraldDark],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF10B981).withValues(alpha: 0.25),
+            color: AppTheme.emerald.withValues(alpha: 0.25),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -686,7 +711,9 @@ class _BreakdownRow extends StatelessWidget {
           children: [
             Icon(icon, size: 18, color: color),
             const SizedBox(width: 12),
-            Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+            Text(label,
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -697,7 +724,8 @@ class _BreakdownRow extends StatelessWidget {
               ),
               child: Text(
                 '₹${amount.toStringAsFixed(0)}',
-                style: TextStyle(fontWeight: FontWeight.w900, color: color, fontSize: 14),
+                style: TextStyle(
+                    fontWeight: FontWeight.w900, color: color, fontSize: 14),
               ),
             ),
           ],
@@ -723,7 +751,8 @@ class _BreakdownRow extends StatelessWidget {
                   ),
                   borderRadius: BorderRadius.circular(5),
                   boxShadow: [
-                    BoxShadow(color: color.withValues(alpha: 0.15), blurRadius: 4),
+                    BoxShadow(
+                        color: color.withValues(alpha: 0.15), blurRadius: 4),
                   ],
                 ),
               ),
@@ -735,7 +764,8 @@ class _BreakdownRow extends StatelessWidget {
           alignment: Alignment.centerRight,
           child: Text(
             '${(percent * 100).toStringAsFixed(1)}%',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color),
+            style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w800, color: color),
           ),
         ),
       ],
@@ -823,7 +853,8 @@ class _QuickActions extends StatelessWidget {
             label: 'New Sale',
             icon: Icons.add_shopping_cart_rounded,
             color: AppTheme.primary,
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PosScreen())),
+            onTap: () => Navigator.push(
+                context, MaterialPageRoute(builder: (_) => const PosScreen())),
           ),
         ),
         const SizedBox(width: 16),
@@ -831,8 +862,9 @@ class _QuickActions extends StatelessWidget {
           child: _ModernActionCard(
             label: 'OPD Queue',
             icon: Icons.personal_injury_rounded,
-            color: const Color(0xFF6366F1),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OpdQueueWindows())),
+            color: AppTheme.indigo,
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const OpdQueueWindows())),
           ),
         ),
         const SizedBox(width: 16),
@@ -841,7 +873,8 @@ class _QuickActions extends StatelessWidget {
             label: 'Warehouse',
             icon: Icons.inventory_2_rounded,
             color: const Color(0xFFF59E0B),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WarehouseScreen())),
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const WarehouseScreen())),
           ),
         ),
         const SizedBox(width: 16),
@@ -850,7 +883,8 @@ class _QuickActions extends StatelessWidget {
             label: 'History',
             icon: Icons.history_rounded,
             color: Colors.grey,
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesHistoryScreen())),
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const SalesHistoryScreen())),
           ),
         ),
         const SizedBox(width: 16),
@@ -859,7 +893,8 @@ class _QuickActions extends StatelessWidget {
             label: 'Settings',
             icon: Icons.settings_rounded,
             color: Colors.blueGrey,
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen())),
           ),
         ),
       ],
@@ -889,10 +924,14 @@ class _ModernActionCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(24),
       child: Container(
         decoration: BoxDecoration(
-          color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.03),
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.05)
+              : Colors.black.withValues(alpha: 0.03),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05),
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.black.withValues(alpha: 0.05),
             width: 1.2,
           ),
         ),
@@ -937,7 +976,7 @@ class _InventoryAlertSection extends StatelessWidget {
     final inv = context.watch<InventoryProvider>();
     return LayoutBuilder(builder: (context, constraints) {
       final isVertical = constraints.maxWidth < 1000;
-      
+
       if (isVertical) {
         return Column(
           children: [
@@ -1059,14 +1098,14 @@ class _AlertBox extends StatelessWidget {
               const SizedBox(width: 10),
               Text(
                 title,
-                style: GoogleFonts.manrope(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: cs.onSurface,
-                ),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: cs.onSurface,
+                    ),
               ),
               const Spacer(),
-              _ModernBadge(count: items.length, color: color, label: badgeLabel),
+              _ModernBadge(
+                  count: items.length, color: color, label: badgeLabel),
             ],
           ),
           const SizedBox(height: 24),
@@ -1120,10 +1159,14 @@ class _StockWarningCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.03),
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.05)
+              : Colors.black.withValues(alpha: 0.03),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05),
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.black.withValues(alpha: 0.05),
             width: 1,
           ),
         ),
@@ -1204,7 +1247,8 @@ class _ModernBadge extends StatelessWidget {
   final Color color;
   final String label;
 
-  const _ModernBadge({required this.count, required this.color, required this.label});
+  const _ModernBadge(
+      {required this.count, required this.color, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -1218,7 +1262,12 @@ class _ModernBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: color, letterSpacing: 0.5)),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                  color: color,
+                  letterSpacing: 0.5)),
           const SizedBox(width: 6),
           Container(
             width: 18,
@@ -1227,7 +1276,10 @@ class _ModernBadge extends StatelessWidget {
             alignment: Alignment.center,
             child: Text(
               '$count',
-              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900),
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900),
             ),
           ),
         ],
@@ -1245,17 +1297,19 @@ class _EmptyAlertState extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF10B981).withValues(alpha: 0.05),
+        color: AppTheme.emerald.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 24),
+          const Icon(Icons.check_circle_rounded,
+              color: Color(0xFF10B981), size: 24),
           const SizedBox(width: 12),
           Text(
             label,
-            style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.w800),
+            style: const TextStyle(
+                color: Color(0xFF10B981), fontWeight: FontWeight.w800),
           ),
         ],
       ),
