@@ -10,6 +10,7 @@ import '../../../shared/models/patient_image.dart';
 import '../../../shared/models/sale.dart';
 import '../../../shared/models/prescription.dart';
 import '../../../shared/models/doctor.dart';
+import '../../../shared/models/appointment.dart';
 import '../../../shared/providers/patient_provider.dart';
 import '../../../shared/providers/sales_provider.dart';
 import '../../../shared/providers/prescription_provider.dart';
@@ -391,66 +392,33 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
 
   void _addPrescription(BuildContext context, Patient patient) async {
     final opd = context.read<OpdProvider>();
-    final doctors = opd.activeDoctors;
 
-    if (doctors.isEmpty) {
+    // 1. Check if patient is in today's active queue
+    // Active means: waiting, with_doctor, or pharmacy (not done/cancelled)
+    final activeAppt = opd.todayQueue.where((a) =>
+        a.patientId == patient.id &&
+        (a.status == kStatusWaiting ||
+            a.status == kStatusWithDoctor ||
+            a.status == kStatusPharmacy)).firstOrNull;
+
+    if (activeAppt == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please add a doctor first'),
+          content: Text('Please add the patient to the OPD queue first'),
           backgroundColor: AppTheme.warning,
         ),
       );
       return;
     }
 
-    final selectedDoctor = await showDialog<Doctor>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.medical_services_rounded, color: AppTheme.primary),
-            SizedBox(width: 12),
-            Text('Select Doctor'),
-          ],
+    // 2. Navigate directly to PrescriptionScreen with the EXISTING appointment
+    if (context.mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PrescriptionScreen(appointment: activeAppt),
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: doctors
-              .map((d) => ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-                      child: Text(d.name[0].toUpperCase(),
-                          style: const TextStyle(color: AppTheme.primary)),
-                    ),
-                    title: Text('Dr. ${d.name}'),
-                    subtitle: Text(d.specialization),
-                    onTap: () => Navigator.pop(ctx, d),
-                  ))
-              .toList(),
-        ),
-      ),
-    );
-
-    if (selectedDoctor != null && context.mounted) {
-      final appointment = await opd.createAppointment(
-        patientId: patient.id,
-        patientName: patient.name,
-        patientPhone: patient.phone,
-        doctorId: selectedDoctor.id,
-        doctorName: selectedDoctor.name,
-        consultationFee: selectedDoctor.consultationFee,
-        paymentMethod: 'cash',
       );
-
-      if (context.mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => PrescriptionScreen(appointment: appointment),
-          ),
-        );
-      }
     }
   }
 }

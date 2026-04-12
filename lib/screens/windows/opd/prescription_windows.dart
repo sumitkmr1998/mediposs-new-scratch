@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../../../shared/models/appointment.dart';
 import '../../../shared/models/prescription.dart';
 import '../../../shared/providers/prescription_provider.dart';
@@ -10,6 +11,7 @@ import '../../../shared/providers/inventory_provider.dart';
 import '../../../shared/providers/template_provider.dart';
 import '../../../shared/services/sync_service.dart';
 import '../../../theme/app_theme.dart';
+import '../../../widgets/windows_camera_dialog.dart';
 
 class PrescriptionWindows extends StatefulWidget {
   final Appointment appointment;
@@ -108,6 +110,14 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
           ],
         ),
         actions: [
+          IconButton(
+            onPressed: () => _showImportPreviousDialog(context),
+            icon: const Icon(Icons.history_rounded, size: 20),
+            tooltip: 'Import Previous',
+            style: IconButton.styleFrom(
+              foregroundColor: context.textMutedColor,
+            ),
+          ),
           IconButton(
             onPressed: () => _loadTemplateDialog(context),
             icon: const Icon(Icons.auto_stories_outlined, size: 20),
@@ -561,6 +571,16 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
   }
 
   Future<void> _pickImage(ImageSource source) async {
+    if (source == ImageSource.camera && Platform.isWindows) {
+      final String? path = await showDialog<String>(
+        context: context,
+        builder: (ctx) => const WindowsCameraDialog(),
+      );
+      if (path != null) {
+        setState(() => _imagePaths.add(path));
+      }
+      return;
+    }
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: source, imageQuality: 80);
     if (picked != null) {
@@ -723,6 +743,121 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
       content: Text('Template "${t.name}" applied'),
       backgroundColor: AppTheme.success,
     ));
+  }
+
+  void _applyPrescription(Prescription p) {
+    final pProvider = context.read<PrescriptionProvider>();
+    setState(() {
+      if (p.diagnosis.isNotEmpty) _diagnosisCtrl.text = p.diagnosis;
+      if (p.complaints.isNotEmpty) _complaintsCtrl.text = p.complaints;
+      if (p.notes.isNotEmpty) _notesCtrl.text = p.notes;
+      final pItems = pProvider.getItems(p);
+      if (pItems.isNotEmpty) _items = List.from(pItems);
+      final pTests = pProvider.getLabTests(p);
+      if (pTests.isNotEmpty) _labTests = List.from(pTests);
+
+      final vitals = pProvider.getVitals(p);
+      if (vitals.bp.isNotEmpty) _bpCtrl.text = vitals.bp;
+      if (vitals.weight.isNotEmpty) _weightCtrl.text = vitals.weight;
+      if (vitals.temp.isNotEmpty) _tempCtrl.text = vitals.temp;
+      if (vitals.spo2.isNotEmpty) _spo2Ctrl.text = vitals.spo2;
+      if (vitals.pulse.isNotEmpty) _pulseCtrl.text = vitals.pulse;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+          'Record from ${DateFormat('dd MMM yyyy').format(p.createdAt)} imported'),
+      backgroundColor: AppTheme.success,
+    ));
+  }
+
+  void _showImportPreviousDialog(BuildContext context) {
+    final pProvider = context.read<PrescriptionProvider>();
+    final past = pProvider
+        .getPrescriptionsForPatient(widget.appointment.patientId)
+        .where((p) => p.appointmentId != widget.appointment.id)
+        .toList();
+
+    if (past.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No previous medical records found for this patient.'),
+      ));
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.55,
+          maxChildSize: 0.85,
+          builder: (_, scrollCtrl) => Column(
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                      color: Colors.grey.shade400,
+                      borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    const Icon(Icons.history, color: AppTheme.primary),
+                    const SizedBox(width: 10),
+                    Text('Import Previous Prescription',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Divider(height: 1),
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollCtrl,
+                  itemCount: past.length,
+                  itemBuilder: (_, i) {
+                    final p = past[i];
+                    final date = DateFormat('dd MMM yyyy').format(p.createdAt);
+                    final itemCount = pProvider.getItems(p).length;
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor:
+                            AppTheme.primary.withValues(alpha: 0.1),
+                        child: const Icon(Icons.history_edu_rounded,
+                            color: AppTheme.primary, size: 20),
+                      ),
+                      title: Text(date,
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                      subtitle: Text(
+                        '${p.diagnosis.isNotEmpty ? p.diagnosis : "No diagnosis"} • $itemCount medicines',
+                        style: TextStyle(
+                            color: context.textMutedColor, fontSize: 12),
+                      ),
+                      trailing: TextButton(
+                        onPressed: () {
+                          _applyPrescription(p);
+                          Navigator.pop(context);
+                        },
+                        child: const Text('Import'),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _saveAsTemplateDialog(BuildContext context) {
