@@ -77,195 +77,208 @@ class _UserManagementAndroidState extends State<UserManagementAndroid> {
 
   Widget _buildUserCard(BuildContext context, AppUser user, AuthProvider auth) {
     final isAdmin = user.role.toLowerCase() == 'admin';
+    final statusColor = user.isActive ? AppTheme.success : AppTheme.danger;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        color: context.surfaceColor.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(24),
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 20,
-            offset: const Offset(0, 8),
+            offset: const Offset(0, 10),
           ),
         ],
-        border: Border.all(color: context.borderColor.withValues(alpha: 0.3)),
+        border: Border.all(
+          color: context.borderColor.withValues(alpha: 0.3),
+          width: 1,
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Stack(
+          children: [
+            // Status Strip
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 4,
+              child: Container(color: statusColor),
+            ),
+            
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        AppTheme.primary.withValues(alpha: 0.2),
-                        AppTheme.primary.withValues(alpha: 0.05)
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Center(
-                    child: Text(
-                      user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
-                      style: const TextStyle(
-                          color: AppTheme.primaryLight,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -1),
-                    ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+                  child: Row(
+                    children: [
+                      // Avatar with Gradient
+                      Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppTheme.primary.withValues(alpha: 0.2),
+                              AppTheme.primary.withValues(alpha: 0.05)
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: AppTheme.primary.withValues(alpha: 0.1),
+                            width: 1,
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                            style: const TextStyle(
+                                color: AppTheme.primaryLight,
+                                fontSize: 26,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -1),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(user.name,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 18,
+                                    letterSpacing: -0.5)),
+                            const SizedBox(height: 6),
+                            _Badge(
+                              label: user.role.toUpperCase(),
+                              color: isAdmin ? AppTheme.primaryLight : context.textMutedColor,
+                              isGlass: true,
+                            ),
+                          ],
+                        ),
+                      ),
+                      _StatusBadge(isActive: user.isActive),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
+
+                const Divider(indent: 20, endIndent: 20, height: 1),
+
+                Padding(
+                  padding: const EdgeInsets.all(20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(user.name,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 17,
-                              letterSpacing: -0.2)),
-                      const SizedBox(height: 4),
+                      Text('MODULE ACCESS',
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.5,
+                              color: context.textMutedColor.withValues(alpha: 0.6))),
+                      const SizedBox(height: 16),
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          _Badge(
-                            label: user.role.toUpperCase(),
-                            color: isAdmin
-                                ? AppTheme.primaryLight
-                                : context.textMutedColor,
-                            isGlass: true,
-                          ),
-                          const SizedBox(width: 8),
-                          Text('PIN: ${user.pin}',
-                              style: TextStyle(
-                                  color: context.textMutedColor,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 1)),
+                          _moduleIcon(Icons.shopping_cart_rounded, 'POS', user.canAccessPOS || isAdmin, context),
+                          _moduleIcon(Icons.inventory_2_rounded, 'Stock', user.canEditInventory || isAdmin, context),
+                          _moduleIcon(Icons.local_hospital_rounded, 'OPD', user.canAccessOPD || isAdmin, context),
+                          _moduleIcon(Icons.analytics_rounded, 'Reports', (user.canViewDashboard || user.canViewOpdReports) || isAdmin, context),
+                          _moduleIcon(Icons.settings_rounded, 'Admin', user.canAccessSettings || isAdmin, context),
                         ],
                       ),
                     ],
                   ),
                 ),
-                _StatusBadge(isActive: user.isActive),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                _permChip('POS', user.canAccessPOS || isAdmin),
-                _permChip('INVENTORY', user.canEditInventory || isAdmin),
-                _permChip('OPD', user.canAccessOPD || isAdmin),
-                _permChip('REPORTS',
-                    user.canViewDashboard || user.canViewOpdReports || isAdmin),
-                _permChip('SETTINGS', user.canAccessSettings || isAdmin),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            decoration: BoxDecoration(
-              color: context.textMutedColor.withValues(alpha: 0.03),
-              borderRadius:
-                  const BorderRadius.vertical(bottom: Radius.circular(24)),
-              border: Border(
-                  top: BorderSide(
-                      color: context.borderColor.withValues(alpha: 0.2))),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('STAFF ACCESS PERMISSIONS',
-                    style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1,
-                        color: AppTheme.primaryLight)),
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => AndroidUserDialog.showUserSheet(context,
-                        existingUser: user),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
+
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: context.textMutedColor.withValues(alpha: 0.05),
+                    border: Border(
+                        top: BorderSide(
+                            color: context.borderColor.withValues(alpha: 0.2))),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // PIN Badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: context.surfaceColor,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: context.borderColor),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.key_rounded, size: 12, color: context.textMutedColor),
+                            const SizedBox(width: 6),
+                            Text(user.pin,
+                                style: TextStyle(
+                                    color: context.textColor,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 1.5)),
+                          ],
+                        ),
                       ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.edit_rounded,
-                              size: 14, color: AppTheme.primary),
-                          SizedBox(width: 6),
-                          Text('EDIT',
-                              style: TextStyle(
-                                  color: AppTheme.primary,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700)),
-                        ],
+                      
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                          foregroundColor: AppTheme.primary,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        ),
+                        onPressed: () => AndroidUserDialog.showUserSheet(context, existingUser: user),
+                        icon: const Icon(Icons.edit_note_rounded, size: 18),
+                        label: const Text('MANAGE STAFF',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.5)),
                       ),
-                    ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _permChip(String label, bool val) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color:
-            val ? AppTheme.success.withValues(alpha: 0.08) : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: val
-              ? AppTheme.success.withValues(alpha: 0.2)
-              : context.borderColor.withValues(alpha: 0.2),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            val ? Icons.check_circle_rounded : Icons.lock_outline_rounded,
-            color: val
-                ? AppTheme.success
-                : context.textMutedColor.withValues(alpha: 0.4),
-            size: 12,
+  Widget _moduleIcon(IconData icon, String label, bool active, BuildContext context) {
+    final color = active ? AppTheme.primary : context.textMutedColor.withValues(alpha: 0.2);
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: active ? AppTheme.primary.withValues(alpha: 0.08) : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: active ? AppTheme.primary.withValues(alpha: 0.2) : Colors.transparent,
+            ),
           ),
-          const SizedBox(width: 6),
-          Text(label,
-              style: TextStyle(
-                  color: val
-                      ? AppTheme.success.withValues(alpha: 0.9)
-                      : context.textMutedColor.withValues(alpha: 0.5),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5)),
-        ],
-      ),
+          child: Icon(icon, size: 22, color: color),
+        ),
+        const SizedBox(height: 6),
+        Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: color, letterSpacing: 0.5)),
+      ],
     );
   }
+
+
 }
 
 class _Badge extends StatelessWidget {

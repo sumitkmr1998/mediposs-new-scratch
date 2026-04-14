@@ -6,6 +6,7 @@ import '../../../shared/providers/opd_provider.dart';
 import '../../../shared/providers/prescription_provider.dart';
 import '../../../theme/app_theme.dart';
 import '../../../shared/widgets/app_status_badge.dart';
+import '../../../shared/widgets/app_kpi_card.dart';
 
 class OpdReportAndroid extends StatelessWidget {
   const OpdReportAndroid({super.key});
@@ -33,6 +34,12 @@ class OpdReportAndroid extends StatelessWidget {
     }
     final sortedDiagnoses = diagnosisCount.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
+
+    // Summary Stats
+    final totalPatients = opd.filteredPatientCount;
+    final doneCount = opd.filteredDoneCount;
+    final revenue = opd.filteredConsultationRevenue;
+    final activeDocs = opd.activeDoctors.length;
 
     return Scaffold(
       backgroundColor: context.surfaceColor,
@@ -80,50 +87,71 @@ class OpdReportAndroid extends StatelessWidget {
                         isSelected: opd.activeFilter == OpdFilter.allTime,
                         onSelected: () => opd.setFilter(OpdFilter.allTime),
                       ),
-                      const SizedBox(width: 8),
-                      _FilterChip(
-                        label: 'Custom',
-                        isSelected: opd.activeFilter == OpdFilter.custom,
-                        onSelected: () async {
-                          final range = await showDateRangePicker(
-                            context: context,
-                            firstDate: DateTime(2020),
-                            lastDate: DateTime.now(),
-                            builder: (ctx, child) {
-                              return Theme(
-                                data: Theme.of(context).copyWith(
-                                  colorScheme:
-                                      Theme.of(context).colorScheme.copyWith(
-                                            primary: AppTheme.primary,
-                                            onPrimary: Colors.white,
-                                          ),
-                                ),
-                                child: child!,
-                              );
-                            },
-                          );
-                          if (range != null) {
-                            opd.setFilter(OpdFilter.custom, range: range);
-                          }
-                        },
+                    ],
+                  ),
+                ),
+
+                // KPI Summary Row (NEW)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('SUMMARY OVERVIEW',
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.5,
+                              color: AppTheme.primary)),
+                      const SizedBox(height: 16),
+                      GridView(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: 2.2,
+                        ),
+                        children: [
+                          _CompactKpiCard(
+                            label: 'Total Patients',
+                            value: '$totalPatients',
+                            icon: Icons.people_rounded,
+                            color: AppTheme.primary,
+                          ),
+                          _CompactKpiCard(
+                            label: 'Attended (Done)',
+                            value: '$doneCount',
+                            icon: Icons.check_circle_rounded,
+                            color: AppTheme.success,
+                          ),
+                          _CompactKpiCard(
+                            label: 'Cons. Revenue',
+                            value: '₹${revenue.toStringAsFixed(0)}',
+                            icon: Icons.currency_rupee_rounded,
+                            color: AppTheme.accent,
+                          ),
+                          _CompactKpiCard(
+                            label: 'Doctors',
+                            value: '$activeDocs',
+                            icon: Icons.medical_services_rounded,
+                            color: AppTheme.purple,
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
+
                 if (sortedDiagnoses.isNotEmpty) ...[
                   Padding(
                     padding: const EdgeInsets.all(20),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: context.surfaceColor.withValues(alpha: 0.9),
+                        color: context.surfaceColor,
                         borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
+                        boxShadow: AppTheme.subtleShadow,
                         border: Border.all(
                             color: context.borderColor.withValues(alpha: 0.3)),
                       ),
@@ -135,14 +163,13 @@ class OpdReportAndroid extends StatelessWidget {
                             child: Row(
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.all(10),
+                                  padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color:
-                                        AppTheme.primary.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(12),
+                                    color: AppTheme.primary.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: const Icon(Icons.analytics_rounded,
-                                      color: AppTheme.primary, size: 20),
+                                      color: AppTheme.primary, size: 18),
                                 ),
                                 const SizedBox(width: 12),
                                 const Text('TOP DIAGNOSES',
@@ -150,19 +177,18 @@ class OpdReportAndroid extends StatelessWidget {
                                         fontSize: 12,
                                         fontWeight: FontWeight.w800,
                                         letterSpacing: 1,
-                                        color: AppTheme.primaryLight)),
+                                        color: AppTheme.primary)),
                               ],
                             ),
                           ),
                           Container(
                               height: 1,
-                              color:
-                                  context.borderColor.withValues(alpha: 0.3)),
+                              color: context.borderColor.withValues(alpha: 0.3)),
                           Padding(
                             padding: const EdgeInsets.all(20),
                             child: Column(
                               children: sortedDiagnoses
-                                  .take(10)
+                                  .take(8)
                                   .map((entry) => Padding(
                                         padding:
                                             const EdgeInsets.only(bottom: 12),
@@ -173,24 +199,24 @@ class OpdReportAndroid extends StatelessWidget {
                                                   style: const TextStyle(
                                                       fontWeight:
                                                           FontWeight.w600,
-                                                      fontSize: 15)),
+                                                      fontSize: 14)),
                                             ),
                                             Container(
                                               padding:
                                                   const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 6),
+                                                      horizontal: 10,
+                                                      vertical: 4),
                                               decoration: BoxDecoration(
                                                 color: AppTheme.primary
-                                                    .withValues(alpha: 0.1),
+                                                    .withValues(alpha: 0.08),
                                                 borderRadius:
-                                                    BorderRadius.circular(20),
+                                                    BorderRadius.circular(12),
                                               ),
                                               child: Text(
                                                   '${entry.value} cases',
                                                   style: const TextStyle(
                                                       color: AppTheme.primary,
-                                                      fontSize: 12,
+                                                      fontSize: 11,
                                                       fontWeight:
                                                           FontWeight.w800)),
                                             ),
@@ -204,140 +230,106 @@ class OpdReportAndroid extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
                 ],
 
                 // Per-doctor stats
-                if (opd.activeDoctors.isNotEmpty) ...[
+                // We should iterate over ALL doctors who have activity in the range, 
+                // but for now we'll match Windows logic which maps over all active doctors but shows activity.
+                if (opd.doctors.isNotEmpty) ...[
                   Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: const Text('PER DOCTOR PERFORMANCE',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.5,
+                            color: AppTheme.primary)),
+                  ),
+                  const SizedBox(height: 16),
+                  ...opd.doctors.where((d) {
+                    // Show if active OR has appointments in filter
+                    final count = queue.where((a) => a.doctorName == d.name).length;
+                    return d.isActive || count > 0;
+                  }).map((doc) {
+                    final docAppts = queue
+                        .where((a) => a.doctorName == doc.name)
+                        .toList();
+                    final attendedCount = docAppts
+                        .where((a) => a.status == kStatusDone)
+                        .length;
+                    final docRevenue = docAppts.fold(
+                        0.0, (s, a) => s + a.consultationFee);
+                    
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: context.surfaceColor.withValues(alpha: 0.9),
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
+                        color: context.surfaceColor,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: AppTheme.subtleShadow,
                         border: Border.all(
                             color: context.borderColor.withValues(alpha: 0.3)),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Row(
+                          CircleAvatar(
+                            backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
+                            child: Text(doc.name[0], style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold)),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color:
-                                        AppTheme.primary.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: const Icon(Icons.groups_rounded,
-                                      color: AppTheme.primary, size: 20),
-                                ),
-                                const SizedBox(width: 12),
-                                const Text('PER DOCTOR STATS',
+                                Text('Dr. ${doc.name}',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 15)),
+                                Text(doc.specialization,
                                     style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: 1,
-                                        color: AppTheme.primaryLight)),
+                                        color: context.textMutedColor,
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 12)),
                               ],
                             ),
                           ),
-                          Container(
-                              height: 1,
-                              color:
-                                  context.borderColor.withValues(alpha: 0.3)),
-                          ...opd.activeDoctors.map((doc) {
-                            final docAppts = queue
-                                .where((a) => a.doctorId == doc.id)
-                                .toList();
-                            final docRevenue = docAppts.fold(
-                                0.0, (s, a) => s + a.consultationFee);
-                            return Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.primary
-                                          .withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: const Icon(Icons.person,
-                                        color: AppTheme.primary),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text('Dr. ${doc.name}',
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 15)),
-                                        const SizedBox(height: 4),
-                                        Text(doc.specialization,
-                                            style: TextStyle(
-                                                color: context.textMutedColor,
-                                                fontWeight: FontWeight.w500,
-                                                fontSize: 13)),
-                                      ],
-                                    ),
-                                  ),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text('${docAppts.length} tokens',
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 14)),
-                                      const SizedBox(height: 4),
-                                      Text('₹${docRevenue.toStringAsFixed(0)}',
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.w800,
-                                              color: AppTheme.success,
-                                              fontSize: 14)),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            );
-                          }),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text('$attendedCount Attended',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      color: AppTheme.primary,
+                                      fontSize: 14)),
+                              const SizedBox(height: 2),
+                              Text('₹${docRevenue.toStringAsFixed(0)}',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      color: AppTheme.success,
+                                      fontSize: 14)),
+                            ],
+                          ),
                         ],
                       ),
-                    ),
-                  ),
+                    );
+                  }),
                   const SizedBox(height: 32),
                 ],
               ],
             ),
           ),
 
-          // Patient List (SliverList to dynamically scroll below everything)
+          // Patient List
           if (queue.isNotEmpty) ...[
             SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               sliver: SliverToBoxAdapter(
-                child: Text('Appointments in Range',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w800)),
+                child: Text('Visit History (${queue.length})',
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: AppTheme.primary)),
               ),
             ),
             SliverPadding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
@@ -346,16 +338,10 @@ class OpdReportAndroid extends StatelessWidget {
                       margin: const EdgeInsets.only(bottom: 12),
                       decoration: BoxDecoration(
                         color: context.surfaceColor,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                             color: context.borderColor.withValues(alpha: 0.5)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.02),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+                        boxShadow: AppTheme.subtleShadow,
                       ),
                       child: ListTile(
                         leading: CircleAvatar(
@@ -366,13 +352,21 @@ class OpdReportAndroid extends StatelessWidget {
                         ),
                         title: Text(appt.patientName,
                             style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 15)),
+                                fontWeight: FontWeight.bold, fontSize: 14)),
                         subtitle: Text(
                           'Dr. ${appt.doctorName} • ${DateFormat('h:mm a').format(appt.scheduledAt)}',
                           style: TextStyle(
-                              color: context.textMutedColor, fontSize: 13),
+                              color: context.textMutedColor, fontSize: 12),
                         ),
-                        trailing: _buildStatusChip(appt.status),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            _buildStatusChip(appt.status),
+                            const SizedBox(height: 4),
+                            Text('₹${appt.consultationFee.toStringAsFixed(0)}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppTheme.success)),
+                          ],
+                        ),
                       ),
                     );
                   },
@@ -384,7 +378,7 @@ class OpdReportAndroid extends StatelessWidget {
             SliverFillRemaining(
               hasScrollBody: false,
               child: Center(
-                child: Text('No appointments found for this period.',
+                child: Text('No records found for this period.',
                     style: TextStyle(color: context.textMutedColor)),
               ),
             ),
@@ -411,8 +405,8 @@ class OpdReportAndroid extends StatelessWidget {
       label: status.toUpperCase(),
       color: color,
       style: AppStatusBadgeStyle.text,
-      fontSize: 10,
-      fontWeight: FontWeight.w700,
+      fontSize: 9,
+      fontWeight: FontWeight.w800,
     );
   }
 }
@@ -445,24 +439,82 @@ class _FilterChip extends StatelessWidget {
                 ? AppTheme.primary
                 : context.borderColor.withValues(alpha: 0.3),
           ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                      color: AppTheme.primary.withValues(alpha: 0.2),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2))
-                ]
-              : null,
         ),
         child: Text(
           label.toUpperCase(),
           style: TextStyle(
             color: isSelected ? Colors.white : context.textMutedColor,
-            fontWeight: FontWeight.w700,
-            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            fontSize: 10,
             letterSpacing: 0.5,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _CompactKpiCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _CompactKpiCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    color: color,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: context.textMutedColor,
+                    letterSpacing: 0.2,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

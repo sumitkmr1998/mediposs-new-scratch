@@ -5,16 +5,20 @@ import '../../shared/providers/inventory_provider.dart';
 import '../../shared/providers/sales_provider.dart';
 import '../../shared/providers/opd_provider.dart';
 import '../../shared/models/medicine.dart' as model;
-import '../../shared/models/appointment.dart';
 import '../../theme/app_theme.dart';
-import '../pos_screen.dart';
-import '../warehouse_screen.dart';
-import '../sales_history_screen.dart';
-import '../settings_screen.dart';
+import 'pos_android.dart';
+import 'warehouse_android.dart';
+import 'sales_history_android.dart';
+import 'settings_android.dart';
+import 'user_management_android.dart';
 import '../connection_screen.dart';
+import 'opd/opd_queue_android.dart';
+import 'opd/opd_report_android.dart';
 import '../../shared/services/sync_service.dart';
 import '../../shared/widgets/app_kpi_card.dart';
 import '../../shared/widgets/app_filter_chip.dart';
+import '../../shared/models/appointment.dart';
+import '../../shared/models/medicine.dart' as model;
 
 class DashboardAndroid extends StatelessWidget {
   const DashboardAndroid({super.key});
@@ -44,19 +48,26 @@ class DashboardAndroid extends StatelessWidget {
               title: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [AppTheme.primary, AppTheme.primaryLight],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.primary.withValues(alpha: 0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: const Icon(
-                      Icons.dashboard_rounded,
+                      Icons.grid_view_rounded,
                       color: Colors.white,
-                      size: 18,
+                      size: 20,
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -74,51 +85,39 @@ class DashboardAndroid extends StatelessWidget {
             actions: [
               Consumer<WebSocketService>(
                 builder: (context, wsvc, _) {
-                  return Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    child: IconButton(
-                      icon: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: wsvc.connected
-                              ? AppTheme.success.withValues(alpha: 0.1)
-                              : AppTheme.warning.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(
-                          wsvc.connected ? Icons.wifi : Icons.wifi_off,
-                          color: wsvc.connected
-                              ? AppTheme.success
-                              : AppTheme.warning,
-                          size: 20,
-                        ),
+                  return IconButton(
+                    icon: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: wsvc.connected
+                            ? AppTheme.success.withValues(alpha: 0.1)
+                            : AppTheme.warning.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const ConnectionScreen()),
+                      child: Icon(
+                        wsvc.connected ? Icons.wifi : Icons.wifi_off,
+                        color: wsvc.connected ? AppTheme.success : AppTheme.warning,
+                        size: 20,
                       ),
+                    ),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => ConnectionScreen()),
                     ),
                   );
                 },
               ),
-              Container(
-                margin: const EdgeInsets.only(right: 12),
-                child: IconButton(
-                  icon: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppTheme.danger.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      Icons.logout_rounded,
-                      color: AppTheme.danger,
-                      size: 20,
-                    ),
+              IconButton(
+                padding: const EdgeInsets.only(right: 12),
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.danger.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  onPressed: () => auth.logout(),
+                  child: const Icon(Icons.logout_rounded, color: AppTheme.danger, size: 20),
                 ),
+                onPressed: () => auth.logout(),
               ),
             ],
           ),
@@ -129,60 +128,25 @@ class DashboardAndroid extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Welcome Section
                   _WelcomeSection(auth: auth, cs: cs),
-
                   const SizedBox(height: 24),
-
-                  // Sentry Security Indicator
                   _SecurityStatusIndicator(cs: cs),
-
                   const SizedBox(height: 24),
-
-                  // Date Filter
                   _DateFilterBar(sales: sales, cs: cs),
-
                   const SizedBox(height: 24),
-
-                  // Primary Stats
                   _PrimaryStats(
                     sales: sales,
                     opd: opd,
                     inv: inv,
                     rangeLabel: rangeLabel,
-                    cs: cs,
                   ),
-
                   const SizedBox(height: 24),
-
-                  // Revenue Breakdown
-                  _RevenueBreakdown(
-                    sales: sales,
-                    opd: opd,
-                    rangeLabel: rangeLabel,
-                    cs: cs,
-                  ),
-
+                  _FinancialPerformance(sales: sales, opd: opd),
                   const SizedBox(height: 24),
-
-                  // Quick Actions
-                  _QuickActionsCard(cs: cs),
-
-                  const SizedBox(height: 20),
-
-                  // Inventory Alerts
-                  if (inv.lowStockCount > 0) ...[
-                    _LowStockCard(inv: inv, cs: cs),
-                    const SizedBox(height: 24),
-                  ],
-                  if (inv.nearExpiryCount > 0) ...[
-                    _NearExpiryCard(inv: inv, cs: cs),
-                    const SizedBox(height: 24),
-                  ],
-                  if (inv.expiredCount > 0) ...[
-                    _ExpiredCard(inv: inv, cs: cs),
-                    const SizedBox(height: 16),
-                  ],
+                  _QuickActionsCard(),
+                  const SizedBox(height: 24),
+                  _InventoryAlertsSection(inv: inv, cs: cs),
+                  const SizedBox(height: 32),
                 ],
               ),
             ),
@@ -213,9 +177,7 @@ class _WelcomeSection extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primary.withValues(alpha: 0.1),
-        ),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.1)),
       ),
       child: Row(
         children: [
@@ -225,10 +187,7 @@ class _WelcomeSection extends StatelessWidget {
               children: [
                 Text(
                   'Welcome back,',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: cs.onSurface.withValues(alpha: 0.6),
-                  ),
+                  style: TextStyle(fontSize: 14, color: cs.onSurface.withValues(alpha: 0.6)),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -246,1031 +205,19 @@ class _WelcomeSection extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppTheme.primary.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(14),
+              gradient: LinearGradient(
+                colors: [AppTheme.primary.withValues(alpha: 0.2), AppTheme.primary.withValues(alpha: 0.05)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.primary.withValues(alpha: 0.1)),
             ),
-            child: const Icon(
-              Icons.person_rounded,
-              color: AppTheme.primary,
-              size: 28,
-            ),
+            child: const Icon(Icons.face_rounded, color: AppTheme.primary, size: 28),
           ),
         ],
       ),
     );
-  }
-}
-
-class _DateFilterBar extends StatelessWidget {
-  final SalesProvider sales;
-  final ColorScheme cs;
-
-  const _DateFilterBar({required this.sales, required this.cs});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: cs.outline.withValues(alpha: 0.08),
-        ),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            AppFilterChip(
-              label: 'Today',
-              isSelected: sales.activeFilter == SalesFilter.today,
-              onTap: () => sales.setFilter(SalesFilter.today),
-              style: AppFilterChipStyle.filled,
-            ),
-            const SizedBox(width: 4),
-            AppFilterChip(
-              label: 'Yesterday',
-              isSelected: sales.activeFilter == SalesFilter.yesterday,
-              onTap: () => sales.setFilter(SalesFilter.yesterday),
-              style: AppFilterChipStyle.filled,
-            ),
-            const SizedBox(width: 4),
-            AppFilterChip(
-              label: '7 Days',
-              isSelected: sales.activeFilter == SalesFilter.last7Days,
-              onTap: () => sales.setFilter(SalesFilter.last7Days),
-              style: AppFilterChipStyle.filled,
-            ),
-            const SizedBox(width: 4),
-            AppFilterChip(
-              label: 'All',
-              isSelected: sales.activeFilter == SalesFilter.allTime,
-              onTap: () => sales.setFilter(SalesFilter.allTime),
-              style: AppFilterChipStyle.filled,
-            ),
-            const SizedBox(width: 4),
-            AppFilterChip(
-              label: 'Custom',
-              isSelected: sales.activeFilter == SalesFilter.custom,
-              onTap: () async {
-                final range = await showDateRangePicker(
-                  context: context,
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime.now(),
-                  builder: (ctx, child) {
-                    return Theme(
-                      data: Theme.of(context).copyWith(
-                        colorScheme: Theme.of(context).colorScheme.copyWith(
-                              primary: AppTheme.primary,
-                              onPrimary: Colors.white,
-                            ),
-                      ),
-                      child: child!,
-                    );
-                  },
-                );
-                if (range != null) {
-                  sales.setFilter(SalesFilter.custom, range: range);
-                }
-              },
-              style: AppFilterChipStyle.filled,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PrimaryStats extends StatelessWidget {
-  final SalesProvider sales;
-  final OpdProvider opd;
-  final InventoryProvider inv;
-  final String rangeLabel;
-  final ColorScheme cs;
-
-  const _PrimaryStats({
-    required this.sales,
-    required this.opd,
-    required this.inv,
-    required this.rangeLabel,
-    required this.cs,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final opdRev = opd.appointments
-        .where((a) =>
-            a.status == kStatusDone &&
-            a.scheduledAt.year == now.year &&
-            a.scheduledAt.month == now.month &&
-            a.scheduledAt.day == now.day)
-        .fold(0.0, (sum, a) => sum + (a.consultationFee));
-
-    final productRev = sales.sales
-        .where((s) =>
-            s.createdAt.year == now.year &&
-            s.createdAt.month == now.month &&
-            s.createdAt.day == now.day)
-        .fold(0.0, (sum, s) => sum + s.total);
-
-    final totalToday = opdRev + productRev;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Overview',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: cs.onSurface,
-          ),
-        ),
-        const SizedBox(height: 14),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 14,
-          crossAxisSpacing: 14,
-          childAspectRatio: 1.1,
-          children: [
-            AppKpiCard(
-              label: 'Today\'s Revenue',
-              value: '₹${totalToday.toStringAsFixed(0)}',
-              icon: Icons.trending_up_rounded,
-              color: AppTheme.emerald,
-            ),
-            AppKpiCard(
-              label: 'OPD Today',
-              value: '${opd.todayQueue.length}',
-              icon: Icons.people_alt_rounded,
-              color: AppTheme.primary,
-            ),
-            AppKpiCard(
-              label: 'Low Stock',
-              value: '${inv.lowStockCount}',
-              icon: Icons.warning_amber_rounded,
-              color: AppTheme.warning,
-              onTap: () => _showMedicineList(context, 'Low Stock',
-                  inv.medicines.where((m) => m.isLowStock).toList()),
-            ),
-            AppKpiCard(
-              label: 'Near Expiry',
-              value: '${inv.nearExpiryCount}',
-              icon: Icons.timer_rounded,
-              color: AppTheme.orange,
-              onTap: () => _showMedicineList(
-                  context, 'Near Expiry', inv.nearExpiryMedicines),
-            ),
-            AppKpiCard(
-              label: 'Expired',
-              value: '${inv.expiredCount}',
-              icon: Icons.event_busy_rounded,
-              color: AppTheme.danger,
-              onTap: () => _showMedicineList(
-                  context, 'Expired Items', inv.expiredMedicines),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  void _showMedicineList(
-      BuildContext context, String title, List<model.Medicine> meds) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        height: MediaQuery.of(ctx).size.height * 0.7,
-        decoration: BoxDecoration(
-          color: Theme.of(ctx).colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          children: [
-            const SizedBox(height: 12),
-            Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                    color: Colors.grey.withAlpha(100),
-                    borderRadius: BorderRadius.circular(2))),
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontSize: 20, fontWeight: FontWeight.bold)),
-                  const Spacer(),
-                  Text('${meds.length} items',
-                      style: TextStyle(
-                          color: context.textMutedColor,
-                          fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-            Expanded(
-              child: meds.isEmpty
-                  ? Center(
-                      child: Text('No items found',
-                          style: TextStyle(color: context.textMutedColor)))
-                  : ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      itemCount: meds.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (ctx, i) {
-                        final m = meds[i];
-                        return ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(m.name,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w600)),
-                          subtitle: Text(
-                              '${m.category} • ${m.storeStock} in stock',
-                              style: TextStyle(
-                                  fontSize: 12, color: context.textMutedColor)),
-                          trailing: Icon(Icons.chevron_right,
-                              color: context.textMutedColor, size: 20),
-                          onTap: () {
-                            Navigator.pop(ctx);
-                            // We should show the detail or edit dialog
-                          },
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _RevenueBreakdown extends StatelessWidget {
-  final SalesProvider sales;
-  final OpdProvider opd;
-  final String rangeLabel;
-  final ColorScheme cs;
-
-  const _RevenueBreakdown({
-    required this.sales,
-    required this.opd,
-    required this.rangeLabel,
-    required this.cs,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final now = DateTime.now();
-    // Calculate breakdown
-    double cash = 0, upi = 0, card = 0;
-
-    // Product Sales
-    for (final s in sales.sales) {
-      if (s.createdAt.year == now.year &&
-          s.createdAt.month == now.month &&
-          s.createdAt.day == now.day) {
-        if (s.paymentMethod == 'mixed') {
-          cash += s.cashAmount;
-          upi += s.upiAmount;
-          card += s.cardAmount;
-        } else if (s.paymentMethod == 'cash') {
-          cash += s.total;
-        } else if (s.paymentMethod == 'upi') {
-          upi += s.total;
-        } else if (s.paymentMethod == 'card') {
-          card += s.total;
-        }
-      }
-    }
-
-    // OPD Revenue
-    for (final a in opd.appointments) {
-      if (a.status == kStatusDone &&
-          a.scheduledAt.year == now.year &&
-          a.scheduledAt.month == now.month &&
-          a.scheduledAt.day == now.day) {
-        if (a.paymentMethod == 'cash') {
-          cash += a.consultationFee;
-        } else if (a.paymentMethod == 'upi') {
-          upi += a.consultationFee;
-        } else if (a.paymentMethod == 'card') {
-          card += a.consultationFee;
-        }
-      }
-    }
-
-    final total = cash + upi + card;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              'Revenue Breakdown',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: cs.onSurface,
-              ),
-            ),
-            const Spacer(),
-            _TodayTotalBadge(total: total),
-          ],
-        ),
-        const SizedBox(height: 14),
-
-        // Visual Composition Bar
-        if (total > 0) ...[
-          _RevenueCompositionBar(
-              cash: cash, upi: upi, card: card, total: total),
-          const SizedBox(height: 16),
-        ],
-
-        Row(
-          children: [
-            Expanded(
-              child: _BreakdownCard(
-                title: 'Cash',
-                value: '₹${cash.toStringAsFixed(0)}',
-                icon: Icons.payments_rounded,
-                color: AppTheme.emerald,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _BreakdownCard(
-                title: 'UPI',
-                value: '₹${upi.toStringAsFixed(0)}',
-                icon: Icons.qr_code_rounded,
-                color: AppTheme.primary,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _BreakdownCard(
-                title: 'Card',
-                value: '₹${card.toStringAsFixed(0)}',
-                icon: Icons.credit_card_rounded,
-                color: AppTheme.accent,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _TodayTotalBadge extends StatelessWidget {
-  final double total;
-  const _TodayTotalBadge({required this.total});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppTheme.emerald, AppTheme.emeraldDark],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.emerald.withValues(alpha: 0.2),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'TODAY: ',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.8),
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
-            ),
-          ),
-          Text(
-            '₹${total.toStringAsFixed(0)}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BreakdownCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color color;
-
-  const _BreakdownCard({
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: cs.outline.withValues(alpha: 0.08),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: color, size: 16),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: cs.onSurface,
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 11,
-              color: cs.onSurface.withValues(alpha: 0.5),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickActionsCard extends StatelessWidget {
-  final ColorScheme cs;
-
-  const _QuickActionsCard({required this.cs});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: cs.outline.withValues(alpha: 0.08),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(7),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  Icons.bolt_rounded,
-                  color: AppTheme.primary,
-                  size: 16,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                'Quick Actions',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurface,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _ActionChip(
-                icon: Icons.point_of_sale_rounded,
-                label: 'New Sale',
-                color: AppTheme.primary,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const PosScreen()),
-                ),
-              ),
-              _ActionChip(
-                icon: Icons.warehouse_rounded,
-                label: 'Warehouse',
-                color: AppTheme.violet,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const WarehouseScreen()),
-                ),
-              ),
-              _ActionChip(
-                icon: Icons.receipt_long_rounded,
-                label: 'Sales',
-                color: AppTheme.accent,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SalesHistoryScreen()),
-                ),
-              ),
-              _ActionChip(
-                icon: Icons.settings_rounded,
-                label: 'Settings',
-                color: cs.onSurface.withValues(alpha: 0.5),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActionChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ActionChip({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: color.withValues(alpha: 0.15),
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: color, size: 16),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LowStockCard extends StatelessWidget {
-  final InventoryProvider inv;
-  final ColorScheme cs;
-
-  const _LowStockCard({required this.inv, required this.cs});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.warning.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.warning.withValues(alpha: 0.15),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(7),
-                decoration: BoxDecoration(
-                  color: AppTheme.warning.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  Icons.warning_amber_rounded,
-                  color: AppTheme.warning,
-                  size: 16,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                'Low Stock Alerts',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurface,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppTheme.danger.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${inv.lowStockCount}',
-                  style: TextStyle(
-                    color: AppTheme.danger,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          ...inv.medicines
-              .where((m) => m.isLowStock)
-              .take(5)
-              .map((m) => _LowStockItem(medicine: m)),
-        ],
-      ),
-    );
-  }
-}
-
-class _LowStockItem extends StatelessWidget {
-  final dynamic medicine;
-
-  const _LowStockItem({required this.medicine});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: AppTheme.warning.withValues(alpha: 0.1),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  medicine.name,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                    color: cs.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Store: ${medicine.storeStock} | Main: ${medicine.mainStock}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: cs.onSurface.withValues(alpha: 0.5),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppTheme.danger.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              'LOW',
-              style: TextStyle(
-                color: AppTheme.danger,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NearExpiryCard extends StatelessWidget {
-  final InventoryProvider inv;
-  final ColorScheme cs;
-
-  const _NearExpiryCard({required this.inv, required this.cs});
-
-  @override
-  Widget build(BuildContext context) {
-    if (inv.nearExpiryCount == 0) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.orange.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.orange.withValues(alpha: 0.15),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(7),
-                decoration: BoxDecoration(
-                  color: AppTheme.orange.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.timer_rounded,
-                  color: AppTheme.orange,
-                  size: 16,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                'Near Expiry Alerts',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurface,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppTheme.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${inv.nearExpiryCount}',
-                  style: const TextStyle(
-                    color: AppTheme.amberDark,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          ...inv.nearExpiryMedicines
-              .take(3)
-              .map((m) => _ExpiryItem(medicine: m, isExpired: false)),
-        ],
-      ),
-    );
-  }
-}
-
-class _ExpiredCard extends StatelessWidget {
-  final InventoryProvider inv;
-  final ColorScheme cs;
-
-  const _ExpiredCard({required this.inv, required this.cs});
-
-  @override
-  Widget build(BuildContext context) {
-    if (inv.expiredCount == 0) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.danger.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.danger.withValues(alpha: 0.15),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(7),
-                decoration: BoxDecoration(
-                  color: AppTheme.danger.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  Icons.event_busy_rounded,
-                  color: AppTheme.danger,
-                  size: 16,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                'Expired Items',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurface,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppTheme.danger.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${inv.expiredCount}',
-                  style: TextStyle(
-                    color: AppTheme.danger,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          ...inv.expiredMedicines
-              .take(3)
-              .map((m) => _ExpiryItem(medicine: m, isExpired: true)),
-        ],
-      ),
-    );
-  }
-}
-
-class _ExpiryItem extends StatelessWidget {
-  final dynamic medicine;
-  final bool isExpired;
-
-  const _ExpiryItem({required this.medicine, required this.isExpired});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final color = isExpired ? AppTheme.danger : AppTheme.orange;
-
-    // Get the earliest problematic date
-    final now = DateTime.now();
-    DateTime? displayDate;
-    if (isExpired) {
-      displayDate = medicine.batches
-          .firstWhere((b) => b.expiryDate.isBefore(now))
-          .expiryDate;
-    } else {
-      final threshold = now.add(const Duration(days: 90));
-      displayDate = medicine.batches
-          .firstWhere((b) =>
-              b.expiryDate.isAfter(now) && b.expiryDate.isBefore(threshold))
-          .expiryDate;
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: color.withValues(alpha: 0.1),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  medicine.name,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                    color: cs.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Exp: ${displayDate!.day}/${displayDate.month}/${displayDate.year}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: color,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              isExpired ? 'EXPIRED' : 'NEAR',
-              style: TextStyle(
-                color: color,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-String _getRangeLabel(SalesProvider sales) {
-  switch (sales.activeFilter) {
-    case SalesFilter.today:
-      return "Today's";
-    case SalesFilter.yesterday:
-      return "Yesterday's";
-    case SalesFilter.last7Days:
-      return "7 Days'";
-    case SalesFilter.allTime:
-      return "All-time";
-    case SalesFilter.custom:
-      return "Custom";
   }
 }
 
@@ -1291,15 +238,11 @@ class _SecurityStatusIndicator extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.all(4),
-            decoration: const BoxDecoration(
-              color: AppTheme.primary,
-              shape: BoxShape.circle,
-            ),
-            child:
-                const Icon(Icons.shield_rounded, color: Colors.white, size: 12),
+            decoration: const BoxDecoration(color: AppTheme.primary, shape: BoxShape.circle),
+            child: const Icon(Icons.shield_rounded, color: Colors.white, size: 12),
           ),
           const SizedBox(width: 10),
-          Text(
+          const Text(
             'SENTRY ACTIVE',
             style: TextStyle(
               fontSize: 10,
@@ -1310,7 +253,7 @@ class _SecurityStatusIndicator extends StatelessWidget {
           ),
           const Spacer(),
           Text(
-            'Anti-Backdate Protection Enabled',
+            'Anti-Backdate Protection Active',
             style: TextStyle(
               fontSize: 10,
               color: cs.onSurface.withValues(alpha: 0.4),
@@ -1323,59 +266,397 @@ class _SecurityStatusIndicator extends StatelessWidget {
   }
 }
 
-class _RevenueCompositionBar extends StatelessWidget {
-  final double cash;
-  final double upi;
-  final double card;
-  final double total;
+class _DateFilterBar extends StatelessWidget {
+  final SalesProvider sales;
+  final ColorScheme cs;
 
-  const _RevenueCompositionBar({
-    required this.cash,
-    required this.upi,
-    required this.card,
-    required this.total,
+  const _DateFilterBar({required this.sales, required this.cs});
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _CompactFilterChip(
+            label: 'Today',
+            isSelected: sales.activeFilter == SalesFilter.today,
+            onTap: () => sales.setFilter(SalesFilter.today),
+          ),
+          const SizedBox(width: 8),
+          _CompactFilterChip(
+            label: 'Yesterday',
+            isSelected: sales.activeFilter == SalesFilter.yesterday,
+            onTap: () => sales.setFilter(SalesFilter.yesterday),
+          ),
+          const SizedBox(width: 8),
+          _CompactFilterChip(
+            label: '7 Days',
+            isSelected: sales.activeFilter == SalesFilter.last7Days,
+            onTap: () => sales.setFilter(SalesFilter.last7Days),
+          ),
+          const SizedBox(width: 8),
+          _CompactFilterChip(
+            label: 'All Time',
+            isSelected: sales.activeFilter == SalesFilter.allTime,
+            onTap: () => sales.setFilter(SalesFilter.allTime),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactFilterChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _CompactFilterChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          height: 8,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(4),
-            color: Colors.grey.withValues(alpha: 0.1),
-          ),
-          child: Row(
-            children: [
-              if (cash > 0)
-                Expanded(
-                  flex: (cash / total * 100).round(),
-                  child: Container(color: AppTheme.emerald),
-                ),
-              if (upi > 0)
-                Expanded(
-                  flex: (upi / total * 100).round(),
-                  child: Container(color: AppTheme.primary),
-                ),
-              if (card > 0)
-                Expanded(
-                  flex: (card / total * 100).round(),
-                  child: Container(color: AppTheme.accent),
-                ),
-            ],
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: isSelected ? AppTheme.primary : AppTheme.primary.withValues(alpha: 0.2)),
+        ),
+        child: Text(
+          label.toUpperCase(),
+          style: TextStyle(
+            color: isSelected ? Colors.white : AppTheme.primary,
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
           ),
         ),
-        const SizedBox(height: 6),
+      ),
+    );
+  }
+}
+
+class _PrimaryStats extends StatelessWidget {
+  final SalesProvider sales;
+  final OpdProvider opd;
+  final InventoryProvider inv;
+  final String rangeLabel;
+
+  const _PrimaryStats({
+    required this.sales,
+    required this.opd,
+    required this.inv,
+    required this.rangeLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final double opdRev = opd.appointments
+        .where((a) =>
+            _isToday(a.scheduledAt) &&
+            a.status != kStatusCancelled &&
+            a.paymentMethod != 'pending')
+        .fold(0.0, (sum, a) => sum + (a.consultationFee));
+
+    final double productRev = sales.sales
+        .where((s) => _isToday(s.createdAt))
+        .fold(0.0, (sum, s) => sum + s.total);
+
+    final totalToday = opdRev + productRev;
+
+    return Column(
+      children: [
+        AppKpiCard(
+          label: 'Today\'s Revenue',
+          value: '₹${totalToday.toStringAsFixed(0)}',
+          icon: Icons.trending_up_rounded,
+          color: AppTheme.emerald,
+          subtitle: 'Combined Product Sales & OPD Fees',
+          width: double.infinity,
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: AppKpiCard(
+                label: 'Sales Count',
+                value: '${sales.sales.where((s) => _isToday(s.createdAt)).length}',
+                icon: Icons.shopping_bag_rounded,
+                color: AppTheme.teal,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: AppKpiCard(
+                label: 'OPD Today',
+                value: '${opd.todayQueue.length}',
+                icon: Icons.medical_services_rounded,
+                color: AppTheme.primary,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  bool _isToday(DateTime dt) {
+    final now = DateTime.now();
+    return dt.year == now.year && dt.month == now.month && dt.day == now.day;
+  }
+}
+
+class _FinancialPerformance extends StatelessWidget {
+  final SalesProvider sales;
+  final OpdProvider opd;
+
+  const _FinancialPerformance({required this.sales, required this.opd});
+
+  @override
+  Widget build(BuildContext context) {
+    final double productSales = sales.sales
+        .where((s) => _isToday(s.createdAt))
+        .fold(0.0, (sum, s) => sum + s.total);
+
+    final double opdRev = opd.appointments
+        .where((a) =>
+            _isToday(a.scheduledAt) &&
+            a.status != kStatusCancelled &&
+            a.paymentMethod != 'pending')
+        .fold(0.0, (sum, a) => sum + a.consultationFee);
+
+    final double total = productSales + opdRev;
+
+    // Payment mode breakdown - Fixed casing to match provider logic
+    double cash = 0, upi = 0, card = 0;
+    for (final s in sales.sales.where((s) => _isToday(s.createdAt))) {
+      final method = s.paymentMethod.toLowerCase();
+      if (method == 'mixed') {
+        cash += s.cashAmount;
+        upi += s.upiAmount;
+        card += s.cardAmount;
+      } else if (method == 'cash') cash += s.total;
+      else if (method == 'upi') upi += s.total;
+      else if (method == 'card') card += s.total;
+    }
+    for (final a in opd.appointments.where((a) => _isToday(a.scheduledAt) && a.status != kStatusCancelled)) {
+      final method = a.paymentMethod.toLowerCase();
+      if (method == 'cash') cash += a.consultationFee;
+      else if (method == 'upi') upi += a.consultationFee;
+      else if (method == 'card') card += a.consultationFee;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+        boxShadow: AppTheme.subtleShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _RevenueTotalBadge(total: total),
+              const SizedBox(width: 20),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'FINANCIAL PERFORMANCE',
+                      style: TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: AppTheme.primary),
+                    ),
+                    Text('Today\'s performance metrics',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+          Text('REVENUE SOURCE',
+              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: context.textMutedColor)),
+          const SizedBox(height: 16),
+          _SourceRow(label: 'Product Sales', amount: productSales, total: total > 0 ? total : 1, color: AppTheme.emerald),
+          const SizedBox(height: 16),
+          _SourceRow(label: 'OPD Consults', amount: opdRev, total: total > 0 ? total : 1, color: AppTheme.primary),
+          const SizedBox(height: 32),
+          Text('PAYMENT MODES',
+              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: context.textMutedColor)),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: _BreakdownMiniCard(label: 'Cash', value: cash, color: AppTheme.emerald, icon: Icons.payments_rounded)),
+              const SizedBox(width: 10),
+              Expanded(child: _BreakdownMiniCard(label: 'UPI', value: upi, color: AppTheme.primary, icon: Icons.qr_code_rounded)),
+              const SizedBox(width: 10),
+              Expanded(child: _BreakdownMiniCard(label: 'Card', value: card, color: AppTheme.purple, icon: Icons.credit_card_rounded)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _isToday(DateTime dt) {
+    final now = DateTime.now();
+    return dt.year == now.year && dt.month == now.month && dt.day == now.day;
+  }
+}
+
+class _SourceRow extends StatelessWidget {
+  final String label;
+  final double amount;
+  final double total;
+  final Color color;
+
+  const _SourceRow({required this.label, required this.amount, required this.total, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = (amount / total).clamp(0.0, 1.0);
+    return Column(
+      children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _CompLabel(
-                label: 'CASH', color: AppTheme.emerald, pct: cash / total),
-            _CompLabel(label: 'UPI', color: AppTheme.primary, pct: upi / total),
-            _CompLabel(
-                label: 'CARD', color: AppTheme.accent, pct: card / total),
+            Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            Text('₹${amount.toStringAsFixed(0)}',
+                style: TextStyle(fontWeight: FontWeight.w900, color: color, fontSize: 13)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: pct,
+            minHeight: 6,
+            backgroundColor: color.withValues(alpha: 0.1),
+            valueColor: AlwaysStoppedAnimation<Color>(color),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BreakdownMiniCard extends StatelessWidget {
+  final String label;
+  final double value;
+  final Color color;
+  final IconData icon;
+
+  const _BreakdownMiniCard({required this.label, required this.value, required this.color, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(height: 8),
+          Text('₹${value.toStringAsFixed(0)}',
+              style: TextStyle(fontWeight: FontWeight.w900, color: color, fontSize: 13)),
+          Text(label.toUpperCase(),
+              style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: color.withValues(alpha: 0.6))),
+        ],
+      ),
+    );
+  }
+}
+
+class _RevenueTotalBadge extends StatelessWidget {
+  final double total;
+  const _RevenueTotalBadge({required this.total});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [AppTheme.emerald, AppTheme.emeraldDark], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: AppTheme.emerald.withValues(alpha: 0.2), blurRadius: 8, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        children: [
+          const Text('TOTAL', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1)),
+          Text('₹${total.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickActionsCard extends StatelessWidget {
+  void _handleAction(BuildContext context, String label) {
+    Widget? target;
+    switch (label) {
+      case 'New POS':
+        target = PosAndroid();
+        break;
+      case 'Add Patient':
+        target = OpdQueueAndroid();
+        break;
+      case 'Stock List':
+        target = WarehouseAndroid();
+        break;
+      case 'Reports':
+        target = SalesHistoryAndroid();
+        break;
+      case 'Staff':
+        target = UserManagementAndroid();
+        break;
+      case 'Settings':
+        target = SettingsAndroid();
+        break;
+    }
+
+    if (target != null) {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => target!));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(left: 4, bottom: 16),
+          child: Text('QUICK ACTIONS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: AppTheme.primary)),
+        ),
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 3,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          children: [
+            _QuickActionItem(icon: Icons.add_shopping_cart_rounded, label: 'New POS', color: AppTheme.primary, onTap: () => _handleAction(context, 'New POS')),
+            _QuickActionItem(icon: Icons.person_add_alt_rounded, label: 'Add Patient', color: AppTheme.teal, onTap: () => _handleAction(context, 'Add Patient')),
+            _QuickActionItem(icon: Icons.inventory_2_rounded, label: 'Stock List', color: AppTheme.orange, onTap: () => _handleAction(context, 'Stock List')),
+            _QuickActionItem(icon: Icons.analytics_rounded, label: 'Reports', color: AppTheme.purple, onTap: () => _handleAction(context, 'Reports')),
+            _QuickActionItem(icon: Icons.security_rounded, label: 'Staff', color: AppTheme.indigo, onTap: () => _handleAction(context, 'Staff')),
+            _QuickActionItem(icon: Icons.settings_rounded, label: 'Settings', color: Colors.blueGrey, onTap: () => _handleAction(context, 'Settings')),
           ],
         ),
       ],
@@ -1383,34 +664,179 @@ class _RevenueCompositionBar extends StatelessWidget {
   }
 }
 
-class _CompLabel extends StatelessWidget {
+class _QuickActionItem extends StatelessWidget {
+  final IconData icon;
   final String label;
   final Color color;
-  final double pct;
-  const _CompLabel(
-      {required this.label, required this.color, required this.pct});
+  final VoidCallback onTap;
+
+  const _QuickActionItem({required this.icon, required this.label, required this.color, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    if (pct == 0) return const SizedBox.shrink();
-    return Row(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        decoration: BoxDecoration(
+          color: context.surfaceColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle), child: Icon(icon, color: color, size: 22)),
+            const SizedBox(height: 10),
+            Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700), textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InventoryAlertsSection extends StatelessWidget {
+  final InventoryProvider inv;
+  final ColorScheme cs;
+
+  const _InventoryAlertsSection({required this.inv, required this.cs});
+
+  @override
+  Widget build(BuildContext context) {
+    if (inv.lowStockCount == 0 && inv.nearExpiryCount == 0 && inv.expiredCount == 0) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: 4),
-        Text(
-          '$label ${(pct * 100).toStringAsFixed(0)}%',
-          style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.4)),
+        const Padding(
+          padding: EdgeInsets.only(left: 4, bottom: 16),
+          child: Text('INVENTORY HEALTH', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: AppTheme.primary)),
+        ),
+        _ExpandableHealthCard(
+          label: 'Low Stock',
+          count: inv.lowStockCount,
+          color: AppTheme.warning,
+          icon: Icons.warning_amber_rounded,
+          items: inv.medicines.where((m) => m.isLowStock).toList(),
+          subtitleBuilder: (m) => 'Store: ${m.storeStock} | Main: ${m.mainStock}',
+        ),
+        const SizedBox(height: 12),
+        _ExpandableHealthCard(
+          label: 'Near Expiry',
+          count: inv.nearExpiryCount,
+          color: AppTheme.orange,
+          icon: Icons.timer_rounded,
+          items: inv.nearExpiryMedicines,
+          subtitleBuilder: (m) {
+             final now = DateTime.now();
+             final threshold = now.add(const Duration(days: 90));
+             final b = m.batches.firstWhere((b) => b.expiryDate.isAfter(now) && b.expiryDate.isBefore(threshold));
+             return 'Exp: ${b.expiryDate.day}/${b.expiryDate.month}/${b.expiryDate.year}';
+          },
+        ),
+        const SizedBox(height: 12),
+        _ExpandableHealthCard(
+          label: 'Expired Items',
+          count: inv.expiredCount,
+          color: AppTheme.danger,
+          icon: Icons.event_busy_rounded,
+          items: inv.expiredMedicines,
+          subtitleBuilder: (m) {
+             final now = DateTime.now();
+             final b = m.batches.firstWhere((b) => b.expiryDate.isBefore(now));
+             return 'Expired: ${b.expiryDate.day}/${b.expiryDate.month}/${b.expiryDate.year}';
+          },
         ),
       ],
     );
+  }
+}
+
+class _ExpandableHealthCard extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+  final IconData icon;
+  final List<model.Medicine> items;
+  final String Function(model.Medicine) subtitleBuilder;
+
+  const _ExpandableHealthCard({
+    required this.label,
+    required this.count,
+    required this.color,
+    required this.icon,
+    required this.items,
+    required this.subtitleBuilder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (count == 0) return const SizedBox.shrink();
+
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: Container(
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.1)),
+        ),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          title: Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+          trailing: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
+            child: Text('$count', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
+          ),
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                children: items.take(10).map((m) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(m.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                            Text(subtitleBuilder(m), style: TextStyle(color: context.textMutedColor, fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
+                    ],
+                  ),
+                )).toList(),
+              ),
+            ),
+            if (items.length > 10)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text('And ${items.length - 10} more...', style: TextStyle(fontSize: 11, color: context.textMutedColor, fontStyle: FontStyle.italic)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _getRangeLabel(SalesProvider sales) {
+  switch (sales.activeFilter) {
+    case SalesFilter.today: return "Today's";
+    case SalesFilter.yesterday: return "Yesterday's";
+    case SalesFilter.last7Days: return "7 Days'";
+    case SalesFilter.allTime: return "All-time";
+    case SalesFilter.custom: return "Custom";
   }
 }

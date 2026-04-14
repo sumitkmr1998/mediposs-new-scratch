@@ -48,6 +48,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
   // Inventory
   bool _canViewInventory = false;
   bool _canEditInventory = false;
+  bool _canOverrideStock = false;
 
   // Warehouse
   bool _canViewWarehouse = false;
@@ -56,6 +57,8 @@ class _UserFormSheetState extends State<_UserFormSheet> {
   // POS
   bool _canAccessPOS = true;
   bool _canDiscountSales = false;
+  bool _canOverridePrice = false;
+  bool _canBulkDiscount = false;
 
   // Sales History
   bool _canViewSalesHistory = false;
@@ -66,6 +69,11 @@ class _UserFormSheetState extends State<_UserFormSheet> {
   bool _canAccessOPD = true;
   bool _canManageDoctors = false;
   bool _canViewOpdReports = false;
+  bool _canAccessMedicalRecords = false;
+
+  // Security & Data
+  bool _canViewPurchasePrice = false;
+  bool _canExportData = false;
 
   @override
   void initState() {
@@ -84,12 +92,15 @@ class _UserFormSheetState extends State<_UserFormSheet> {
 
       _canViewInventory = u.canViewInventory;
       _canEditInventory = u.canEditInventory;
+      _canOverrideStock = u.canOverrideStock;
 
       _canViewWarehouse = u.canViewWarehouse;
       _canTransferStock = u.canTransferStock;
 
       _canAccessPOS = u.canAccessPOS;
       _canDiscountSales = u.canDiscountSales;
+      _canOverridePrice = u.canOverridePrice;
+      _canBulkDiscount = u.canBulkDiscount;
 
       _canViewSalesHistory = u.canViewSalesHistory;
       _canVoidSales = u.canVoidSales;
@@ -98,7 +109,40 @@ class _UserFormSheetState extends State<_UserFormSheet> {
       _canAccessOPD = u.canAccessOPD;
       _canManageDoctors = u.canManageDoctors;
       _canViewOpdReports = u.canViewOpdReports;
+      _canAccessMedicalRecords = u.canAccessMedicalRecords;
+
+      _canViewPurchasePrice = u.canViewPurchasePrice;
+      _canExportData = u.canExportData;
     }
+  }
+
+  void _applyPreset(String preset) {
+    final tempUser = AppUser(name: '');
+    tempUser.applyPreset(preset);
+    setState(() {
+      _roleCtrl.text = tempUser.role;
+      _canAccessSettings = tempUser.canAccessSettings;
+      _canManageUsers = tempUser.canManageUsers;
+      _canViewDashboard = tempUser.canViewDashboard;
+      _canViewInventory = tempUser.canViewInventory;
+      _canEditInventory = tempUser.canEditInventory;
+      _canOverrideStock = tempUser.canOverrideStock;
+      _canViewWarehouse = tempUser.canViewWarehouse;
+      _canTransferStock = tempUser.canTransferStock;
+      _canAccessPOS = tempUser.canAccessPOS;
+      _canDiscountSales = tempUser.canDiscountSales;
+      _canOverridePrice = tempUser.canOverridePrice;
+      _canBulkDiscount = tempUser.canBulkDiscount;
+      _canViewSalesHistory = tempUser.canViewSalesHistory;
+      _canVoidSales = tempUser.canVoidSales;
+      _canProcessReturns = tempUser.canProcessReturns;
+      _canAccessOPD = tempUser.canAccessOPD;
+      _canManageDoctors = tempUser.canManageDoctors;
+      _canViewOpdReports = tempUser.canViewOpdReports;
+      _canAccessMedicalRecords = tempUser.canAccessMedicalRecords;
+      _canViewPurchasePrice = tempUser.canViewPurchasePrice;
+      _canExportData = tempUser.canExportData;
+    });
   }
 
   @override
@@ -125,12 +169,15 @@ class _UserFormSheetState extends State<_UserFormSheet> {
 
     u.canViewInventory = _canViewInventory;
     u.canEditInventory = _canEditInventory;
+    u.canOverrideStock = _canOverrideStock;
 
     u.canViewWarehouse = _canViewWarehouse;
     u.canTransferStock = _canTransferStock;
 
     u.canAccessPOS = _canAccessPOS;
     u.canDiscountSales = _canDiscountSales;
+    u.canOverridePrice = _canOverridePrice;
+    u.canBulkDiscount = _canBulkDiscount;
 
     u.canViewSalesHistory = _canViewSalesHistory;
     u.canVoidSales = _canVoidSales;
@@ -139,6 +186,10 @@ class _UserFormSheetState extends State<_UserFormSheet> {
     u.canAccessOPD = _canAccessOPD;
     u.canManageDoctors = _canManageDoctors;
     u.canViewOpdReports = _canViewOpdReports;
+    u.canAccessMedicalRecords = _canAccessMedicalRecords;
+
+    u.canViewPurchasePrice = _canViewPurchasePrice;
+    u.canExportData = _canExportData;
 
     context.read<AuthProvider>().addUser(u);
     Navigator.pop(context, true);
@@ -276,22 +327,36 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                 ),
               ),
               const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    isEdit ? 'Edit Staff' : 'Add New Staff',
-                    style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.primaryLight),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        isEdit ? 'Edit Staff' : 'Add New Staff',
+                        style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.primaryLight),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded),
-                    onPressed: () => Navigator.pop(context),
+                  const SizedBox(height: 12),
+                  // Role Presets
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _presetChip('CASHIER', Icons.point_of_sale_rounded, () => _applyPreset('Cashier')),
+                        _presetChip('PHARMACIST', Icons.medication_rounded, () => _applyPreset('Pharmacist')),
+                        _presetChip('DOCTOR', Icons.medical_services_rounded, () => _applyPreset('Doctor')),
+                        _presetChip('MANAGER', Icons.supervisor_account_rounded, () => _applyPreset('Manager')),
+                        _presetChip('ADMIN', Icons.admin_panel_settings_rounded, () => _applyPreset('Admin')),
+                      ],
+                    ),
                   ),
-                ],
-              ),
               const SizedBox(height: 16),
               Expanded(
                 child: SingleChildScrollView(
@@ -411,6 +476,11 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                                     _canEditInventory = v;
                                     if (v) _canViewInventory = true;
                                   })),
+                          _buildPermToggle(
+                              'Override Stock',
+                              'Can manually adjust stock counts (Auditing)',
+                              _canOverrideStock,
+                              (v) => setState(() => _canOverrideStock = v)),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -455,6 +525,16 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                                     _canDiscountSales = v;
                                     if (v) _canAccessPOS = true;
                                   })),
+                          _buildPermToggle(
+                              'Price Overrides',
+                              'Can change item price on the fly in POS',
+                              _canOverridePrice,
+                              (v) => setState(() => _canOverridePrice = v)),
+                          _buildPermToggle(
+                              'Bulk Discounts',
+                              'Can apply flat discounts to entire bill',
+                              _canBulkDiscount,
+                              (v) => setState(() => _canBulkDiscount = v)),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -521,6 +601,27 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                                     _canViewOpdReports = v;
                                     if (v) _canAccessOPD = true;
                                   })),
+                          _buildPermToggle(
+                              'Privacy: Medical Records',
+                              'Can view clinical history and prescriptions',
+                              _canAccessMedicalRecords,
+                              (v) => setState(() => _canAccessMedicalRecords = v)),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      _buildFormSection(
+                        title: 'Security & Financial Data',
+                        children: [
+                          _buildPermToggle(
+                              'View Purchase Price',
+                              'Can see cost prices of medicines (Restricted)',
+                              _canViewPurchasePrice,
+                              (v) => setState(() => _canViewPurchasePrice = v)),
+                          _buildPermToggle(
+                              'Export Data',
+                              'Can export system records to Excel/CSV',
+                              _canExportData,
+                              (v) => setState(() => _canExportData = v)),
                         ],
                       ),
                       const SizedBox(height: 48),
@@ -548,6 +649,22 @@ class _UserFormSheetState extends State<_UserFormSheet> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _presetChip(String label, IconData icon, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8, bottom: 8),
+      child: ActionChip(
+        avatar: Icon(icon, size: 14, color: AppTheme.primary),
+        label: Text(label,
+            style: const TextStyle(
+                fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+        onPressed: onTap,
+        backgroundColor: AppTheme.primary.withValues(alpha: 0.05),
+        side: BorderSide(color: AppTheme.primary.withValues(alpha: 0.1)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
