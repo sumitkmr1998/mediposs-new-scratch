@@ -118,7 +118,9 @@ class PrescriptionProvider extends ChangeNotifier {
     // Notify PatientProvider to refresh Gallery if context is available
     if (context != null && context.mounted) {
       try {
-        context.read<PatientProvider>().load(); // refreshes and calls notifyListeners
+        context
+            .read<PatientProvider>()
+            .load(); // refreshes and calls notifyListeners
       } catch (e) {
         debugPrint('Note: PatientProvider not found in current context');
       }
@@ -203,7 +205,8 @@ class PrescriptionProvider extends ChangeNotifier {
     load();
   }
 
-  void markDispensedByAppointment(int appointmentId, {SyncService? syncService}) {
+  void markDispensedByAppointment(int appointmentId,
+      {SyncService? syncService}) {
     final p = getPrescriptionForAppointment(appointmentId);
     if (p != null) {
       markDispensed(p.id, syncService: syncService);

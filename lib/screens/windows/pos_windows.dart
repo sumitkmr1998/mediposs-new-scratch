@@ -174,7 +174,8 @@ class _PosWindowsState extends State<PosWindows> {
           }
         },
         const SingleActivator(LogicalKeyboardKey.f4): () => _handleHoldCart(),
-        const SingleActivator(LogicalKeyboardKey.f8): () => _showPendingCartsDialog(),
+        const SingleActivator(LogicalKeyboardKey.f8): () =>
+            _showPendingCartsDialog(),
       },
       child: Focus(
         autofocus: true,
@@ -241,7 +242,9 @@ class _PosWindowsState extends State<PosWindows> {
                 IconButton(
                   icon: Icon(
                     Icons.pause_circle_outline,
-                    color: cart.isReturnMode ? Colors.white : AppTheme.primaryLight,
+                    color: cart.isReturnMode
+                        ? Colors.white
+                        : AppTheme.primaryLight,
                   ),
                   tooltip: 'Hold Cart [F4]',
                   onPressed: _handleHoldCart,
@@ -252,7 +255,9 @@ class _PosWindowsState extends State<PosWindows> {
                 child: IconButton(
                   icon: Icon(
                     Icons.history_outlined,
-                    color: cart.isReturnMode ? Colors.white : AppTheme.primaryLight,
+                    color: cart.isReturnMode
+                        ? Colors.white
+                        : AppTheme.primaryLight,
                   ),
                   tooltip: 'Pending Carts [F8]',
                   onPressed: _showPendingCartsDialog,
@@ -1110,8 +1115,7 @@ class _MedicineCard extends StatelessWidget {
               if (medicine.activeBatch != null) ...[
                 Row(
                   children: [
-                    Icon(Icons.layers, 
-                        size: 10, color: context.textMutedColor),
+                    Icon(Icons.layers, size: 10, color: context.textMutedColor),
                     const SizedBox(width: 4),
                     Text(
                       'Batch: ${medicine.activeBatch!.batchNo}',
@@ -1124,8 +1128,10 @@ class _MedicineCard extends StatelessWidget {
                 ),
                 Row(
                   children: [
-                    Icon(Icons.event, 
-                        size: 10, color: medicine.activeBatch!.expiryDate.isBefore(DateTime.now().add(const Duration(days: 90)))
+                    Icon(Icons.event,
+                        size: 10,
+                        color: medicine.activeBatch!.expiryDate.isBefore(
+                                DateTime.now().add(const Duration(days: 90)))
                             ? AppTheme.danger
                             : context.textMutedColor),
                     const SizedBox(width: 4),
@@ -1133,10 +1139,12 @@ class _MedicineCard extends StatelessWidget {
                       'Exp: ${medicine.activeBatch!.expiryDate.day}/${medicine.activeBatch!.expiryDate.month}/${medicine.activeBatch!.expiryDate.year}',
                       style: TextStyle(
                         fontSize: 10,
-                        color: medicine.activeBatch!.expiryDate.isBefore(DateTime.now().add(const Duration(days: 90)))
+                        color: medicine.activeBatch!.expiryDate.isBefore(
+                                DateTime.now().add(const Duration(days: 90)))
                             ? AppTheme.danger
                             : context.textMutedColor,
-                        fontWeight: medicine.activeBatch!.expiryDate.isBefore(DateTime.now().add(const Duration(days: 90)))
+                        fontWeight: medicine.activeBatch!.expiryDate.isBefore(
+                                DateTime.now().add(const Duration(days: 90)))
                             ? FontWeight.bold
                             : FontWeight.normal,
                       ),
@@ -1405,12 +1413,14 @@ class _CartPanel extends StatelessWidget {
                           height: 42,
                           margin: const EdgeInsets.symmetric(vertical: 2),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).brightness == Brightness.dark
+                            color: Theme.of(context).brightness ==
+                                    Brightness.dark
                                 ? AppTheme.primary.withValues(alpha: 0.15)
                                 : AppTheme.primaryLight.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: AppTheme.primaryLight.withValues(alpha: 0.3),
+                              color:
+                                  AppTheme.primaryLight.withValues(alpha: 0.3),
                               width: 1.5,
                             ),
                           ),
@@ -1426,7 +1436,8 @@ class _CartPanel extends StatelessWidget {
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
-                              color: Theme.of(context).brightness == Brightness.dark
+                              color: Theme.of(context).brightness ==
+                                      Brightness.dark
                                   ? AppTheme.primaryLight
                                   : AppTheme.primary,
                             ),

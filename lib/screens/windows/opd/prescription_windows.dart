@@ -9,9 +9,16 @@ import '../../../shared/models/prescription.dart';
 import '../../../shared/providers/prescription_provider.dart';
 import '../../../shared/providers/inventory_provider.dart';
 import '../../../shared/providers/template_provider.dart';
+import '../../../shared/providers/patient_provider.dart';
 import '../../../shared/services/sync_service.dart';
 import '../../../theme/app_theme.dart';
+import 'patient_details_windows.dart';
 import '../../../widgets/windows_camera_dialog.dart';
+import '../../../widgets/phone_camera_dialog.dart';
+import '../../../shared/services/local_server_service.dart';
+import '../../../shared/services/objectbox_service.dart';
+import '../../../../shared/models/patient.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 class PrescriptionWindows extends StatefulWidget {
   final Appointment appointment;
@@ -23,6 +30,9 @@ class PrescriptionWindows extends StatefulWidget {
 }
 
 class _PrescriptionWindowsState extends State<PrescriptionWindows> {
+  // Session-based draft system: persists data even if navigating away and back
+  static final Map<int, Map<String, dynamic>> _sessionDrafts = {};
+
   final _diagnosisCtrl = TextEditingController();
   final _complaintsCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
@@ -53,6 +63,26 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // 1. Check if a session draft exists for this appointment
+      if (_sessionDrafts.containsKey(widget.appointment.id)) {
+        final draft = _sessionDrafts[widget.appointment.id]!;
+        _diagnosisCtrl.text = draft['diagnosis'] ?? '';
+        _complaintsCtrl.text = draft['complaints'] ?? '';
+        _notesCtrl.text = draft['notes'] ?? '';
+        _bpCtrl.text = draft['bp'] ?? '';
+        _weightCtrl.text = draft['weight'] ?? '';
+        _tempCtrl.text = draft['temp'] ?? '';
+        _spo2Ctrl.text = draft['spo2'] ?? '';
+        _pulseCtrl.text = draft['pulse'] ?? '';
+        setState(() {
+          _items = draft['items'] ?? [];
+          _labTests = draft['labTests'] ?? [];
+          _imagePaths.addAll(draft['imagePaths'] ?? []);
+        });
+        return;
+      }
+
+      // 2. If no draft, check for existing saved prescription in DB
       final pProvider = context.read<PrescriptionProvider>();
       final existing =
           pProvider.getPrescriptionForAppointment(widget.appointment.id);
@@ -75,8 +105,25 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
     });
   }
 
+  void _updateDraft() {
+    _sessionDrafts[widget.appointment.id] = {
+      'diagnosis': _diagnosisCtrl.text,
+      'complaints': _complaintsCtrl.text,
+      'notes': _notesCtrl.text,
+      'bp': _bpCtrl.text,
+      'weight': _weightCtrl.text,
+      'temp': _tempCtrl.text,
+      'spo2': _spo2Ctrl.text,
+      'pulse': _pulseCtrl.text,
+      'items': _items,
+      'labTests': _labTests,
+      'imagePaths': _imagePaths,
+    };
+  }
+
   @override
   void dispose() {
+    _updateDraft(); // Save draft before disposal
     _diagnosisCtrl.dispose();
     _complaintsCtrl.dispose();
     _notesCtrl.dispose();
@@ -97,102 +144,162 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    final patient =
+        context.watch<PatientProvider>().getById(widget.appointment.patientId);
+
     return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Prescription — Token #${widget.appointment.tokenNumber}'),
-            Text(
-              '${widget.appointment.patientName}  •  Dr. ${widget.appointment.doctorName}',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            onPressed: () => _showImportPreviousDialog(context),
-            icon: const Icon(Icons.history_rounded, size: 20),
-            tooltip: 'Import Previous',
-            style: IconButton.styleFrom(
-              foregroundColor: context.textMutedColor,
-            ),
-          ),
-          IconButton(
-            onPressed: () => _loadTemplateDialog(context),
-            icon: const Icon(Icons.auto_stories_outlined, size: 20),
-            tooltip: 'Templates',
-            style: IconButton.styleFrom(
-              foregroundColor: context.textMutedColor,
-            ),
-          ),
-          IconButton(
-            onPressed: () => _saveAsTemplateDialog(context),
-            icon: const Icon(Icons.bookmark_add_outlined, size: 20),
-            tooltip: 'Save Template',
-            style: IconButton.styleFrom(
-              foregroundColor: context.textMutedColor,
-            ),
-          ),
-          const SizedBox(width: 4),
+      body: Column(
+        children: [
+          // ── Premium Hero Header (Matching Patient Details style) ──
           Container(
-            width: 1,
-            height: 28,
-            color: context.borderColor.withValues(alpha: 0.5),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppTheme.primary, AppTheme.primaryLight],
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Color(0xFF0A5D5F),
+                  AppTheme.primary,
+                  AppTheme.primaryLight
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.primary.withValues(alpha: 0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
             ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(24),
-                onTap: _saving ? null : _save,
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.save_outlined,
-                          size: 18, color: Colors.white),
-                      const SizedBox(width: 8),
-                      Text(
-                        _saving ? 'Saving...' : 'Save & Send',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.arrow_back_rounded,
+                            color: Colors.white, size: 20),
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    const SizedBox(width: 12),
+                    Container(
+                      width: 54,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.4),
+                            width: 2.5),
+                      ),
+                      child: Center(
+                        child: Text(
+                          patient?.name.isNotEmpty == true
+                              ? patient!.name[0].toUpperCase()
+                              : '?',
+                          style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Text(widget.appointment.patientName,
+                                  style: const TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                      letterSpacing: -0.5)),
+                              const SizedBox(width: 12),
+                              _HeaderMiniBadge(
+                                text: 'Token #${widget.appointment.tokenNumber}',
+                                color: Colors.orangeAccent,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [
+                              _HeroBadge(
+                                  text: patient?.uhid ?? widget.appointment.patientId.toString(),
+                                  icon: Icons.badge_outlined),
+                              if (patient != null) ...[
+                                _HeroBadge(
+                                    text: '${patient.ageYears} yrs / ${patient.gender}',
+                                    icon: Icons.person_search_outlined),
+                              ],
+                              _HeroBadge(
+                                  text: 'Dr. ${widget.appointment.doctorName}',
+                                  icon: Icons.medical_services_outlined),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Action Buttons (Integrated into Header)
+                    Row(
+                      children: [
+                        _HeaderActionBtn(
+                          icon: Icons.history_rounded,
+                          tooltip: 'Import Previous',
+                          onTap: () => _showImportPreviousDialog(context),
+                        ),
+                        const SizedBox(width: 8),
+                        _HeaderActionBtn(
+                          icon: Icons.auto_stories_outlined,
+                          tooltip: 'Templates',
+                          onTap: () => _loadTemplateDialog(context),
+                        ),
+                        const SizedBox(width: 8),
+                        _HeaderActionBtn(
+                          icon: Icons.contact_page_outlined,
+                          tooltip: 'View History',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => PatientDetailsWindows(
+                                  patientId: widget.appointment.patientId,
+                                  fromAppointmentId: widget.appointment.id,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        _HeaderActionBtn(
+                          icon: Icons.bookmark_add_outlined,
+                          tooltip: 'Save Template',
+                          onTap: () => _saveAsTemplateDialog(context),
+                        ),
+                        const SizedBox(width: 12),
+                        Container(width: 1.5, height: 32, color: Colors.white24),
+                        const SizedBox(width: 12),
+                        _SaveButtonUI(saving: _saving, onTap: _save),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 16),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
             // ── Vitals Section ──────────────────────────
             _buildCard(
               isDark: isDark,
@@ -533,6 +640,9 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
           ],
         ),
       ),
+    ),
+  ],
+),
     );
   }
 
@@ -572,12 +682,63 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
 
   Future<void> _pickImage(ImageSource source) async {
     if (source == ImageSource.camera && Platform.isWindows) {
-      final String? path = await showDialog<String>(
+      // Show menu to choose between Windows Camera (Webcam) or Phone Camera
+      final result = await showMenu<String>(
         context: context,
-        builder: (ctx) => const WindowsCameraDialog(),
+        position:
+            const RelativeRect.fromLTRB(100, 100, 100, 100), // Approximate
+        items: [
+          PopupMenuItem(
+            value: 'webcam',
+            child: Row(
+              children: [
+                Icon(LucideIcons.camera, size: 18),
+                SizedBox(width: 12),
+                Text('Use Web Camera'),
+              ],
+            ),
+          ),
+          PopupMenuItem(
+            value: 'phone',
+            child: Row(
+              children: [
+                Icon(LucideIcons.smartphone, size: 18),
+                SizedBox(width: 12),
+                Text('Use Phone Camera'),
+              ],
+            ),
+          ),
+        ],
       );
-      if (path != null) {
-        setState(() => _imagePaths.add(path));
+
+      if (result == 'webcam') {
+        final path = await showDialog<String>(
+          context: context,
+          builder: (ctx) => const WindowsCameraDialog(),
+        );
+        if (path != null) setState(() => _imagePaths.add(path));
+      } else if (result == 'phone') {
+        // Resolve UHID from Patient box
+        final patient = ObjectBoxService.instance.patientBox
+            .get(widget.appointment.patientId);
+        final uhid = patient?.uhid ?? 'UNKNOWN';
+
+        final receivedPath = await showDialog<String>(
+          context: context,
+          builder: (ctx) => PhoneCameraDialog(
+            patientUhid: uhid,
+            patientName: widget.appointment.patientName,
+          ),
+        );
+        if (receivedPath != null) {
+          if (mounted) {
+            setState(() {
+              if (!_imagePaths.contains(receivedPath)) {
+                _imagePaths.add(receivedPath);
+              }
+            });
+          }
+        }
       }
       return;
     }
@@ -617,6 +778,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
             context: context,
           );
 
+      _sessionDrafts.remove(widget.appointment.id);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Prescription saved! Patient moved to Pharmacy status.'),
@@ -1622,6 +1784,133 @@ class _UploadButton extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Supportive Header Widgets ──────────────────────────────────────────────────
+
+class _HeroBadge extends StatelessWidget {
+  final String text;
+  final IconData icon;
+  const _HeroBadge({required this.text, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: Colors.white70),
+          const SizedBox(width: 6),
+          Text(text,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeaderMiniBadge extends StatelessWidget {
+  final String text;
+  final Color color;
+  const _HeaderMiniBadge({required this.text, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Text(text,
+          style: TextStyle(
+              color: color, fontSize: 10, fontWeight: FontWeight.w800)),
+    );
+  }
+}
+
+class _HeaderActionBtn extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  const _HeaderActionBtn(
+      {required this.icon, required this.tooltip, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: onTap,
+      tooltip: tooltip,
+      icon: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, color: Colors.white, size: 18),
+      ),
+    );
+  }
+}
+
+class _SaveButtonUI extends StatelessWidget {
+  final bool saving;
+  final VoidCallback onTap;
+  const _SaveButtonUI({required this.saving, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black26, blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: saving ? null : onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (saving)
+                  const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: AppTheme.primary))
+                else
+                  const Icon(Icons.check_circle_outline,
+                      color: AppTheme.primary, size: 18),
+                const SizedBox(width: 10),
+                Text(saving ? 'SAVING...' : 'SAVE & PRINT',
+                    style: const TextStyle(
+                        color: AppTheme.primary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13)),
+              ],
+            ),
+          ),
         ),
       ),
     );

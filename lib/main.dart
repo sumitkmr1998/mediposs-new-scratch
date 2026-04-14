@@ -21,12 +21,16 @@ import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'shared/services/local_server_service.dart';
 import 'shared/services/discovery_service.dart';
+import 'shared/services/global_navigation_service.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Set high refresh rate for Android
+  // 1. Initialize DB FIRST (so settings are available)
+  await ObjectBoxService.init();
+
+  // 2. Set high refresh rate for Android
   if (defaultTargetPlatform == TargetPlatform.android) {
     try {
       final preferredRate = ObjectBoxService.instance.settings.preferredRefreshRate;
@@ -45,22 +49,19 @@ void main() async {
     }
   }
 
-  // 1. Initialize DB
-  await ObjectBoxService.init();
-
-  // 2. Setup Base Providers
+  // 3. Setup Base Providers
   final authProvider = AuthProvider();
   final inventoryProvider = InventoryProvider();
   final salesProvider = SalesProvider();
   final warehouseProvider = WarehouseProvider(inventoryProvider);
   final prescriptionProvider = PrescriptionProvider();
 
-  // 3. OPD Providers
+  // 4. OPD Providers
   final patientProvider = PatientProvider();
   final opdProvider = OpdProvider();
   final templateProvider = TemplateProvider();
 
-  // 4. Cart Provider (Depends on inventory, sales, prescription, and opd)
+  // 5. Cart Provider
   final cartProvider = CartProvider(
       inventoryProvider, salesProvider, prescriptionProvider, opdProvider);
 
@@ -74,9 +75,18 @@ void main() async {
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
   if (isMobile) {
-    await syncService.tryAutoConnect();
+    final connected = await syncService.tryAutoConnect();
+    if (connected && syncService.hubIp != null) {
+      wsService.connect(syncService.hubIp!);
+      // Global listener for automatic pop-ups
+      wsService.eventStream.listen((msg) {
+        if (msg['event'] == 'remote_camera_trigger') {
+          GlobalNavigationService.handleRemoteCameraTrigger(msg);
+        }
+      });
+    }
   } else if (Platform.isWindows) {
-    // Start Hub server immediately on Windows launch (pre-login)
+    // Start Hub server immediately on Windows launch
     await LocalServerService.instance.start();
     await DiscoveryService.startAdvertising(
         ObjectBoxService.instance.settings.serverPort);
@@ -120,6 +130,7 @@ class MediPossApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final settingsProvider = context.watch<SettingsProvider>();
     return MaterialApp(
+      navigatorKey: GlobalNavigationService.navigatorKey,
       title: 'MediPoss',
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
@@ -127,7 +138,6 @@ class MediPossApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       home: Consumer2<AuthProvider, SyncService>(
         builder: (ctx, auth, sync, _) {
-          // If we are a mobile app (companion), we must connect to a Hub first.
           final isMobile = !kIsWeb &&
               (defaultTargetPlatform == TargetPlatform.android ||
                   defaultTargetPlatform == TargetPlatform.iOS);

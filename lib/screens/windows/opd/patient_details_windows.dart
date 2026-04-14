@@ -22,7 +22,13 @@ import '../../opd/prescription_screen.dart';
 
 class PatientDetailsWindows extends StatefulWidget {
   final int patientId;
-  const PatientDetailsWindows({super.key, required this.patientId});
+  final int? fromAppointmentId;
+
+  const PatientDetailsWindows({
+    super.key,
+    required this.patientId,
+    this.fromAppointmentId,
+  });
 
   @override
   State<PatientDetailsWindows> createState() => _PatientDetailsWindowsState();
@@ -250,6 +256,7 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
                                 : null,
                             trailing: _AddPrescriptionBtn(
                               onTap: () => _addPrescription(context, patient),
+                              isResume: widget.fromAppointmentId != null,
                             ),
                             child: _PrescriptionsContent(
                               prescriptions: prescriptions,
@@ -401,6 +408,13 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
             a.status == kStatusWithDoctor ||
             a.status == kStatusPharmacy)).firstOrNull;
 
+    // 1.5. If we came from a prescription page and this is the same appointment
+    // Just go back instead of pushing a new screen
+    if (activeAppt != null && activeAppt.id == widget.fromAppointmentId) {
+      if (context.mounted) Navigator.pop(context);
+      return;
+    }
+
     if (activeAppt == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -427,7 +441,8 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
 
 class _AddPrescriptionBtn extends StatelessWidget {
   final VoidCallback onTap;
-  const _AddPrescriptionBtn({required this.onTap});
+  final bool isResume;
+  const _AddPrescriptionBtn({required this.onTap, this.isResume = false});
 
   @override
   Widget build(BuildContext context) {
@@ -445,9 +460,9 @@ class _AddPrescriptionBtn extends StatelessWidget {
               const Icon(Icons.add_rounded,
                   size: 18, color: AppTheme.primaryLight),
               const SizedBox(width: 6),
-              const Text(
-                'Add',
-                style: TextStyle(
+              Text(
+                isResume ? 'Resume' : 'Add',
+                style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.primaryLight,

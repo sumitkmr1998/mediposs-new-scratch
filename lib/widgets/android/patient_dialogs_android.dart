@@ -49,6 +49,7 @@ class AndroidPatientDialogs {
       {required Patient patient}) {
     return showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: context.surfaceColor,
       shape: const RoundedRectangleBorder(
@@ -578,10 +579,11 @@ class _BookAppointmentSheetState extends State<_BookAppointmentSheet> {
         color: context.surfaceColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
           // Drag handle
           Center(
             child: Container(
@@ -813,6 +815,7 @@ class _BookAppointmentSheetState extends State<_BookAppointmentSheet> {
           const SizedBox(height: 8),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }

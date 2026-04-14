@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../shared/services/sync_service.dart';
+import '../../shared/services/global_navigation_service.dart';
 import '../../theme/app_theme.dart';
 import '../../shared/services/discovery_service.dart';
+import 'qr_scanner_screen.dart';
+import 'opd/remote_camera_screen_android.dart';
+import 'dart:convert';
 
 class ConnectionAndroid extends StatefulWidget {
   const ConnectionAndroid({super.key});
@@ -16,6 +20,48 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
   bool _testing = false;
   bool? _reachable;
   String? _errorMsg;
+
+  Future<void> _scanQr() async {
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const QrScannerScreen()),
+    );
+
+    if (result != null && mounted) {
+      try {
+        final data = jsonDecode(result) as Map<String, dynamic>;
+        if (data['type'] == 'remote_camera') {
+          final hubIp = data['hubIp'];
+          final patientUhid = data['patientUhid'];
+          final patientName = data['patientName'];
+
+          if (hubIp != null) {
+            _ipCtrl.text = hubIp;
+            await _connect();
+            
+            if (mounted && context.read<SyncService>().isConnected) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => RemoteCameraScreenAndroid(
+                    patientUhid: patientUhid,
+                    patientName: patientName,
+                    hubIp: hubIp,
+                  ),
+                ),
+              );
+            }
+          }
+        } else {
+          // Maybe it's just the IP?
+          _ipCtrl.text = result;
+        }
+      } catch (e) {
+        // Fallback: treat raw string as IP
+        _ipCtrl.text = result;
+      }
+    }
+  }
 
   Future<void> _autoDetect() async {
     setState(() {
@@ -86,6 +132,15 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
           _isConnecting = false;
         });
       } else {
+        // Start WebSocket for real-time triggers/sync
+        final wsService = context.read<WebSocketService>();
+        wsService.connect(sync.hubIp!);
+        wsService.eventStream.listen((msg) {
+          if (msg['event'] == 'remote_camera_trigger') {
+            GlobalNavigationService.handleRemoteCameraTrigger(msg);
+          }
+        });
+
         // Just pull users for the Login Screen
         await sync.pullUsers();
         if (mounted) {
@@ -138,6 +193,19 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
                   ),
                 ),
                 const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: _testing ? null : _scanQr,
+                  icon: const Icon(Icons.qr_code_scanner),
+                  label: const Text('Scan Hub QR'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 50),
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 OutlinedButton.icon(
                   onPressed: _testing ? null : _autoDetect,
                   icon: const Icon(Icons.search),

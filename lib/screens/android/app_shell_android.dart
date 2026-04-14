@@ -16,17 +16,18 @@ import '../pos_screen.dart';
 import '../warehouse_screen.dart';
 import '../sales_history_screen.dart';
 import '../settings_screen.dart';
-import '../connection_screen.dart';
 import '../user_management_screen.dart';
 import '../opd/opd_queue_screen.dart';
 import '../opd/patient_list_screen.dart';
 import '../opd/doctor_list_screen.dart';
 import '../opd/opd_report_screen.dart';
+import '../connection_screen.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/opd_provider.dart';
 import '../../shared/providers/prescription_provider.dart';
 import '../../shared/providers/template_provider.dart';
 import '../../shared/widgets/interactive_hover.dart';
+import 'opd/remote_camera_screen_android.dart';
 
 class AppShellAndroid extends StatefulWidget {
   const AppShellAndroid({super.key});
@@ -262,7 +263,7 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
                   onConnectTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                          builder: (_) => const ConnectionScreen())),
+                          builder: (_) => ConnectionScreen())),
                 ),
                 Expanded(child: _screenForId(currentDestId)),
               ],

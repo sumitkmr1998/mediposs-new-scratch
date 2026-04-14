@@ -1174,6 +1174,18 @@ class WebSocketService extends ChangeNotifier {
                 body: msg['medicineName'] ??
                     'One or more items are low in stock.',
               );
+            } else if (msg['event'] == 'remote_camera_trigger') {
+              NotificationService.instance.showNotification(
+                id: 2001,
+                title: 'Remote Camera Requested',
+                body: 'Doctor needs a photo of ${msg['patientName'] ?? 'Patient'}. Tap to open camera.',
+                payload: jsonEncode({
+                  'type': 'remote_camera',
+                  'patientUhid': msg['patientUhid'],
+                  'patientName': msg['patientName'],
+                  'hubIp': msg['hubIp'],
+                }),
+              );
             }
 
             notifyListeners();

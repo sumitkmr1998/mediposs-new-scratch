@@ -1073,8 +1073,8 @@ class LocalServerService {
         ObjectBoxService.instance.patientImageBox.put(pImage);
       }
 
-      broadcast({'event': 'sync_received'});
-      _incomingDataController.add('patient_photos');
+      broadcast({'event': 'photo_received', 'path': savedPath});
+      _incomingDataController.add('patient_photos:$savedPath');
 
       return Response.ok(
         jsonEncode({'status': 'success'}),
