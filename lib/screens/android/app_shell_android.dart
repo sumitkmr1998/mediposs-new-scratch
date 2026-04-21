@@ -76,14 +76,6 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
           label: 'Sales'));
     }
 
-    if (auth.canManageUsers) {
-      dests.add(const _Dest(
-          id: 'staff',
-          icon: Icons.people_outline,
-          selectedIcon: Icons.people,
-          label: 'Staff'));
-    }
-
     // OPD Section
     if (auth.canAccessOPD) {
       dests.add(const _Dest(
@@ -96,11 +88,6 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
           icon: Icons.people_alt_outlined,
           selectedIcon: Icons.people_alt,
           label: 'Patients'));
-      dests.add(const _Dest(
-          id: 'doctors',
-          icon: Icons.medical_services_outlined,
-          selectedIcon: Icons.medical_services,
-          label: 'Doctors'));
     }
 
     if (auth.canViewOpdReports) {

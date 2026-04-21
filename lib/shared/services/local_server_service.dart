@@ -78,6 +78,9 @@ class LocalServerService {
     router.get('/api/patient-photos', _withAuth(_patientPhotosGetHandler));
     router.post(
         '/api/patient-photos/push', _withAuth(_patientPhotosPushHandler));
+    router.post('/api/settings/push', _withAuth(_settingsPushHandler));
+    router.get('/api/settings', _withAuth(_settingsGetHandler));
+    router.post('/api/users/push', _withAuth(_usersPushHandler));
     router.post('/api/sync', _withAuth(_syncHandler));
 
     // ------ WebSocket ------
@@ -172,6 +175,66 @@ class LocalServerService {
       jsonEncode({'data': json, 'count': json.length}),
       headers: {'content-type': 'application/json'},
     );
+  }
+
+  Future<Response> _usersPushHandler(Request req) async {
+    try {
+      final item = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      final box = ObjectBoxService.instance.userBox;
+      final name = item['name'] as String? ?? '';
+      
+      if (name.isEmpty) {
+        return Response.badRequest(body: jsonEncode({'error': 'Name is required'}));
+      }
+
+      final existing = box.query(AppUser_.name.equals(name)).build().findFirst();
+      if (existing != null) {
+        final u = AppUser.fromJson(item);
+        u.id = existing.id;
+        box.put(u);
+      } else {
+        final u = AppUser.fromJson(item);
+        u.id = 0;
+        box.put(u);
+      }
+
+      broadcast({'event': 'users_updated'});
+      _incomingDataController.add('users');
+      return Response.ok(jsonEncode({'success': true}));
+    } catch (e) {
+      return Response.internalServerError(body: jsonEncode({'error': e.toString()}));
+    }
+  }
+
+  Response _settingsGetHandler(Request req) {
+    final settings = ObjectBoxService.instance.settings;
+    return Response.ok(
+      jsonEncode(settings.toJson()),
+      headers: {'content-type': 'application/json'},
+    );
+  }
+
+  Future<Response> _settingsPushHandler(Request req) async {
+    try {
+      final item = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      final box = ObjectBoxService.instance.settingsBox;
+      final current = ObjectBoxService.instance.settings;
+      
+      final updated = AppSettings.fromJson(item);
+      updated.id = current.id;
+      // Do not overwrite hub-specific fields if pushed from companion
+      updated.hubIp = current.hubIp; 
+      updated.serverPort = current.serverPort;
+      updated.jwtSecret = current.jwtSecret;
+
+      box.put(updated);
+      
+      broadcast({'event': 'settings_updated'});
+      _incomingDataController.add('settings');
+      return Response.ok(jsonEncode({'success': true}));
+    } catch (e) {
+      return Response.internalServerError(body: jsonEncode({'error': e.toString()}));
+    }
   }
 
   Response _medicinesGetHandler(Request req) {

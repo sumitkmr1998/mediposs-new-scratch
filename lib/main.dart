@@ -82,6 +82,10 @@ void main() async {
       wsService.eventStream.listen((msg) {
         if (msg['event'] == 'remote_camera_trigger') {
           GlobalNavigationService.handleRemoteCameraTrigger(msg);
+        } else if (msg['event'] == 'settings_updated') {
+          syncService.pullSettings().then((_) => settingsProvider.load());
+        } else if (msg['event'] == 'users_updated') {
+          syncService.pullUsers().then((_) => authProvider.notifyListeners());
         }
       });
     }

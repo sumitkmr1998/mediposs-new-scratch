@@ -74,13 +74,17 @@ class SyncService extends ChangeNotifier {
         settings.autoLoginPin = pin;
         ObjectBoxService.instance.settingsBox.put(settings);
 
+        // Fetch latest settings and users upon login
+        await pullSettings();
+        await pullUsers();
+
         notifyListeners();
         return null; // success
       } else {
         return 'Invalid PIN or server error (${res.statusCode})';
       }
     } on TimeoutException {
-      return 'Connection timed out. Check the IP or connection speed.';
+        return 'Connection timed out. Check the IP or connection speed.';
     } catch (e) {
       return 'Authentication failed: $e';
     }
@@ -174,7 +178,7 @@ class SyncService extends ChangeNotifier {
   }
 
   Future<void> pullMedicines() async {
-    if (!_isConnected || _jwtToken == null) return;
+    if (!_isConnected || _jwtToken == null || _isSyncing) return;
     debugPrint('SyncService: pullMedicines starting...');
     _isSyncing = true;
     notifyListeners();
@@ -191,23 +195,32 @@ class SyncService extends ChangeNotifier {
         // This avoids forcing Hub IDs which can exceed ObjectBox sequence counter on Android.
         final hubBarcodes = <String>{};
         final hubNames = <String>{};
+        final claimedLocalIds = <int>{};
+
         for (final item in data) {
-          final barcode = item['barcode'] as String? ?? '';
-          final name = item['name'] as String? ?? '';
+          final barcode = (item['barcode'] as String? ?? '').trim();
+          final name = (item['name'] as String? ?? '').trim();
           if (barcode.isNotEmpty) hubBarcodes.add(barcode);
           hubNames.add(name);
 
           final updatedAt =
               DateTime.tryParse(item['updatedAt'] ?? '') ?? DateTime.now();
 
-          // Find existing by barcode first, then name
-          Medicine? existing;
-          if (barcode.isNotEmpty) {
-            existing = allLocal.where((m) => m.barcode == barcode).firstOrNull;
-          }
-          existing ??= allLocal.where((m) => m.name == name).firstOrNull;
+          // Find existing entries using normalized natural keys
+          // We use list find to identify ALL matches so we can deduplicate if needed
+          final matches = allLocal.where((m) {
+            if (claimedLocalIds.contains(m.id)) return false;
+            
+            final matchesBarcode = barcode.isNotEmpty && m.barcode.trim() == barcode;
+            final matchesName = m.name.trim().toLowerCase() == name.toLowerCase();
+            
+            return matchesBarcode || matchesName;
+          }).toList();
+
+          Medicine? existing = matches.firstOrNull;
 
           if (existing != null) {
+            // Update the primary record
             existing
               ..name = name
               ..barcode = barcode
@@ -235,9 +248,19 @@ class SyncService extends ChangeNotifier {
             }
 
             box.put(existing);
+            claimedLocalIds.add(existing.id);
+
+            // DELETE Redundant records if multiple found locally
+            if (matches.length > 1) {
+              for (int j = 1; j < matches.length; j++) {
+                final redundant = matches[j];
+                debugPrint('SyncService: Deduplicating redundant locally: ${redundant.name} (ID: ${redundant.id})');
+                box.remove(redundant.id);
+              }
+            }
           } else {
             final m = Medicine(
-              id: 0, // Let ObjectBox auto-assign — never force Hub IDs
+              id: 0, 
               name: name,
               barcode: barcode,
               category: item['category'] ?? 'General',
@@ -260,15 +283,21 @@ class SyncService extends ChangeNotifier {
                 ));
               }
             }
-            box.put(m);
+            int newId = box.put(m);
+            claimedLocalIds.add(newId);
           }
         }
-        // Remove locally any medicine not in Hub (deleted on Hub)
+        // Cleanup phase: Remove locally any medicine not in Hub (deleted on Hub)
+        // AND not claimed by the current sync (ensures any legacy orphans are gone)
         for (final m in allLocal) {
-          final bc = m.barcode;
-          final matchedBar = bc.isNotEmpty && hubBarcodes.contains(bc);
-          final matchedName = hubNames.contains(m.name);
-          if (!matchedBar && !matchedName) {
+          if (claimedLocalIds.contains(m.id)) continue;
+
+          final bc = m.barcode.trim();
+          final matchesBar = bc.isNotEmpty && hubBarcodes.contains(bc);
+          final matchesName = hubNames.any((hn) => hn.toLowerCase() == m.name.trim().toLowerCase());
+
+          if (!matchesBar && !matchesName) {
+            debugPrint('SyncService: Removing orphaned local medicine: ${m.name}');
             box.remove(m.id);
           }
         }
@@ -1123,6 +1152,61 @@ class SyncService extends ChangeNotifier {
         'Authorization': 'Bearer $_jwtToken',
         'Content-Type': 'application/json',
       };
+
+  Future<void> pullSettings() async {
+    if (!_isConnected || _jwtToken == null) return;
+    try {
+      final url = Uri.parse('$_baseUrl/api/settings');
+      final res = await http.get(url, headers: _authHeaders());
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final box = ObjectBoxService.instance.settingsBox;
+        final current = ObjectBoxService.instance.settings;
+        
+        final updated = AppSettings.fromJson(data);
+        updated.id = current.id;
+        // Keep local-only settings
+        updated.hubIp = current.hubIp;
+        updated.autoLoginPin = current.autoLoginPin;
+        updated.serverPort = current.serverPort;
+        updated.jwtSecret = current.jwtSecret;
+
+        box.put(updated);
+        notifyListeners();
+        debugPrint('SyncService: pullSettings completed.');
+      }
+    } catch (e) {
+      debugPrint('SyncService: pullSettings err: $e');
+    }
+  }
+
+  Future<bool> pushUser(AppUser user) async {
+    if (!_isConnected || _jwtToken == null) return false;
+    try {
+      final url = Uri.parse('$_baseUrl/api/users/push');
+      final body = jsonEncode(user.toJson());
+      final res = await http.post(url, headers: _authHeaders(), body: body);
+      debugPrint('SyncService: pushUser result=${res.statusCode}');
+      return res.statusCode == 200;
+    } catch (e) {
+      debugPrint('SyncService: pushUser err: $e');
+      return false;
+    }
+  }
+
+  Future<bool> pushSettings(AppSettings settings) async {
+    if (!_isConnected || _jwtToken == null) return false;
+    try {
+      final url = Uri.parse('$_baseUrl/api/settings/push');
+      final body = jsonEncode(settings.toJson());
+      final res = await http.post(url, headers: _authHeaders(), body: body);
+      debugPrint('SyncService: pushSettings result=${res.statusCode}');
+      return res.statusCode == 200;
+    } catch (e) {
+      debugPrint('SyncService: pushSettings err: $e');
+      return false;
+    }
+  }
 }
 
 class WebSocketService extends ChangeNotifier {

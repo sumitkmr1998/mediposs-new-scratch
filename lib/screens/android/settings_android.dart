@@ -8,11 +8,14 @@ import 'package:intl/intl.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/models/app_user.dart';
+import '../../shared/services/sync_service.dart';
 import '../../theme/app_theme.dart';
 import '../../shared/services/local_server_service.dart';
 import '../../shared/services/printing_service.dart';
 import 'package:printing/printing.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
+import '../user_management_screen.dart';
+import '../opd/doctor_list_screen.dart';
 
 class SettingsAndroid extends StatefulWidget {
   const SettingsAndroid({super.key});
@@ -111,7 +114,7 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
       ..serverPort = int.tryParse(_portCtrl.text) ?? 8080
       ..preferredRefreshRate = _selectedFPS;
 
-    settingsProv.save(s);
+    settingsProv.save(s, syncService: context.read<SyncService>());
 
     // Apply FPS immediately on Android
     if (Platform.isAndroid) {
@@ -572,7 +575,55 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                   ),
                 ],
               ),
-              if (auth.isAdmin)
+              if (auth.isAdmin) ...[
+                _buildSection(
+                  'User & Medical Management',
+                  children: [
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.people_rounded,
+                            color: AppTheme.primary, size: 20),
+                      ),
+                      title: const Text('Manage Staff & Roles',
+                          style: TextStyle(fontWeight: FontWeight.w700)),
+                      subtitle: const Text('Add users, set permissions',
+                          style: TextStyle(fontSize: 12)),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const UserManagementScreen())),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.teal.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.medical_services_rounded,
+                            color: Colors.teal, size: 20),
+                      ),
+                      title: const Text('Manage Doctors',
+                          style: TextStyle(fontWeight: FontWeight.w700)),
+                      subtitle: const Text('Edit list, fees and specializations',
+                          style: TextStyle(fontSize: 12)),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const DoctorListScreen())),
+                    ),
+                  ],
+                ),
                 _buildSection(
                   'User Authentication',
                   children: [
@@ -632,6 +683,7 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                         )),
                   ],
                 ),
+              ],
               const SizedBox(height: 32),
             ],
           ),
@@ -784,7 +836,8 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
               ),
               onPressed: () {
                 if (pinCtrl.text.length >= 4) {
-                  auth.updatePin(user.id, pinCtrl.text);
+                  auth.updatePin(user.id, pinCtrl.text,
+                      syncService: context.read<SyncService>());
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                       content: Text('✅ PIN updated successfully')));

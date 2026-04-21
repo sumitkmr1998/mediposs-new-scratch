@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../shared/providers/inventory_provider.dart';
@@ -23,6 +24,7 @@ import '../opd/opd_report_screen.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/opd_provider.dart';
 import '../../shared/providers/prescription_provider.dart';
+import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/template_provider.dart';
 import '../../shared/widgets/interactive_hover.dart';
 
@@ -73,13 +75,6 @@ class _AppShellWindowsState extends State<AppShellWindows> {
           label: 'Sales'));
     }
 
-    if (auth.canManageUsers) {
-      dests.add(const _Dest(
-          id: 'staff',
-          icon: Icons.people_outline,
-          selectedIcon: Icons.people,
-          label: 'Staff'));
-    }
 
     // OPD Section
     if (auth.canAccessOPD) {
@@ -93,11 +88,6 @@ class _AppShellWindowsState extends State<AppShellWindows> {
           icon: Icons.people_alt_outlined,
           selectedIcon: Icons.people_alt,
           label: 'Patients'));
-      dests.add(const _Dest(
-          id: 'doctors',
-          icon: Icons.medical_services_outlined,
-          selectedIcon: Icons.medical_services,
-          label: 'Doctors'));
     }
 
     if (auth.canViewOpdReports) {
@@ -165,21 +155,37 @@ class _AppShellWindowsState extends State<AppShellWindows> {
       context.read<WarehouseProvider>().loadTransfers();
       context.read<OpdProvider>().loadAll();
       context.read<PrescriptionProvider>().load();
+      context.read<SettingsProvider>().load().then((_) {
+        // Trigger startup backup check
+        context.read<SettingsProvider>().checkAndPerformAutoBackup('At Startup');
+        
+        // Setup periodic check if enabled
+        if (context.read<SettingsProvider>().settings.autoBackupLogic == 'Periodic') {
+          Stream.periodic(const Duration(hours: 6)).listen((_) {
+            if (mounted) context.read<SettingsProvider>().checkAndPerformAutoBackup('Periodic');
+          });
+        }
+      });
 
       // HUB server now starts in main.dart (pre-login)
       if (Platform.isWindows) {
-        // Bug 4 Fix: Listen to incoming data pushes from Android and reload Windows providers
         LocalServerService.instance.incomingDataStream.listen((entityType) {
           if (!mounted) return;
           debugPrint(
               'AppShellWindows [Windows]: incoming data push for $entityType — reloading providers');
-          context.read<InventoryProvider>().load();
-          context.read<SalesProvider>().load();
-          context.read<OpdProvider>().loadAll();
-          context.read<PatientProvider>().load();
-          context.read<PrescriptionProvider>().load();
-          context.read<TemplateProvider>().load();
-          context.read<WarehouseProvider>().loadTransfers();
+          if (entityType == 'settings') {
+            context.read<SettingsProvider>().load();
+          } else if (entityType == 'users') {
+            context.read<AuthProvider>().notifyListeners();
+          } else {
+            context.read<InventoryProvider>().load();
+            context.read<SalesProvider>().load();
+            context.read<OpdProvider>().loadAll();
+            context.read<PatientProvider>().load();
+            context.read<PrescriptionProvider>().load();
+            context.read<TemplateProvider>().load();
+            context.read<WarehouseProvider>().loadTransfers();
+          }
         });
 
         setState(() {});
@@ -225,6 +231,14 @@ class _AppShellWindowsState extends State<AppShellWindows> {
           }
         }
       });
+      
+      // Setup AppLifecycleListener for 'On Close' backup
+      AppLifecycleListener(
+        onExitRequested: () async {
+          await context.read<SettingsProvider>().checkAndPerformAutoBackup('On Close');
+          return AppExitResponse.exit;
+        },
+      );
     });
   }
 
@@ -288,6 +302,8 @@ class _AppShellWindowsState extends State<AppShellWindows> {
                     destinations: dests,
                     isWindowsHub: Platform.isWindows,
                     isConnected: wsvc.connected,
+                    isCollapsed: context.watch<SettingsProvider>().settings.navCollapsed,
+                    onToggleCollapse: () => context.read<SettingsProvider>().toggleNavCollapse(),
                     onConnectTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -344,13 +360,14 @@ class _Dest {
       required this.selectedIcon,
       required this.label});
 }
-
 class _SideNav extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
   final List<_Dest> destinations;
   final bool isWindowsHub;
   final bool isConnected;
+  final bool isCollapsed;
+  final VoidCallback onToggleCollapse;
   final VoidCallback onConnectTap;
 
   const _SideNav({
@@ -359,37 +376,58 @@ class _SideNav extends StatelessWidget {
     required this.destinations,
     required this.isWindowsHub,
     required this.isConnected,
+    required this.isCollapsed,
+    required this.onToggleCollapse,
     required this.onConnectTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isExpanded = MediaQuery.of(context).size.width > 1100;
+    // Width logic: Manual collapse overrides width-based expansion
+    final isWideWindow = MediaQuery.of(context).size.width > 1100;
+    final expanded = isWideWindow && !isCollapsed;
 
-    return Container(
-      width: isExpanded ? 220 : 72,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+      width: expanded ? 220 : 72,
       decoration: BoxDecoration(
         color: context.surfaceColor,
         border: Border(right: BorderSide(color: context.borderColor)),
       ),
       child: Column(
         children: [
-          const SizedBox(height: 20),
-          // Logo
+          const SizedBox(height: 12),
+          // Toggle & Logo Section
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(
               children: [
-                const Icon(Icons.local_pharmacy,
-                    color: AppTheme.primary, size: 28),
-                if (isExpanded) ...[
-                  const SizedBox(width: 10),
-                  const Text('MediPoss',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 16,
-                          color: AppTheme.primary)),
-                ],
+                Expanded(
+                  child: Row(
+                    children: [
+                      const Icon(Icons.local_pharmacy,
+                          color: AppTheme.primary, size: 28),
+                      if (expanded) ...[
+                        const SizedBox(width: 10),
+                        const Text('MediPoss',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 16,
+                                color: AppTheme.primary)),
+                      ],
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: onToggleCollapse,
+                  icon: Icon(
+                    isCollapsed ? Icons.menu_open : Icons.menu,
+                    color: AppTheme.primary.withValues(alpha: 0.7),
+                    size: 20,
+                  ),
+                  tooltip: isCollapsed ? 'Expand' : 'Collapse',
+                ),
               ],
             ),
           ),
@@ -423,10 +461,12 @@ class _SideNav extends StatelessWidget {
                                 ? AppTheme.primary
                                 : context.textMutedColor,
                             size: 20),
-                        if (isExpanded) ...[
+                        if (expanded) ...[
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(d.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                     color: selected
                                         ? AppTheme.primary
@@ -483,7 +523,7 @@ class _SideNav extends StatelessWidget {
                 child: Row(
                   children: [
                     const Icon(Icons.logout, color: AppTheme.danger, size: 20),
-                    if (isExpanded) ...[
+                    if (expanded) ...[
                       const SizedBox(width: 12),
                       const Text('Logout',
                           style: TextStyle(
@@ -502,7 +542,7 @@ class _SideNav extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             child: isWindowsHub
                 ? _StatusBadge(
-                    label: isExpanded ? 'Hub Active' : '',
+                    label: expanded ? 'Hub Active' : '',
                     color: AppTheme.success,
                     icon: Icons.router,
                   )
@@ -510,7 +550,7 @@ class _SideNav extends StatelessWidget {
                     onTap: onConnectTap,
                     borderRadius: BorderRadius.circular(8),
                     child: _StatusBadge(
-                      label: isExpanded
+                      label: expanded
                           ? (isConnected ? 'Connected' : 'Connect Hub')
                           : '',
                       color: isConnected ? AppTheme.success : AppTheme.warning,
@@ -524,6 +564,7 @@ class _SideNav extends StatelessWidget {
     );
   }
 }
+
 
 class _StatusBadge extends StatelessWidget {
   final String label;

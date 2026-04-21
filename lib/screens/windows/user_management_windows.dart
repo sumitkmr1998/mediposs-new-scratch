@@ -6,7 +6,8 @@ import '../../theme/app_theme.dart';
 import '../../widgets/user_form_dialog.dart';
 
 class UserManagementWindows extends StatefulWidget {
-  const UserManagementWindows({super.key});
+  final bool isEmbedded;
+  const UserManagementWindows({super.key, this.isEmbedded = false});
 
   @override
   State<UserManagementWindows> createState() => _UserManagementWindowsState();
@@ -17,6 +18,58 @@ class _UserManagementWindowsState extends State<UserManagementWindows> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final users = auth.getAllUsers();
+
+    final content = GridView.builder(
+      padding: widget.isEmbedded ? EdgeInsets.zero : const EdgeInsets.all(24),
+      shrinkWrap: widget.isEmbedded,
+      physics: widget.isEmbedded ? const NeverScrollableScrollPhysics() : null,
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 400,
+        mainAxisExtent: 260,
+        crossAxisSpacing: 24,
+        mainAxisSpacing: 24,
+      ),
+      itemCount: users.length,
+      itemBuilder: (ctx, i) => _UserCard(user: users[i], auth: auth),
+    );
+
+    if (widget.isEmbedded) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                   const Text('Staff Registry', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                   Text('Manage permissions and credentials for ${users.length} staff members', style: TextStyle(color: context.textMutedColor)),
+                ],
+              ),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.person_add_rounded, size: 18),
+                label: const Text('Add Staff'),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (_) => const UserFormDialog(),
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+          content,
+        ],
+      );
+    }
 
     return Scaffold(
       backgroundColor: context.bgColor,
@@ -48,17 +101,7 @@ class _UserManagementWindowsState extends State<UserManagementWindows> {
           ),
         ],
       ),
-      body: GridView.builder(
-        padding: const EdgeInsets.all(24),
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 400,
-          mainAxisExtent: 260,
-          crossAxisSpacing: 24,
-          mainAxisSpacing: 24,
-        ),
-        itemCount: users.length,
-        itemBuilder: (ctx, i) => _UserCard(user: users[i], auth: auth),
-      ),
+      body: content,
     );
   }
 }

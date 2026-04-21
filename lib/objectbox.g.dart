@@ -32,7 +32,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(1, 637942838794498612),
       name: 'AppSettings',
-      lastPropertyId: const obx_int.IdUid(16, 2954104296010480771),
+      lastPropertyId: const obx_int.IdUid(27, 7369160090690350084),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -114,6 +114,61 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(16, 2954104296010480771),
             name: 'autoLoginPin',
             type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(17, 2561410333648253826),
+            name: 'lowStockThreshold',
+            type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(18, 6952963793876090515),
+            name: 'nearExpiryThresholdDays',
+            type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(19, 6555715215182641822),
+            name: 'preferredRefreshRate',
+            type: 8,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(20, 7234315612171975681),
+            name: 'enableAnimations',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(21, 845512357430139650),
+            name: 'autoBackupFrequency',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(22, 5300834372101890140),
+            name: 'autoBackupLogic',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(23, 6223521778994140219),
+            name: 'googleDriveLinked',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(24, 2500592212458200060),
+            name: 'googleAuthData',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(25, 6365980594313513836),
+            name: 'lastBackupMillis',
+            type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(26, 9162471795554774336),
+            name: 'autoBackupTime',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(27, 7369160090690350084),
+            name: 'navCollapsed',
+            type: 1,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
@@ -121,7 +176,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(2, 1561353773588181738),
       name: 'AppUser',
-      lastPropertyId: const obx_int.IdUid(20, 137962504004245421),
+      lastPropertyId: const obx_int.IdUid(26, 5450336284533585166),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -222,6 +277,36 @@ final _entities = <obx_int.ModelEntity>[
         obx_int.ModelProperty(
             id: const obx_int.IdUid(20, 137962504004245421),
             name: 'canViewOpdReports',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(21, 3281125342086955224),
+            name: 'canOverrideStock',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(22, 1886058660425671495),
+            name: 'canOverridePrice',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(23, 6994582357169761346),
+            name: 'canBulkDiscount',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(24, 360398799468796942),
+            name: 'canAccessMedicalRecords',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(25, 1779375825187423078),
+            name: 'canViewPurchasePrice',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(26, 5450336284533585166),
+            name: 'canExportData',
             type: 1,
             flags: 0)
       ],
@@ -535,7 +620,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(8, 387908478841800652),
       name: 'Prescription',
-      lastPropertyId: const obx_int.IdUid(14, 9166390049168587947),
+      lastPropertyId: const obx_int.IdUid(15, 2456645063456317354),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -607,6 +692,11 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(14, 9166390049168587947),
             name: 'createdAt',
             type: 10,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(15, 2456645063456317354),
+            name: 'imagesJson',
+            type: 9,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
@@ -985,7 +1075,16 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final autoLoginPinOffset = object.autoLoginPin == null
               ? null
               : fbb.writeString(object.autoLoginPin!);
-          fbb.startTable(17);
+          final autoBackupFrequencyOffset =
+              fbb.writeString(object.autoBackupFrequency);
+          final autoBackupLogicOffset = fbb.writeString(object.autoBackupLogic);
+          final googleAuthDataOffset = object.googleAuthData == null
+              ? null
+              : fbb.writeString(object.googleAuthData!);
+          final autoBackupTimeOffset = object.autoBackupTime == null
+              ? null
+              : fbb.writeString(object.autoBackupTime!);
+          fbb.startTable(28);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, storeNameOffset);
           fbb.addOffset(2, storeAddressOffset);
@@ -1002,6 +1101,17 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addOffset(13, receiptPaperSizeOffset);
           fbb.addOffset(14, hubIpOffset);
           fbb.addOffset(15, autoLoginPinOffset);
+          fbb.addInt64(16, object.lowStockThreshold);
+          fbb.addInt64(17, object.nearExpiryThresholdDays);
+          fbb.addFloat64(18, object.preferredRefreshRate);
+          fbb.addBool(19, object.enableAnimations);
+          fbb.addOffset(20, autoBackupFrequencyOffset);
+          fbb.addOffset(21, autoBackupLogicOffset);
+          fbb.addBool(22, object.googleDriveLinked);
+          fbb.addOffset(23, googleAuthDataOffset);
+          fbb.addInt64(24, object.lastBackupMillis);
+          fbb.addOffset(25, autoBackupTimeOffset);
+          fbb.addBool(26, object.navCollapsed);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -1046,6 +1156,32 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final autoLoginPinParam =
               const fb.StringReader(asciiOptimization: true)
                   .vTableGetNullable(buffer, rootOffset, 34);
+          final lowStockThresholdParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 36, 0);
+          final nearExpiryThresholdDaysParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 38, 0);
+          final preferredRefreshRateParam =
+              const fb.Float64Reader().vTableGet(buffer, rootOffset, 40, 0);
+          final enableAnimationsParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 42, false);
+          final autoBackupFrequencyParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGet(buffer, rootOffset, 44, '');
+          final autoBackupLogicParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGet(buffer, rootOffset, 46, '');
+          final googleDriveLinkedParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 48, false);
+          final googleAuthDataParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGetNullable(buffer, rootOffset, 50);
+          final lastBackupMillisParam =
+              const fb.Int64Reader().vTableGetNullable(buffer, rootOffset, 52);
+          final autoBackupTimeParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGetNullable(buffer, rootOffset, 54);
+          final navCollapsedParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 56, false);
           final object = AppSettings(
               id: idParam,
               storeName: storeNameParam,
@@ -1062,7 +1198,18 @@ obx_int.ModelDefinition getObjectBoxModel() {
               autoPrintReceipt: autoPrintReceiptParam,
               receiptPaperSize: receiptPaperSizeParam,
               hubIp: hubIpParam,
-              autoLoginPin: autoLoginPinParam);
+              autoLoginPin: autoLoginPinParam,
+              lowStockThreshold: lowStockThresholdParam,
+              nearExpiryThresholdDays: nearExpiryThresholdDaysParam,
+              preferredRefreshRate: preferredRefreshRateParam,
+              enableAnimations: enableAnimationsParam,
+              autoBackupFrequency: autoBackupFrequencyParam,
+              autoBackupLogic: autoBackupLogicParam,
+              googleDriveLinked: googleDriveLinkedParam,
+              googleAuthData: googleAuthDataParam,
+              lastBackupMillis: lastBackupMillisParam,
+              autoBackupTime: autoBackupTimeParam,
+              navCollapsed: navCollapsedParam);
 
           return object;
         }),
@@ -1078,7 +1225,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final nameOffset = fbb.writeString(object.name);
           final roleOffset = fbb.writeString(object.role);
           final pinOffset = fbb.writeString(object.pin);
-          fbb.startTable(21);
+          fbb.startTable(27);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, nameOffset);
           fbb.addOffset(2, roleOffset);
@@ -1099,6 +1246,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addBool(17, object.canAccessOPD);
           fbb.addBool(18, object.canManageDoctors);
           fbb.addBool(19, object.canViewOpdReports);
+          fbb.addBool(20, object.canOverrideStock);
+          fbb.addBool(21, object.canOverridePrice);
+          fbb.addBool(22, object.canBulkDiscount);
+          fbb.addBool(23, object.canAccessMedicalRecords);
+          fbb.addBool(24, object.canViewPurchasePrice);
+          fbb.addBool(25, object.canExportData);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -1125,6 +1278,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.BoolReader().vTableGet(buffer, rootOffset, 20, false);
           final canEditInventoryParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 22, false);
+          final canOverrideStockParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 44, false);
           final canViewWarehouseParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 24, false);
           final canTransferStockParam =
@@ -1133,6 +1288,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.BoolReader().vTableGet(buffer, rootOffset, 28, false);
           final canDiscountSalesParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 30, false);
+          final canOverridePriceParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 46, false);
+          final canBulkDiscountParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 48, false);
           final canViewSalesHistoryParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 32, false);
           final canVoidSalesParam =
@@ -1145,6 +1304,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.BoolReader().vTableGet(buffer, rootOffset, 40, false);
           final canViewOpdReportsParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 42, false);
+          final canAccessMedicalRecordsParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 50, false);
+          final canViewPurchasePriceParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 52, false);
+          final canExportDataParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 54, false);
           final object = AppUser(
               id: idParam,
               name: nameParam,
@@ -1156,16 +1321,22 @@ obx_int.ModelDefinition getObjectBoxModel() {
               canViewDashboard: canViewDashboardParam,
               canViewInventory: canViewInventoryParam,
               canEditInventory: canEditInventoryParam,
+              canOverrideStock: canOverrideStockParam,
               canViewWarehouse: canViewWarehouseParam,
               canTransferStock: canTransferStockParam,
               canAccessPOS: canAccessPOSParam,
               canDiscountSales: canDiscountSalesParam,
+              canOverridePrice: canOverridePriceParam,
+              canBulkDiscount: canBulkDiscountParam,
               canViewSalesHistory: canViewSalesHistoryParam,
               canVoidSales: canVoidSalesParam,
               canProcessReturns: canProcessReturnsParam,
               canAccessOPD: canAccessOPDParam,
               canManageDoctors: canManageDoctorsParam,
-              canViewOpdReports: canViewOpdReportsParam);
+              canViewOpdReports: canViewOpdReportsParam,
+              canAccessMedicalRecords: canAccessMedicalRecordsParam,
+              canViewPurchasePrice: canViewPurchasePriceParam,
+              canExportData: canExportDataParam);
 
           return object;
         }),
@@ -1521,7 +1692,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final itemsJsonOffset = fbb.writeString(object.itemsJson);
           final labTestsJsonOffset = fbb.writeString(object.labTestsJson);
           final vitalsJsonOffset = fbb.writeString(object.vitalsJson);
-          fbb.startTable(15);
+          final imagesJsonOffset = fbb.writeString(object.imagesJson);
+          fbb.startTable(16);
           fbb.addInt64(0, object.id);
           fbb.addInt64(1, object.appointmentId);
           fbb.addInt64(2, object.patientId);
@@ -1536,6 +1708,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addOffset(11, vitalsJsonOffset);
           fbb.addBool(12, object.dispensed);
           fbb.addInt64(13, object.createdAt.millisecondsSinceEpoch);
+          fbb.addOffset(14, imagesJsonOffset);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -1568,6 +1741,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
                   .vTableGet(buffer, rootOffset, 24, '');
           final vitalsJsonParam = const fb.StringReader(asciiOptimization: true)
               .vTableGet(buffer, rootOffset, 26, '');
+          final imagesJsonParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 32, '');
           final dispensedParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 28, false);
           final createdAtParam = DateTime.fromMillisecondsSinceEpoch(
@@ -1585,6 +1760,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
               itemsJson: itemsJsonParam,
               labTestsJson: labTestsJsonParam,
               vitalsJson: vitalsJsonParam,
+              imagesJson: imagesJsonParam,
               dispensed: dispensedParam,
               createdAt: createdAtParam);
 
@@ -1988,6 +2164,50 @@ class AppSettings_ {
   /// See [AppSettings.autoLoginPin].
   static final autoLoginPin =
       obx.QueryStringProperty<AppSettings>(_entities[0].properties[15]);
+
+  /// See [AppSettings.lowStockThreshold].
+  static final lowStockThreshold =
+      obx.QueryIntegerProperty<AppSettings>(_entities[0].properties[16]);
+
+  /// See [AppSettings.nearExpiryThresholdDays].
+  static final nearExpiryThresholdDays =
+      obx.QueryIntegerProperty<AppSettings>(_entities[0].properties[17]);
+
+  /// See [AppSettings.preferredRefreshRate].
+  static final preferredRefreshRate =
+      obx.QueryDoubleProperty<AppSettings>(_entities[0].properties[18]);
+
+  /// See [AppSettings.enableAnimations].
+  static final enableAnimations =
+      obx.QueryBooleanProperty<AppSettings>(_entities[0].properties[19]);
+
+  /// See [AppSettings.autoBackupFrequency].
+  static final autoBackupFrequency =
+      obx.QueryStringProperty<AppSettings>(_entities[0].properties[20]);
+
+  /// See [AppSettings.autoBackupLogic].
+  static final autoBackupLogic =
+      obx.QueryStringProperty<AppSettings>(_entities[0].properties[21]);
+
+  /// See [AppSettings.googleDriveLinked].
+  static final googleDriveLinked =
+      obx.QueryBooleanProperty<AppSettings>(_entities[0].properties[22]);
+
+  /// See [AppSettings.googleAuthData].
+  static final googleAuthData =
+      obx.QueryStringProperty<AppSettings>(_entities[0].properties[23]);
+
+  /// See [AppSettings.lastBackupMillis].
+  static final lastBackupMillis =
+      obx.QueryIntegerProperty<AppSettings>(_entities[0].properties[24]);
+
+  /// See [AppSettings.autoBackupTime].
+  static final autoBackupTime =
+      obx.QueryStringProperty<AppSettings>(_entities[0].properties[25]);
+
+  /// See [AppSettings.navCollapsed].
+  static final navCollapsed =
+      obx.QueryBooleanProperty<AppSettings>(_entities[0].properties[26]);
 }
 
 /// [AppUser] entity fields to define ObjectBox queries.
@@ -2071,6 +2291,30 @@ class AppUser_ {
   /// See [AppUser.canViewOpdReports].
   static final canViewOpdReports =
       obx.QueryBooleanProperty<AppUser>(_entities[1].properties[19]);
+
+  /// See [AppUser.canOverrideStock].
+  static final canOverrideStock =
+      obx.QueryBooleanProperty<AppUser>(_entities[1].properties[20]);
+
+  /// See [AppUser.canOverridePrice].
+  static final canOverridePrice =
+      obx.QueryBooleanProperty<AppUser>(_entities[1].properties[21]);
+
+  /// See [AppUser.canBulkDiscount].
+  static final canBulkDiscount =
+      obx.QueryBooleanProperty<AppUser>(_entities[1].properties[22]);
+
+  /// See [AppUser.canAccessMedicalRecords].
+  static final canAccessMedicalRecords =
+      obx.QueryBooleanProperty<AppUser>(_entities[1].properties[23]);
+
+  /// See [AppUser.canViewPurchasePrice].
+  static final canViewPurchasePrice =
+      obx.QueryBooleanProperty<AppUser>(_entities[1].properties[24]);
+
+  /// See [AppUser.canExportData].
+  static final canExportData =
+      obx.QueryBooleanProperty<AppUser>(_entities[1].properties[25]);
 }
 
 /// [Appointment] entity fields to define ObjectBox queries.
@@ -2353,6 +2597,10 @@ class Prescription_ {
   /// See [Prescription.createdAt].
   static final createdAt =
       obx.QueryDateProperty<Prescription>(_entities[7].properties[13]);
+
+  /// See [Prescription.imagesJson].
+  static final imagesJson =
+      obx.QueryStringProperty<Prescription>(_entities[7].properties[14]);
 }
 
 /// [PrescriptionTemplate] entity fields to define ObjectBox queries.

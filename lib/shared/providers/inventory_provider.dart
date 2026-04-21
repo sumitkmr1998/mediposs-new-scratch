@@ -129,6 +129,8 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   void addMedicine(Medicine m, {SyncService? syncService}) {
+    m.name = m.name.trim();
+    m.barcode = m.barcode.trim();
     m.updatedAt = DateTime.now();
     _box.put(m);
     load();
@@ -143,6 +145,8 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   void updateMedicine(Medicine m, {SyncService? syncService}) {
+    m.name = m.name.trim();
+    m.barcode = m.barcode.trim();
     m.updatedAt = DateTime.now();
     _box.put(m);
     load();

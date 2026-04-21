@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/app_user.dart';
 import '../services/objectbox_service.dart';
+import '../services/sync_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   AppUser? _currentUser;
@@ -101,16 +102,22 @@ class AuthProvider extends ChangeNotifier {
 
   List<AppUser> getAllUsers() => ObjectBoxService.instance.userBox.getAll();
 
-  void addUser(AppUser user) {
+  void addUser(AppUser user, {SyncService? syncService}) {
     ObjectBoxService.instance.userBox.put(user);
+    if (syncService != null && syncService.isConnected) {
+      syncService.pushUser(user);
+    }
     notifyListeners();
   }
 
-  void updatePin(int userId, String newPin) {
+  void updatePin(int userId, String newPin, {SyncService? syncService}) {
     final user = ObjectBoxService.instance.userBox.get(userId);
     if (user != null) {
       user.pin = newPin;
       ObjectBoxService.instance.userBox.put(user);
+      if (syncService != null && syncService.isConnected) {
+        syncService.pushUser(user);
+      }
       notifyListeners();
     }
   }

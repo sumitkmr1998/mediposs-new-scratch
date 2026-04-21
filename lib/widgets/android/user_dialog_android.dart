@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/models/app_user.dart';
+import '../../shared/services/sync_service.dart';
 import '../../theme/app_theme.dart';
 
 class AndroidUserDialog {
@@ -191,7 +192,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
     u.canViewPurchasePrice = _canViewPurchasePrice;
     u.canExportData = _canExportData;
 
-    context.read<AuthProvider>().addUser(u);
+    context.read<AuthProvider>().addUser(u, syncService: context.read<SyncService>());
     Navigator.pop(context, true);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

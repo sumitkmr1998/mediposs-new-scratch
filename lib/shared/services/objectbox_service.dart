@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../models/medicine.dart';
 import '../models/stock_transfer.dart';
@@ -10,6 +11,8 @@ import '../models/prescription.dart';
 import '../models/prescription_template.dart';
 import '../models/patient_image.dart';
 import '../models/purchase_record.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 import '../../objectbox.g.dart';
 
 class ObjectBoxService {
@@ -17,6 +20,7 @@ class ObjectBoxService {
   static ObjectBoxService get instance => _instance!;
 
   late final Store _store;
+  late final String _dbDirectory;
 
   late final Box<Medicine> medicineBox;
   late final Box<StockTransfer> transferBox;
@@ -41,7 +45,12 @@ class ObjectBoxService {
 
 
     final svc = ObjectBoxService._();
-    svc._store = await openStore();
+    
+    // Explicitly set directory for desktop consistency
+    final appSupportDir = await getApplicationSupportDirectory();
+    svc._dbDirectory = p.join(appSupportDir.path, 'mediposs_db');
+    
+    svc._store = await openStore(directory: svc._dbDirectory);
 
     svc.medicineBox = svc._store.box<Medicine>();
     svc.transferBox = svc._store.box<StockTransfer>();
@@ -99,81 +108,41 @@ class ObjectBoxService {
       }
     }
 
-    // Seed sample medicines
-    if (svc.medicineBox.isEmpty()) {
-      final sampleMedicines = [
-        Medicine(
-            name: 'Paracetamol 500mg',
-            barcode: '10001',
-            category: 'General',
-            unit: 'Tab',
-            purchasePrice: 15.0,
-            sellingPrice: 20.0)
-          ..mainStock = 500
-          ..storeStock = 100,
-        Medicine(
-            name: 'Amoxicillin 250mg',
-            barcode: '10002',
-            category: 'Antibiotic',
-            unit: 'Cap',
-            purchasePrice: 40.0,
-            sellingPrice: 55.0)
-          ..mainStock = 200
-          ..storeStock = 50,
-        Medicine(
-            name: 'Cetirizine 10mg',
-            barcode: '10003',
-            category: 'Allergy',
-            unit: 'Tab',
-            purchasePrice: 10.0,
-            sellingPrice: 15.0)
-          ..mainStock = 300
-          ..storeStock = 150,
-        Medicine(
-            name: 'Ibuprofen 400mg',
-            barcode: '10004',
-            category: 'Painkiller',
-            unit: 'Tab',
-            purchasePrice: 20.0,
-            sellingPrice: 30.0)
-          ..mainStock = 400
-          ..storeStock = 80,
-        Medicine(
-            name: 'Cough Syrup 100ml',
-            barcode: '10005',
-            category: 'Syrup',
-            unit: 'Bottle',
-            purchasePrice: 35.0,
-            sellingPrice: 50.0)
-          ..mainStock = 100
-          ..storeStock = 20,
-      ];
 
-      for (var i = 0; i < sampleMedicines.length; i++) {
-        final m = sampleMedicines[i];
-        final expDate = i == 0 
-            ? DateTime.now().subtract(const Duration(days: 10)) // Expired
-            : i == 1 
-                ? DateTime.now().add(const Duration(days: 15)) // Near expiry
-                : DateTime.now().add(const Duration(days: 400)); // Normal
-        
-        final batch = MedicineBatch(
-          batchNo: 'BAT-${100 + i}',
-          expiryDate: expDate,
-          mainStock: m.mainStock,
-          storeStock: m.storeStock,
-        );
-        batch.medicine.target = m;
-        m.batches.add(batch);
-        svc.medicineBox.put(m);
-      }
-    }
 
     _instance = svc;
     return svc;
   }
+ 
+  Future<void> close() async {
+    _store.close();
+  }
+ 
+  Future<void> createLocalSafetyBackup() async {
+    final appSupportDir = await getApplicationSupportDirectory();
+    final safetyBackupDir = Directory(p.join(appSupportDir.path, 'mediposs_safety_backup_${DateTime.now().millisecondsSinceEpoch}'));
+    await safetyBackupDir.create(recursive: true);
+    
+    final dbDir = Directory(_dbDirectory);
+    if (await dbDir.exists()) {
+      await _copyDir(dbDir, Directory(p.join(safetyBackupDir.path, 'database')));
+    }
+  }
+ 
+  Future<void> _copyDir(Directory source, Directory destination) async {
+    await destination.create(recursive: true);
+    await for (final entity in source.list()) {
+      final newPath = p.join(destination.path, p.basename(entity.path));
+      if (entity is Directory) {
+        await _copyDir(entity, Directory(newPath));
+      } else if (entity is File) {
+        await entity.copy(newPath);
+      }
+    }
+  }
 
   Store get store => _store;
+  String get dbDirectory => _dbDirectory;
 
   AppSettings get settings => settingsBox.getAll().isNotEmpty
       ? settingsBox.getAll().first

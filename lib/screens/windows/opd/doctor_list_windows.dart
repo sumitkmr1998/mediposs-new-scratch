@@ -10,7 +10,8 @@ import '../../../shared/widgets/app_empty_state.dart';
 import '../../../shared/widgets/app_status_badge.dart';
 
 class DoctorListWindows extends StatefulWidget {
-  const DoctorListWindows({super.key});
+  final bool isEmbedded;
+  const DoctorListWindows({super.key, this.isEmbedded = false});
 
   @override
   State<DoctorListWindows> createState() => _DoctorListWindowsState();
@@ -59,20 +60,54 @@ class _DoctorListWindowsState extends State<DoctorListWindows> {
     final activeCount = allDoctors.where((d) => d.isActive).length;
     final inactiveCount = allDoctors.where((d) => !d.isActive).length;
 
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (widget.isEmbedded) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Clinician Directory', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                  Text('Manage records for ${allDoctors.length} registered healthcare providers', style: TextStyle(color: context.textMutedColor)),
+                ],
+              ),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.person_add_rounded, size: 18),
+                label: const Text('Add Doctor'),
+                onPressed: () => _showDoctorDialog(context),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+        ],
+        _buildKpiSection(allDoctors.length, activeCount, inactiveCount),
+        const SizedBox(height: 24),
+        _buildFilterSearchCard(context),
+        const SizedBox(height: 24),
+        _buildDataTable(context, filteredDoctors),
+      ],
+    );
+
+    if (widget.isEmbedded) {
+      return Padding(
+        padding: EdgeInsets.zero,
+        child: content,
+      );
+    }
+
     return Scaffold(
       appBar: _buildAppBar(),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildKpiSection(allDoctors.length, activeCount, inactiveCount),
-            const SizedBox(height: 24),
-            _buildFilterSearchCard(context),
-            const SizedBox(height: 24),
-            _buildDataTable(context, filteredDoctors),
-          ],
-        ),
+        child: content,
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showDoctorDialog(context),

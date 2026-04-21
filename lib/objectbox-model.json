@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:637942838794498612",
-      "lastPropertyId": "16:2954104296010480771",
+      "lastPropertyId": "27:7369160090690350084",
       "name": "AppSettings",
       "properties": [
         {
@@ -88,13 +88,68 @@
           "id": "16:2954104296010480771",
           "name": "autoLoginPin",
           "type": 9
+        },
+        {
+          "id": "17:2561410333648253826",
+          "name": "lowStockThreshold",
+          "type": 6
+        },
+        {
+          "id": "18:6952963793876090515",
+          "name": "nearExpiryThresholdDays",
+          "type": 6
+        },
+        {
+          "id": "19:6555715215182641822",
+          "name": "preferredRefreshRate",
+          "type": 8
+        },
+        {
+          "id": "20:7234315612171975681",
+          "name": "enableAnimations",
+          "type": 1
+        },
+        {
+          "id": "21:845512357430139650",
+          "name": "autoBackupFrequency",
+          "type": 9
+        },
+        {
+          "id": "22:5300834372101890140",
+          "name": "autoBackupLogic",
+          "type": 9
+        },
+        {
+          "id": "23:6223521778994140219",
+          "name": "googleDriveLinked",
+          "type": 1
+        },
+        {
+          "id": "24:2500592212458200060",
+          "name": "googleAuthData",
+          "type": 9
+        },
+        {
+          "id": "25:6365980594313513836",
+          "name": "lastBackupMillis",
+          "type": 6
+        },
+        {
+          "id": "26:9162471795554774336",
+          "name": "autoBackupTime",
+          "type": 9
+        },
+        {
+          "id": "27:7369160090690350084",
+          "name": "navCollapsed",
+          "type": 1
         }
       ],
       "relations": []
     },
     {
       "id": "2:1561353773588181738",
-      "lastPropertyId": "20:137962504004245421",
+      "lastPropertyId": "26:5450336284533585166",
       "name": "AppUser",
       "properties": [
         {
@@ -196,6 +251,36 @@
         {
           "id": "20:137962504004245421",
           "name": "canViewOpdReports",
+          "type": 1
+        },
+        {
+          "id": "21:3281125342086955224",
+          "name": "canOverrideStock",
+          "type": 1
+        },
+        {
+          "id": "22:1886058660425671495",
+          "name": "canOverridePrice",
+          "type": 1
+        },
+        {
+          "id": "23:6994582357169761346",
+          "name": "canBulkDiscount",
+          "type": 1
+        },
+        {
+          "id": "24:360398799468796942",
+          "name": "canAccessMedicalRecords",
+          "type": 1
+        },
+        {
+          "id": "25:1779375825187423078",
+          "name": "canViewPurchasePrice",
+          "type": 1
+        },
+        {
+          "id": "26:5450336284533585166",
+          "name": "canExportData",
           "type": 1
         }
       ],
@@ -509,7 +594,7 @@
     },
     {
       "id": "8:387908478841800652",
-      "lastPropertyId": "14:9166390049168587947",
+      "lastPropertyId": "15:2456645063456317354",
       "name": "Prescription",
       "properties": [
         {
@@ -582,6 +667,11 @@
           "id": "14:9166390049168587947",
           "name": "createdAt",
           "type": 10
+        },
+        {
+          "id": "15:2456645063456317354",
+          "name": "imagesJson",
+          "type": 9
         }
       ],
       "relations": []
