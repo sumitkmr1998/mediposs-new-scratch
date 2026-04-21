@@ -12,6 +12,7 @@ import '../pos_screen.dart';
 import '../warehouse_screen.dart';
 import '../sales_history_screen.dart';
 import '../settings_screen.dart';
+import '../user_management_screen.dart';
 import 'opd/opd_queue_windows.dart';
 import '../../shared/widgets/interactive_hover.dart';
 import '../../shared/widgets/app_filter_chip.dart';
@@ -697,61 +698,91 @@ class _BreakdownCard extends StatelessWidget {
 
 // ── Quick Actions Component ────────────────────────────────────────────────
 
+class _DashboardAction {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final Widget screen;
+  final bool isAllowed;
+
+  _DashboardAction({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.screen,
+    required this.isAllowed,
+  });
+}
+
 class _QuickActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
+    final auth = context.watch<AuthProvider>();
+
+    final List<_DashboardAction> allActions = [
+      _DashboardAction(
+        label: 'New Sale',
+        icon: Icons.add_shopping_cart_rounded,
+        color: AppTheme.primary,
+        screen: const PosScreen(),
+        isAllowed: auth.canAccessPOS,
+      ),
+      _DashboardAction(
+        label: 'OPD Queue',
+        icon: Icons.personal_injury_rounded,
+        color: AppTheme.indigo,
+        screen: const OpdQueueWindows(),
+        isAllowed: auth.canAccessOPD,
+      ),
+      _DashboardAction(
+        label: 'Warehouse',
+        icon: Icons.inventory_2_rounded,
+        color: const Color(0xFFF59E0B),
+        screen: const WarehouseScreen(),
+        isAllowed: auth.canViewWarehouse,
+      ),
+      _DashboardAction(
+        label: 'Staff',
+        icon: Icons.badge_rounded,
+        color: AppTheme.teal,
+        screen: const UserManagementScreen(),
+        isAllowed: auth.canManageUsers,
+      ),
+      _DashboardAction(
+        label: 'History',
+        icon: Icons.history_rounded,
+        color: Colors.grey,
+        screen: const SalesHistoryScreen(),
+        isAllowed: auth.canViewSalesHistory,
+      ),
+      _DashboardAction(
+        label: 'Settings',
+        icon: Icons.settings_rounded,
+        color: Colors.blueGrey,
+        screen: const SettingsScreen(),
+        isAllowed: auth.canAccessSettings,
+      ),
+    ];
+
+    final allowedActions = allActions.where((a) => a.isAllowed).toList();
+
+    return Wrap(
+      spacing: 16,
+      runSpacing: 16,
+      children: allowedActions.map((action) {
+        return SizedBox(
+          width: 200, // Fixed width for consistent grid-like appearance
           child: _ModernActionCard(
-            label: 'New Sale',
-            icon: Icons.add_shopping_cart_rounded,
-            color: AppTheme.primary,
+            label: action.label,
+            icon: action.icon,
+            color: action.color,
             onTap: () => Navigator.push(
-                context, MaterialPageRoute(builder: (_) => const PosScreen())),
+              context,
+              MaterialPageRoute(builder: (_) => action.screen),
+            ),
           ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _ModernActionCard(
-            label: 'OPD Queue',
-            icon: Icons.personal_injury_rounded,
-            color: AppTheme.indigo,
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const OpdQueueWindows())),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _ModernActionCard(
-            label: 'Warehouse',
-            icon: Icons.inventory_2_rounded,
-            color: const Color(0xFFF59E0B),
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const WarehouseScreen())),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _ModernActionCard(
-            label: 'History',
-            icon: Icons.history_rounded,
-            color: Colors.grey,
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const SalesHistoryScreen())),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _ModernActionCard(
-            label: 'Settings',
-            icon: Icons.settings_rounded,
-            color: Colors.blueGrey,
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const SettingsScreen())),
-          ),
-        ),
-      ],
+        );
+      }).toList(),
     );
   }
 }

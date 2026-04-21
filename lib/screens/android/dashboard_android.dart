@@ -596,43 +596,85 @@ class _RevenueTotalBadge extends StatelessWidget {
   }
 }
 
+class _ActionItemData {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final Widget screen;
+  final bool isAllowed;
+
+  _ActionItemData({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.screen,
+    required this.isAllowed,
+  });
+}
+
 class _QuickActionsCard extends StatelessWidget {
-  void _handleAction(BuildContext context, String label) {
-    Widget? target;
-    switch (label) {
-      case 'New POS':
-        target = PosAndroid();
-        break;
-      case 'Add Patient':
-        target = OpdQueueAndroid();
-        break;
-      case 'Stock List':
-        target = WarehouseAndroid();
-        break;
-      case 'Reports':
-        target = SalesHistoryAndroid();
-        break;
-      case 'Staff':
-        target = UserManagementAndroid();
-        break;
-      case 'Settings':
-        target = SettingsAndroid();
-        break;
-    }
-
-    if (target != null) {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => target!));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+
+    final List<_ActionItemData> allActions = [
+      _ActionItemData(
+        label: 'New POS',
+        icon: Icons.add_shopping_cart_rounded,
+        color: AppTheme.primary,
+        screen: const PosAndroid(),
+        isAllowed: auth.canAccessPOS,
+      ),
+      _ActionItemData(
+        label: 'Add Patient',
+        icon: Icons.person_add_alt_rounded,
+        color: AppTheme.teal,
+        screen: const OpdQueueAndroid(),
+        isAllowed: auth.canAccessOPD,
+      ),
+      _ActionItemData(
+        label: 'Stock List',
+        icon: Icons.inventory_2_rounded,
+        color: AppTheme.orange,
+        screen: const WarehouseAndroid(),
+        isAllowed: auth.canViewWarehouse,
+      ),
+      _ActionItemData(
+        label: 'Reports',
+        icon: Icons.analytics_rounded,
+        color: AppTheme.purple,
+        screen: const SalesHistoryAndroid(),
+        isAllowed: auth.canViewSalesHistory,
+      ),
+      _ActionItemData(
+        label: 'Staff',
+        icon: Icons.security_rounded,
+        color: AppTheme.indigo,
+        screen: const UserManagementAndroid(),
+        isAllowed: auth.canManageUsers,
+      ),
+      _ActionItemData(
+        label: 'Settings',
+        icon: Icons.settings_rounded,
+        color: Colors.blueGrey,
+        screen: const SettingsAndroid(),
+        isAllowed: auth.canAccessSettings,
+      ),
+    ];
+
+    final allowedActions = allActions.where((a) => a.isAllowed).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Padding(
           padding: EdgeInsets.only(left: 4, bottom: 16),
-          child: Text('QUICK ACTIONS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: AppTheme.primary)),
+          child: Text('QUICK ACTIONS',
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.5,
+                  color: AppTheme.primary)),
         ),
         GridView.count(
           shrinkWrap: true,
@@ -640,14 +682,17 @@ class _QuickActionsCard extends StatelessWidget {
           crossAxisCount: 3,
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
-          children: [
-            _QuickActionItem(icon: Icons.add_shopping_cart_rounded, label: 'New POS', color: AppTheme.primary, onTap: () => _handleAction(context, 'New POS')),
-            _QuickActionItem(icon: Icons.person_add_alt_rounded, label: 'Add Patient', color: AppTheme.teal, onTap: () => _handleAction(context, 'Add Patient')),
-            _QuickActionItem(icon: Icons.inventory_2_rounded, label: 'Stock List', color: AppTheme.orange, onTap: () => _handleAction(context, 'Stock List')),
-            _QuickActionItem(icon: Icons.analytics_rounded, label: 'Reports', color: AppTheme.purple, onTap: () => _handleAction(context, 'Reports')),
-            _QuickActionItem(icon: Icons.security_rounded, label: 'Staff', color: AppTheme.indigo, onTap: () => _handleAction(context, 'Staff')),
-            _QuickActionItem(icon: Icons.settings_rounded, label: 'Settings', color: Colors.blueGrey, onTap: () => _handleAction(context, 'Settings')),
-          ],
+          children: allowedActions.map((action) {
+            return _QuickActionItem(
+              icon: action.icon,
+              label: action.label,
+              color: action.color,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => action.screen),
+              ),
+            );
+          }).toList(),
         ),
       ],
     );

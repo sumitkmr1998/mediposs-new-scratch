@@ -25,6 +25,7 @@ class GoogleDriveService {
   Future<AccessCredentials?> login() async {
     try {
       final id = ClientId(_clientId, _clientSecret);
+      // prompt: 'consent' and access_type: 'offline' are often needed to get a refresh token consistently on desktop
       final client = await clientViaUserConsent(id, _scopes, (url) {
         launchUrl(Uri.parse(url));
       });
@@ -39,7 +40,10 @@ class GoogleDriveService {
   Future<bool> loginWithCredentials(String credsJson) async {
     try {
       final id = ClientId(_clientId, _clientSecret);
-      final creds = AccessCredentials.fromJson(jsonDecode(credsJson));
+      final json = jsonDecode(credsJson);
+      final creds = AccessCredentials.fromJson(json);
+      
+      // Use autoRefreshingClient to ensure the session stays alive
       _client = autoRefreshingClient(id, creds, http.Client());
       return true;
     } catch (e) {
@@ -53,13 +57,9 @@ class GoogleDriveService {
     _client = null;
   }
 
-  /// Zips multiple data directories and uploads them as a single backup.
+  /// Performs a full system backup (Local + Google Drive).
   Future<bool> uploadBackup() async {
-    if (_client == null) throw Exception('Google Drive not connected');
-
     try {
-      final driveApi = drive.DriveApi(_client!);
-      
       // 1. Determine Source Paths
       final appDocDir = await getApplicationDocumentsDirectory();
       final dbDirStr = ObjectBoxService.instance.dbDirectory;
@@ -72,7 +72,8 @@ class GoogleDriveService {
 
       // 2. Prepare Temp Staging Area
       final tempDir = await getTemporaryDirectory();
-      final stagingName = 'mediposs_staging_${DateTime.now().millisecondsSinceEpoch}';
+      final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
+      final stagingName = 'mediposs_staging_$timestamp';
       final stagingDir = Directory(p.join(tempDir.path, stagingName));
       await stagingDir.create(recursive: true);
 
@@ -81,45 +82,112 @@ class GoogleDriveService {
         if (await entry.value.exists()) {
           final target = Directory(p.join(stagingDir.path, entry.key));
           await target.create(recursive: true);
-          // Simple directory copy (recursive)
           await _copyDirectory(entry.value, target);
           foundAnything = true;
         }
       }
 
       if (!foundAnything) {
-        throw Exception('Source data folders not found. Database at: $dbDirStr');
+        throw Exception('Source data folders not found at $dbDirStr');
       }
 
-      // 3. Zip the staging folder
-      final zipFilePath = p.join(tempDir.path, 'mediposs_full_backup.zip');
+      // 3. Create the master ZIP
+      final zipFileName = 'mediposs_backup_$timestamp.zip';
+      final zipFilePath = p.join(tempDir.path, zipFileName);
       final encoder = ZipFileEncoder();
       encoder.create(zipFilePath);
       encoder.addDirectory(stagingDir);
       encoder.close();
 
       final zipFile = File(zipFilePath);
-      final media = drive.Media(zipFile.openRead(), zipFile.lengthSync());
 
-      // 4. Drive Upload
-      String folderId = await _getOrCreateFolder(driveApi);
-      final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
-      
-      final fileToUpload = drive.File()
-        ..name = 'mediposs_full_backup_$timestamp.zip'
-        ..parents = [folderId]
-        ..description = 'MediPoss complete system backup';
+      // 4. STEP 1: Offline Local Backup
+      await _handleLocalBackup(zipFile);
 
-      await driveApi.files.create(fileToUpload, uploadMedia: media);
+      // 5. STEP 2: Google Drive Upload (If Connected)
+      if (_client != null) {
+        final driveApi = drive.DriveApi(_client!);
+        final media = drive.Media(zipFile.openRead(), zipFile.lengthSync());
+        String folderId = await _getOrCreateFolder(driveApi);
+        
+        final fileToUpload = drive.File()
+          ..name = zipFileName
+          ..parents = [folderId]
+          ..description = 'MediPoss complete system backup (Cloud)';
+
+        await driveApi.files.create(fileToUpload, uploadMedia: media);
+      } else {
+        debugPrint('Google Drive not connected - Cloud upload skipped.');
+      }
       
-      // 5. Clean up
+      // 6. Clean up temp files
       if (await zipFile.exists()) await zipFile.delete();
       if (await stagingDir.exists()) await stagingDir.delete(recursive: true);
       
       return true;
     } catch (e) {
-      debugPrint('GoogleDriveUpload Error: $e');
+      debugPrint('Backup System Error: $e');
       rethrow;
+    }
+  }
+
+  Future<void> _handleLocalBackup(File zipFile) async {
+    try {
+      final backupDir = await _getLocalBackupDirectory();
+      if (!await backupDir.exists()) {
+        await backupDir.create(recursive: true);
+      }
+
+      // Copy the zip to the local backup folder
+      final targetPath = p.join(backupDir.path, p.basename(zipFile.path));
+      await zipFile.copy(targetPath);
+      debugPrint('Local offline backup saved to: $targetPath');
+
+      // Cleanup files older than 10 days
+      await _cleanupOldLocalBackups(backupDir);
+    } catch (e) {
+      debugPrint('Local Backup Error: $e. This might be due to folder permissions.');
+    }
+  }
+
+  Future<Directory> _getLocalBackupDirectory() async {
+    try {
+      // 1. Try Installation folder "backups"
+      String exePath = Platform.resolvedExecutable;
+      String appDir = p.dirname(exePath);
+      final idealDir = Directory(p.join(appDir, 'backups'));
+      
+      // Test write permission (quick check)
+      final testFile = File(p.join(idealDir.path, '.test'));
+      await idealDir.create(recursive: true);
+      await testFile.writeAsString('test');
+      await testFile.delete();
+      
+      return idealDir;
+    } catch (_) {
+      // 2. Fallback to App Support Directory if Program Files is restricted
+      final supportDir = await getApplicationSupportDirectory();
+      return Directory(p.join(supportDir.path, 'backups'));
+    }
+  }
+
+  Future<void> _cleanupOldLocalBackups(Directory backupDir) async {
+    final now = DateTime.now();
+    final expirationDate = now.subtract(const Duration(days: 10));
+
+    try {
+      final files = backupDir.listSync().whereType<File>();
+      for (final file in files) {
+        if (p.extension(file.path) == '.zip') {
+          final stats = await file.stat();
+          if (stats.modified.isBefore(expirationDate)) {
+            debugPrint('Cleaning up old backup: ${p.basename(file.path)}');
+            await file.delete();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Backup Cleanup Error: $e');
     }
   }
 

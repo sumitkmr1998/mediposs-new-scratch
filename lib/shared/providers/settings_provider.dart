@@ -28,15 +28,22 @@ class SettingsProvider extends ChangeNotifier {
     }
   }
 
+  bool _isAutoBackingUp = false;
+  bool get isAutoBackingUp => _isAutoBackingUp;
+
   Future<void> load() async {
     _settings = ObjectBoxService.instance.settings;
     
     // Attempt silent reconnect if linked
     if (_settings.googleDriveLinked && _settings.googleAuthData != null) {
-      final success = await _googleDrive.loginWithCredentials(_settings.googleAuthData!);
-      if (!success) {
-        _settings.googleDriveLinked = false;
-        ObjectBoxService.instance.settingsBox.put(_settings);
+      try {
+        final success = await _googleDrive.loginWithCredentials(_settings.googleAuthData!);
+        if (!success) {
+          debugPrint('SettingsProvider: Silent Google login failed. Keeping link for manual retry.');
+          // Don't unlink immediately, maybe it's just a network issue
+        }
+      } catch (e) {
+        debugPrint('SettingsProvider: Error during silent login: $e');
       }
     }
     notifyListeners();
@@ -80,7 +87,7 @@ class SettingsProvider extends ChangeNotifier {
     _isGoogleLoading = true;
     _googleError = null;
     notifyListeners();
- 
+
     try {
       final success = await _googleDrive.uploadBackup();
       if (success) {
@@ -103,7 +110,7 @@ class SettingsProvider extends ChangeNotifier {
     if (!_settings.googleDriveLinked || _settings.autoBackupFrequency == 'Never') return;
     if (_settings.autoBackupLogic != trigger) return;
 
-    // Logic for Daily/Weekly/Monthly timing
+    // Logic for Daily/Weekly/Monthly timing (Simplified for check)
     final now = DateTime.now();
     final last = _settings.lastBackupMillis != null 
         ? DateTime.fromMillisecondsSinceEpoch(_settings.lastBackupMillis!) 
@@ -114,14 +121,14 @@ class SettingsProvider extends ChangeNotifier {
     // Check if we are past the scheduled time today
     bool isPastScheduledTime = true;
     if (_settings.autoBackupTime != null) {
-      final parts = _settings.autoBackupTime!.split(':');
-      final scheduledHour = int.parse(parts[0]);
-      final scheduledMinute = int.parse(parts[1]);
-      final nowTime = TimeOfDay.fromDateTime(now);
-      
-      if (nowTime.hour < scheduledHour || (nowTime.hour == scheduledHour && nowTime.minute < scheduledMinute)) {
-        isPastScheduledTime = false;
-      }
+      try {
+        final parts = _settings.autoBackupTime!.split(':');
+        final scheduledHour = int.parse(parts[0]);
+        final scheduledMinute = int.parse(parts[1]);
+        if (now.hour < scheduledHour || (now.hour == scheduledHour && now.minute < scheduledMinute)) {
+          isPastScheduledTime = false;
+        }
+      } catch (_) {}
     }
 
     if (_settings.autoBackupFrequency == 'Daily') {
@@ -136,17 +143,27 @@ class SettingsProvider extends ChangeNotifier {
       if (now.difference(last).inDays >= 30 && isPastScheduledTime) {
         shouldBackup = true;
       }
+    } else if (_settings.autoBackupFrequency == 'Always') {
+       shouldBackup = true;
     }
 
     if (shouldBackup) {
       try {
+        _isAutoBackingUp = true;
+        notifyListeners();
+        
         debugPrint('Auto-Backup triggered by $trigger');
         await _googleDrive.uploadBackup();
+        
         _settings.lastBackupMillis = now.millisecondsSinceEpoch;
         ObjectBoxService.instance.settingsBox.put(_settings);
+        
+        _isAutoBackingUp = false;
         notifyListeners();
       } catch (e) {
         debugPrint('Auto-Backup failed ($trigger): $e');
+        _isAutoBackingUp = false;
+        notifyListeners();
       }
     }
   }
