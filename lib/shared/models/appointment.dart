@@ -32,6 +32,12 @@ class Appointment {
   DateTime? calledAt;
 
   @Property(type: PropertyType.date)
+  DateTime? pharmacyAt;
+
+  @Property(type: PropertyType.date)
+  DateTime? completedAt;
+
+  @Property(type: PropertyType.date)
   DateTime createdAt;
 
   bool isWalkIn; // Walk-in vs advance booking

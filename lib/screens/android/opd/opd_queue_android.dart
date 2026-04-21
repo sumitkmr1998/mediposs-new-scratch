@@ -205,7 +205,7 @@ class _QueueList extends StatelessWidget {
   }
 }
 
-class _ModernQueueCard extends StatelessWidget {
+class _ModernQueueCard extends StatefulWidget {
   final Appointment appointment;
   final ValueChanged<String> onStatusChange;
   final VoidCallback onConsult;
@@ -215,6 +215,82 @@ class _ModernQueueCard extends StatelessWidget {
     required this.onStatusChange,
     required this.onConsult,
   });
+
+  @override
+  State<_ModernQueueCard> createState() => _ModernQueueCardState();
+}
+
+class _ModernQueueCardState extends State<_ModernQueueCard> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    // Refresh every minute for duration updates
+    _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _ModernQueueCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.appointment.status != oldWidget.appointment.status) {
+      _startTimer();
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  String _getDuration() {
+    final now = DateTime.now();
+    Duration diff;
+    String prefix = "";
+
+    switch (widget.appointment.status) {
+      case kStatusWaiting:
+        diff = now.difference(widget.appointment.scheduledAt);
+        prefix = "Wait: ";
+        break;
+      case kStatusWithDoctor:
+        if (widget.appointment.calledAt == null) return "Consulting";
+        diff = now.difference(widget.appointment.calledAt!);
+        prefix = "In Cabin: ";
+        break;
+      case kStatusPharmacy:
+        if (widget.appointment.pharmacyAt == null)
+          return "Wait: ${_format(now.difference(widget.appointment.scheduledAt))}";
+        diff = now.difference(widget.appointment.pharmacyAt!);
+        prefix = "Pharm: ";
+        break;
+      case kStatusDone:
+        if (widget.appointment.completedAt == null ||
+            widget.appointment.scheduledAt == null) return "Done";
+        diff = widget.appointment.completedAt!
+            .difference(widget.appointment.scheduledAt);
+        prefix = "Total: ";
+        break;
+      default:
+        return "";
+    }
+
+    return "$prefix${_format(diff)}";
+  }
+
+  String _format(Duration d) {
+    if (d.isNegative) return "0m";
+    if (d.inMinutes < 60) return "${d.inMinutes}m";
+    return "${d.inHours}h ${d.inMinutes % 60}m";
+  }
 
   Color _statusColor(String status) {
     switch (status) {
@@ -248,7 +324,7 @@ class _ModernQueueCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _statusColor(appointment.status);
+    final color = _statusColor(widget.appointment.status);
 
     return Container(
       decoration: BoxDecoration(
@@ -294,7 +370,7 @@ class _ModernQueueCard extends StatelessWidget {
                               letterSpacing: 1,
                               color: Colors.grey)),
                       Text(
-                        '${appointment.tokenNumber}',
+                        '${widget.appointment.tokenNumber}',
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.w900,
@@ -312,23 +388,47 @@ class _ModernQueueCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(appointment.patientName,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 17,
-                              letterSpacing: -0.2)),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(widget.appointment.patientName,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 17,
+                                    letterSpacing: -0.2)),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              _getDuration(),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: color,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 6),
                       Row(
                         children: [
                           AppStatusBadge(
-                            label: _statusLabel(appointment.status),
+                            label: _statusLabel(widget.appointment.status),
                             color: color,
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'DR. ${appointment.doctorName.toUpperCase()}',
+                            'DR. ${widget.appointment.doctorName.toUpperCase()}',
                             style: TextStyle(
                                 color: context.textMutedColor,
                                 fontSize: 11,
@@ -343,7 +443,7 @@ class _ModernQueueCard extends StatelessWidget {
               ],
             ),
           ),
-          if (appointment.status != kStatusDone) ...[
+          if (widget.appointment.status != kStatusDone) ...[
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -356,22 +456,22 @@ class _ModernQueueCard extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  if (appointment.status == kStatusWaiting)
+                  if (widget.appointment.status == kStatusWaiting)
                     Expanded(
                       child: _ActionBtn(
                         label: 'CALL PATIENT',
                         icon: Icons.play_arrow_rounded,
                         color: AppTheme.primary,
-                        onTap: () => onStatusChange(kStatusWithDoctor),
+                        onTap: () => widget.onStatusChange(kStatusWithDoctor),
                       ),
                     ),
-                  if (appointment.status == kStatusWithDoctor) ...[
+                  if (widget.appointment.status == kStatusWithDoctor) ...[
                     Expanded(
                       child: _ActionBtn(
                         label: 'PRESCRIBE',
                         icon: Icons.medical_information_rounded,
                         color: AppTheme.primary,
-                        onTap: onConsult,
+                        onTap: widget.onConsult,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -380,17 +480,17 @@ class _ModernQueueCard extends StatelessWidget {
                         label: 'TO PHARMACY',
                         icon: Icons.arrow_forward_rounded,
                         color: AppTheme.purple,
-                        onTap: () => onStatusChange(kStatusPharmacy),
+                        onTap: () => widget.onStatusChange(kStatusPharmacy),
                       ),
                     ),
                   ],
-                  if (appointment.status == kStatusPharmacy)
+                  if (widget.appointment.status == kStatusPharmacy)
                     Expanded(
                       child: _ActionBtn(
                         label: 'MARK COMPLETED',
                         icon: Icons.check_circle_rounded,
                         color: AppTheme.success,
-                        onTap: () => onStatusChange(kStatusDone),
+                        onTap: () => widget.onStatusChange(kStatusDone),
                       ),
                     ),
                 ],

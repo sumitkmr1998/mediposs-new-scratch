@@ -57,6 +57,22 @@ class OpdProvider extends ChangeNotifier {
   double get filteredConsultationRevenue =>
       filteredQueue.fold(0.0, (sum, a) => sum + a.consultationFee);
 
+  double get filteredCollectedRevenue => filteredQueue
+      .where((a) => a.paymentMethod != 'pending')
+      .fold(0.0, (sum, a) => sum + a.consultationFee);
+
+  double get filteredCashRevenue => filteredQueue
+      .where((a) => a.paymentMethod.toLowerCase() == 'cash')
+      .fold(0.0, (sum, a) => sum + a.consultationFee);
+
+  double get filteredUpiRevenue => filteredQueue
+      .where((a) => a.paymentMethod.toLowerCase() == 'upi')
+      .fold(0.0, (sum, a) => sum + a.consultationFee);
+
+  double get filteredCardRevenue => filteredQueue
+      .where((a) => a.paymentMethod.toLowerCase() == 'card')
+      .fold(0.0, (sum, a) => sum + a.consultationFee);
+
   static const int pageSize = 30;
   int _loadedCount = 30;
 
@@ -197,6 +213,10 @@ class OpdProvider extends ChangeNotifier {
     appt.status = newStatus;
     if (newStatus == kStatusWithDoctor) {
       appt.calledAt = await TimeService.getRobustTime();
+    } else if (newStatus == kStatusPharmacy) {
+      appt.pharmacyAt = await TimeService.getRobustTime();
+    } else if (newStatus == kStatusDone) {
+      appt.completedAt = await TimeService.getRobustTime();
     }
     ObjectBoxService.instance.appointmentBox.put(appt);
     loadAll();
@@ -224,6 +244,10 @@ class OpdProvider extends ChangeNotifier {
     appt.paymentMethod = paymentMethod;
     if (newStatus == kStatusWithDoctor) {
       appt.calledAt = await TimeService.getRobustTime();
+    } else if (newStatus == kStatusPharmacy) {
+      appt.pharmacyAt = await TimeService.getRobustTime();
+    } else if (newStatus == kStatusDone) {
+      appt.completedAt = await TimeService.getRobustTime();
     }
     ObjectBoxService.instance.appointmentBox.put(appt);
     loadAll();

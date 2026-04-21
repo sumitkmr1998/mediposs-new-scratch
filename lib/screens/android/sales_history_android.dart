@@ -18,6 +18,13 @@ class SalesHistoryAndroid extends StatefulWidget {
 }
 
 class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
+  final TextEditingController _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
   @override
   Widget build(BuildContext context) {
     final sales = context.watch<SalesProvider>();
@@ -107,7 +114,37 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
             }),
           ),
 
-          // 2. Filter Bar
+          // 2. Search Bar
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (v) => sales.search(v),
+              decoration: InputDecoration(
+                hintText: 'Search by patient, mobile or bill #',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: _searchCtrl.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          sales.search('');
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: context.surfaceColor,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(
+                      color: context.borderColor.withValues(alpha: 0.5)),
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+              ),
+            ),
+          ),
+
+          // 3. Filter Bar
           Container(
             color: context.surfaceColor,
             child: SingleChildScrollView(
@@ -117,35 +154,35 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
                 children: [
                   AppFilterChip(
                     label: 'Today',
-                    isSelected: sales.activeFilter == SalesFilter.today,
+                    isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.today,
                     onTap: () => sales.setFilter(SalesFilter.today),
                     style: AppFilterChipStyle.filled,
                   ),
                   const SizedBox(width: 8),
                   AppFilterChip(
                     label: 'Yesterday',
-                    isSelected: sales.activeFilter == SalesFilter.yesterday,
+                    isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.yesterday,
                     onTap: () => sales.setFilter(SalesFilter.yesterday),
                     style: AppFilterChipStyle.filled,
                   ),
                   const SizedBox(width: 8),
                   AppFilterChip(
                     label: 'Last 7 Days',
-                    isSelected: sales.activeFilter == SalesFilter.last7Days,
+                    isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.last7Days,
                     onTap: () => sales.setFilter(SalesFilter.last7Days),
                     style: AppFilterChipStyle.filled,
                   ),
                   const SizedBox(width: 8),
                   AppFilterChip(
                     label: 'History',
-                    isSelected: sales.activeFilter == SalesFilter.allTime,
+                    isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.allTime,
                     onTap: () => sales.setFilter(SalesFilter.allTime),
                     style: AppFilterChipStyle.filled,
                   ),
                   const SizedBox(width: 8),
                   AppFilterChip(
                     label: 'Range',
-                    isSelected: sales.activeFilter == SalesFilter.custom,
+                    isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.custom,
                     onTap: () async {
                       final range = await showDateRangePicker(
                         context: context,
@@ -168,7 +205,7 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
             child: Row(
               children: [
-                Text('TRANSACTION STREAM',
+                Text(sales.isSearching ? 'SEARCH RESULTS' : 'TRANSACTION STREAM',
                     style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w800,

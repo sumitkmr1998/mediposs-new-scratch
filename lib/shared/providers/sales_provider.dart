@@ -33,6 +33,10 @@ class SalesProvider extends ChangeNotifier {
   DateTime? get customStart => _customStart;
   DateTime? get customEnd => _customEnd;
 
+  String _searchQuery = '';
+  String get searchQuery => _searchQuery;
+  bool get isSearching => _searchQuery.isNotEmpty;
+
   SalesProvider() {
     _activeFilter = SalesFilter.today;
     _setToday();
@@ -94,6 +98,34 @@ class SalesProvider extends ChangeNotifier {
         )
         .fold(0.0, (sum, s) => sum + s.total);
   }
+
+  double get filteredRevenue => _sales.fold(0.0, (sum, s) => sum + s.total);
+
+  double get filteredCashRevenue {
+    return _sales.fold(0.0, (sum, s) {
+      if (s.paymentMethod == 'mixed') return sum + s.cashAmount;
+      if (s.paymentMethod == 'cash') return sum + s.total;
+      return sum;
+    });
+  }
+
+  double get filteredUpiRevenue {
+    return _sales.fold(0.0, (sum, s) {
+      if (s.paymentMethod == 'mixed') return sum + s.upiAmount;
+      if (s.paymentMethod == 'upi') return sum + s.total;
+      return sum;
+    });
+  }
+
+  double get filteredCardRevenue {
+    return _sales.fold(0.0, (sum, s) {
+      if (s.paymentMethod == 'mixed') return sum + s.cardAmount;
+      if (s.paymentMethod == 'card') return sum + s.total;
+      return sum;
+    });
+  }
+
+  int get filteredSalesCount => _sales.length;
 
   double get todayCashRevenue {
     return _sales.where((s) => _isToday(s.createdAt)).fold(0.0, (sum, s) {
@@ -158,6 +190,31 @@ class SalesProvider extends ChangeNotifier {
       query =
           box.query().order(Sale_.createdAt, flags: Order.descending).build();
     }
+
+    _sales = query.find();
+    _loadedCount = pageSize;
+    query.close();
+    notifyListeners();
+  }
+
+  void search(String term) {
+    _searchQuery = term;
+    if (term.isEmpty) {
+      load();
+      return;
+    }
+
+    final box = ObjectBoxService.instance.saleBox;
+    final query = box
+        .query(
+          Sale_.patientName
+              .contains(_searchQuery, caseSensitive: false)
+              .or(Sale_.invoiceNo.contains(_searchQuery, caseSensitive: false))
+              .or(Sale_.patientPhone
+                  .contains(_searchQuery, caseSensitive: false)),
+        )
+        .order(Sale_.createdAt, flags: Order.descending)
+        .build();
 
     _sales = query.find();
     _loadedCount = pageSize;

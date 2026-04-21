@@ -281,25 +281,37 @@ class _DateFilterBar extends StatelessWidget {
           _CompactFilterChip(
             label: 'Today',
             isSelected: sales.activeFilter == SalesFilter.today,
-            onTap: () => sales.setFilter(SalesFilter.today),
+            onTap: () {
+              sales.setFilter(SalesFilter.today);
+              context.read<OpdProvider>().setFilter(OpdFilter.today);
+            },
           ),
           const SizedBox(width: 8),
           _CompactFilterChip(
             label: 'Yesterday',
             isSelected: sales.activeFilter == SalesFilter.yesterday,
-            onTap: () => sales.setFilter(SalesFilter.yesterday),
+            onTap: () {
+              sales.setFilter(SalesFilter.yesterday);
+              context.read<OpdProvider>().setFilter(OpdFilter.yesterday);
+            },
           ),
           const SizedBox(width: 8),
           _CompactFilterChip(
             label: '7 Days',
             isSelected: sales.activeFilter == SalesFilter.last7Days,
-            onTap: () => sales.setFilter(SalesFilter.last7Days),
+            onTap: () {
+              sales.setFilter(SalesFilter.last7Days);
+              context.read<OpdProvider>().setFilter(OpdFilter.last7Days);
+            },
           ),
           const SizedBox(width: 8),
           _CompactFilterChip(
             label: 'All Time',
             isSelected: sales.activeFilter == SalesFilter.allTime,
-            onTap: () => sales.setFilter(SalesFilter.allTime),
+            onTap: () {
+              sales.setFilter(SalesFilter.allTime);
+              context.read<OpdProvider>().setFilter(OpdFilter.allTime);
+            },
           ),
         ],
       ),
@@ -359,24 +371,14 @@ class _PrimaryStats extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double opdRev = opd.appointments
-        .where((a) =>
-            _isToday(a.scheduledAt) &&
-            a.status != kStatusCancelled &&
-            a.paymentMethod != 'pending')
-        .fold(0.0, (sum, a) => sum + (a.consultationFee));
-
-    final double productRev = sales.sales
-        .where((s) => _isToday(s.createdAt))
-        .fold(0.0, (sum, s) => sum + s.total);
-
-    final totalToday = opdRev + productRev;
+    final double totalRevenue = sales.filteredRevenue + opd.filteredCollectedRevenue;
+    final String labelSuffix = _getLabelSuffix(sales.activeFilter);
 
     return Column(
       children: [
         AppKpiCard(
-          label: 'Today\'s Revenue',
-          value: '₹${totalToday.toStringAsFixed(0)}',
+          label: 'Revenue ($labelSuffix)',
+          value: '₹${totalRevenue.toStringAsFixed(0)}',
           icon: Icons.trending_up_rounded,
           color: AppTheme.emerald,
           subtitle: 'Combined Product Sales & OPD Fees',
@@ -387,8 +389,8 @@ class _PrimaryStats extends StatelessWidget {
           children: [
             Expanded(
               child: AppKpiCard(
-                label: 'Sales Count',
-                value: '${sales.sales.where((s) => _isToday(s.createdAt)).length}',
+                label: 'Sales ($labelSuffix)',
+                value: '${sales.filteredSalesCount}',
                 icon: Icons.shopping_bag_rounded,
                 color: AppTheme.teal,
               ),
@@ -396,8 +398,8 @@ class _PrimaryStats extends StatelessWidget {
             const SizedBox(width: 14),
             Expanded(
               child: AppKpiCard(
-                label: 'OPD Today',
-                value: '${opd.todayQueue.length}',
+                label: 'OPD ($labelSuffix)',
+                value: '${opd.filteredPatientCount}',
                 icon: Icons.medical_services_rounded,
                 color: AppTheme.primary,
               ),
@@ -408,9 +410,14 @@ class _PrimaryStats extends StatelessWidget {
     );
   }
 
-  bool _isToday(DateTime dt) {
-    final now = DateTime.now();
-    return dt.year == now.year && dt.month == now.month && dt.day == now.day;
+  String _getLabelSuffix(SalesFilter filter) {
+    switch (filter) {
+      case SalesFilter.today: return 'Today';
+      case SalesFilter.yesterday: return 'Yesterday';
+      case SalesFilter.last7Days: return '7 Days';
+      case SalesFilter.allTime: return 'All Time';
+      case SalesFilter.custom: return 'Custom';
+    }
   }
 }
 
@@ -422,37 +429,15 @@ class _FinancialPerformance extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double productSales = sales.sales
-        .where((s) => _isToday(s.createdAt))
-        .fold(0.0, (sum, s) => sum + s.total);
-
-    final double opdRev = opd.appointments
-        .where((a) =>
-            _isToday(a.scheduledAt) &&
-            a.status != kStatusCancelled &&
-            a.paymentMethod != 'pending')
-        .fold(0.0, (sum, a) => sum + a.consultationFee);
-
+    final double productSales = sales.filteredRevenue;
+    final double opdRev = opd.filteredCollectedRevenue;
     final double total = productSales + opdRev;
 
-    // Payment mode breakdown - Fixed casing to match provider logic
-    double cash = 0, upi = 0, card = 0;
-    for (final s in sales.sales.where((s) => _isToday(s.createdAt))) {
-      final method = s.paymentMethod.toLowerCase();
-      if (method == 'mixed') {
-        cash += s.cashAmount;
-        upi += s.upiAmount;
-        card += s.cardAmount;
-      } else if (method == 'cash') cash += s.total;
-      else if (method == 'upi') upi += s.total;
-      else if (method == 'card') card += s.total;
-    }
-    for (final a in opd.appointments.where((a) => _isToday(a.scheduledAt) && a.status != kStatusCancelled)) {
-      final method = a.paymentMethod.toLowerCase();
-      if (method == 'cash') cash += a.consultationFee;
-      else if (method == 'upi') upi += a.consultationFee;
-      else if (method == 'card') card += a.consultationFee;
-    }
+    final double cash = sales.filteredCashRevenue + opd.filteredCashRevenue;
+    final double upi = sales.filteredUpiRevenue + opd.filteredUpiRevenue;
+    final double card = sales.filteredCardRevenue + opd.filteredCardRevenue;
+
+    final String labelSuffix = _getLabelSuffix(sales.activeFilter);
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -469,17 +454,17 @@ class _FinancialPerformance extends StatelessWidget {
             children: [
               _RevenueTotalBadge(total: total),
               const SizedBox(width: 20),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       'FINANCIAL PERFORMANCE',
                       style: TextStyle(
                           fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: AppTheme.primary),
                     ),
-                    Text('Today\'s performance metrics',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                    Text('$labelSuffix performance metrics',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
                   ],
                 ),
               ),
@@ -510,9 +495,14 @@ class _FinancialPerformance extends StatelessWidget {
     );
   }
 
-  bool _isToday(DateTime dt) {
-    final now = DateTime.now();
-    return dt.year == now.year && dt.month == now.month && dt.day == now.day;
+  String _getLabelSuffix(SalesFilter filter) {
+    switch (filter) {
+      case SalesFilter.today: return 'Today';
+      case SalesFilter.yesterday: return 'Yesterday';
+      case SalesFilter.last7Days: return '7 Days';
+      case SalesFilter.allTime: return 'All Time';
+      case SalesFilter.custom: return 'Custom';
+    }
   }
 }
 

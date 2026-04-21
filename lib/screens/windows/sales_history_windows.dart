@@ -43,7 +43,7 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
   @override
   Widget build(BuildContext context) {
     final sales = context.watch<SalesProvider>();
-    final displayed = _filteredSales(sales.displayedSales);
+    final displayed = sales.displayedSales;
 
     double grossSales = 0;
     double returns = 0;
@@ -248,7 +248,10 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
             width: 260,
             child: TextField(
               controller: _searchCtrl,
-              onChanged: (v) => setState(() => _searchQuery = v),
+              onChanged: (v) {
+                setState(() => _searchQuery = v);
+                sales.search(v);
+              },
               style: const TextStyle(fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'Search sales...',
@@ -262,6 +265,7 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
                         onPressed: () {
                           _searchCtrl.clear();
                           setState(() => _searchQuery = '');
+                          sales.search('');
                         },
                       )
                     : null,
@@ -414,6 +418,7 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
       color: context.textMutedColor);
 
   String _getRangeLabel(SalesProvider sales) {
+    if (sales.isSearching) return "Search Result";
     switch (sales.activeFilter) {
       case SalesFilter.today:
         return "Today's";
@@ -426,6 +431,7 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
       case SalesFilter.custom:
         return "Custom";
     }
+    return "";
   }
 }
 
