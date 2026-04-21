@@ -403,18 +403,22 @@ class _SideNav extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(
               children: [
-                Expanded(
+                Flexible(
                   child: Row(
                     children: [
                       const Icon(Icons.local_pharmacy,
                           color: AppTheme.primary, size: 28),
                       if (expanded) ...[
                         const SizedBox(width: 10),
-                        const Text('MediPoss',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 16,
-                                color: AppTheme.primary)),
+                        Flexible(
+                          child: Text('MediPoss',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                  color: AppTheme.primary)),
+                        ),
                       ],
                     ],
                   ),
@@ -590,9 +594,13 @@ class _StatusBadge extends StatelessWidget {
           Icon(icon, color: color, size: 14),
           if (label.isNotEmpty) ...[
             const SizedBox(width: 6),
-            Text(label,
-                style: TextStyle(
-                    color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+            Expanded(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+            ),
           ],
         ],
       ),

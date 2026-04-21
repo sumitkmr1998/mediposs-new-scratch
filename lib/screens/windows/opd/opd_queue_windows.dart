@@ -5,6 +5,7 @@ import '../../../shared/models/appointment.dart';
 import '../../../shared/providers/opd_provider.dart';
 import '../../../shared/providers/prescription_provider.dart';
 import '../../../shared/providers/patient_provider.dart';
+import '../../../shared/providers/auth_provider.dart';
 import '../../../theme/app_theme.dart';
 import '../../../shared/models/patient.dart';
 import '../../../shared/widgets/app_status_badge.dart';
@@ -695,13 +696,14 @@ class _QueueRowState extends State<_QueueRow> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  _ActionBtn(
-                    label: 'Prescribe',
-                    icon: Icons.edit_note_rounded,
-                    color: AppTheme.primary,
-                    onTap: widget.onConsult,
-                    filled: true,
-                  ),
+                  if (context.read<AuthProvider>().canAccessMedicalRecords)
+                    _ActionBtn(
+                      label: 'Prescribe',
+                      icon: Icons.edit_note_rounded,
+                      color: AppTheme.primary,
+                      onTap: widget.onConsult,
+                      filled: true,
+                    ),
                 ],
               ),
             ),

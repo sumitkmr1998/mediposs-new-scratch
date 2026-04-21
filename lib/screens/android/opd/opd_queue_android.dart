@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:provider/provider.dart';
 import '../../../shared/models/appointment.dart';
 import '../../../shared/providers/opd_provider.dart';
 import '../../../shared/providers/prescription_provider.dart';
+import '../../../shared/providers/auth_provider.dart';
 import '../../../theme/app_theme.dart';
 import '../../../shared/models/patient.dart';
 import '../../../widgets/android/patient_dialogs_android.dart';
@@ -466,15 +468,17 @@ class _ModernQueueCardState extends State<_ModernQueueCard> {
                       ),
                     ),
                   if (widget.appointment.status == kStatusWithDoctor) ...[
-                    Expanded(
-                      child: _ActionBtn(
-                        label: 'PRESCRIBE',
-                        icon: Icons.medical_information_rounded,
-                        color: AppTheme.primary,
-                        onTap: widget.onConsult,
+                    if (context.read<AuthProvider>().canAccessMedicalRecords)
+                      Expanded(
+                        child: _ActionBtn(
+                          label: 'PRESCRIBE',
+                          icon: Icons.medical_information_rounded,
+                          color: AppTheme.primary,
+                          onTap: widget.onConsult,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
+                    if (context.read<AuthProvider>().canAccessMedicalRecords)
+                      const SizedBox(width: 12),
                     Expanded(
                       child: _ActionBtn(
                         label: 'TO PHARMACY',

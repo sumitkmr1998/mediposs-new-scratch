@@ -13,6 +13,7 @@ import '../../../shared/providers/patient_provider.dart';
 import '../../../shared/providers/sales_provider.dart';
 import '../../../shared/providers/prescription_provider.dart';
 import '../../../shared/providers/opd_provider.dart';
+import '../../../shared/providers/auth_provider.dart';
 import '../../../shared/services/sync_service.dart';
 import '../../../../theme/app_theme.dart';
 import '../../opd/../../screens/opd/prescription_screen.dart';
@@ -153,10 +154,13 @@ class _HistoryTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.read<AuthProvider>();
     final sales = context.watch<SalesProvider>().getSalesByPatient(patient.id);
-    final prescriptions = context
-        .watch<PrescriptionProvider>()
-        .getPrescriptionsForPatient(patient.id);
+    final prescriptions = auth.canAccessMedicalRecords
+        ? context
+            .watch<PrescriptionProvider>()
+            .getPrescriptionsForPatient(patient.id)
+        : <Prescription>[];
 
     // Merge and sort by date
     final List<dynamic> history = [...sales, ...prescriptions]
@@ -673,16 +677,31 @@ class _GalleryTabState extends State<_GalleryTab> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
     final pProvider = context.watch<PatientProvider>();
     final photos = pProvider.getPatientPhotos(widget.patient.id);
 
     return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addPhoto,
-        backgroundColor: AppTheme.primary,
-        child: const Icon(Icons.add_a_photo, color: Colors.white),
-      ),
-      body: _loadingFromHub
+      floatingActionButton: auth.canAccessMedicalRecords
+          ? FloatingActionButton(
+              onPressed: _addPhoto,
+              backgroundColor: AppTheme.primary,
+              child: const Icon(Icons.add_a_photo, color: Colors.white),
+            )
+          : null,
+      body: !auth.canAccessMedicalRecords
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.lock_person,
+                      size: 64, color: context.textMutedColor),
+                  const SizedBox(height: 12),
+                  const Text('Medical records access required'),
+                ],
+              ),
+            )
+          : _loadingFromHub
           ? const Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/models/doctor.dart';
 import '../../../shared/providers/opd_provider.dart';
+import '../../../shared/providers/auth_provider.dart';
 import '../../../shared/services/sync_service.dart';
 import '../../../theme/app_theme.dart';
 import '../../../shared/widgets/app_kpi_card.dart';
@@ -40,6 +41,8 @@ class _DoctorListWindowsState extends State<DoctorListWindows> {
   @override
   Widget build(BuildContext context) {
     final opd = context.watch<OpdProvider>();
+    final auth = context.watch<AuthProvider>();
+    final canManage = auth.canManageDoctors;
     final allDoctors = opd.doctors;
 
     final filteredDoctors = allDoctors.where((d) {
@@ -70,20 +73,21 @@ class _DoctorListWindowsState extends State<DoctorListWindows> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Clinician Directory', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                  Text('Manage records for ${allDoctors.length} registered healthcare providers', style: TextStyle(color: context.textMutedColor)),
+                   const Text('Clinician Directory', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                   Text('Manage records for ${allDoctors.length} registered healthcare providers', style: TextStyle(color: context.textMutedColor)),
                 ],
               ),
-              FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              if (canManage)
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: const Icon(Icons.person_add_rounded, size: 18),
+                  label: const Text('Add Doctor'),
+                  onPressed: () => _showDoctorDialog(context),
                 ),
-                icon: const Icon(Icons.person_add_rounded, size: 18),
-                label: const Text('Add Doctor'),
-                onPressed: () => _showDoctorDialog(context),
-              ),
             ],
           ),
           const SizedBox(height: 32),
@@ -92,7 +96,7 @@ class _DoctorListWindowsState extends State<DoctorListWindows> {
         const SizedBox(height: 24),
         _buildFilterSearchCard(context),
         const SizedBox(height: 24),
-        _buildDataTable(context, filteredDoctors),
+        _buildDataTable(context, filteredDoctors, canManage),
       ],
     );
 
@@ -109,13 +113,15 @@ class _DoctorListWindowsState extends State<DoctorListWindows> {
         padding: const EdgeInsets.all(20),
         child: content,
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showDoctorDialog(context),
-        icon: const Icon(Icons.person_add_rounded),
-        label: const Text('Add Doctor'),
-        backgroundColor: AppTheme.primary,
-        foregroundColor: Colors.white,
-      ),
+      floatingActionButton: canManage
+          ? FloatingActionButton.extended(
+              onPressed: () => _showDoctorDialog(context),
+              icon: const Icon(Icons.person_add_rounded),
+              label: const Text('Add Doctor'),
+              backgroundColor: AppTheme.primary,
+              foregroundColor: Colors.white,
+            )
+          : null,
     );
   }
 
@@ -306,7 +312,7 @@ class _DoctorListWindowsState extends State<DoctorListWindows> {
     );
   }
 
-  Widget _buildDataTable(BuildContext context, List<Doctor> doctors) {
+  Widget _buildDataTable(BuildContext context, List<Doctor> doctors, bool canManage) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -338,8 +344,8 @@ class _DoctorListWindowsState extends State<DoctorListWindows> {
           child: _isGridView
               ? _DoctorGrid(
                   doctors: doctors,
-                  onEdit: (d) => _showDoctorDialog(context, doctor: d),
-                  onDelete: (d) => _confirmDelete(context, d),
+                  onEdit: !canManage ? null : (d) => _showDoctorDialog(context, doctor: d),
+                  onDelete: !canManage ? null : (d) => _confirmDelete(context, d),
                 )
               : Column(
                   children: [
@@ -358,6 +364,7 @@ class _DoctorListWindowsState extends State<DoctorListWindows> {
                     else
                       ...doctors.map((d) => _DoctorTableRow(
                             doctor: d,
+                            canManage: canManage,
                             onEdit: () => _showDoctorDialog(context, doctor: d),
                             onDelete: () => _confirmDelete(context, d),
                           )),
@@ -521,11 +528,13 @@ class _ToggleBtn extends StatelessWidget {
 
 class _DoctorTableRow extends StatefulWidget {
   final Doctor doctor;
+  final bool canManage;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const _DoctorTableRow({
     required this.doctor,
+    this.canManage = true,
     required this.onEdit,
     required this.onDelete,
   });
@@ -644,30 +653,31 @@ class _DoctorTableRowState extends State<_DoctorTableRow> {
             const SizedBox(width: 12),
             SizedBox(
               width: 130,
-              child: _StatusToggle(doctor: widget.doctor),
+              child: _StatusToggle(doctor: widget.doctor, enabled: widget.canManage),
             ),
             const SizedBox(width: 12),
-            SizedBox(
-              width: 100,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  _IconActionBtn(
-                    icon: Icons.edit_rounded,
-                    color: AppTheme.warning,
-                    onTap: widget.onEdit,
-                    tooltip: 'Edit',
-                  ),
-                  const SizedBox(width: 4),
-                  _IconActionBtn(
-                    icon: Icons.delete_rounded,
-                    color: AppTheme.danger,
-                    onTap: widget.onDelete,
-                    tooltip: 'Delete',
-                  ),
-                ],
+            if (widget.canManage)
+              SizedBox(
+                width: 100,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    _IconActionBtn(
+                      icon: Icons.edit_rounded,
+                      color: AppTheme.warning,
+                      onTap: widget.onEdit,
+                      tooltip: 'Edit',
+                    ),
+                    const SizedBox(width: 4),
+                    _IconActionBtn(
+                      icon: Icons.delete_rounded,
+                      color: AppTheme.danger,
+                      onTap: widget.onDelete,
+                      tooltip: 'Delete',
+                    ),
+                  ],
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -739,7 +749,9 @@ class _SpecializationBadge extends StatelessWidget {
 class _StatusToggle extends StatelessWidget {
   final Doctor doctor;
 
-  const _StatusToggle({required this.doctor});
+  final bool enabled;
+
+  const _StatusToggle({required this.doctor, this.enabled = true});
 
   @override
   Widget build(BuildContext context) {
@@ -748,7 +760,7 @@ class _StatusToggle extends StatelessWidget {
       children: [
         _AnimatedSwitch(
           value: doctor.isActive,
-          onChanged: (v) {
+          onChanged: !enabled ? (_) {} : (v) {
             doctor.isActive = v;
             final sync = context.read<SyncService>();
             context.read<OpdProvider>().saveDoctor(doctor, syncService: sync);
@@ -900,13 +912,13 @@ class _IconActionBtn extends StatelessWidget {
 
 class _DoctorGrid extends StatelessWidget {
   final List<Doctor> doctors;
-  final Function(Doctor) onEdit;
-  final Function(Doctor) onDelete;
+  final Function(Doctor)? onEdit;
+  final Function(Doctor)? onDelete;
 
   const _DoctorGrid({
     required this.doctors,
-    required this.onEdit,
-    required this.onDelete,
+    this.onEdit,
+    this.onDelete,
   });
 
   @override
@@ -942,8 +954,8 @@ class _DoctorGrid extends StatelessWidget {
           itemCount: doctors.length,
           itemBuilder: (context, index) => _DoctorCard(
             doctor: doctors[index],
-            onEdit: () => onEdit(doctors[index]),
-            onDelete: () => onDelete(doctors[index]),
+            onEdit: () => onEdit?.call(doctors[index]),
+            onDelete: () => onDelete?.call(doctors[index]),
           ),
         );
       },
@@ -955,13 +967,13 @@ class _DoctorGrid extends StatelessWidget {
 
 class _DoctorCard extends StatefulWidget {
   final Doctor doctor;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   const _DoctorCard({
     required this.doctor,
-    required this.onEdit,
-    required this.onDelete,
+    this.onEdit,
+    this.onDelete,
   });
 
   @override
@@ -1043,25 +1055,29 @@ class _DoctorCardState extends State<_DoctorCard> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _CardActionBtn(
-                          icon: Icons.edit_rounded,
-                          color: AppTheme.warning,
-                          onTap: widget.onEdit,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _CardActionBtn(
-                          icon: Icons.delete_rounded,
-                          color: AppTheme.danger,
-                          onTap: widget.onDelete,
-                        ),
-                      ),
-                    ],
-                  ),
+                  if (widget.onEdit != null || widget.onDelete != null)
+                    Row(
+                      children: [
+                        if (widget.onEdit != null)
+                          Expanded(
+                            child: _CardActionBtn(
+                              icon: Icons.edit_rounded,
+                              color: AppTheme.warning,
+                              onTap: widget.onEdit!,
+                            ),
+                          ),
+                        if (widget.onEdit != null && widget.onDelete != null)
+                          const SizedBox(width: 8),
+                        if (widget.onDelete != null)
+                          Expanded(
+                            child: _CardActionBtn(
+                              icon: Icons.delete_rounded,
+                              color: AppTheme.danger,
+                              onTap: widget.onDelete!,
+                            ),
+                          ),
+                      ],
+                    ),
                 ],
               ),
             ),

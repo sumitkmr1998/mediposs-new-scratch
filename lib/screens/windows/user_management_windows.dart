@@ -17,7 +17,26 @@ class _UserManagementWindowsState extends State<UserManagementWindows> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final canManage = auth.canManageUsers;
     final users = auth.getAllUsers();
+
+    if (!canManage) {
+      return Scaffold(
+        backgroundColor: context.bgColor,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.lock_person_rounded, size: 64, color: AppTheme.danger),
+              const SizedBox(height: 16),
+              const Text('Access Denied', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text('You do not have permission to manage staff profiles.', style: TextStyle(color: context.textMutedColor)),
+            ],
+          ),
+        ),
+      );
+    }
 
     final content = GridView.builder(
       padding: widget.isEmbedded ? EdgeInsets.zero : const EdgeInsets.all(24),
@@ -47,22 +66,23 @@ class _UserManagementWindowsState extends State<UserManagementWindows> {
                    Text('Manage permissions and credentials for ${users.length} staff members', style: TextStyle(color: context.textMutedColor)),
                 ],
               ),
-              FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              if (canManage)
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: const Icon(Icons.person_add_rounded, size: 18),
+                  label: const Text('Add Staff'),
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (_) => const UserFormDialog(),
+                    );
+                  },
                 ),
-                icon: const Icon(Icons.person_add_rounded, size: 18),
-                label: const Text('Add Staff'),
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (_) => const UserFormDialog(),
-                  );
-                },
-              ),
             ],
           ),
           const SizedBox(height: 32),
@@ -78,27 +98,28 @@ class _UserManagementWindowsState extends State<UserManagementWindows> {
         backgroundColor: context.surfaceColor,
         elevation: 0,
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-                foregroundColor: Colors.white,
-                elevation: 2,
-                shadowColor: AppTheme.primary.withValues(alpha: 0.3),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          if (canManage)
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 2,
+                  shadowColor: AppTheme.primary.withValues(alpha: 0.3),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.person_add_rounded, size: 18),
+                label: const Text('Add New Staff'),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (_) => const UserFormDialog(),
+                  );
+                },
               ),
-              icon: const Icon(Icons.person_add_rounded, size: 18),
-              label: const Text('Add New Staff'),
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (_) => const UserFormDialog(),
-                );
-              },
             ),
-          ),
         ],
       ),
       body: content,
@@ -193,20 +214,21 @@ class _UserCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      IconButton(
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            barrierDismissible: false,
-                            builder: (_) => UserFormDialog(existingUser: user),
-                          );
-                        },
-                        icon: const Icon(Icons.edit_note_rounded),
-                        color: AppTheme.primary,
-                        style: IconButton.styleFrom(
-                          backgroundColor: AppTheme.primary.withValues(alpha: 0.08),
+                      if (auth.canManageUsers)
+                        IconButton(
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (_) => UserFormDialog(existingUser: user),
+                            );
+                          },
+                          icon: const Icon(Icons.edit_note_rounded),
+                          color: AppTheme.primary,
+                          style: IconButton.styleFrom(
+                            backgroundColor: AppTheme.primary.withValues(alpha: 0.08),
+                          ),
                         ),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 24),

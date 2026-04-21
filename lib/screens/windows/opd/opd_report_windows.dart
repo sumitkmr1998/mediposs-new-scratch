@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../shared/providers/opd_provider.dart';
+import '../../../shared/providers/auth_provider.dart';
 import '../../../shared/providers/prescription_provider.dart';
 import '../../../shared/models/appointment.dart';
 import '../../../theme/app_theme.dart';
@@ -215,30 +216,32 @@ class _OpdReportWindowsState extends State<OpdReportWindows> {
                     onTap: () => opd.setFilter(OpdFilter.today),
                     style: AppFilterChipStyle.filled,
                   ),
-                  const SizedBox(width: 8),
-                  AppFilterChip(
-                    label: 'Yesterday',
-                    icon: Icons.history_rounded,
-                    isSelected: opd.activeFilter == OpdFilter.yesterday,
-                    onTap: () => opd.setFilter(OpdFilter.yesterday),
-                    style: AppFilterChipStyle.filled,
-                  ),
-                  const SizedBox(width: 8),
-                  AppFilterChip(
-                    label: 'Last 7 Days',
-                    icon: Icons.date_range_rounded,
-                    isSelected: opd.activeFilter == OpdFilter.last7Days,
-                    onTap: () => opd.setFilter(OpdFilter.last7Days),
-                    style: AppFilterChipStyle.filled,
-                  ),
-                  const SizedBox(width: 8),
-                  AppFilterChip(
-                    label: 'All Time',
-                    icon: Icons.all_inbox_rounded,
-                    isSelected: opd.activeFilter == OpdFilter.allTime,
-                    onTap: () => opd.setFilter(OpdFilter.allTime),
-                    style: AppFilterChipStyle.filled,
-                  ),
+                  if (context.watch<AuthProvider>().currentUser?.canViewHistoricalData ?? true) ...[
+                    const SizedBox(width: 8),
+                    AppFilterChip(
+                      label: 'Yesterday',
+                      icon: Icons.history_rounded,
+                      isSelected: opd.activeFilter == OpdFilter.yesterday,
+                      onTap: () => opd.setFilter(OpdFilter.yesterday),
+                      style: AppFilterChipStyle.filled,
+                    ),
+                    const SizedBox(width: 8),
+                    AppFilterChip(
+                      label: 'Last 7 Days',
+                      icon: Icons.date_range_rounded,
+                      isSelected: opd.activeFilter == OpdFilter.last7Days,
+                      onTap: () => opd.setFilter(OpdFilter.last7Days),
+                      style: AppFilterChipStyle.filled,
+                    ),
+                    const SizedBox(width: 8),
+                    AppFilterChip(
+                      label: 'All Time',
+                      icon: Icons.all_inbox_rounded,
+                      isSelected: opd.activeFilter == OpdFilter.allTime,
+                      onTap: () => opd.setFilter(OpdFilter.allTime),
+                      style: AppFilterChipStyle.filled,
+                    ),
+                  ],
                   const SizedBox(width: 8),
                   AppFilterChip(
                     label: 'Custom',

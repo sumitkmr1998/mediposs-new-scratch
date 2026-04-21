@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/models/doctor.dart';
 import '../../../shared/providers/opd_provider.dart';
+import '../../../shared/providers/auth_provider.dart';
 import '../../../shared/services/sync_service.dart';
 import '../../../theme/app_theme.dart';
 import '../../../shared/widgets/app_empty_state.dart';
@@ -25,6 +26,12 @@ class _DoctorListAndroidState extends State<DoctorListAndroid> {
   @override
   Widget build(BuildContext context) {
     final opd = context.watch<OpdProvider>();
+    final auth = context.watch<AuthProvider>();
+    final canManage = auth.canManageDoctors;
+
+    if (!canManage && opd.doctors.isEmpty) {
+       // Optional: show empty state or access denied if no doctors and no permission
+    }
 
     return Scaffold(
       backgroundColor: context.surfaceColor,
@@ -37,11 +44,12 @@ class _DoctorListAndroidState extends State<DoctorListAndroid> {
             forceElevated: innerBoxIsScrolled,
             elevation: innerBoxIsScrolled ? 4 : 0,
             actions: [
-              IconButton(
-                icon: const Icon(Icons.person_add),
-                tooltip: 'Add Doctor',
-                onPressed: () => _showDoctorDialog(context),
-              ),
+              if (canManage)
+                IconButton(
+                  icon: const Icon(Icons.person_add),
+                  tooltip: 'Add Doctor',
+                  onPressed: () => _showDoctorDialog(context),
+                ),
               const SizedBox(width: 8),
             ],
           ),
@@ -50,9 +58,9 @@ class _DoctorListAndroidState extends State<DoctorListAndroid> {
             ? AppEmptyState(
                 icon: Icons.medical_services_outlined,
                 title: 'No doctors added yet',
-                ctaLabel: 'Add First Doctor',
-                ctaIcon: Icons.add,
-                onCtaTap: () => _showDoctorDialog(context),
+                ctaLabel: canManage ? 'Add First Doctor' : null,
+                ctaIcon: canManage ? Icons.add : null,
+                onCtaTap: canManage ? () => _showDoctorDialog(context) : null,
               )
             : ListView.builder(
                 padding: const EdgeInsets.all(20).copyWith(bottom: 100),
@@ -159,7 +167,7 @@ class _DoctorListAndroidState extends State<DoctorListAndroid> {
                                   children: [
                                     Switch(
                                       value: d.isActive,
-                                      onChanged: (v) {
+                                      onChanged: !canManage ? null : (v) {
                                         d.isActive = v;
                                         final sync =
                                             context.read<SyncService>();
@@ -185,26 +193,27 @@ class _DoctorListAndroidState extends State<DoctorListAndroid> {
                                     ),
                                   ],
                                 ),
-                                Row(
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.edit_rounded,
-                                          size: 20),
-                                      color: AppTheme.indigo,
-                                      onPressed: () =>
-                                          _showDoctorDialog(context, doctor: d),
-                                      tooltip: 'Edit Doctor',
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(
-                                          Icons.delete_outline_rounded,
-                                          size: 20),
-                                      color: AppTheme.danger,
-                                      onPressed: () => _confirmDelete(d),
-                                      tooltip: 'Delete Doctor',
-                                    ),
-                                  ],
-                                ),
+                                if (canManage)
+                                  Row(
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_rounded,
+                                            size: 20),
+                                        color: AppTheme.indigo,
+                                        onPressed: () =>
+                                            _showDoctorDialog(context, doctor: d),
+                                        tooltip: 'Edit Doctor',
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(
+                                            Icons.delete_outline_rounded,
+                                            size: 20),
+                                        color: AppTheme.danger,
+                                        onPressed: () => _confirmDelete(d),
+                                        tooltip: 'Delete Doctor',
+                                      ),
+                                    ],
+                                  ),
                               ],
                             ),
                           ),
@@ -215,13 +224,15 @@ class _DoctorListAndroidState extends State<DoctorListAndroid> {
                 },
               ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showDoctorDialog(context),
-        backgroundColor: AppTheme.primary,
-        icon: const Icon(Icons.person_add, color: Colors.white),
-        label: const Text('Add Doctor',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-      ),
+      floatingActionButton: canManage
+          ? FloatingActionButton.extended(
+              onPressed: () => _showDoctorDialog(context),
+              backgroundColor: AppTheme.primary,
+              icon: const Icon(Icons.person_add, color: Colors.white),
+              label: const Text('Add Doctor',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+            )
+          : null,
     );
   }
 

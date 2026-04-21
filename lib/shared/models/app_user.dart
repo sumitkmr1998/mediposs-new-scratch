@@ -47,6 +47,7 @@ class AppUser {
   // Security & Data
   bool canViewPurchasePrice;     // Restricted financial data
   bool canExportData;            // Prevent bulk extraction
+  bool canViewHistoricalData;    // Shield historical stats (Dashboard/Reports)
 
   AppUser({
     this.id = 0,
@@ -75,6 +76,7 @@ class AppUser {
     this.canAccessMedicalRecords = false,
     this.canViewPurchasePrice = false,
     this.canExportData = false,
+    this.canViewHistoricalData = true,
   });
 
   /// Applies standard permissions based on a role name.
@@ -119,12 +121,32 @@ class AppUser {
       case 'doctor':
         canAccessOPD = true;
         canAccessMedicalRecords = true;
+        canViewInventory = true;
         break;
       case 'accountant':
         canViewDashboard = true;
         canViewSalesHistory = true;
         canViewOpdReports = true;
         canViewPurchasePrice = true;
+        canViewHistoricalData = true;
+        break;
+    }
+  }
+
+  void _applyPermissionShield(String preset) {
+    switch (preset.toLowerCase()) {
+      case 'admin':
+      case 'owner':
+      case 'manager':
+      case 'doctor':
+      case 'accountant':
+        canViewHistoricalData = true;
+        break;
+      case 'cashier':
+      case 'pharmacist':
+      case 'staff':
+      default:
+        canViewHistoricalData = false;
         break;
     }
   }
@@ -151,6 +173,7 @@ class AppUser {
     canAccessMedicalRecords = val;
     canViewPurchasePrice = val;
     canExportData = val;
+    canViewHistoricalData = val;
   }
 
   Map<String, dynamic> toJson() => {
@@ -180,6 +203,7 @@ class AppUser {
         'canAccessMedicalRecords': canAccessMedicalRecords,
         'canViewPurchasePrice': canViewPurchasePrice,
         'canExportData': canExportData,
+        'canViewHistoricalData': canViewHistoricalData,
       };
 
   static AppUser fromJson(Map<String, dynamic> json) => AppUser(
@@ -209,6 +233,7 @@ class AppUser {
         canAccessMedicalRecords: json['canAccessMedicalRecords'] ?? false,
         canViewPurchasePrice: json['canViewPurchasePrice'] ?? false,
         canExportData: json['canExportData'] ?? false,
+        canViewHistoricalData: json['canViewHistoricalData'] ?? true,
       );
 }
 
@@ -232,6 +257,7 @@ class AppSettings {
   String receiptPaperSize; // 'A6', 'Letter', 'A4', 'Roll80'
   String? hubIp; // To persist connection
   String? autoLoginPin; // Saved PIN for auto-login JWT refresh on Android
+  String? autoLoginName; // Saved Name for auto-login JWT refresh on Android
   int lowStockThreshold;
   int nearExpiryThresholdDays;
   double preferredRefreshRate; // -1.0 = Auto/Max
@@ -243,6 +269,7 @@ class AppSettings {
   int? lastBackupMillis;
   String? autoBackupTime; // e.g., "22:00"
   bool navCollapsed;
+  int? lastGlobalSync;
 
   AppSettings({
     this.id = 0,
@@ -261,6 +288,7 @@ class AppSettings {
     this.receiptPaperSize = 'A6',
     this.hubIp,
     this.autoLoginPin,
+    this.autoLoginName,
     this.lowStockThreshold = 10,
     this.nearExpiryThresholdDays = 90,
     this.preferredRefreshRate = -1.0,
@@ -272,6 +300,7 @@ class AppSettings {
     this.lastBackupMillis,
     this.autoBackupTime = '22:00',
     this.navCollapsed = false,
+    this.lastGlobalSync,
   });
 
   Map<String, dynamic> toJson() => {
@@ -291,6 +320,7 @@ class AppSettings {
         'receiptPaperSize': receiptPaperSize,
         'hubIp': hubIp,
         'autoLoginPin': autoLoginPin,
+        'autoLoginName': autoLoginName,
         'lowStockThreshold': lowStockThreshold,
         'nearExpiryThresholdDays': nearExpiryThresholdDays,
         'preferredRefreshRate': preferredRefreshRate,
@@ -302,6 +332,7 @@ class AppSettings {
         'lastBackupMillis': lastBackupMillis,
         'autoBackupTime': autoBackupTime,
         'navCollapsed': navCollapsed,
+        'lastGlobalSync': lastGlobalSync,
       };
 
   static AppSettings fromJson(Map<String, dynamic> json) => AppSettings(
@@ -322,6 +353,7 @@ class AppSettings {
         receiptPaperSize: json['receiptPaperSize'] ?? 'A6',
         hubIp: json['hubIp'],
         autoLoginPin: json['autoLoginPin'],
+        autoLoginName: json['autoLoginName'],
         lowStockThreshold: json['lowStockThreshold'] ?? 10,
         nearExpiryThresholdDays: json['nearExpiryThresholdDays'] ?? 90,
         preferredRefreshRate:
@@ -334,5 +366,6 @@ class AppSettings {
         lastBackupMillis: json['lastBackupMillis'],
         autoBackupTime: json['autoBackupTime'] ?? '22:00',
         navCollapsed: json['navCollapsed'] ?? false,
+        lastGlobalSync: json['lastGlobalSync'],
       );
 }

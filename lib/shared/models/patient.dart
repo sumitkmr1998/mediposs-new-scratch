@@ -17,6 +17,9 @@ class Patient {
   @Property(type: PropertyType.date)
   DateTime createdAt;
 
+  @Property(type: PropertyType.date)
+  DateTime updatedAt;
+
   Patient({
     this.id = 0,
     required this.uhid,
@@ -27,7 +30,9 @@ class Patient {
     this.bloodGroup = '',
     this.age = 0,
     DateTime? createdAt,
-  }) : createdAt = createdAt ?? DateTime.now();
+    DateTime? updatedAt,
+  }) : createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? createdAt ?? DateTime.now();
 
   int get ageYears => age;
 }

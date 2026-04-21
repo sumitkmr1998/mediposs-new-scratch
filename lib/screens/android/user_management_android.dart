@@ -16,7 +16,27 @@ class _UserManagementAndroidState extends State<UserManagementAndroid> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final canManage = auth.canManageUsers;
     final users = auth.getAllUsers();
+
+    if (!canManage) {
+      return Scaffold(
+        backgroundColor: context.surfaceColor,
+        appBar: AppBar(title: const Text('Staff Management')),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.lock_person_rounded, size: 64, color: AppTheme.danger),
+              const SizedBox(height: 16),
+              const Text('Access Denied', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text('You do not have permission to manage staff.', style: TextStyle(color: context.textMutedColor)),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: context.surfaceColor,
@@ -29,13 +49,14 @@ class _UserManagementAndroidState extends State<UserManagementAndroid> {
             forceElevated: innerBoxIsScrolled,
             elevation: innerBoxIsScrolled ? 4 : 0,
             actions: [
-              IconButton(
-                icon: const Icon(Icons.person_add),
-                tooltip: 'Add New Staff',
-                onPressed: () {
-                  AndroidUserDialog.showUserSheet(context);
-                },
-              ),
+              if (canManage)
+                IconButton(
+                  icon: const Icon(Icons.person_add),
+                  tooltip: 'Add New Staff',
+                  onPressed: () {
+                    AndroidUserDialog.showUserSheet(context);
+                  },
+                ),
               const SizedBox(width: 8),
             ],
           ),
@@ -65,13 +86,15 @@ class _UserManagementAndroidState extends State<UserManagementAndroid> {
                     _buildUserCard(context, users[i], auth),
               ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          AndroidUserDialog.showUserSheet(context);
-        },
-        backgroundColor: AppTheme.primary,
-        child: const Icon(Icons.person_add, color: Colors.white),
-      ),
+      floatingActionButton: canManage 
+          ? FloatingActionButton(
+              onPressed: () {
+                AndroidUserDialog.showUserSheet(context);
+              },
+              backgroundColor: AppTheme.primary,
+              child: const Icon(Icons.person_add, color: Colors.white),
+            )
+          : null,
     );
   }
 

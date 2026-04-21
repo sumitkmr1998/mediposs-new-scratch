@@ -67,7 +67,7 @@ class _LoginWindowsState extends State<LoginWindows> {
       // Companion App Auth (Android)
       try {
         final sync = context.read<SyncService>();
-        final errorMsg = await sync.login(_pin);
+        final errorMsg = await sync.login(_selectedUser!.name, _pin);
 
         if (errorMsg == null && mounted) {
           // Auth passed on Hub, now pull the full universe of data!

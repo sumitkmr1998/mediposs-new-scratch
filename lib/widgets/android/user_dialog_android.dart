@@ -155,6 +155,17 @@ class _UserFormSheetState extends State<_UserFormSheet> {
   }
 
   void _save() {
+    final auth = context.read<AuthProvider>();
+    if (!auth.canManageUsers) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unauthorized: You do not have permission to manage staff profiles.'),
+          backgroundColor: AppTheme.danger,
+        ),
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
 
     final u = widget.existingUser ?? AppUser(name: _nameCtrl.text);

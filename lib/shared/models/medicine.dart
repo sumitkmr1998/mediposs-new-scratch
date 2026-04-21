@@ -21,6 +21,9 @@ class Medicine {
   int lowStockThreshold;
 
   @Property(type: PropertyType.date)
+  DateTime createdAt;
+
+  @Property(type: PropertyType.date)
   DateTime updatedAt;
 
   bool synced;
@@ -38,9 +41,11 @@ class Medicine {
     this.mainStock = 0,
     this.storeStock = 0,
     this.lowStockThreshold = 10,
+    DateTime? createdAt,
     DateTime? updatedAt,
     this.synced = false,
-  }) : updatedAt = updatedAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? createdAt ?? DateTime.now();
  
   /// Recalculates aggregate stock fields from individual batches.
   void recalculateStockFromBatches() {

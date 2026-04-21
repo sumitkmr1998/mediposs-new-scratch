@@ -15,6 +15,7 @@ import '../../../shared/providers/patient_provider.dart';
 import '../../../shared/providers/sales_provider.dart';
 import '../../../shared/providers/prescription_provider.dart';
 import '../../../shared/providers/opd_provider.dart';
+import '../../../shared/providers/auth_provider.dart';
 import '../../../shared/services/sync_service.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/patient_dialogs.dart';
@@ -46,11 +47,17 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
     }
 
     final sales = context.watch<SalesProvider>().getSalesByPatient(patient.id);
-    final prescriptions = context
-        .watch<PrescriptionProvider>()
-        .getPrescriptionsForPatient(patient.id);
-    final photos =
-        context.watch<PatientProvider>().getPatientPhotos(patient.id);
+    final auth = context.read<AuthProvider>();
+    final prescriptions = auth.canAccessMedicalRecords
+        ? context
+            .watch<PrescriptionProvider>()
+            .getPrescriptionsForPatient(patient.id)
+        : <Prescription>[];
+        
+    final photos = auth.canAccessMedicalRecords
+        ? context.watch<PatientProvider>().getPatientPhotos(patient.id)
+        : <PatientImage>[];
+        
     final totalSpent =
         sales.fold(0.0, (sum, s) => sum + (s.isReturn ? -s.total : s.total));
 
@@ -155,10 +162,11 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
                     ),
                     Row(
                       children: [
-                        _HeroStat(
-                            value: '${prescriptions.length}',
-                            label: 'Prescriptions',
-                            icon: Icons.medical_services_rounded),
+                        if (auth.canAccessMedicalRecords)
+                          _HeroStat(
+                              value: '${prescriptions.length}',
+                              label: 'Prescriptions',
+                              icon: Icons.medical_services_rounded),
                         const SizedBox(width: 16),
                         _HeroStat(
                             value: '${sales.length}',
@@ -225,19 +233,27 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
                         ),
                         const SizedBox(width: 16),
                         Expanded(
-                          child: _SectionCard(
-                            title: 'Gallery',
-                            icon: Icons.photo_library_rounded,
-                            accentColor: AppTheme.purple,
-                            badge:
-                                photos.isNotEmpty ? '${photos.length}' : null,
-                            trailing: _AddPhotoBtn(
-                                onTap: () => _addPhoto(context, patient)),
-                            child: _GalleryContent(
-                              photos: photos,
-                              onView: (i) => _viewPhotos(context, photos, i),
-                            ),
-                          ),
+                          child: auth.canAccessMedicalRecords
+                              ? _SectionCard(
+                                  title: 'Gallery',
+                                  icon: Icons.photo_library_rounded,
+                                  accentColor: AppTheme.purple,
+                                  badge: photos.isNotEmpty
+                                      ? '${photos.length}'
+                                      : null,
+                                  trailing: _AddPhotoBtn(
+                                      onTap: () => _addPhoto(context, patient)),
+                                  child: _GalleryContent(
+                                    photos: photos,
+                                    onView: (i) =>
+                                        _viewPhotos(context, photos, i),
+                                  ),
+                                )
+                              : _RestrictedSectionCard(
+                                  title: 'Gallery',
+                                  icon: Icons.photo_library_rounded,
+                                  accentColor: AppTheme.purple,
+                                ),
                         ),
                       ],
                     ),
@@ -247,22 +263,30 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
                     child: Row(
                       children: [
                         Expanded(
-                          child: _SectionCard(
-                            title: 'Prescriptions',
-                            icon: Icons.medical_services_rounded,
-                            accentColor: AppTheme.primaryLight,
-                            badge: prescriptions.isNotEmpty
-                                ? '${prescriptions.length}'
-                                : null,
-                            trailing: _AddPrescriptionBtn(
-                              onTap: () => _addPrescription(context, patient),
-                              isResume: widget.fromAppointmentId != null,
-                            ),
-                            child: _PrescriptionsContent(
-                              prescriptions: prescriptions,
-                              pProvider: context.watch<PrescriptionProvider>(),
-                            ),
-                          ),
+                          child: auth.canAccessMedicalRecords
+                              ? _SectionCard(
+                                  title: 'Prescriptions',
+                                  icon: Icons.medical_services_rounded,
+                                  accentColor: AppTheme.primaryLight,
+                                  badge: prescriptions.isNotEmpty
+                                      ? '${prescriptions.length}'
+                                      : null,
+                                  trailing: _AddPrescriptionBtn(
+                                    onTap: () =>
+                                        _addPrescription(context, patient),
+                                    isResume: widget.fromAppointmentId != null,
+                                  ),
+                                  child: _PrescriptionsContent(
+                                    prescriptions: prescriptions,
+                                    pProvider:
+                                        context.watch<PrescriptionProvider>(),
+                                  ),
+                                )
+                              : _RestrictedSectionCard(
+                                  title: 'Prescriptions',
+                                  icon: Icons.medical_services_rounded,
+                                  accentColor: AppTheme.primaryLight,
+                                ),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -1702,6 +1726,49 @@ class _PhotoViewerState extends State<_PhotoViewer> {
                               _ctrl.value = Matrix4.identity();
                             })))),
         ]),
+      ),
+    );
+  }
+}
+
+class _RestrictedSectionCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Color accentColor;
+
+  const _RestrictedSectionCard({
+    required this.title,
+    required this.icon,
+    required this.accentColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionCard(
+      title: title,
+      icon: icon,
+      accentColor: accentColor,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.lock_person_rounded,
+                size: 48, color: context.textMutedColor.withValues(alpha: 0.3)),
+            const SizedBox(height: 12),
+            Text(
+              'Access Restricted',
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: context.textMutedColor),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Doctor or Admin privilege required',
+              style: TextStyle(fontSize: 11, color: context.textMutedColor),
+            ),
+          ],
+        ),
       ),
     );
   }

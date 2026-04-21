@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../shared/models/appointment.dart';
 import '../../../shared/providers/opd_provider.dart';
+import '../../../shared/providers/auth_provider.dart';
 import '../../../shared/providers/prescription_provider.dart';
 import '../../../theme/app_theme.dart';
 import '../../../shared/widgets/app_status_badge.dart';
@@ -46,8 +47,18 @@ class OpdReportAndroid extends StatelessWidget {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            title: Text(
-                'OPD Report — ${DateFormat('dd MMM yyyy').format(DateTime.now())}'),
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('OPD Report'),
+                Text(
+                  opd.activeFilter == OpdFilter.custom && opd.customStart != null && opd.customEnd != null
+                      ? '${DateFormat('dd MMM').format(opd.customStart!)} - ${DateFormat('dd MMM yyyy').format(opd.customEnd!)}'
+                      : DateFormat('dd MMM yyyy').format(DateTime.now()),
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+                ),
+              ],
+            ),
             floating: true,
             pinned: true,
             elevation: 4,
@@ -69,24 +80,41 @@ class OpdReportAndroid extends StatelessWidget {
                         isSelected: opd.activeFilter == OpdFilter.today,
                         onSelected: () => opd.setFilter(OpdFilter.today),
                       ),
-                      const SizedBox(width: 8),
-                      _FilterChip(
-                        label: 'Yesterday',
-                        isSelected: opd.activeFilter == OpdFilter.yesterday,
-                        onSelected: () => opd.setFilter(OpdFilter.yesterday),
-                      ),
-                      const SizedBox(width: 8),
-                      _FilterChip(
-                        label: 'Last 7 Days',
-                        isSelected: opd.activeFilter == OpdFilter.last7Days,
-                        onSelected: () => opd.setFilter(OpdFilter.last7Days),
-                      ),
-                      const SizedBox(width: 8),
-                      _FilterChip(
-                        label: 'All Time',
-                        isSelected: opd.activeFilter == OpdFilter.allTime,
-                        onSelected: () => opd.setFilter(OpdFilter.allTime),
-                      ),
+                      if (context.watch<AuthProvider>().currentUser?.canViewHistoricalData ?? true) ...[
+                        const SizedBox(width: 8),
+                        _FilterChip(
+                          label: 'Yesterday',
+                          isSelected: opd.activeFilter == OpdFilter.yesterday,
+                          onSelected: () => opd.setFilter(OpdFilter.yesterday),
+                        ),
+                        const SizedBox(width: 8),
+                        _FilterChip(
+                          label: '7 Days',
+                          isSelected: opd.activeFilter == OpdFilter.last7Days,
+                          onSelected: () => opd.setFilter(OpdFilter.last7Days),
+                        ),
+                        const SizedBox(width: 8),
+                        _FilterChip(
+                          label: 'All Time',
+                          isSelected: opd.activeFilter == OpdFilter.allTime,
+                          onSelected: () => opd.setFilter(OpdFilter.allTime),
+                        ),
+                        const SizedBox(width: 8),
+                        _FilterChip(
+                          label: 'Custom',
+                          isSelected: opd.activeFilter == OpdFilter.custom,
+                          onSelected: () async {
+                            final range = await showDateRangePicker(
+                              context: context,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime.now(),
+                            );
+                            if (range != null) {
+                              opd.setFilter(OpdFilter.custom, range: range);
+                            }
+                          },
+                        ),
+                      ],
                     ],
                   ),
                 ),

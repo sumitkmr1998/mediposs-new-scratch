@@ -26,6 +26,9 @@ class Prescription {
   @Property(type: PropertyType.date)
   DateTime createdAt;
 
+  @Property(type: PropertyType.date)
+  DateTime updatedAt;
+
   Prescription({
     this.id = 0,
     required this.appointmentId,
@@ -42,7 +45,9 @@ class Prescription {
     this.imagesJson = '[]',
     this.dispensed = false,
     DateTime? createdAt,
-  }) : createdAt = createdAt ?? DateTime.now();
+    DateTime? updatedAt,
+  }) : createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? createdAt ?? DateTime.now();
 }
 
 // Transient models — not ObjectBox entities

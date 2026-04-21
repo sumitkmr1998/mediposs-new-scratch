@@ -144,7 +144,7 @@ class _DashboardHeader extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            const _ModernFilterChips(),
+            _ModernFilterChips(isCashier: !(auth.currentUser?.canViewHistoricalData ?? true)),
           ],
         ),
       ],
@@ -153,7 +153,8 @@ class _DashboardHeader extends StatelessWidget {
 }
 
 class _ModernFilterChips extends StatelessWidget {
-  const _ModernFilterChips();
+  final bool isCashier;
+  const _ModernFilterChips({required this.isCashier});
 
   @override
   Widget build(BuildContext context) {
@@ -165,46 +166,48 @@ class _ModernFilterChips extends StatelessWidget {
         AppFilterChip(
           label: 'Today',
           icon: Icons.today_rounded,
-          isSelected: sales.activeFilter == SalesFilter.today,
+          isSelected: sales.activeFilter == SalesFilter.today || isCashier,
           onTap: () {
             sales.setFilter(SalesFilter.today);
             opd.setFilter(OpdFilter.today);
           },
           style: AppFilterChipStyle.filled,
         ),
-        const SizedBox(width: 8),
-        AppFilterChip(
-          label: 'Yesterday',
-          icon: Icons.history_rounded,
-          isSelected: sales.activeFilter == SalesFilter.yesterday,
-          onTap: () {
-            sales.setFilter(SalesFilter.yesterday);
-            opd.setFilter(OpdFilter.yesterday);
-          },
-          style: AppFilterChipStyle.filled,
-        ),
-        const SizedBox(width: 8),
-        AppFilterChip(
-          label: '7 Days',
-          icon: Icons.date_range_rounded,
-          isSelected: sales.activeFilter == SalesFilter.last7Days,
-          onTap: () {
-            sales.setFilter(SalesFilter.last7Days);
-            opd.setFilter(OpdFilter.last7Days);
-          },
-          style: AppFilterChipStyle.filled,
-        ),
-        const SizedBox(width: 8),
-        AppFilterChip(
-          label: 'All Time',
-          icon: Icons.all_inclusive_rounded,
-          isSelected: sales.activeFilter == SalesFilter.allTime,
-          onTap: () {
-            sales.setFilter(SalesFilter.allTime);
-            opd.setFilter(OpdFilter.allTime);
-          },
-          style: AppFilterChipStyle.filled,
-        ),
+        if (!isCashier) ...[
+          const SizedBox(width: 8),
+          AppFilterChip(
+            label: 'Yesterday',
+            icon: Icons.history_rounded,
+            isSelected: sales.activeFilter == SalesFilter.yesterday,
+            onTap: () {
+              sales.setFilter(SalesFilter.yesterday);
+              opd.setFilter(OpdFilter.yesterday);
+            },
+            style: AppFilterChipStyle.filled,
+          ),
+          const SizedBox(width: 8),
+          AppFilterChip(
+            label: '7 Days',
+            icon: Icons.date_range_rounded,
+            isSelected: sales.activeFilter == SalesFilter.last7Days,
+            onTap: () {
+              sales.setFilter(SalesFilter.last7Days);
+              opd.setFilter(OpdFilter.last7Days);
+            },
+            style: AppFilterChipStyle.filled,
+          ),
+          const SizedBox(width: 8),
+          AppFilterChip(
+            label: 'All Time',
+            icon: Icons.all_inclusive_rounded,
+            isSelected: sales.activeFilter == SalesFilter.allTime,
+            onTap: () {
+              sales.setFilter(SalesFilter.allTime);
+              opd.setFilter(OpdFilter.allTime);
+            },
+            style: AppFilterChipStyle.filled,
+          ),
+        ],
       ],
     );
   }
@@ -225,8 +228,14 @@ class _KPIGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double totalRevenue = sales.filteredRevenue + opd.filteredCollectedRevenue;
-    final String labelSuffix = _getLabelSuffix(sales.activeFilter);
+    final auth = context.watch<AuthProvider>();
+    final bool isCashier = !(auth.currentUser?.canViewHistoricalData ?? true);
+
+    final double totalRevenue = isCashier
+        ? (sales.todayRevenue + opd.todayCollectedRevenue)
+        : (sales.filteredRevenue + opd.filteredCollectedRevenue);
+
+    final String labelSuffix = isCashier ? 'Today' : _getLabelSuffix(sales.activeFilter);
 
     return LayoutBuilder(builder: (context, constraints) {
       return GridView.count(
@@ -246,13 +255,13 @@ class _KPIGrid extends StatelessWidget {
           ),
           AppKpiCard(
             label: "Sales ($labelSuffix)",
-            value: '${sales.filteredSalesCount}',
+            value: isCashier ? '${sales.todaySalesCount}' : '${sales.filteredSalesCount}',
             icon: Icons.shopping_bag_rounded,
             color: const Color(0xFF14B8A6),
           ),
           AppKpiCard(
             label: "OPD ($labelSuffix)",
-            value: '${opd.filteredPatientCount}',
+            value: isCashier ? '${opd.todayPatientCount}' : '${opd.filteredPatientCount}',
             icon: Icons.medical_services_rounded,
             color: AppTheme.primary,
           ),
@@ -310,17 +319,25 @@ class _RevenueBreakdown extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final auth = context.watch<AuthProvider>();
+    final bool isCashier = !(auth.currentUser?.canViewHistoricalData ?? true);
 
     // Collected revenue only
-    final productSales = sales.filteredRevenue;
-    final opdRev = opd.filteredCollectedRevenue;
+    final productSales = isCashier ? sales.todayRevenue : sales.filteredRevenue;
+    final opdRev = isCashier ? opd.todayCollectedRevenue : opd.filteredCollectedRevenue;
     final total = productSales + opdRev;
 
-    final totalCash = sales.filteredCashRevenue + opd.filteredCashRevenue;
-    final totalUpi = sales.filteredUpiRevenue + opd.filteredUpiRevenue;
-    final totalCard = sales.filteredCardRevenue + opd.filteredCardRevenue;
+    final totalCash = isCashier
+        ? (sales.todayCashRevenue + opd.todayCashRevenue)
+        : (sales.filteredCashRevenue + opd.filteredCashRevenue);
+    final totalUpi = isCashier
+        ? (sales.todayUpiRevenue + opd.todayUpiRevenue)
+        : (sales.filteredUpiRevenue + opd.filteredUpiRevenue);
+    final totalCard = isCashier
+        ? (sales.todayCardRevenue + opd.todayCardRevenue)
+        : (sales.filteredCardRevenue + opd.filteredCardRevenue);
 
-    final String labelSuffix = _getLabelSuffix(sales.activeFilter);
+    final String labelSuffix = isCashier ? 'Today' : _getLabelSuffix(sales.activeFilter);
 
     return Container(
       padding: const EdgeInsets.all(20),

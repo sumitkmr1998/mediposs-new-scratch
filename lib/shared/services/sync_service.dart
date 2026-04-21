@@ -22,6 +22,7 @@ class SyncService extends ChangeNotifier {
   String? _hubIp;
   String? _jwtToken;
   String? _connectedRole;
+  Map<String, dynamic>? _lastUserMap;
   bool _isConnected = false;
   bool _isSyncing = false;
 
@@ -29,6 +30,7 @@ class SyncService extends ChangeNotifier {
   bool get isConnected => _isConnected;
   bool get isSyncing => _isSyncing;
   String? get connectedRole => _connectedRole;
+  Map<String, dynamic>? get lastUserMap => _lastUserMap;
 
   String get _baseUrl => 'http://$_hubIp:8080';
 
@@ -53,12 +55,12 @@ class SyncService extends ChangeNotifier {
     }
   }
 
-  Future<String?> login(String pin) async {
+  Future<String?> login(String name, String pin) async {
     if (_hubIp == null) return 'No Hub IP set.';
     try {
       final url = Uri.parse('http://$_hubIp:8080/api/auth/login');
       final res = await http.post(url,
-          body: jsonEncode({'pin': pin}),
+          body: jsonEncode({'name': name, 'pin': pin}),
           headers: {
             'content-type': 'application/json'
           }).timeout(const Duration(seconds: 10));
@@ -67,16 +69,19 @@ class SyncService extends ChangeNotifier {
         final data = jsonDecode(res.body);
         _jwtToken = data['token'];
         _connectedRole = data['role'];
+        _lastUserMap = data['permissions'];
         _isConnected = true;
 
-        // Save the PIN so auto-connect can re-authenticate on next launch
+        // Save the credentials so auto-connect can re-authenticate on next launch
         final settings = ObjectBoxService.instance.settings;
         settings.autoLoginPin = pin;
+        settings.autoLoginName = name;
         ObjectBoxService.instance.settingsBox.put(settings);
 
         // Fetch latest settings and users upon login
         await pullSettings();
         await pullUsers();
+        await syncAll();
 
         notifyListeners();
         return null; // success
@@ -126,10 +131,12 @@ class SyncService extends ChangeNotifier {
           // Try to login using the hub PIN stored in settings (default: first user's PIN equivalent)
           // We use a special auto-login PIN approach: pull token using admin PIN from settings
           final savedPin = settings.autoLoginPin;
-          if (savedPin != null && savedPin.isNotEmpty) {
-            final loginErr = await login(savedPin);
+          final savedName = settings.autoLoginName;
+          if (savedPin != null && savedPin.isNotEmpty && savedName != null) {
+            final loginErr = await login(savedName, savedPin);
             if (loginErr == null) {
               debugPrint('SyncService: Auto-login JWT obtained successfully.');
+              await syncAll();
             } else {
               debugPrint(
                   'SyncService: Auto-login failed: $loginErr — push calls will fail until manual login.');
@@ -140,6 +147,45 @@ class SyncService extends ChangeNotifier {
       }
     }
     return false;
+  }
+
+  /// Pulls all relevant data from Hub to ensure Android parity
+  Future<void> syncAll() async {
+    if (!_isConnected || _jwtToken == null) return;
+    debugPrint('SyncService: syncAll starting...');
+
+    final settings = ObjectBoxService.instance.settings;
+    String? sinceStr;
+
+    if (settings.lastGlobalSync == null) {
+      // NEW DEVICE SEED: Only fetch the last 180 days to keep initial payload light
+      final seedDate = DateTime.now().subtract(const Duration(days: 180));
+      sinceStr = seedDate.toIso8601String();
+      debugPrint('SyncService: Initial sync detected. Seeding from $sinceStr');
+    } else {
+      sinceStr = DateTime.fromMillisecondsSinceEpoch(settings.lastGlobalSync!)
+          .toIso8601String();
+      debugPrint('SyncService: Incremental sync from $sinceStr');
+    }
+
+    try {
+      await pullMedicines(since: sinceStr);
+      await pullPatients(since: sinceStr);
+      await pullAppointments();
+      await pullDoctors();
+      await pullPrescriptions(since: sinceStr);
+      await pullSales(since: sinceStr);
+      await pullTransfers();
+      await pullTemplates();
+
+      // Update sync timestamp
+      settings.lastGlobalSync = DateTime.now().millisecondsSinceEpoch;
+      ObjectBoxService.instance.settingsBox.put(settings);
+
+      debugPrint('SyncService: syncAll completed successfully.');
+    } catch (e) {
+      debugPrint('SyncService: syncAll error - $e');
+    }
   }
 
   Future<void> pullUsers() async {
@@ -158,13 +204,10 @@ class SyncService extends ChangeNotifier {
         final users = data.map((u) {
           debugPrint(
               'SyncService Mapping User: HubId=${u['id']}, name=${u['name']}');
-          return AppUser(
-            id: 0, // Auto-assign local ID to avoid sequence conflicts (OBX 10002)
-            name: u['name'],
-            role: u['role'],
-            pin: 'xxxx', // Master PIN for companion bypass
-            isActive: u['isActive'] ?? true,
-          );
+          final user = AppUser.fromJson(u);
+          user.id = 0; // Auto-assign local ID
+          user.pin = 'xxxx'; // Mask PIN locally as it's not needed for companion auth (handled via Hub)
+          return user;
         }).toList();
 
         box.putMany(users);
@@ -177,14 +220,17 @@ class SyncService extends ChangeNotifier {
     }
   }
 
-  Future<void> pullMedicines() async {
+  Future<void> pullMedicines({String? since}) async {
     if (!_isConnected || _jwtToken == null || _isSyncing) return;
-    debugPrint('SyncService: pullMedicines starting...');
+    debugPrint('SyncService: pullMedicines starting (since=$since)...');
     _isSyncing = true;
     notifyListeners();
 
     try {
-      final url = Uri.parse('$_baseUrl/api/medicines');
+      var url = Uri.parse('$_baseUrl/api/medicines');
+      if (since != null) {
+        url = url.replace(queryParameters: {'since': since});
+      }
       final res = await http.get(url, headers: _authHeaders());
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body)['data'] as List;
@@ -313,11 +359,14 @@ class SyncService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> pullPatients() async {
+  Future<void> pullPatients({String? since}) async {
     if (!_isConnected || _jwtToken == null) return;
-    debugPrint('SyncService: pullPatients starting...');
+    debugPrint('SyncService: pullPatients starting (since=$since)...');
     try {
-      final url = Uri.parse('$_baseUrl/api/patients');
+      var url = Uri.parse('$_baseUrl/api/patients');
+      if (since != null) {
+        url = url.replace(queryParameters: {'since': since});
+      }
       final res = await http.get(url, headers: _authHeaders());
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body)['data'] as List;
@@ -517,11 +566,14 @@ class SyncService extends ChangeNotifier {
     debugPrint('SyncService: pullDoctors done.');
   }
 
-  Future<void> pullPrescriptions() async {
+  Future<void> pullPrescriptions({String? since}) async {
     if (!_isConnected || _jwtToken == null) return;
-    debugPrint('SyncService: pullPrescriptions starting...');
+    debugPrint('SyncService: pullPrescriptions starting (since=$since)...');
     try {
-      final url = Uri.parse('$_baseUrl/api/prescriptions');
+      var url = Uri.parse('$_baseUrl/api/prescriptions');
+      if (since != null) {
+        url = url.replace(queryParameters: {'since': since});
+      }
       final res = await http.get(url, headers: _authHeaders());
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body)['data'] as List;
@@ -594,10 +646,14 @@ class SyncService extends ChangeNotifier {
     debugPrint('SyncService: pullPrescriptions done.');
   }
 
-  Future<void> pullSales() async {
+  Future<void> pullSales({String? since}) async {
     if (!_isConnected || _jwtToken == null) return;
+    debugPrint('SyncService: pullSales starting (since=$since)...');
     try {
-      final url = Uri.parse('$_baseUrl/api/sales');
+      var url = Uri.parse('$_baseUrl/api/sales');
+      if (since != null) {
+        url = url.replace(queryParameters: {'since': since});
+      }
       final res = await http.get(url, headers: _authHeaders());
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body)['data'] as List;

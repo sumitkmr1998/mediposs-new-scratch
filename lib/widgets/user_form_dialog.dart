@@ -58,6 +58,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
   bool _canOverrideStock = false;
   bool _canOverridePrice = false;
   bool _canBulkDiscount = false;
+  bool _canViewHistoricalData = true;
+
 
   @override
   void initState() {
@@ -97,6 +99,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
       _canOverrideStock = u.canOverrideStock;
       _canOverridePrice = u.canOverridePrice;
       _canBulkDiscount = u.canBulkDiscount;
+      _canViewHistoricalData = u.canViewHistoricalData;
     }
   }
 
@@ -126,6 +129,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
       _canOverrideStock = tempUser.canOverrideStock;
       _canOverridePrice = tempUser.canOverridePrice;
       _canBulkDiscount = tempUser.canBulkDiscount;
+      _canViewHistoricalData = tempUser.canViewHistoricalData;
     });
   }
 
@@ -138,6 +142,14 @@ class _UserFormDialogState extends State<UserFormDialog> {
   }
 
   void _save() {
+    final auth = context.read<AuthProvider>();
+    if (!auth.canManageUsers) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unauthorized: You do not have permission to manage staff.')),
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
 
     final u = widget.existingUser ?? AppUser(name: _nameCtrl.text);
@@ -174,7 +186,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
     u.canOverrideStock = _canOverrideStock;
     u.canOverridePrice = _canOverridePrice;
     u.canBulkDiscount = _canBulkDiscount;
-
+    u.canViewHistoricalData = _canViewHistoricalData;
+ 
     context.read<AuthProvider>().addUser(u);
     Navigator.pop(context, true);
   }
@@ -249,6 +262,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
                           _PresetChip('Cashier', Icons.point_of_sale, () => _applyPreset('Cashier')),
                           const SizedBox(width: 8),
                           _PresetChip('Pharmacist', Icons.medication, () => _applyPreset('Pharmacist')),
+                          const SizedBox(width: 8),
+                          _PresetChip('Doctor', Icons.medical_services_rounded, () => _applyPreset('Doctor')),
                           const SizedBox(width: 8),
                           _PresetChip('Manager', Icons.supervisor_account, () => _applyPreset('Manager')),
                           const SizedBox(width: 8),

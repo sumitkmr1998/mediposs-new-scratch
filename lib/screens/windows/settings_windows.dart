@@ -239,9 +239,15 @@ class _SettingsWindowsState extends State<SettingsWindows> {
 
   Widget _buildSidebarHeader() {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       child: Row(
         children: [
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(LucideIcons.arrowLeft, size: 20),
+            tooltip: 'Go Back',
+          ),
+          const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(

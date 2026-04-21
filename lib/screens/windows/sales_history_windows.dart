@@ -45,19 +45,31 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
     final sales = context.watch<SalesProvider>();
     final displayed = sales.displayedSales;
 
+    final auth = context.watch<AuthProvider>();
+    final bool isCashier = !(auth.currentUser?.canViewHistoricalData ?? true);
+
     double grossSales = 0;
     double returns = 0;
-    for (final s in sales.sales) {
-      if (s.isReturn) {
-        returns += s.total.abs();
-      } else {
-        grossSales += s.total;
+    
+    // For Cashier, we force the revenue summary to Today's metrics
+    // For others, we calculate based on the current list (search or filter)
+    if (isCashier) {
+      grossSales = sales.todayRevenue;
+      returns = sales.sales.where((s) => s.isReturn && _isToday(s.createdAt)).fold(0.0, (sum, s) => sum + s.total.abs());
+    } else {
+      for (final s in sales.sales) {
+        if (s.isReturn) {
+          returns += s.total.abs();
+        } else {
+          grossSales += s.total;
+        }
       }
     }
+
     final netTotal = grossSales - returns;
-    final saleCount = sales.sales.where((s) => !s.isReturn).length;
-    final returnCount = sales.sales.where((s) => s.isReturn).length;
-    final rangeLabel = _getRangeLabel(sales);
+    final saleCount = isCashier ? sales.todaySalesCount : sales.sales.where((s) => !s.isReturn).length;
+    final returnCount = isCashier ? sales.sales.where((s) => s.isReturn && _isToday(s.createdAt)).length : sales.sales.where((s) => s.isReturn).length;
+    final rangeLabel = isCashier ? "Today's" : _getRangeLabel(sales);
 
     return Scaffold(
       appBar: _buildAppBar(rangeLabel),
@@ -67,7 +79,7 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildKpiSection(grossSales, returns, netTotal, sales, saleCount,
-                returnCount, rangeLabel),
+                returnCount, rangeLabel, isCashier),
             const SizedBox(height: 24),
             _buildFilterSearchCard(sales),
             const SizedBox(height: 24),
@@ -108,7 +120,7 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
   }
 
   Widget _buildKpiSection(double grossSales, double returns, double netTotal,
-      SalesProvider sales, int saleCount, int returnCount, String rangeLabel) {
+      SalesProvider sales, int saleCount, int returnCount, String rangeLabel, bool isCashier) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -152,22 +164,28 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
                 value: '₹${netTotal.toStringAsFixed(0)}',
                 icon: Icons.account_balance_wallet_rounded,
                 color: AppTheme.success,
-                subtitle: '$rangeLabel performance',
+                subtitle: isCashier ? "Today's Performance" : '$rangeLabel performance',
                 width: cardWidth,
               ),
-              AppKpiCard(
-                label: 'Total Collected',
-                value: '₹${sales.totalRevenue.toStringAsFixed(0)}',
-                icon: Icons.auto_graph_rounded,
-                color: AppTheme.accent,
-                subtitle: 'Lifetime summary',
-                width: cardWidth,
-              ),
+              if (!isCashier)
+                AppKpiCard(
+                  label: 'Total Collected',
+                  value: '₹${sales.totalRevenue.toStringAsFixed(0)}',
+                  icon: Icons.auto_graph_rounded,
+                  color: AppTheme.accent,
+                  subtitle: 'Lifetime summary',
+                  width: cardWidth,
+                ),
             ],
           );
         }),
       ],
     );
+  }
+
+  bool _isToday(DateTime dt) {
+    final now = DateTime.now();
+    return dt.year == now.year && dt.month == now.month && dt.day == now.day;
   }
 
   Widget _buildFilterSearchCard(SalesProvider sales) {
@@ -199,46 +217,48 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
                     onTap: () => sales.setFilter(SalesFilter.today),
                     style: AppFilterChipStyle.filled,
                   ),
-                  const SizedBox(width: 8),
-                  AppFilterChip(
-                    label: 'Yesterday',
-                    icon: Icons.history_rounded,
-                    isSelected: sales.activeFilter == SalesFilter.yesterday,
-                    onTap: () => sales.setFilter(SalesFilter.yesterday),
-                    style: AppFilterChipStyle.filled,
-                  ),
-                  const SizedBox(width: 8),
-                  AppFilterChip(
-                    label: 'Last 7 Days',
-                    icon: Icons.date_range_rounded,
-                    isSelected: sales.activeFilter == SalesFilter.last7Days,
-                    onTap: () => sales.setFilter(SalesFilter.last7Days),
-                    style: AppFilterChipStyle.filled,
-                  ),
-                  const SizedBox(width: 8),
-                  AppFilterChip(
-                    label: 'All Time',
-                    icon: Icons.all_inbox_rounded,
-                    isSelected: sales.activeFilter == SalesFilter.allTime,
-                    onTap: () => sales.setFilter(SalesFilter.allTime),
-                    style: AppFilterChipStyle.filled,
-                  ),
-                  const SizedBox(width: 8),
-                  AppFilterChip(
-                    label: 'Custom',
-                    icon: Icons.calendar_month_rounded,
-                    isSelected: sales.activeFilter == SalesFilter.custom,
-                    onTap: () async {
-                      final range = await showDateRangePicker(
-                        context: context,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime.now(),
-                      );
-                      if (range != null)
-                        sales.setFilter(SalesFilter.custom, range: range);
-                    },
-                    style: AppFilterChipStyle.filled,
-                  ),
+                  if (context.watch<AuthProvider>().currentUser?.canViewHistoricalData ?? true) ...[
+                    const SizedBox(width: 8),
+                    AppFilterChip(
+                      label: 'Yesterday',
+                      icon: Icons.history_rounded,
+                      isSelected: sales.activeFilter == SalesFilter.yesterday,
+                      onTap: () => sales.setFilter(SalesFilter.yesterday),
+                      style: AppFilterChipStyle.filled,
+                    ),
+                    const SizedBox(width: 8),
+                    AppFilterChip(
+                      label: 'Last 7 Days',
+                      icon: Icons.date_range_rounded,
+                      isSelected: sales.activeFilter == SalesFilter.last7Days,
+                      onTap: () => sales.setFilter(SalesFilter.last7Days),
+                      style: AppFilterChipStyle.filled,
+                    ),
+                    const SizedBox(width: 8),
+                    AppFilterChip(
+                      label: 'All Time',
+                      icon: Icons.all_inbox_rounded,
+                      isSelected: sales.activeFilter == SalesFilter.allTime,
+                      onTap: () => sales.setFilter(SalesFilter.allTime),
+                      style: AppFilterChipStyle.filled,
+                    ),
+                    const SizedBox(width: 8),
+                    AppFilterChip(
+                      label: 'Custom',
+                      icon: Icons.calendar_month_rounded,
+                      isSelected: sales.activeFilter == SalesFilter.custom,
+                      onTap: () async {
+                        final range = await showDateRangePicker(
+                          context: context,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now(),
+                        );
+                        if (range != null)
+                          sales.setFilter(SalesFilter.custom, range: range);
+                      },
+                      style: AppFilterChipStyle.filled,
+                    ),
+                  ],
                 ],
               ),
             ),

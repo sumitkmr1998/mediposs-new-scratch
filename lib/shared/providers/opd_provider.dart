@@ -73,6 +73,25 @@ class OpdProvider extends ChangeNotifier {
       .where((a) => a.paymentMethod.toLowerCase() == 'card')
       .fold(0.0, (sum, a) => sum + a.consultationFee);
 
+  // Today-specific totals for restricted Dashboard views
+  double get todayCollectedRevenue => todayQueue
+      .where((a) => a.paymentMethod != 'pending')
+      .fold(0.0, (sum, a) => sum + a.consultationFee);
+
+  double get todayCashRevenue => todayQueue
+      .where((a) => a.paymentMethod.toLowerCase() == 'cash')
+      .fold(0.0, (sum, a) => sum + a.consultationFee);
+
+  double get todayUpiRevenue => todayQueue
+      .where((a) => a.paymentMethod.toLowerCase() == 'upi')
+      .fold(0.0, (sum, a) => sum + a.consultationFee);
+
+  double get todayCardRevenue => todayQueue
+      .where((a) => a.paymentMethod.toLowerCase() == 'card')
+      .fold(0.0, (sum, a) => sum + a.consultationFee);
+
+  int get todayPatientCount => todayQueue.length;
+
   static const int pageSize = 30;
   int _loadedCount = 30;
 

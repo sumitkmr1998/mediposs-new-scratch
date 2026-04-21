@@ -89,10 +89,13 @@ class LocalServerService {
     final pipeline = const Pipeline()
         .addMiddleware(logRequests())
         .addMiddleware(_corsMiddleware())
+        .addMiddleware(_gzipMiddleware())
         .addHandler(router.call);
 
     _server = await io.serve(pipeline, InternetAddress.anyIPv4, _port);
-    // Print statement removed for production lint: print('🟢 MediPoss Hub running on port $_port');
+    
+    // One-time migration for legacy records that lack sync metadata
+    _migrateSyncMetadata();
   }
 
   Future<void> stop() async {
@@ -132,12 +135,13 @@ class LocalServerService {
   Future<Response> _loginHandler(Request req) async {
     final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
     final pin = body['pin']?.toString() ?? '';
+    final name = body['name']?.toString() ?? '';
 
     final users = ObjectBoxService.instance.userBox.getAll();
     debugPrint(
-        'Hub: login attempt for PIN $pin. Total users in DB: ${users.length}');
+        'Hub: login attempt for user "$name" with PIN $pin. Total users in DB: ${users.length}');
     final user = users.cast<AppUser?>().firstWhere(
-          (u) => u!.pin == pin && u.isActive,
+          (u) => u!.name == name && u.pin == pin && u.isActive,
           orElse: () => null,
         );
 
@@ -152,7 +156,12 @@ class LocalServerService {
     final token = jwt.sign(SecretKey(_jwtSecret));
 
     return Response.ok(
-      jsonEncode({'token': token, 'role': user.role, 'name': user.name}),
+      jsonEncode({
+        'token': token, 
+        'role': user.role, 
+        'name': user.name,
+        'permissions': user.toJson(), // Full profile for immediate client-side auth refresh
+      }),
       headers: {'content-type': 'application/json'},
     );
   }
@@ -162,13 +171,10 @@ class LocalServerService {
     debugPrint('Hub: Serving ${users.length} total users to client.');
     // Only return public info, never the PIN.
     final json = users.where((u) => u.isActive).map((u) {
+      final map = u.toJson();
+      map['pin'] = 'xxxx'; // Mask PIN for security during general pull
       debugPrint('Hub User: id=${u.id}, name=${u.name}, role=${u.role}');
-      return {
-        'id': u.id,
-        'name': u.name,
-        'role': u.role,
-        'isActive': u.isActive,
-      };
+      return map;
     }).toList();
 
     return Response.ok(
@@ -238,7 +244,12 @@ class LocalServerService {
   }
 
   Response _medicinesGetHandler(Request req) {
-    final medicines = ObjectBoxService.instance.medicineBox.getAll();
+    final sinceStr = req.url.queryParameters['since'];
+    final since = DateTime.tryParse(sinceStr ?? '') ?? DateTime(2000);
+
+    final box = ObjectBoxService.instance.medicineBox;
+    final medicines = box.query(Medicine_.updatedAt.greaterThan(since.millisecondsSinceEpoch)).build().find();
+    
     final json = medicines
         .map((m) => {
               'id': m.id,
@@ -251,6 +262,7 @@ class LocalServerService {
               'mainStock': m.mainStock,
               'storeStock': m.storeStock,
               'lowStockThreshold': m.lowStockThreshold,
+              'createdAt': m.createdAt.toIso8601String(),
               'updatedAt': m.updatedAt.toIso8601String(),
               'batches': m.batches
                   .map((b) => {
@@ -410,7 +422,15 @@ class LocalServerService {
   }
 
   Response _salesGetHandler(Request req) {
-    final sales = ObjectBoxService.instance.saleBox.getAll();
+    final sinceStr = req.url.queryParameters['since'];
+    final since = DateTime.tryParse(sinceStr ?? '') ?? DateTime(2000);
+
+    final box = ObjectBoxService.instance.saleBox;
+    final sales = box
+        .query(Sale_.updatedAt.greaterThan(since.millisecondsSinceEpoch))
+        .build()
+        .find();
+
     final json = sales
         .map((s) => {
               'id': s.id,
@@ -428,6 +448,7 @@ class LocalServerService {
               'upiAmount': s.upiAmount,
               'cardAmount': s.cardAmount,
               'createdAt': s.createdAt.toIso8601String(),
+              'updatedAt': s.updatedAt.toIso8601String(),
               'synced': s.synced,
               'isReturn': s.isReturn,
               'itemsJson': s.itemsJson,
@@ -628,7 +649,15 @@ class LocalServerService {
   }
 
   Response _patientsGetHandler(Request req) {
-    final patients = ObjectBoxService.instance.patientBox.getAll();
+    final sinceStr = req.url.queryParameters['since'];
+    final since = DateTime.tryParse(sinceStr ?? '') ?? DateTime(2000);
+
+    final box = ObjectBoxService.instance.patientBox;
+    final patients = box
+        .query(Patient_.updatedAt.greaterThan(since.millisecondsSinceEpoch))
+        .build()
+        .find();
+
     final json = patients
         .map((p) => {
               'id': p.id,
@@ -640,6 +669,7 @@ class LocalServerService {
               'bloodGroup': p.bloodGroup,
               'age': p.age,
               'createdAt': p.createdAt.toIso8601String(),
+              'updatedAt': p.updatedAt.toIso8601String(),
             })
         .toList();
     return Response.ok(
@@ -733,7 +763,15 @@ class LocalServerService {
   }
 
   Response _prescriptionsGetHandler(Request req) {
-    final prescriptions = ObjectBoxService.instance.prescriptionBox.getAll();
+    final sinceStr = req.url.queryParameters['since'];
+    final since = DateTime.tryParse(sinceStr ?? '') ?? DateTime(2000);
+
+    final box = ObjectBoxService.instance.prescriptionBox;
+    final prescriptions = box
+        .query(Prescription_.updatedAt.greaterThan(since.millisecondsSinceEpoch))
+        .build()
+        .find();
+
     final json = prescriptions
         .map((p) => {
               'id': p.id,
@@ -750,6 +788,7 @@ class LocalServerService {
               'vitalsJson': p.vitalsJson,
               'dispensed': p.dispensed,
               'createdAt': p.createdAt.toIso8601String(),
+              'updatedAt': p.updatedAt.toIso8601String(),
             })
         .toList();
     return Response.ok(
@@ -1159,6 +1198,46 @@ class LocalServerService {
         return resp.change(headers: _corsHeaders());
       };
 
+  void _migrateSyncMetadata() {
+    final boxP = ObjectBoxService.instance.patientBox;
+    final boxS = ObjectBoxService.instance.saleBox;
+    final boxPr = ObjectBoxService.instance.prescriptionBox;
+    
+    int migrated = 0;
+    
+    // Since ObjectBox initialization might have some records with updatedAt as epoch or 0
+    final epoch = DateTime(2000);
+
+    for (var p in boxP.getAll()) {
+      // In ObjectBox, uninitialized Date/int might look like 0 or very early dates
+      if (p.updatedAt.isBefore(epoch)) {
+        p.updatedAt = p.createdAt;
+        boxP.put(p);
+        migrated++;
+      }
+    }
+    
+    for (var s in boxS.getAll()) {
+      if (s.updatedAt.isBefore(epoch)) {
+        s.updatedAt = s.createdAt;
+        boxS.put(s);
+        migrated++;
+      }
+    }
+    
+    for (var pr in boxPr.getAll()) {
+      if (pr.updatedAt.isBefore(epoch)) {
+        pr.updatedAt = pr.createdAt;
+        boxPr.put(pr);
+        migrated++;
+      }
+    }
+    
+    if (migrated > 0) {
+      debugPrint('Hub: Migrated $migrated legacy records with missing sync metadata.');
+    }
+  }
+
   Map<String, String> _corsHeaders() => {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
@@ -1183,4 +1262,30 @@ class LocalServerService {
         }
         return handler(req);
       };
+
+  Middleware _gzipMiddleware() {
+    return (Handler innerHandler) {
+      return (Request request) async {
+        final response = await innerHandler(request);
+        if (request.headers['accept-encoding']?.contains('gzip') ?? false) {
+          // If body is empty or already compressed, skip
+          if (response.contentLength == 0 ||
+              response.headers['content-encoding'] == 'gzip') {
+            return response;
+          }
+          final bodyBytes = await response.read().fold<List<int>>([], (p, e) => p..addAll(e));
+          final compressed = gzip.encode(bodyBytes);
+          return response.change(
+            body: compressed,
+            headers: {
+              ...response.headers,
+              'content-encoding': 'gzip',
+              'content-length': compressed.length.toString(),
+            },
+          );
+        }
+        return response;
+      };
+    };
+  }
 }

@@ -253,6 +253,10 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
             title: const Text('Settings'),
             pinned: true,
             floating: true,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded),
+              onPressed: () => Navigator.pop(context),
+            ),
             forceElevated: innerBoxIsScrolled,
             elevation: innerBoxIsScrolled ? 4 : 0,
           ),

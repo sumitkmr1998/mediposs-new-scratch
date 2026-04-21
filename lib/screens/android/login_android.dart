@@ -67,7 +67,7 @@ class _LoginAndroidState extends State<LoginAndroid> {
       // Companion App Auth (Android)
       try {
         final sync = context.read<SyncService>();
-        final errorMsg = await sync.login(_pin);
+        final errorMsg = await sync.login(_selectedUser!.name, _pin);
 
         if (errorMsg == null && mounted) {
           // Auth passed on Hub, now pull the full universe of data!
@@ -90,7 +90,14 @@ class _LoginAndroidState extends State<LoginAndroid> {
 
           // Finally, tell AuthProvider we are logged in so `main.dart` navigates
           // We use forceLogin because Hub already approved the PIN.
-          auth.forceLogin(_selectedUser!);
+          // CRITICAL: Update the user object with the permissions returned by the Hub
+          if (sync.lastUserMap != null) {
+            final updatedUser = AppUser.fromJson(sync.lastUserMap!);
+            // Ensure local ID is preserved if possible, but forceLogin will use this object anyway
+            auth.forceLogin(updatedUser);
+          } else {
+            auth.forceLogin(_selectedUser!);
+          }
         } else {
           if (mounted) {
             setState(() {

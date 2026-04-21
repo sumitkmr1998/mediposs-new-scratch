@@ -25,6 +25,9 @@ class Sale {
   @Property(type: PropertyType.date)
   DateTime createdAt;
 
+  @Property(type: PropertyType.date)
+  DateTime updatedAt;
+
   bool synced;
   bool isReturn;
 
@@ -47,10 +50,12 @@ class Sale {
     this.upiAmount = 0,
     this.cardAmount = 0,
     DateTime? createdAt,
+    DateTime? updatedAt,
     this.synced = false,
     this.isReturn = false,
     this.itemsJson = '[]',
-  }) : createdAt = createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? createdAt ?? DateTime.now();
 }
 
 // Transient model (not an ObjectBox entity)

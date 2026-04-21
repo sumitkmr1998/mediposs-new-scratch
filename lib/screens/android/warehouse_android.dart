@@ -68,9 +68,9 @@ class _WarehouseAndroidState extends State<WarehouseAndroid>
             forceElevated: innerBoxIsScrolled,
             elevation: innerBoxIsScrolled ? 2 : 0,
             bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(60),
+              preferredSize: const Size.fromHeight(64),
               child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
                   color: context.borderColor.withValues(alpha: 0.1),
@@ -93,8 +93,8 @@ class _WarehouseAndroidState extends State<WarehouseAndroid>
                   unselectedLabelColor: context.textMutedColor,
                   labelStyle: const TextStyle(
                       fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      letterSpacing: 0.5),
+                      fontSize: 12,
+                      letterSpacing: 0),
                   tabs: const [
                     Tab(text: 'STOCK LEVELS'),
                     Tab(text: 'TRANSFERS'),
