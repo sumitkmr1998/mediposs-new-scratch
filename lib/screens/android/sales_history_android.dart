@@ -27,7 +27,16 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
   }
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
     final sales = context.watch<SalesProvider>();
+    final bool isCashier = !(auth.currentUser?.canViewHistoricalData ?? true);
+    
+    // Enforcement: If cashier, lock to today's data
+    if (isCashier && sales.activeFilter != SalesFilter.today) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        sales.setFilter(SalesFilter.today);
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -47,11 +56,17 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
             child: LayoutBuilder(builder: (ctx, constraints) {
               double grossSales = 0;
               double returns = 0;
-              for (final s in sales.sales) {
-                if (s.isReturn)
-                  returns += s.total.abs();
-                else
-                  grossSales += s.total;
+              
+              if (isCashier) {
+                grossSales = sales.todayRevenue;
+                returns = sales.sales.where((s) => s.isReturn && _isToday(s.createdAt)).fold(0.0, (sum, s) => sum + s.total.abs());
+              } else {
+                for (final s in sales.sales) {
+                  if (s.isReturn)
+                    returns += s.total.abs();
+                  else
+                    grossSales += s.total;
+                }
               }
               final netTotal = grossSales - returns;
 
@@ -154,47 +169,49 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
                 children: [
                   AppFilterChip(
                     label: 'Today',
-                    isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.today,
+                    isSelected: !sales.isSearching && (sales.activeFilter == SalesFilter.today || isCashier),
                     onTap: () => sales.setFilter(SalesFilter.today),
                     style: AppFilterChipStyle.filled,
                   ),
-                  const SizedBox(width: 8),
-                  AppFilterChip(
-                    label: 'Yesterday',
-                    isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.yesterday,
-                    onTap: () => sales.setFilter(SalesFilter.yesterday),
-                    style: AppFilterChipStyle.filled,
-                  ),
-                  const SizedBox(width: 8),
-                  AppFilterChip(
-                    label: 'Last 7 Days',
-                    isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.last7Days,
-                    onTap: () => sales.setFilter(SalesFilter.last7Days),
-                    style: AppFilterChipStyle.filled,
-                  ),
-                  const SizedBox(width: 8),
-                  AppFilterChip(
-                    label: 'History',
-                    isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.allTime,
-                    onTap: () => sales.setFilter(SalesFilter.allTime),
-                    style: AppFilterChipStyle.filled,
-                  ),
-                  const SizedBox(width: 8),
-                  AppFilterChip(
-                    label: 'Range',
-                    isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.custom,
-                    onTap: () async {
-                      final range = await showDateRangePicker(
-                        context: context,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime.now(),
-                      );
-                      if (range != null) {
-                        sales.setFilter(SalesFilter.custom, range: range);
-                      }
-                    },
-                    style: AppFilterChipStyle.filled,
-                  ),
+                  if (!isCashier) ...[
+                    const SizedBox(width: 8),
+                    AppFilterChip(
+                      label: 'Yesterday',
+                      isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.yesterday,
+                      onTap: () => sales.setFilter(SalesFilter.yesterday),
+                      style: AppFilterChipStyle.filled,
+                    ),
+                    const SizedBox(width: 8),
+                    AppFilterChip(
+                      label: 'Last 7 Days',
+                      isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.last7Days,
+                      onTap: () => sales.setFilter(SalesFilter.last7Days),
+                      style: AppFilterChipStyle.filled,
+                    ),
+                    const SizedBox(width: 8),
+                    AppFilterChip(
+                      label: 'History',
+                      isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.allTime,
+                      onTap: () => sales.setFilter(SalesFilter.allTime),
+                      style: AppFilterChipStyle.filled,
+                    ),
+                    const SizedBox(width: 8),
+                    AppFilterChip(
+                      label: 'Range',
+                      isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.custom,
+                      onTap: () async {
+                        final range = await showDateRangePicker(
+                          context: context,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now(),
+                        );
+                        if (range != null) {
+                          sales.setFilter(SalesFilter.custom, range: range);
+                        }
+                      },
+                      style: AppFilterChipStyle.filled,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -238,6 +255,11 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
         ],
       ),
     );
+  }
+
+  bool _isToday(DateTime dt) {
+    final now = DateTime.now();
+    return dt.year == now.year && dt.month == now.month && dt.day == now.day;
   }
 }
 

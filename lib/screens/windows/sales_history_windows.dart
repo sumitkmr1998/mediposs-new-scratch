@@ -47,6 +47,13 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
 
     final auth = context.watch<AuthProvider>();
     final bool isCashier = !(auth.currentUser?.canViewHistoricalData ?? true);
+    
+    // Enforcement: If cashier, lock to today's data
+    if (isCashier && sales.activeFilter != SalesFilter.today) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        sales.setFilter(SalesFilter.today);
+      });
+    }
 
     double grossSales = 0;
     double returns = 0;
@@ -735,7 +742,7 @@ class _SaleRow extends StatelessWidget {
                         color: AppTheme.primary,
                         isFullWidth: true,
                         onTap: () => PrintingService.instance
-                            .printReceipt(context, sale),
+                            .printSaleAsInvoice(context, sale),
                       ),
                       if (!sale.isReturn && canProcessReturns) ...[
                         const SizedBox(height: 12),

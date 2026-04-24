@@ -11,6 +11,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/android/patient_dialogs_android.dart';
 import '../../shared/services/printing_service.dart';
 import '../../shared/services/sync_service.dart';
+import '../../shared/providers/patient_provider.dart';
 
 class PosAndroid extends StatefulWidget {
   const PosAndroid({super.key});
@@ -274,7 +275,7 @@ class _PosAndroidState extends State<PosAndroid> {
                                       color: context.textMutedColor,
                                       fontWeight: FontWeight.bold)),
                               Text(
-                                  '${cart.patientName} ${cart.patientPhone.isNotEmpty ? ' • ${cart.patientPhone}' : ''}',
+                                  '${cart.patientName}${context.read<PatientProvider>().getById(cart.patientId)?.uhid != null ? ' (${context.read<PatientProvider>().getById(cart.patientId)!.uhid})' : ''} ${cart.patientPhone.isNotEmpty ? ' • ${cart.patientPhone}' : ''}',
                                   style: const TextStyle(
                                       fontWeight: FontWeight.w800,
                                       color: AppTheme.primaryLight)),

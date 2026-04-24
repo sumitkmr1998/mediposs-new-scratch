@@ -212,7 +212,7 @@ class _OpdReportWindowsState extends State<OpdReportWindows> {
                   AppFilterChip(
                     label: 'Today',
                     icon: Icons.today_rounded,
-                    isSelected: opd.activeFilter == OpdFilter.today,
+                    isSelected: opd.activeFilter == OpdFilter.today || !(context.read<AuthProvider>().currentUser?.canViewHistoricalData ?? true),
                     onTap: () => opd.setFilter(OpdFilter.today),
                     style: AppFilterChipStyle.filled,
                   ),

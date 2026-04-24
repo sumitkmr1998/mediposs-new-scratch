@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/models/patient.dart';
 import '../../../shared/providers/patient_provider.dart';
+import '../../../shared/providers/auth_provider.dart';
 import '../../../shared/services/sync_service.dart';
 import '../../../theme/app_theme.dart';
 import '../../../shared/widgets/app_kpi_card.dart';
@@ -501,12 +502,13 @@ class _PatientRow extends StatelessWidget {
                   tooltip: 'Edit',
                 ),
                 const SizedBox(width: 4),
-                _ActionBtn(
-                  icon: Icons.delete_rounded,
-                  color: AppTheme.danger,
-                  onTap: () => _confirmDelete(context),
-                  tooltip: 'Delete',
-                ),
+                if (context.read<AuthProvider>().currentUser?.canDeletePatients == true)
+                  _ActionBtn(
+                    icon: Icons.delete_rounded,
+                    color: AppTheme.danger,
+                    onTap: () => _confirmDelete(context),
+                    tooltip: 'Delete',
+                  ),
               ],
             ),
           ),

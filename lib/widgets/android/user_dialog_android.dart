@@ -75,6 +75,12 @@ class _UserFormSheetState extends State<_UserFormSheet> {
   // Security & Data
   bool _canViewPurchasePrice = false;
   bool _canExportData = false;
+  bool _canViewHistoricalData = true;
+
+  // Deletion Rights
+  bool _canDeleteInventory = false;
+  bool _canDeletePatients = false;
+  bool _canDeleteAppointments = false;
 
   @override
   void initState() {
@@ -114,6 +120,10 @@ class _UserFormSheetState extends State<_UserFormSheet> {
 
       _canViewPurchasePrice = u.canViewPurchasePrice;
       _canExportData = u.canExportData;
+      _canViewHistoricalData = u.canViewHistoricalData;
+      _canDeleteInventory = u.canDeleteInventory;
+      _canDeletePatients = u.canDeletePatients;
+      _canDeleteAppointments = u.canDeleteAppointments;
     }
   }
 
@@ -143,6 +153,10 @@ class _UserFormSheetState extends State<_UserFormSheet> {
       _canAccessMedicalRecords = tempUser.canAccessMedicalRecords;
       _canViewPurchasePrice = tempUser.canViewPurchasePrice;
       _canExportData = tempUser.canExportData;
+      _canViewHistoricalData = tempUser.canViewHistoricalData;
+      _canDeleteInventory = tempUser.canDeleteInventory;
+      _canDeletePatients = tempUser.canDeletePatients;
+      _canDeleteAppointments = tempUser.canDeleteAppointments;
     });
   }
 
@@ -202,6 +216,10 @@ class _UserFormSheetState extends State<_UserFormSheet> {
 
     u.canViewPurchasePrice = _canViewPurchasePrice;
     u.canExportData = _canExportData;
+    u.canViewHistoricalData = _canViewHistoricalData;
+    u.canDeleteInventory = _canDeleteInventory;
+    u.canDeletePatients = _canDeletePatients;
+    u.canDeleteAppointments = _canDeleteAppointments;
 
     context.read<AuthProvider>().addUser(u, syncService: context.read<SyncService>());
     Navigator.pop(context, true);
@@ -493,6 +511,11 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                               'Can manually adjust stock counts (Auditing)',
                               _canOverrideStock,
                               (v) => setState(() => _canOverrideStock = v)),
+                          _buildPermToggle(
+                              'Delete Items',
+                              'Can permanently remove medicines from system',
+                              _canDeleteInventory,
+                              (v) => setState(() => _canDeleteInventory = v)),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -618,6 +641,16 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                               'Can view clinical history and prescriptions',
                               _canAccessMedicalRecords,
                               (v) => setState(() => _canAccessMedicalRecords = v)),
+                          _buildPermToggle(
+                              'Delete Patients',
+                              'Can permanently remove patient files',
+                              _canDeletePatients,
+                              (v) => setState(() => _canDeletePatients = v)),
+                          _buildPermToggle(
+                              'Cancel Appointments',
+                              'Can remove patient visits from queue',
+                              _canDeleteAppointments,
+                              (v) => setState(() => _canDeleteAppointments = v)),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -629,6 +662,11 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                               'Can see cost prices of medicines (Restricted)',
                               _canViewPurchasePrice,
                               (v) => setState(() => _canViewPurchasePrice = v)),
+                          _buildPermToggle(
+                              'Today Only Access',
+                              'Restriction: Staff cannot see past records',
+                              !_canViewHistoricalData,
+                              (v) => setState(() => _canViewHistoricalData = !v)),
                           _buildPermToggle(
                               'Export Data',
                               'Can export system records to Excel/CSV',

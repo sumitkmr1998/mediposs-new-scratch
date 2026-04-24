@@ -77,7 +77,7 @@ class OpdReportAndroid extends StatelessWidget {
                     children: [
                       _FilterChip(
                         label: 'Today',
-                        isSelected: opd.activeFilter == OpdFilter.today,
+                        isSelected: opd.activeFilter == OpdFilter.today || !(context.read<AuthProvider>().currentUser?.canViewHistoricalData ?? true),
                         onSelected: () => opd.setFilter(OpdFilter.today),
                       ),
                       if (context.watch<AuthProvider>().currentUser?.canViewHistoricalData ?? true) ...[

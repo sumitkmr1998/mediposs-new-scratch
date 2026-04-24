@@ -9,6 +9,7 @@ import '../../../theme/app_theme.dart';
 import '../../../shared/models/patient.dart';
 import '../../../widgets/android/patient_dialogs_android.dart';
 import '../../../shared/services/sync_service.dart';
+import '../../../shared/providers/patient_provider.dart';
 import '../../opd/prescription_screen.dart';
 import '../../../shared/widgets/app_empty_state.dart';
 import '../../../shared/widgets/app_status_badge.dart';
@@ -201,6 +202,10 @@ class _QueueList extends StatelessWidget {
               builder: (_) => PrescriptionScreen(appointment: queue[i]),
             ),
           ),
+          onCancel: () {
+            context.read<OpdProvider>().cancelAppointment(
+                queue[i].id, context.read<SyncService>());
+          },
         ),
       ),
     );
@@ -211,11 +216,13 @@ class _ModernQueueCard extends StatefulWidget {
   final Appointment appointment;
   final ValueChanged<String> onStatusChange;
   final VoidCallback onConsult;
+  final VoidCallback onCancel;
 
   const _ModernQueueCard({
     required this.appointment,
     required this.onStatusChange,
     required this.onConsult,
+    required this.onCancel,
   });
 
   @override
@@ -304,6 +311,8 @@ class _ModernQueueCardState extends State<_ModernQueueCard> {
         return AppTheme.purple;
       case kStatusDone:
         return AppTheme.success;
+      case kStatusCancelled:
+        return AppTheme.danger;
       default:
         return Colors.grey;
     }
@@ -319,9 +328,32 @@ class _ModernQueueCardState extends State<_ModernQueueCard> {
         return 'PHARMACY';
       case kStatusDone:
         return 'DONE';
+      case kStatusCancelled:
+        return 'CANCELLED';
       default:
         return status.toUpperCase();
     }
+  }
+
+  void _confirmCancel(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Appointment?'),
+        content: Text('Are you sure you want to cancel for ${widget.appointment.patientName}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('KEEP')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger, foregroundColor: Colors.white),
+            onPressed: () {
+              widget.onCancel();
+              Navigator.pop(ctx);
+            },
+            child: const Text('YES, CANCEL'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -394,11 +426,24 @@ class _ModernQueueCardState extends State<_ModernQueueCard> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Expanded(
-                            child: Text(widget.appointment.patientName,
-                                style: const TextStyle(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(widget.appointment.patientName,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 17,
+                                        letterSpacing: -0.2)),
+                                Text(
+                                  'UHID: ${context.read<PatientProvider>().getById(widget.appointment.patientId)?.uhid ?? widget.appointment.patientId}',
+                                  style: TextStyle(
+                                    fontSize: 10,
                                     fontWeight: FontWeight.w700,
-                                    fontSize: 17,
-                                    letterSpacing: -0.2)),
+                                    color: context.textMutedColor,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -501,6 +546,16 @@ class _ModernQueueCardState extends State<_ModernQueueCard> {
               ),
             ),
           ],
+          if (widget.appointment.status != kStatusDone)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: _ActionBtn(
+                label: 'CANCEL APPOINTMENT',
+                icon: Icons.cancel_outlined,
+                color: AppTheme.danger,
+                onTap: () => _confirmCancel(context),
+              ),
+            ),
         ],
       ),
     );

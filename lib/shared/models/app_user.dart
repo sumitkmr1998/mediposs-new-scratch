@@ -22,6 +22,7 @@ class AppUser {
   bool canViewInventory;
   bool canEditInventory;
   bool canOverrideStock;         // Manual inventory adjustments
+  bool canDeleteInventory;       // NEW: Separate delete right
 
   // Warehouse
   bool canViewWarehouse;
@@ -43,6 +44,8 @@ class AppUser {
   bool canManageDoctors;
   bool canViewOpdReports;
   bool canAccessMedicalRecords;  // Clinical privacy (Prescriptions/History)
+  bool canDeletePatients;        // NEW: Separate delete right
+  bool canDeleteAppointments;    // NEW: Separate delete right
 
   // Security & Data
   bool canViewPurchasePrice;     // Restricted financial data
@@ -61,6 +64,7 @@ class AppUser {
     this.canViewInventory = false,
     this.canEditInventory = false,
     this.canOverrideStock = false,
+    this.canDeleteInventory = false,
     this.canViewWarehouse = false,
     this.canTransferStock = false,
     this.canAccessPOS = true,
@@ -74,6 +78,8 @@ class AppUser {
     this.canManageDoctors = false,
     this.canViewOpdReports = false,
     this.canAccessMedicalRecords = false,
+    this.canDeletePatients = false,
+    this.canDeleteAppointments = false,
     this.canViewPurchasePrice = false,
     this.canExportData = false,
     this.canViewHistoricalData = true,
@@ -104,6 +110,7 @@ class AppUser {
         canViewPurchasePrice = true;
         canOverrideStock = true;
         canBulkDiscount = true;
+        canViewHistoricalData = true;
         break;
       case 'pharmacist':
         canViewInventory = true;
@@ -112,16 +119,19 @@ class AppUser {
         canTransferStock = true;
         canAccessPOS = true;
         canAccessOPD = true;
+        canViewHistoricalData = false; // "Today Only" for staff
         break;
       case 'cashier':
         canAccessPOS = true;
         canViewInventory = true;
         canAccessOPD = true;
+        canViewHistoricalData = false; // "Today Only" for staff
         break;
       case 'doctor':
         canAccessOPD = true;
         canAccessMedicalRecords = true;
         canViewInventory = true;
+        canViewHistoricalData = true;
         break;
       case 'accountant':
         canViewDashboard = true;
@@ -158,6 +168,7 @@ class AppUser {
     canViewInventory = val;
     canEditInventory = val;
     canOverrideStock = val;
+    canDeleteInventory = val;
     canViewWarehouse = val;
     canTransferStock = val;
     canAccessPOS = val;
@@ -171,6 +182,8 @@ class AppUser {
     canManageDoctors = val;
     canViewOpdReports = val;
     canAccessMedicalRecords = val;
+    canDeletePatients = val;
+    canDeleteAppointments = val;
     canViewPurchasePrice = val;
     canExportData = val;
     canViewHistoricalData = val;
@@ -188,6 +201,7 @@ class AppUser {
         'canViewInventory': canViewInventory,
         'canEditInventory': canEditInventory,
         'canOverrideStock': canOverrideStock,
+        'canDeleteInventory': canDeleteInventory,
         'canViewWarehouse': canViewWarehouse,
         'canTransferStock': canTransferStock,
         'canAccessPOS': canAccessPOS,
@@ -201,6 +215,8 @@ class AppUser {
         'canManageDoctors': canManageDoctors,
         'canViewOpdReports': canViewOpdReports,
         'canAccessMedicalRecords': canAccessMedicalRecords,
+        'canDeletePatients': canDeletePatients,
+        'canDeleteAppointments': canDeleteAppointments,
         'canViewPurchasePrice': canViewPurchasePrice,
         'canExportData': canExportData,
         'canViewHistoricalData': canViewHistoricalData,
@@ -218,6 +234,7 @@ class AppUser {
         canViewInventory: json['canViewInventory'] ?? false,
         canEditInventory: json['canEditInventory'] ?? false,
         canOverrideStock: json['canOverrideStock'] ?? false,
+        canDeleteInventory: json['canDeleteInventory'] ?? false,
         canViewWarehouse: json['canViewWarehouse'] ?? false,
         canTransferStock: json['canTransferStock'] ?? false,
         canAccessPOS: json['canAccessPOS'] ?? true,
@@ -231,6 +248,8 @@ class AppUser {
         canManageDoctors: json['canManageDoctors'] ?? false,
         canViewOpdReports: json['canViewOpdReports'] ?? false,
         canAccessMedicalRecords: json['canAccessMedicalRecords'] ?? false,
+        canDeletePatients: json['canDeletePatients'] ?? false,
+        canDeleteAppointments: json['canDeleteAppointments'] ?? false,
         canViewPurchasePrice: json['canViewPurchasePrice'] ?? false,
         canExportData: json['canExportData'] ?? false,
         canViewHistoricalData: json['canViewHistoricalData'] ?? true,

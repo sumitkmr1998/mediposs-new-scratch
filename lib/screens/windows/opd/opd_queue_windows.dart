@@ -270,6 +270,10 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                               );
                             }
                           },
+                          onCancel: () {
+                            context.read<OpdProvider>().cancelAppointment(
+                                appt.id, context.read<SyncService>());
+                          },
                         )),
                 ],
               ),
@@ -367,6 +371,7 @@ class _QueueRow extends StatefulWidget {
   final VoidCallback onConsult;
   final VoidCallback onViewPatient;
   final VoidCallback onEditPatient;
+  final VoidCallback onCancel;
 
   const _QueueRow({
     required this.appointment,
@@ -375,6 +380,7 @@ class _QueueRow extends StatefulWidget {
     required this.onConsult,
     required this.onViewPatient,
     required this.onEditPatient,
+    required this.onCancel,
   });
 
   @override
@@ -458,6 +464,27 @@ class _QueueRowState extends State<_QueueRow> {
         syncService: context.read<SyncService>());
   }
 
+  void _confirmCancel(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Appointment?'),
+        content: Text('Are you sure you want to cancel the appointment for ${widget.appointment.patientName}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Keep')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+            onPressed: () {
+              widget.onCancel();
+              Navigator.pop(ctx);
+            },
+            child: const Text('Yes, Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final a = widget.appointment;
@@ -503,7 +530,8 @@ class _QueueRowState extends State<_QueueRow> {
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
                                 color: context.textMutedColor)),
-                        Text('ID: P-${a.patientId}',
+                        Text(
+                            'UHID: ${context.read<PatientProvider>().getById(a.patientId)?.uhid ?? a.patientId}',
                             style: TextStyle(
                                 fontSize: 10,
                                 color: context.textMutedColor
@@ -609,7 +637,8 @@ class _QueueRowState extends State<_QueueRow> {
                                     fontWeight: FontWeight.w800,
                                     color: AppTheme.primary)),
                             const SizedBox(height: 2),
-                            Text('ID: P-${a.patientId}',
+                            Text(
+                                'UHID: ${context.read<PatientProvider>().getById(a.patientId)?.uhid ?? a.patientId}',
                                 style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,
@@ -704,6 +733,13 @@ class _QueueRowState extends State<_QueueRow> {
                       onTap: widget.onConsult,
                       filled: true,
                     ),
+                  const SizedBox(width: 8),
+                  _ActionBtn(
+                    label: 'Cancel',
+                    icon: Icons.cancel_outlined,
+                    color: AppTheme.danger,
+                    onTap: () => _confirmCancel(context),
+                  ),
                 ],
               ),
             ),
@@ -756,7 +792,8 @@ class _QueueRowState extends State<_QueueRow> {
                                     fontWeight: FontWeight.w700,
                                     color: AppTheme.primary)),
                             const SizedBox(height: 2),
-                            Text('ID: P-${a.patientId}',
+                            Text(
+                                'UHID: ${context.read<PatientProvider>().getById(a.patientId)?.uhid ?? a.patientId}',
                                 style: TextStyle(
                                     fontSize: 10,
                                     color: context.textMutedColor)),
@@ -810,6 +847,13 @@ class _QueueRowState extends State<_QueueRow> {
                     onTap: () => _handleComplete(context),
                     filled: true,
                   ),
+                  const SizedBox(width: 8),
+                  _ActionBtn(
+                    label: 'Cancel',
+                    icon: Icons.cancel_outlined,
+                    color: AppTheme.danger,
+                    onTap: () => _confirmCancel(context),
+                  ),
                 ],
               ),
             ),
@@ -858,7 +902,7 @@ class _QueueRowState extends State<_QueueRow> {
                                   fontWeight: FontWeight.w700,
                                   color: AppTheme.primary)),
                           const SizedBox(height: 2),
-                          Text('ID: P-${a.patientId}',
+                          Text('UHID: ${context.read<PatientProvider>().getById(a.patientId)?.uhid ?? a.patientId}',
                               style: TextStyle(
                                   fontSize: 10, color: context.textMutedColor)),
                         ],
@@ -910,6 +954,13 @@ class _QueueRowState extends State<_QueueRow> {
                   color: AppTheme.primary,
                   onTap: () => widget.onStatusChange(kStatusWithDoctor),
                   filled: true,
+                ),
+                const SizedBox(width: 8),
+                _ActionBtn(
+                  label: 'Cancel',
+                  icon: Icons.cancel_outlined,
+                  color: AppTheme.danger,
+                  onTap: () => _confirmCancel(context),
                 ),
               ],
             ),

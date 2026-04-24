@@ -614,13 +614,14 @@ class _ModernMedicineCardWindowsState
                             Icon(Icons.arrow_back),
                             Text(' Return to Hub')
                           ])),
-                      const PopupMenuItem(
-                          value: 'delete',
-                          child: Row(children: [
-                            Icon(Icons.delete, color: AppTheme.danger),
-                            Text(' Delete',
-                                style: TextStyle(color: AppTheme.danger))
-                          ])),
+                      if (widget.auth.currentUser?.canDeleteInventory == true)
+                        const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(children: [
+                              Icon(Icons.delete, color: AppTheme.danger),
+                              Text(' Delete',
+                                  style: TextStyle(color: AppTheme.danger))
+                            ])),
                     ],
                   ),
                 ],

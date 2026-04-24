@@ -456,7 +456,7 @@ class _PosWindowsState extends State<PosWindows> {
       );
 
       // Trigger Print Preview (Wait for it to close)
-      await PrintingService.instance.printReceipt(context, sale);
+      await PrintingService.instance.printSaleAsInvoice(context, sale);
 
       // Proactive Search for next sale
       _showPatientProactiveSearch();
@@ -1321,7 +1321,7 @@ class _CartPanel extends StatelessWidget {
                                 final p = options.elementAt(i);
                                 return ListTile(
                                   title: Text(p.name),
-                                  subtitle: Text('${p.phone} • ${p.address}'),
+                                  subtitle: Text('${p.uhid} • ${p.phone} • ${p.address}'),
                                   onTap: () => onSelected(p),
                                 );
                               },

@@ -186,7 +186,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(2, 1561353773588181738),
       name: 'AppUser',
-      lastPropertyId: const obx_int.IdUid(26, 5450336284533585166),
+      lastPropertyId: const obx_int.IdUid(30, 3106793706457653237),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -317,6 +317,26 @@ final _entities = <obx_int.ModelEntity>[
         obx_int.ModelProperty(
             id: const obx_int.IdUid(26, 5450336284533585166),
             name: 'canExportData',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(27, 8881886772768182317),
+            name: 'canViewHistoricalData',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(28, 7693935264867814458),
+            name: 'canDeleteInventory',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(29, 2204766997636866348),
+            name: 'canDeletePatients',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(30, 3106793706457653237),
+            name: 'canDeleteAppointments',
             type: 1,
             flags: 0)
       ],
@@ -1277,7 +1297,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final nameOffset = fbb.writeString(object.name);
           final roleOffset = fbb.writeString(object.role);
           final pinOffset = fbb.writeString(object.pin);
-          fbb.startTable(27);
+          fbb.startTable(31);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, nameOffset);
           fbb.addOffset(2, roleOffset);
@@ -1304,6 +1324,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addBool(23, object.canAccessMedicalRecords);
           fbb.addBool(24, object.canViewPurchasePrice);
           fbb.addBool(25, object.canExportData);
+          fbb.addBool(26, object.canViewHistoricalData);
+          fbb.addBool(27, object.canDeleteInventory);
+          fbb.addBool(28, object.canDeletePatients);
+          fbb.addBool(29, object.canDeleteAppointments);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -1332,6 +1356,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.BoolReader().vTableGet(buffer, rootOffset, 22, false);
           final canOverrideStockParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 44, false);
+          final canDeleteInventoryParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 58, false);
           final canViewWarehouseParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 24, false);
           final canTransferStockParam =
@@ -1358,10 +1384,16 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.BoolReader().vTableGet(buffer, rootOffset, 42, false);
           final canAccessMedicalRecordsParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 50, false);
+          final canDeletePatientsParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 60, false);
+          final canDeleteAppointmentsParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 62, false);
           final canViewPurchasePriceParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 52, false);
           final canExportDataParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 54, false);
+          final canViewHistoricalDataParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 56, false);
           final object = AppUser(
               id: idParam,
               name: nameParam,
@@ -1374,6 +1406,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
               canViewInventory: canViewInventoryParam,
               canEditInventory: canEditInventoryParam,
               canOverrideStock: canOverrideStockParam,
+              canDeleteInventory: canDeleteInventoryParam,
               canViewWarehouse: canViewWarehouseParam,
               canTransferStock: canTransferStockParam,
               canAccessPOS: canAccessPOSParam,
@@ -1387,8 +1420,11 @@ obx_int.ModelDefinition getObjectBoxModel() {
               canManageDoctors: canManageDoctorsParam,
               canViewOpdReports: canViewOpdReportsParam,
               canAccessMedicalRecords: canAccessMedicalRecordsParam,
+              canDeletePatients: canDeletePatientsParam,
+              canDeleteAppointments: canDeleteAppointmentsParam,
               canViewPurchasePrice: canViewPurchasePriceParam,
-              canExportData: canExportDataParam);
+              canExportData: canExportDataParam,
+              canViewHistoricalData: canViewHistoricalDataParam);
 
           return object;
         }),
@@ -2403,6 +2439,22 @@ class AppUser_ {
   /// See [AppUser.canExportData].
   static final canExportData =
       obx.QueryBooleanProperty<AppUser>(_entities[1].properties[25]);
+
+  /// See [AppUser.canViewHistoricalData].
+  static final canViewHistoricalData =
+      obx.QueryBooleanProperty<AppUser>(_entities[1].properties[26]);
+
+  /// See [AppUser.canDeleteInventory].
+  static final canDeleteInventory =
+      obx.QueryBooleanProperty<AppUser>(_entities[1].properties[27]);
+
+  /// See [AppUser.canDeletePatients].
+  static final canDeletePatients =
+      obx.QueryBooleanProperty<AppUser>(_entities[1].properties[28]);
+
+  /// See [AppUser.canDeleteAppointments].
+  static final canDeleteAppointments =
+      obx.QueryBooleanProperty<AppUser>(_entities[1].properties[29]);
 }
 
 /// [Appointment] entity fields to define ObjectBox queries.

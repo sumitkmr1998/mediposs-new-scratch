@@ -29,8 +29,18 @@ class DashboardAndroid extends StatelessWidget {
     final sales = context.watch<SalesProvider>();
     final opd = context.watch<OpdProvider>();
     final auth = context.read<AuthProvider>();
+    final bool isCashier = !(auth.currentUser?.canViewHistoricalData ?? true);
     final cs = Theme.of(context).colorScheme;
-    final rangeLabel = _getRangeLabel(sales);
+    
+    // Enforcement: If cashier, lock to today's data
+    if (isCashier && (sales.activeFilter != SalesFilter.today || opd.activeFilter != OpdFilter.today)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        sales.setFilter(SalesFilter.today);
+        opd.setFilter(OpdFilter.today);
+      });
+    }
+    
+    final rangeLabel = isCashier ? 'Today' : _getRangeLabel(sales);
 
     return Scaffold(
       backgroundColor: cs.surface,
@@ -132,7 +142,7 @@ class DashboardAndroid extends StatelessWidget {
                   const SizedBox(height: 24),
                   _SecurityStatusIndicator(cs: cs),
                   const SizedBox(height: 24),
-                  _DateFilterBar(sales: sales, cs: cs),
+                  _DateFilterBar(sales: sales, cs: cs, isCashier: isCashier),
                   const SizedBox(height: 24),
                   _PrimaryStats(
                     sales: sales,
@@ -269,8 +279,9 @@ class _SecurityStatusIndicator extends StatelessWidget {
 class _DateFilterBar extends StatelessWidget {
   final SalesProvider sales;
   final ColorScheme cs;
+  final bool isCashier;
 
-  const _DateFilterBar({required this.sales, required this.cs});
+  const _DateFilterBar({required this.sales, required this.cs, required this.isCashier});
 
   @override
   Widget build(BuildContext context) {
@@ -280,39 +291,41 @@ class _DateFilterBar extends StatelessWidget {
         children: [
           _CompactFilterChip(
             label: 'Today',
-            isSelected: sales.activeFilter == SalesFilter.today,
+            isSelected: sales.activeFilter == SalesFilter.today || isCashier,
             onTap: () {
               sales.setFilter(SalesFilter.today);
               context.read<OpdProvider>().setFilter(OpdFilter.today);
             },
           ),
-          const SizedBox(width: 8),
-          _CompactFilterChip(
-            label: 'Yesterday',
-            isSelected: sales.activeFilter == SalesFilter.yesterday,
-            onTap: () {
-              sales.setFilter(SalesFilter.yesterday);
-              context.read<OpdProvider>().setFilter(OpdFilter.yesterday);
-            },
-          ),
-          const SizedBox(width: 8),
-          _CompactFilterChip(
-            label: '7 Days',
-            isSelected: sales.activeFilter == SalesFilter.last7Days,
-            onTap: () {
-              sales.setFilter(SalesFilter.last7Days);
-              context.read<OpdProvider>().setFilter(OpdFilter.last7Days);
-            },
-          ),
-          const SizedBox(width: 8),
-          _CompactFilterChip(
-            label: 'All Time',
-            isSelected: sales.activeFilter == SalesFilter.allTime,
-            onTap: () {
-              sales.setFilter(SalesFilter.allTime);
-              context.read<OpdProvider>().setFilter(OpdFilter.allTime);
-            },
-          ),
+          if (!isCashier) ...[
+            const SizedBox(width: 8),
+            _CompactFilterChip(
+              label: 'Yesterday',
+              isSelected: sales.activeFilter == SalesFilter.yesterday,
+              onTap: () {
+                sales.setFilter(SalesFilter.yesterday);
+                context.read<OpdProvider>().setFilter(OpdFilter.yesterday);
+              },
+            ),
+            const SizedBox(width: 8),
+            _CompactFilterChip(
+              label: '7 Days',
+              isSelected: sales.activeFilter == SalesFilter.last7Days,
+              onTap: () {
+                sales.setFilter(SalesFilter.last7Days);
+                context.read<OpdProvider>().setFilter(OpdFilter.last7Days);
+              },
+            ),
+            const SizedBox(width: 8),
+            _CompactFilterChip(
+              label: 'All Time',
+              isSelected: sales.activeFilter == SalesFilter.allTime,
+              onTap: () {
+                sales.setFilter(SalesFilter.allTime);
+                context.read<OpdProvider>().setFilter(OpdFilter.allTime);
+              },
+            ),
+          ],
         ],
       ),
     );

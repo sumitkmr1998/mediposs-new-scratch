@@ -6,7 +6,13 @@ import 'package:printing/printing.dart';
 import 'dart:convert';
 import 'package:intl/intl.dart';
 import '../models/sale.dart';
+import '../models/invoice.dart';
+import '../models/prescription.dart';
+import '../models/patient.dart';
 import '../services/objectbox_service.dart';
+import '../services/invoice_generator.dart';
+import '../../objectbox.g.dart';
+import 'package:objectbox/objectbox.dart';
 
 class PrintingService {
   static final PrintingService instance = PrintingService._();
@@ -294,6 +300,141 @@ class PrintingService {
         ],
       ),
     );
+  }
+
+  Future<void> printInvoice(BuildContext context, Invoice invoice) async {
+    final settings = ObjectBoxService.instance.settings;
+    PdfPageFormat format;
+    switch (settings.receiptPaperSize) {
+      case 'A6':
+        format = PdfPageFormat.a6;
+        break;
+      case 'Letter':
+        format = PdfPageFormat.letter;
+        break;
+      case 'A4':
+        format = PdfPageFormat.a4;
+        break;
+      case 'Roll80':
+      default:
+        format = PdfPageFormat.roll80;
+        break;
+    }
+
+    final pdfBytes = await InvoiceGenerator.generate(invoice, format);
+
+    if (settings.autoPrintReceipt && settings.defaultPrinterName.isNotEmpty) {
+      await Printing.directPrintPdf(
+        printer: Printer(url: settings.defaultPrinterName),
+        onLayout: (PdfPageFormat f) async => pdfBytes,
+        name: 'Invoice_${invoice.patientName}_${invoice.formattedDate}',
+      );
+    } else {
+      if (context.mounted) {
+        await showDialog(
+          context: context,
+          builder: (ctx) => CallbackShortcuts(
+            bindings: {
+              const SingleActivator(LogicalKeyboardKey.enter): () async {
+                await Printing.layoutPdf(
+                  onLayout: (PdfPageFormat f) async => pdfBytes,
+                  name: 'Invoice_${invoice.patientName}_${invoice.formattedDate}',
+                );
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              const SingleActivator(LogicalKeyboardKey.escape): () {
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+            },
+            child: Focus(
+              autofocus: true,
+              child: Dialog(
+                backgroundColor: Colors.transparent,
+                insetPadding: const EdgeInsets.all(24),
+                child: Container(
+                  width: 600,
+                  height: 800,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).scaffoldBackgroundColor,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: PdfPreview(
+                      build: (f) async => pdfBytes,
+                      initialPageFormat: format,
+                      allowSharing: true,
+                      canChangeOrientation: true,
+                      canChangePageFormat: true,
+                      canDebug: false,
+                      pdfFileName: 'Invoice_${invoice.patientName}.pdf',
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> printSaleAsInvoice(BuildContext context, Sale sale) async {
+    final settings = ObjectBoxService.instance.settings;
+    
+    // Decode items
+    final List<dynamic> decoded = jsonDecode(sale.itemsJson);
+    final saleItems = decoded.map((j) => SaleItem.fromJson(j)).toList();
+    
+    // Map to InvoiceItem
+    final invoiceItems = saleItems.map((si) => InvoiceItem(
+      name: si.medicineName,
+      quantity: si.qty.abs(),
+      rate: si.unitPrice,
+    )).toList();
+
+    // Try to find a related prescription for diagnosis/doctor
+    String diagnosis = 'General Consultation';
+    String doctorName = 'On-Duty Doctor';
+    
+    // Fetch latest prescription for this patient to get diagnosis/doctor if possible
+    if (sale.patientId != 0) {
+      final prescription = ObjectBoxService.instance.store.box<Prescription>()
+          .query(Prescription_.patientId.equals(sale.patientId))
+          .order(Prescription_.createdAt, flags: Order.descending)
+          .build()
+          .findFirst();
+      
+      if (prescription != null) {
+        diagnosis = prescription.diagnosis;
+        doctorName = prescription.doctorName;
+      }
+    }
+
+    // Fetch patient UHID
+    String patientUhid = 'Walk-in';
+    if (sale.patientId != 0) {
+      final patient = ObjectBoxService.instance.store.box<Patient>().get(sale.patientId);
+      if (patient != null) {
+        patientUhid = patient.uhid;
+      }
+    }
+
+    final invoice = Invoice(
+      invoiceNo: sale.invoiceNo,
+      patientId: patientUhid,
+      clinicName: settings.storeName.isNotEmpty ? settings.storeName : 'MediPoss Clinic',
+      clinicAddress: settings.storeAddress.isNotEmpty ? settings.storeAddress : 'Address not set',
+      registrationNo: settings.gstNumber.isNotEmpty ? settings.gstNumber : 'N/A',
+      doctorName: doctorName,
+      patientName: sale.patientName.isNotEmpty ? sale.patientName : 'Walk-in Patient',
+      diagnosis: diagnosis.isNotEmpty ? diagnosis : 'General',
+      date: sale.createdAt,
+      items: invoiceItems,
+      totalAmount: sale.total.abs(),
+    );
+
+    await printInvoice(context, invoice);
   }
 
   Future<void> testPrint(BuildContext context) async {

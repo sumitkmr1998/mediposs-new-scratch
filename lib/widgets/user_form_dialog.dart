@@ -60,6 +60,11 @@ class _UserFormDialogState extends State<UserFormDialog> {
   bool _canBulkDiscount = false;
   bool _canViewHistoricalData = true;
 
+  // Deletion Rights
+  bool _canDeleteInventory = false;
+  bool _canDeletePatients = false;
+  bool _canDeleteAppointments = false;
+
 
   @override
   void initState() {
@@ -100,6 +105,9 @@ class _UserFormDialogState extends State<UserFormDialog> {
       _canOverridePrice = u.canOverridePrice;
       _canBulkDiscount = u.canBulkDiscount;
       _canViewHistoricalData = u.canViewHistoricalData;
+      _canDeleteInventory = u.canDeleteInventory;
+      _canDeletePatients = u.canDeletePatients;
+      _canDeleteAppointments = u.canDeleteAppointments;
     }
   }
 
@@ -130,6 +138,9 @@ class _UserFormDialogState extends State<UserFormDialog> {
       _canOverridePrice = tempUser.canOverridePrice;
       _canBulkDiscount = tempUser.canBulkDiscount;
       _canViewHistoricalData = tempUser.canViewHistoricalData;
+      _canDeleteInventory = tempUser.canDeleteInventory;
+      _canDeletePatients = tempUser.canDeletePatients;
+      _canDeleteAppointments = tempUser.canDeleteAppointments;
     });
   }
 
@@ -187,6 +198,9 @@ class _UserFormDialogState extends State<UserFormDialog> {
     u.canOverridePrice = _canOverridePrice;
     u.canBulkDiscount = _canBulkDiscount;
     u.canViewHistoricalData = _canViewHistoricalData;
+    u.canDeleteInventory = _canDeleteInventory;
+    u.canDeletePatients = _canDeletePatients;
+    u.canDeleteAppointments = _canDeleteAppointments;
  
     context.read<AuthProvider>().addUser(u);
     Navigator.pop(context, true);
@@ -361,6 +375,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
                                   _PermTile('Manual Discounts', 'Apply custom discounts', _canDiscountSales, (v) => setState(() => _canDiscountSales = v)),
                                   _PermTile('Price Overrides', 'Change item price at checkout', _canOverridePrice, (v) => setState(() => _canOverridePrice = v)),
                                   _PermTile('Bulk Discounts', 'Discount entire bill amount', _canBulkDiscount, (v) => setState(() => _canBulkDiscount = v)),
+                                  _PermTile('Void Receipts', 'Delete/Cancel past sales', _canVoidSales, (v) => setState(() => _canVoidSales = v)),
+                                  _PermTile('Process Returns', 'Handle item returns/refunds', _canProcessReturns, (v) => setState(() => _canProcessReturns = v)),
                                 ],
                               ),
                               _PermGroup(
@@ -369,6 +385,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
                                 children: [
                                   _PermTile('Manage Stock', 'View and audit stock levels', _canViewInventory, (v) => setState(() => _canViewInventory = v)),
                                   _PermTile('Modify Items', 'Edit medicine details/pricing', _canEditInventory, (v) => setState(() => _canEditInventory = v)),
+                                  _PermTile('Delete Items', 'Permanently remove medicines', _canDeleteInventory, (v) => setState(() => _canDeleteInventory = v)),
                                   _PermTile('Stock Corrections', 'Manually override stock counts', _canOverrideStock, (v) => setState(() => _canOverrideStock = v)),
                                   _PermTile('Warehouse HQ', 'Manage main distribution', _canViewWarehouse, (v) => setState(() => _canViewWarehouse = v)),
                                   _PermTile('Execute Transfers', 'Move stock between locations', _canTransferStock, (v) => setState(() => _canTransferStock = v)),
@@ -381,13 +398,18 @@ class _UserFormDialogState extends State<UserFormDialog> {
                                   _PermTile('Queue Management', 'Manage patient visits', _canAccessOPD, (v) => setState(() => _canAccessOPD = v)),
                                   _PermTile('Patient Privacy', 'View prescriptions & history', _canAccessMedicalRecords, (v) => setState(() => _canAccessMedicalRecords = v)),
                                   _PermTile('Manage Doctors', 'Edit doctor fees & profiles', _canManageDoctors, (v) => setState(() => _canManageDoctors = v)),
+                                  _PermTile('Clinical Reports', 'View OPD revenue & statistics', _canViewOpdReports, (v) => setState(() => _canViewOpdReports = v)),
+                                  _PermTile('Delete Patients', 'Remove patient files', _canDeletePatients, (v) => setState(() => _canDeletePatients = v)),
+                                  _PermTile('Cancel Appointments', 'Remove visits from queue', _canDeleteAppointments, (v) => setState(() => _canDeleteAppointments = v)),
                                 ],
                               ),
                               _PermGroup(
                                 title: 'History & Admin',
                                 icon: Icons.admin_panel_settings_outlined,
                                 children: [
-                                  _PermTile('Sale Auditing', 'View sales and void receipts', _canViewSalesHistory, (v) => setState(() => _canViewSalesHistory = v)),
+                                  _PermTile('View Dashboard', 'Access KPI charts & metrics', _canViewDashboard, (v) => setState(() => _canViewDashboard = v)),
+                                  _PermTile('Sale Auditing', 'View history of past receipts', _canViewSalesHistory, (v) => setState(() => _canViewSalesHistory = v)),
+                                  _PermTile('Today Only Access', 'Restriction: Hide historical data', !_canViewHistoricalData, (v) => setState(() => _canViewHistoricalData = !v)),
                                   _PermTile('Financial Privacy', 'View purchase/cost prices', _canViewPurchasePrice, (v) => setState(() => _canViewPurchasePrice = v)),
                                   _PermTile('System Configuration', 'Access global settings', _canAccessSettings, (v) => setState(() => _canAccessSettings = v)),
                                   _PermTile('Manage Staff', 'Edit user roles & permissions', _canManageUsers, (v) => setState(() => _canManageUsers = v)),

@@ -159,7 +159,7 @@
     },
     {
       "id": "2:1561353773588181738",
-      "lastPropertyId": "26:5450336284533585166",
+      "lastPropertyId": "30:3106793706457653237",
       "name": "AppUser",
       "properties": [
         {
@@ -291,6 +291,26 @@
         {
           "id": "26:5450336284533585166",
           "name": "canExportData",
+          "type": 1
+        },
+        {
+          "id": "27:8881886772768182317",
+          "name": "canViewHistoricalData",
+          "type": 1
+        },
+        {
+          "id": "28:7693935264867814458",
+          "name": "canDeleteInventory",
+          "type": 1
+        },
+        {
+          "id": "29:2204766997636866348",
+          "name": "canDeletePatients",
+          "type": 1
+        },
+        {
+          "id": "30:3106793706457653237",
+          "name": "canDeleteAppointments",
           "type": 1
         }
       ],

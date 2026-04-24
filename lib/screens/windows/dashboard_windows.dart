@@ -28,6 +28,15 @@ class DashboardWindows extends StatelessWidget {
     final opd = context.watch<OpdProvider>();
     final auth = context.watch<AuthProvider>();
     final cs = Theme.of(context).colorScheme;
+    
+    // Enforcement: If cashier, lock to today's data
+    if (!(auth.currentUser?.canViewHistoricalData ?? true) && 
+        (sales.activeFilter != SalesFilter.today || opd.activeFilter != OpdFilter.today)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        sales.setFilter(SalesFilter.today);
+        opd.setFilter(OpdFilter.today);
+      });
+    }
 
     return Scaffold(
       backgroundColor: cs.surface,

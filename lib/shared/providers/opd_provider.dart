@@ -254,6 +254,25 @@ class OpdProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> cancelAppointment(int appointmentId, [SyncService? syncService]) async {
+    final appt = ObjectBoxService.instance.appointmentBox.get(appointmentId);
+    if (appt == null) return;
+    appt.status = kStatusCancelled;
+    ObjectBoxService.instance.appointmentBox.put(appt);
+    loadAll();
+
+    if (Platform.isWindows) {
+      if (LocalServerService.instance.isRunning) {
+        LocalServerService.instance.broadcast({'event': 'sync_received'});
+      }
+    } else if (Platform.isAndroid && syncService != null) {
+      final success = await syncService.pushAppointment(appt);
+      if (!success) {
+        debugPrint('OpdProvider: cancelAppointment push failed for appt ${appt.id}');
+      }
+    }
+  }
+
   void updateStatusWithPayment(
       int appointmentId, String newStatus, String paymentMethod,
       [SyncService? syncService]) async {
