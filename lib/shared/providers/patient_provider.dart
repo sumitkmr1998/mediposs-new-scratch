@@ -148,14 +148,25 @@ class PatientProvider extends ChangeNotifier {
     }
   }
 
-  void deletePatientPhoto(PatientImage pImage) {
+  void deletePatientPhoto(PatientImage pImage, {SyncService? syncService}) {
     try {
       final file = File(pImage.imagePath);
       if (file.existsSync()) {
         file.deleteSync();
       }
+
+      final patient = ObjectBoxService.instance.patientBox.get(pImage.patientId);
+      final uhid = patient?.uhid ?? '';
+      final fileName = pImage.imagePath.replaceAll('\\', '/').split('/').last;
+
       ObjectBoxService.instance.patientImageBox.remove(pImage.id);
       notifyListeners();
+
+      if (Platform.isWindows && LocalServerService.instance.isRunning) {
+        LocalServerService.instance.broadcast({'event': 'sync_received'});
+      } else if (Platform.isAndroid && syncService != null && uhid.isNotEmpty) {
+        syncService.pushPatientPhotoDelete(uhid, fileName);
+      }
     } catch (e) {
       debugPrint('Error deleting patient photo: $e');
     }

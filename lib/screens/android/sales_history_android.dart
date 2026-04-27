@@ -9,6 +9,7 @@ import '../../widgets/return_dialog.dart';
 import '../../shared/services/printing_service.dart';
 import '../../shared/widgets/app_empty_state.dart';
 import '../../shared/widgets/app_filter_chip.dart';
+import '../../shared/services/sync_service.dart';
 
 class SalesHistoryAndroid extends StatefulWidget {
   const SalesHistoryAndroid({super.key});
@@ -492,7 +493,7 @@ class _SaleRow extends StatelessWidget {
                 backgroundColor: AppTheme.danger,
                 foregroundColor: Colors.white),
             onPressed: () {
-              salesProvider.deleteSale(sale, inv);
+              salesProvider.deleteSale(sale, inv, syncService: context.read<SyncService>());
               Navigator.pop(ctx);
             },
             child: const Text('VOID SALE'),

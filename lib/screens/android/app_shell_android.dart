@@ -193,29 +193,58 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
       // Listen to WebSocket events for real-time sync
       context.read<WebSocketService>().eventStream.listen((msg) async {
         if (!mounted) return;
+        debugPrint('AppShellAndroid: Event received: ${msg['event']}');
+        
+        // Show a visual Toast/SnackBar on the Android screen to prove we received it!
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Received Hub Event: ${msg['event']}'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
         final sync = context.read<SyncService>();
         if (msg['event'] == 'new_patient' ||
             msg['event'] == 'sync_received' ||
             msg['event'] == 'medicines_updated') {
-          // Pull everything on any sync event to ensure consistency
-          await sync.pullMedicines();
-          await sync.pullPatients();
-          await sync.pullAppointments();
-          await sync.pullDoctors();
-          await sync.pullPrescriptions();
-          await sync.pullSales();
-          await sync.pullTransfers();
-          await sync.pullTemplates();
-          // Note: patient photos are loaded lazily when Gallery tab opens
+          debugPrint('AppShellAndroid: Triggering pull cascade...');
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('🔄 Syncing changes from Hub...'),
+              duration: Duration(seconds: 1),
+            ),
+          );
 
-          if (mounted) {
-            context.read<PatientProvider>().load();
-            context.read<OpdProvider>().loadAll();
-            context.read<SalesProvider>().load();
-            context.read<InventoryProvider>().load();
-            context.read<PrescriptionProvider>().load();
-            context.read<TemplateProvider>().load();
-            context.read<WarehouseProvider>().loadTransfers();
+          try {
+            await sync.syncAll(); // syncAll() is more robust and uses the 'since' logic
+            
+            if (mounted) {
+              context.read<PatientProvider>().load();
+              context.read<OpdProvider>().loadAll();
+              context.read<SalesProvider>().load();
+              context.read<InventoryProvider>().load();
+              context.read<PrescriptionProvider>().load();
+              context.read<TemplateProvider>().load();
+              context.read<WarehouseProvider>().loadTransfers();
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('✅ Sync Complete'),
+                  backgroundColor: Color(0xFF4CAF50),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('❌ Sync Failed: $e'),
+                  backgroundColor: Color(0xFFF44336),
+                ),
+              );
+            }
           }
         }
       });

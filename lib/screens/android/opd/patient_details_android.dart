@@ -849,7 +849,7 @@ class _GalleryTabState extends State<_GalleryTab> {
         photos: photos,
         initialIndex: initialIndex,
         onDelete: (photo) {
-          context.read<PatientProvider>().deletePatientPhoto(photo);
+          context.read<PatientProvider>().deletePatientPhoto(photo, syncService: context.read<SyncService>());
           setState(() {});
         },
       ),

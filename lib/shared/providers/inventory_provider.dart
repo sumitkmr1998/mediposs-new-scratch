@@ -257,8 +257,9 @@ class InventoryProvider extends ChangeNotifier {
       m.updatedAt = DateTime.now();
       _box.put(m);
       load();
-
-      if (Platform.isAndroid && syncService != null) {
+      if (Platform.isWindows && LocalServerService.instance.isRunning) {
+        LocalServerService.instance.broadcast({'event': 'medicines_updated'});
+      } else if (Platform.isAndroid && syncService != null) {
         syncService.pushMedicine(m);
       }
     }

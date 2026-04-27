@@ -79,12 +79,19 @@ class LocalServerService {
     router.post(
         '/api/patient-photos/push', _withAuth(_patientPhotosPushHandler));
     router.post('/api/settings/push', _withAuth(_settingsPushHandler));
+    router.post('/api/settings', _withAuth(_settingsGetHandler)); // Allow GET settings via POST for some clients
     router.get('/api/settings', _withAuth(_settingsGetHandler));
     router.post('/api/users/push', _withAuth(_usersPushHandler));
     router.post('/api/sync', _withAuth(_syncHandler));
 
+    // Deletion Endpoints
+    router.post('/api/sales/delete', _withAuth(_salesDeleteHandler));
+    router.post('/api/templates/delete', _withAuth(_templatesDeleteHandler));
+    router.post(
+        '/api/patients/photos/delete', _withAuth(_patientPhotosDeleteHandler));
+
     // ------ WebSocket ------
-    router.get('/ws/updates', webSocketHandler(_onWsConnect));
+    router.get('/ws/updates', webSocketHandler(_onWsConnect, pingInterval: const Duration(seconds: 15)));
 
     final pipeline = const Pipeline()
         .addMiddleware(logRequests())
@@ -105,7 +112,9 @@ class LocalServerService {
 
   // Broadcast a JSON message to all connected WS clients
   void broadcast(Map<String, dynamic> message) {
+    if (!isRunning) return;
     final data = jsonEncode(message);
+    debugPrint('LocalServerService: Broadcasting ${message['event']} to ${_wsClients.length} clients');
     for (final client in _wsClients.toList()) {
       try {
         client.sink.add(data);
@@ -116,11 +125,18 @@ class LocalServerService {
   }
 
   void _onWsConnect(WebSocketChannel channel) {
+    debugPrint('LocalServerService: New WebSocket client connected! Total clients: ${_wsClients.length + 1}');
     _wsClients.add(channel);
     channel.stream.listen(
       (_) {},
-      onDone: () => _wsClients.remove(channel),
-      onError: (_) => _wsClients.remove(channel),
+      onDone: () {
+        _wsClients.remove(channel);
+        debugPrint('LocalServerService: WebSocket client disconnected. Total clients: ${_wsClients.length}');
+      },
+      onError: (_) {
+        _wsClients.remove(channel);
+        debugPrint('LocalServerService: WebSocket client error. Total clients: ${_wsClients.length}');
+      },
     );
   }
 
@@ -276,7 +292,11 @@ class LocalServerService {
             })
         .toList();
     return Response.ok(
-      jsonEncode({'data': json, 'count': json.length}),
+      jsonEncode({
+        'data': json,
+        'count': json.length,
+        'serverTime': DateTime.now().millisecondsSinceEpoch,
+      }),
       headers: {'content-type': 'application/json'},
     );
   }
@@ -423,13 +443,13 @@ class LocalServerService {
 
   Response _salesGetHandler(Request req) {
     final sinceStr = req.url.queryParameters['since'];
-    final since = DateTime.tryParse(sinceStr ?? '') ?? DateTime(2000);
+    final sinceMs = int.tryParse(sinceStr ?? '') ?? (DateTime.tryParse(sinceStr ?? '')?.millisecondsSinceEpoch) ?? 0;
 
     final box = ObjectBoxService.instance.saleBox;
-    final sales = box
-        .query(Sale_.updatedAt.greaterThan(since.millisecondsSinceEpoch))
-        .build()
-        .find();
+    final query = box.query(Sale_.updatedAt.greaterThan(sinceMs - 1));
+    final sales = query.build().find();
+    
+    debugPrint('Hub: Sales sync requested (since=$sinceMs). Returning ${sales.length} sales.');
 
     final json = sales
         .map((s) => {
@@ -455,7 +475,7 @@ class LocalServerService {
             })
         .toList();
     return Response.ok(
-      jsonEncode({'data': json}),
+      jsonEncode({'data': json, 'serverTime': DateTime.now().millisecondsSinceEpoch}),
       headers: {'content-type': 'application/json'},
     );
   }
@@ -673,7 +693,11 @@ class LocalServerService {
             })
         .toList();
     return Response.ok(
-      jsonEncode({'data': json, 'count': json.length}),
+      jsonEncode({
+        'data': json,
+        'count': json.length,
+        'serverTime': DateTime.now().millisecondsSinceEpoch,
+      }),
       headers: {'content-type': 'application/json'},
     );
   }
@@ -961,7 +985,10 @@ class LocalServerService {
             })
         .toList();
     return Response.ok(
-      jsonEncode({'data': json}),
+      jsonEncode({
+        'data': json,
+        'serverTime': DateTime.now().millisecondsSinceEpoch,
+      }),
       headers: {'content-type': 'application/json'},
     );
   }
@@ -1235,6 +1262,104 @@ class LocalServerService {
     
     if (migrated > 0) {
       debugPrint('Hub: Migrated $migrated legacy records with missing sync metadata.');
+    }
+  }
+
+  Future<Response> _salesDeleteHandler(Request req) async {
+    try {
+      final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      final invoiceNo = body['invoiceNo'] as String? ?? '';
+      if (invoiceNo.isEmpty) return Response.badRequest();
+
+      final box = ObjectBoxService.instance.saleBox;
+      final sale =
+          box.query(Sale_.invoiceNo.equals(invoiceNo)).build().findFirst();
+
+      if (sale != null) {
+        // Reverse inventory on Hub
+        final items = jsonDecode(sale.itemsJson) as List;
+        for (final jsonItem in items) {
+          final item = SaleItem.fromJson(jsonItem as Map<String, dynamic>);
+          final m = ObjectBoxService.instance.medicineBox
+              .getAll()
+              .where((x) => x.name == item.medicineName)
+              .firstOrNull;
+          if (m != null) {
+            // Reversing: if it was a sale (positive qty), we add it back (negative deduction)
+            // if it was a return (negative qty), we deduct it (add negative = subtract)
+            m.storeStock = (m.storeStock + item.qty.toInt()).clamp(0, 999999);
+            m.updatedAt = DateTime.now();
+            ObjectBoxService.instance.medicineBox.put(m);
+          }
+        }
+        box.remove(sale.id);
+        broadcast({'event': 'sync_received'});
+        broadcast({'event': 'medicines_updated'});
+        _incomingDataController.add('sales');
+      }
+
+      return Response.ok(jsonEncode({'status': 'success'}));
+    } catch (e) {
+      debugPrint('Hub: Sale Delete Err: $e');
+      return Response.internalServerError();
+    }
+  }
+
+  Future<Response> _templatesDeleteHandler(Request req) async {
+    try {
+      final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      final name = body['name'] as String? ?? '';
+      if (name.isEmpty) return Response.badRequest();
+
+      final box = ObjectBoxService.instance.templateBox;
+      final t = box.query(PrescriptionTemplate_.name.equals(name)).build().findFirst();
+      if (t != null) {
+        box.remove(t.id);
+        broadcast({'event': 'sync_received'});
+        _incomingDataController.add('templates');
+      }
+      return Response.ok(jsonEncode({'status': 'success'}));
+    } catch (e) {
+      debugPrint('Hub: Template Delete Err: $e');
+      return Response.internalServerError();
+    }
+  }
+
+  Future<Response> _patientPhotosDeleteHandler(Request req) async {
+    try {
+      final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      final uhid = body['uhid'] as String? ?? '';
+      final filename = body['fileName'] as String? ?? '';
+      if (uhid.isEmpty || filename.isEmpty) return Response.badRequest();
+
+      // Resolve patient to get ID
+      final patient = ObjectBoxService.instance.patientBox
+          .query(Patient_.uhid.equals(uhid))
+          .build()
+          .findFirst();
+      if (patient == null) return Response.notFound(jsonEncode({'error': 'Patient not found'}));
+
+      final box = ObjectBoxService.instance.patientImageBox;
+      final photos = box.query(PatientImage_.patientId.equals(patient.id)).build().find();
+      
+      for (final photo in photos) {
+        if (photo.imagePath.replaceAll('\\', '/').endsWith(filename)) {
+          // Delete file
+          final file = File(photo.imagePath);
+          if (await file.exists()) {
+            await file.delete();
+          }
+          box.remove(photo.id);
+        }
+      }
+
+      broadcast({'event': 'sync_received'});
+      _incomingDataController.add('patients');
+
+      return Response.ok(jsonEncode({'status': 'success'}));
+    } catch (e) {
+      debugPrint('Hub: Photo Delete Err: $e');
+      return Response.internalServerError();
     }
   }
 

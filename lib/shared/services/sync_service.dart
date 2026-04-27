@@ -163,24 +163,35 @@ class SyncService extends ChangeNotifier {
       sinceStr = seedDate.toIso8601String();
       debugPrint('SyncService: Initial sync detected. Seeding from $sinceStr');
     } else {
-      sinceStr = DateTime.fromMillisecondsSinceEpoch(settings.lastGlobalSync!)
-          .toIso8601String();
-      debugPrint('SyncService: Incremental sync from $sinceStr');
+      // Add a 1-minute safety buffer for clock drift (reduced from 5m because we use serverTime now)
+      final bufferedDate = DateTime.fromMillisecondsSinceEpoch(settings.lastGlobalSync!)
+          .subtract(const Duration(minutes: 1));
+      sinceStr = bufferedDate.toIso8601String();
+      debugPrint('SyncService: Incremental sync from $sinceStr (buffered for drift)');
     }
 
     try {
-      await pullMedicines(since: sinceStr);
-      await pullPatients(since: sinceStr);
+      final t1 = await pullMedicines(since: sinceStr);
+      final t2 = await pullPatients(since: sinceStr);
       await pullAppointments();
       await pullDoctors();
       await pullPrescriptions(since: sinceStr);
-      await pullSales(since: sinceStr);
+      final t3 = await pullSales(since: sinceStr);
       await pullTransfers();
       await pullTemplates();
 
-      // Update sync timestamp
-      settings.lastGlobalSync = DateTime.now().millisecondsSinceEpoch;
-      ObjectBoxService.instance.settingsBox.put(settings);
+      // Update sync timestamp using the Hub's reported time if available
+      // This eliminates issues with device clock drift
+      final serverTime = t1 ?? t2 ?? t3;
+      if (serverTime != null) {
+        settings.lastGlobalSync = serverTime;
+        ObjectBoxService.instance.settingsBox.put(settings);
+        debugPrint('SyncService: Updated lastGlobalSync to Hub time: $serverTime');
+      } else {
+        // Fallback to local time only if Hub didn't provide one
+        settings.lastGlobalSync = DateTime.now().millisecondsSinceEpoch;
+        ObjectBoxService.instance.settingsBox.put(settings);
+      }
 
       debugPrint('SyncService: syncAll completed successfully.');
     } catch (e) {
@@ -220,8 +231,11 @@ class SyncService extends ChangeNotifier {
     }
   }
 
-  Future<void> pullMedicines({String? since}) async {
-    if (!_isConnected || _jwtToken == null || _isSyncing) return;
+  Future<int?> pullMedicines({String? since}) async {
+    if (!_isConnected || _jwtToken == null || _isSyncing) {
+      debugPrint('SyncService: pullMedicines aborted (isConnected: $_isConnected, jwt: $_jwtToken, isSyncing: $_isSyncing)');
+      return null;
+    }
     debugPrint('SyncService: pullMedicines starting (since=$since)...');
     _isSyncing = true;
     notifyListeners();
@@ -349,18 +363,19 @@ class SyncService extends ChangeNotifier {
         }
         debugPrint(
             'SyncService: pullMedicines synced ${data.length} medicines.');
+        return jsonDecode(res.body)['serverTime'] as int?;
       }
     } catch (e) {
-      debugPrint('Sync Medicines error: $e');
+      debugPrint('pullMedicines err: $e');
+    } finally {
+      _isSyncing = false;
+      notifyListeners();
     }
-
-    debugPrint('SyncService: pullMedicines done.');
-    _isSyncing = false;
-    notifyListeners();
+    return null;
   }
 
-  Future<void> pullPatients({String? since}) async {
-    if (!_isConnected || _jwtToken == null) return;
+  Future<int?> pullPatients({String? since}) async {
+    if (!_isConnected || _jwtToken == null) return null;
     debugPrint('SyncService: pullPatients starting (since=$since)...');
     try {
       var url = Uri.parse('$_baseUrl/api/patients');
@@ -414,11 +429,12 @@ class SyncService extends ChangeNotifier {
           }
         }
         debugPrint('SyncService: pullPatients synced ${data.length} patients.');
+        return jsonDecode(res.body)['serverTime'] as int?;
       }
     } catch (e) {
       debugPrint('pullPatients err: $e');
     }
-    debugPrint('SyncService: pullPatients done.');
+    return null;
   }
 
   Future<void> pullAppointments() async {
@@ -646,8 +662,11 @@ class SyncService extends ChangeNotifier {
     debugPrint('SyncService: pullPrescriptions done.');
   }
 
-  Future<void> pullSales({String? since}) async {
-    if (!_isConnected || _jwtToken == null) return;
+  Future<int?> pullSales({String? since}) async {
+    if (!_isConnected || _jwtToken == null) {
+      debugPrint('SyncService: pullSales aborted (isConnected: $_isConnected, jwt: $_jwtToken)');
+      return null;
+    }
     debugPrint('SyncService: pullSales starting (since=$since)...');
     try {
       var url = Uri.parse('$_baseUrl/api/sales');
@@ -687,6 +706,7 @@ class SyncService extends ChangeNotifier {
               ..upiAmount = (item['upiAmount'] as num?)?.toDouble() ?? 0
               ..cardAmount = (item['cardAmount'] as num?)?.toDouble() ?? 0
               ..createdAt = createdAt
+              ..updatedAt = DateTime.tryParse(item['updatedAt'] ?? '') ?? createdAt
               ..synced = true
               ..isReturn = item['isReturn'] ?? false
               ..itemsJson = item['itemsJson'] ?? '[]';
@@ -708,6 +728,7 @@ class SyncService extends ChangeNotifier {
               upiAmount: (item['upiAmount'] as num?)?.toDouble() ?? 0,
               cardAmount: (item['cardAmount'] as num?)?.toDouble() ?? 0,
               createdAt: createdAt,
+              updatedAt: DateTime.tryParse(item['updatedAt'] ?? '') ?? createdAt,
               synced: true,
               isReturn: item['isReturn'] ?? false,
               itemsJson: item['itemsJson'] ?? '[]',
@@ -723,11 +744,13 @@ class SyncService extends ChangeNotifier {
           }
         }
         debugPrint('SyncService: pullSales synced ${data.length} sales.');
+        return jsonDecode(res.body)['serverTime'] as int?;
       }
     } catch (e) {
       debugPrint('pullSales err: $e');
     }
     debugPrint('SyncService: pullSales done.');
+    return null;
   }
 
   Future<void> pullTransfers() async {
@@ -1263,6 +1286,44 @@ class SyncService extends ChangeNotifier {
       return false;
     }
   }
+  Future<bool> pushSaleDelete(String invoiceNo) async {
+    if (!_isConnected || _jwtToken == null) return false;
+    try {
+      final url = Uri.parse('$_baseUrl/api/sales/delete');
+      final body = jsonEncode({'invoiceNo': invoiceNo});
+      final res = await http.post(url, headers: _authHeaders(), body: body);
+      return res.statusCode == 200;
+    } catch (e) {
+      debugPrint('SyncService: pushSaleDelete err: $e');
+      return false;
+    }
+  }
+
+  Future<bool> pushTemplateDelete(String name) async {
+    if (!_isConnected || _jwtToken == null) return false;
+    try {
+      final url = Uri.parse('$_baseUrl/api/templates/delete');
+      final body = jsonEncode({'name': name});
+      final res = await http.post(url, headers: _authHeaders(), body: body);
+      return res.statusCode == 200;
+    } catch (e) {
+      debugPrint('SyncService: pushTemplateDelete err: $e');
+      return false;
+    }
+  }
+
+  Future<bool> pushPatientPhotoDelete(String uhid, String fileName) async {
+    if (!_isConnected || _jwtToken == null) return false;
+    try {
+      final url = Uri.parse('$_baseUrl/api/patients/photos/delete');
+      final body = jsonEncode({'uhid': uhid, 'fileName': fileName});
+      final res = await http.post(url, headers: _authHeaders(), body: body);
+      return res.statusCode == 200;
+    } catch (e) {
+      debugPrint('SyncService: pushPatientPhotoDelete err: $e');
+      return false;
+    }
+  }
 }
 
 class WebSocketService extends ChangeNotifier {
@@ -1270,6 +1331,7 @@ class WebSocketService extends ChangeNotifier {
   bool _connected = false;
   String? _lastIp;
   bool _intentionalDisconnect = false;
+  int _reconnectAttempts = 0;
   final List<Map<String, dynamic>> _events = [];
 
   bool get connected => _connected;
@@ -1282,6 +1344,7 @@ class WebSocketService extends ChangeNotifier {
   void connect(String ip) {
     _lastIp = ip;
     _intentionalDisconnect = false;
+    _reconnectAttempts = 0;
     _doConnect(ip);
   }
 
@@ -1291,45 +1354,75 @@ class WebSocketService extends ChangeNotifier {
       final uri = Uri.parse('ws://$ip:8080/ws/updates');
       _channel = WebSocketChannel.connect(uri);
       _connected = true;
+      _reconnectAttempts = 0; // Reset on successful connect
       debugPrint('WebSocketService: Connected to $ip');
 
       _channel!.stream.listen(
         (data) {
           try {
-            final msg = jsonDecode(data as String) as Map<String, dynamic>;
+            debugPrint('WebSocketService [Android]: Received data of type: ${data.runtimeType}');
+            
+            final Map<String, dynamic> msg;
+            
+            if (data is Map) {
+              msg = Map<String, dynamic>.from(data);
+            } else {
+              String dataStr;
+              if (data is String) {
+                dataStr = data;
+              } else if (data is List<int>) {
+                dataStr = utf8.decode(data);
+              } else if (data is List) {
+                dataStr = utf8.decode(data.whereType<int>().toList());
+              } else {
+                dataStr = data.toString();
+              }
+              
+              final decoded = jsonDecode(dataStr);
+              if (decoded is Map) {
+                msg = Map<String, dynamic>.from(decoded);
+              } else {
+                debugPrint('WebSocketService: Received non-map JSON: $decoded');
+                return;
+              }
+            }
+
             _events.insert(0, msg);
             _eventController.add(msg);
 
-            // Notification logic
-            if (msg['event'] == 'new_patient') {
-              NotificationService.instance.showNotification(
-                id: DateTime.now().millisecond,
-                title: 'New Patient in Queue',
-                body: msg['patientName'] ?? 'A new patient has been added.',
-              );
-            } else if (msg['event'] == 'low_stock') {
-              NotificationService.instance.showNotification(
-                id: 1001,
-                title: 'Low Stock Alert',
-                body: msg['medicineName'] ??
-                    'One or more items are low in stock.',
-              );
-            } else if (msg['event'] == 'remote_camera_trigger') {
-              NotificationService.instance.showNotification(
-                id: 2001,
-                title: 'Remote Camera Requested',
-                body: 'Doctor needs a photo of ${msg['patientName'] ?? 'Patient'}. Tap to open camera.',
-                payload: jsonEncode({
-                  'type': 'remote_camera',
-                  'patientUhid': msg['patientUhid'],
-                  'patientName': msg['patientName'],
-                  'hubIp': msg['hubIp'],
-                }),
-              );
-            }
+              // Notification logic
+              if (msg['event'] == 'new_patient') {
+                NotificationService.instance.showNotification(
+                  id: DateTime.now().millisecond,
+                  title: 'New Patient in Queue',
+                  body: msg['patientName'] ?? 'A new patient has been added.',
+                );
+              } else if (msg['event'] == 'low_stock') {
+                NotificationService.instance.showNotification(
+                  id: 1001,
+                  title: 'Low Stock Alert',
+                  body: msg['medicineName'] ??
+                      'One or more items are low in stock.',
+                );
+              } else if (msg['event'] == 'remote_camera_trigger') {
+                NotificationService.instance.showNotification(
+                  id: 2001,
+                  title: 'Remote Camera Requested',
+                  body: 'Doctor needs a photo of ${msg['patientName'] ?? 'Patient'}. Tap to open camera.',
+                  payload: jsonEncode({
+                    'type': 'remote_camera',
+                    'patientUhid': msg['patientUhid'],
+                    'patientName': msg['patientName'],
+                    'hubIp': msg['hubIp'],
+                  }),
+                );
+              }
 
-            notifyListeners();
-          } catch (_) {}
+              notifyListeners();
+          } catch (e, st) {
+            debugPrint('WebSocketService: Error parsing message: $e\n$st');
+            // Even if parsing fails, don't let the listener die
+          }
         },
         onDone: () {
           _connected = false;
@@ -1359,8 +1452,14 @@ class WebSocketService extends ChangeNotifier {
   }
 
   void _scheduleReconnect() {
-    debugPrint('WebSocketService: Scheduling reconnect in 5s...');
-    Future.delayed(const Duration(seconds: 5), () {
+    if (_intentionalDisconnect || _lastIp == null) return;
+    
+    // Exponential backoff: 2s, 4s, 8s, 16s, capped at 30s
+    final int delaySeconds = (2 << _reconnectAttempts).clamp(2, 30);
+    if (_reconnectAttempts < 5) _reconnectAttempts++;
+    
+    debugPrint('WebSocketService: Scheduling reconnect in ${delaySeconds}s (Attempt: $_reconnectAttempts)...');
+    Future.delayed(Duration(seconds: delaySeconds), () {
       if (!_intentionalDisconnect && _lastIp != null && !_connected) {
         debugPrint('WebSocketService: Attempting reconnect to $_lastIp');
         _doConnect(_lastIp!);

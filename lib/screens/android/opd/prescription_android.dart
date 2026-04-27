@@ -641,7 +641,7 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
                                 color: AppTheme.danger, size: 18),
                             tooltip: 'Delete template',
                             onPressed: () {
-                              tProvider.delete(t.id);
+                              tProvider.delete(t.id, syncService: context.read<SyncService>());
                               Navigator.pop(context);
                             },
                           ),

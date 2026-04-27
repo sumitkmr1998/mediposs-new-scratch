@@ -58,11 +58,17 @@ class TemplateProvider extends ChangeNotifier {
   }
 
   void delete(int id, {SyncService? syncService}) {
-    ObjectBoxService.instance.templateBox.remove(id);
-    load();
-    // Broadcast on Windows so Android re-pulls
-    if (Platform.isWindows && LocalServerService.instance.isRunning) {
-      LocalServerService.instance.broadcast({'event': 'sync_received'});
+    final t = ObjectBoxService.instance.templateBox.get(id);
+    if (t != null) {
+      final name = t.name;
+      ObjectBoxService.instance.templateBox.remove(id);
+      load();
+
+      if (Platform.isWindows && LocalServerService.instance.isRunning) {
+        LocalServerService.instance.broadcast({'event': 'sync_received'});
+      } else if (Platform.isAndroid && syncService != null) {
+        syncService.pushTemplateDelete(name);
+      }
     }
   }
 
