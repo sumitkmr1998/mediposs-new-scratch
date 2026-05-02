@@ -7,6 +7,9 @@ import '../../shared/services/discovery_service.dart';
 import 'qr_scanner_screen.dart';
 import 'opd/remote_camera_screen_android.dart';
 import 'dart:convert';
+import 'package:flutter/services.dart';
+import '../../shared/services/firebase_sync_service.dart';
+import '../../shared/providers/settings_provider.dart';
 
 class ConnectionAndroid extends StatefulWidget {
   const ConnectionAndroid({super.key});
@@ -20,6 +23,41 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
   bool _testing = false;
   bool? _reachable;
   String? _errorMsg;
+  String _connectionMode = 'auto';
+  String _cloudflareUrl = '';
+  bool _isFetchingCloudflare = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final s = context.read<SettingsProvider>().settings;
+    _ipCtrl.text = s.hubIp ?? '';
+    _connectionMode = s.connectionMode;
+    _cloudflareUrl = s.cloudflareUrl;
+    _fetchCloudflareUrl();
+  }
+
+  Future<void> _fetchCloudflareUrl() async {
+    setState(() => _isFetchingCloudflare = true);
+    try {
+      final status = await FirebaseSyncService.instance.getHubStatus();
+      if (status != null && mounted) {
+        setState(() {
+          _cloudflareUrl = status['cloudflareUrl'] ?? _cloudflareUrl;
+        });
+      }
+    } catch (_) {} finally {
+      if (mounted) setState(() => _isFetchingCloudflare = false);
+    }
+  }
+
+  void _saveMode(String mode) {
+    final settingsProv = context.read<SettingsProvider>();
+    final s = settingsProv.settings;
+    s.connectionMode = mode;
+    settingsProv.save(s);
+    setState(() => _connectionMode = mode);
+  }
 
   Future<void> _scanQr() async {
     final result = await Navigator.push<String>(
@@ -69,7 +107,19 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
       _errorMsg = null;
       _reachable = null;
     });
-    final ip = await DiscoveryService.discoverHub();
+
+    // 1. Try Local Network Discovery (UDP)
+    String? ip = await DiscoveryService.discoverHub();
+
+    // 2. If local fails, try Cloud Discovery (Firebase)
+    if (ip == null) {
+      final status = await FirebaseSyncService.instance.getHubStatus();
+      if (status != null && status['cloudflareUrl'] != null) {
+        ip = status['cloudflareUrl'];
+        debugPrint('Auto-detected Hub via Cloudflare: $ip');
+      }
+    }
+
     if (!mounted) return;
 
     if (ip != null) {
@@ -91,7 +141,7 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text(
-              'Could not find Hub automatically. Please check if Hub is running on the same Wi-Fi.'),
+              'Could not find Hub. Please check if Hub is running or use Cloud Mode.'),
           backgroundColor: AppTheme.warning,
         ));
       }
@@ -136,8 +186,11 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
         final wsService = context.read<WebSocketService>();
         wsService.connect(sync.hubIp!);
         wsService.eventStream.listen((msg) {
-          if (msg['event'] == 'remote_camera_trigger') {
+          final event = msg['event'];
+          if (event == 'remote_camera_trigger') {
             GlobalNavigationService.handleRemoteCameraTrigger(msg);
+          } else if (event == 'sync_received' || event == 'sales_updated') {
+            sync.syncAll();
           }
         });
 
@@ -216,6 +269,84 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
                         borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
+                const SizedBox(height: 24),
+                // --- Hybrid Mode Selector ---
+                Row(
+                  children: [
+                    Text('Sync Mode:',
+                        style: TextStyle(
+                            color: context.textMutedColor,
+                            fontWeight: FontWeight.bold)),
+                    const Spacer(),
+                    DropdownButton<String>(
+                      value: _connectionMode,
+                      dropdownColor: context.surfaceColor,
+                      underline: const SizedBox(),
+                      items: const [
+                        DropdownMenuItem(
+                            value: 'auto', child: Text('Auto (Hybrid)')),
+                        DropdownMenuItem(
+                            value: 'local', child: Text('Local Only')),
+                        DropdownMenuItem(
+                            value: 'cloudflare', child: Text('Tunnel Only')),
+                        DropdownMenuItem(
+                            value: 'firebase', child: Text('Cloud Only')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) _saveMode(val);
+                      },
+                    ),
+                  ],
+                ),
+                if (_connectionMode == 'cloudflare' ||
+                    _connectionMode == 'auto') ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: context.textMutedColor.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: context.borderColor.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.cloud_done,
+                            size: 16, color: AppTheme.primaryLight),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _cloudflareUrl.isEmpty
+                                ? 'Fetching Tunnel...'
+                                : _cloudflareUrl,
+                            style: const TextStyle(
+                                fontSize: 12, overflow: TextOverflow.ellipsis),
+                          ),
+                        ),
+                        if (_isFetchingCloudflare)
+                          const SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                        else
+                          IconButton(
+                            icon: const Icon(Icons.copy, size: 14),
+                            onPressed: () {
+                              if (_cloudflareUrl.isNotEmpty) {
+                                Clipboard.setData(
+                                    ClipboardData(text: _cloudflareUrl));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content:
+                                            Text('Tunnel URL copied!')));
+                              }
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 TextField(
                   controller: _ipCtrl,

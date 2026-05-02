@@ -5,6 +5,7 @@ import '../services/objectbox_service.dart';
 import '../services/time_service.dart';
 import '../services/local_server_service.dart';
 import '../services/sync_service.dart';
+import '../services/sync_queue_service.dart';
 import 'dart:io';
 
 enum OpdFilter { today, yesterday, last7Days, allTime, custom }
@@ -212,14 +213,12 @@ class OpdProvider extends ChangeNotifier {
         LocalServerService.instance
             .broadcast({'event': 'appointments_updated'});
       }
-    } else if (Platform.isAndroid && syncService != null) {
-      // Push to Hub; Hub returns the Hub-assigned ID
-      final success = await syncService.pushAppointment(appt);
-      if (success) {
-        // Re-pull local appointment by Hub ID so updateStatus uses correct ID
-        await syncService.pullAppointments();
-        loadAll();
-      }
+    } else if (Platform.isAndroid) {
+      SyncQueueService.instance.addToQueue(
+        entity: 'appointment',
+        action: 'create',
+        data: appt.toJson(),
+      );
     }
 
     return appt;
@@ -245,12 +244,12 @@ class OpdProvider extends ChangeNotifier {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
-    } else if (Platform.isAndroid && syncService != null) {
-      // Push status update to Hub
-      final success = await syncService.pushAppointment(appt);
-      if (!success) {
-        debugPrint('OpdProvider: updateStatus push failed for appt ${appt.id}');
-      }
+    } else if (Platform.isAndroid) {
+      SyncQueueService.instance.addToQueue(
+        entity: 'appointment',
+        action: 'update',
+        data: appt.toJson(),
+      );
     }
   }
 
@@ -265,11 +264,12 @@ class OpdProvider extends ChangeNotifier {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
-    } else if (Platform.isAndroid && syncService != null) {
-      final success = await syncService.pushAppointment(appt);
-      if (!success) {
-        debugPrint('OpdProvider: cancelAppointment push failed for appt ${appt.id}');
-      }
+    } else if (Platform.isAndroid) {
+      SyncQueueService.instance.addToQueue(
+        entity: 'appointment',
+        action: 'update',
+        data: appt.toJson(),
+      );
     }
   }
 
@@ -295,12 +295,12 @@ class OpdProvider extends ChangeNotifier {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
-    } else if (Platform.isAndroid && syncService != null) {
-      final success = await syncService.pushAppointment(appt);
-      if (!success) {
-        debugPrint(
-            'OpdProvider: updateStatusWithPayment push failed for appt ${appt.id}');
-      }
+    } else if (Platform.isAndroid) {
+      SyncQueueService.instance.addToQueue(
+        entity: 'appointment',
+        action: 'update',
+        data: appt.toJson(),
+      );
     }
   }
 
@@ -314,8 +314,12 @@ class OpdProvider extends ChangeNotifier {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
-    } else if (Platform.isAndroid && syncService != null) {
-      syncService.pushDoctor(d);
+    } else if (Platform.isAndroid) {
+      SyncQueueService.instance.addToQueue(
+        entity: 'doctor',
+        action: 'create',
+        data: d.toJson(),
+      );
     }
   }
 
@@ -328,8 +332,12 @@ class OpdProvider extends ChangeNotifier {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
-    } else if (Platform.isAndroid && syncService != null) {
-      syncService.pushDoctorDelete(id);
+    } else if (Platform.isAndroid) {
+      SyncQueueService.instance.addToQueue(
+        entity: 'doctor',
+        action: 'delete',
+        data: {'id': id},
+      );
     }
   }
 

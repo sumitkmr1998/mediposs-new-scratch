@@ -6,6 +6,7 @@ import '../models/prescription.dart';
 import '../services/objectbox_service.dart';
 import '../services/local_server_service.dart';
 import '../services/sync_service.dart';
+import '../services/sync_queue_service.dart';
 
 class TemplateProvider extends ChangeNotifier {
   List<PrescriptionTemplate> _templates = [];
@@ -50,8 +51,12 @@ class TemplateProvider extends ChangeNotifier {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
-    } else if (Platform.isAndroid && syncService != null) {
-      syncService.pushTemplate(t);
+    } else if (Platform.isAndroid) {
+      SyncQueueService.instance.addToQueue(
+        entity: 'template',
+        action: 'create',
+        data: t.toJson(),
+      );
     }
 
     return t;
@@ -66,8 +71,12 @@ class TemplateProvider extends ChangeNotifier {
 
       if (Platform.isWindows && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
-      } else if (Platform.isAndroid && syncService != null) {
-        syncService.pushTemplateDelete(name);
+      } else if (Platform.isAndroid) {
+        SyncQueueService.instance.addToQueue(
+          entity: 'template',
+          action: 'delete',
+          data: {'name': name},
+        );
       }
     }
   }

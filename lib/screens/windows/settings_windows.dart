@@ -7,6 +7,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:network_info_plus/network_info_plus.dart';
+import '../../shared/services/cloudflare_service.dart';
 
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/settings_provider.dart';
@@ -54,9 +56,13 @@ class _SettingsWindowsState extends State<SettingsWindows> {
   bool _enableAnimations = true;
   String _autoBackupFreq = 'Never';
   String _autoBackupLogic = 'At Startup';
+  String? _hubIp;
 
   @override
   void initState() {
+    super.initState();
+    _loadHubIp();
+    // ...
     super.initState();
     final s = context.read<SettingsProvider>().settings;
     _storeNameCtrl = TextEditingController(text: s.storeName);
@@ -91,6 +97,16 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       setState(() {
         _printers = printers.where((p) => p.isAvailable).toList();
       });
+    }
+  }
+
+  Future<void> _loadHubIp() async {
+    try {
+      final info = NetworkInfo();
+      final ip = await info.getWifiIP();
+      if (mounted) setState(() => _hubIp = ip);
+    } catch (e) {
+      debugPrint('Error loading Hub IP: $e');
     }
   }
 
@@ -643,7 +659,66 @@ class _SettingsWindowsState extends State<SettingsWindows> {
           'Android clients must specify this port to connect to this Hub.',
           style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
         ),
+        const Divider(height: 48),
+        _buildInfoCard(
+          'Local Network Address',
+          _hubIp ?? 'Finding IP...',
+          LucideIcons.wifi,
+          'Use this IP in the companion app while on the same Wi-Fi.',
+        ),
+        const SizedBox(height: 16),
+        _buildInfoCard(
+          'Cloudflare Tunnel Link',
+          CloudflareService.instance.currentUrl ?? 'No active tunnel',
+          LucideIcons.globe,
+          'Use this URL to connect remotely from anywhere in the world.',
+          isLink: true,
+        ),
       ],
+    );
+  }
+
+  Widget _buildInfoCard(String title, String value, IconData icon, String hint, {bool isLink = false}) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: AppTheme.primaryLight),
+              const SizedBox(width: 12),
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(LucideIcons.copy, size: 16),
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: value));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied to clipboard')));
+                },
+                tooltip: 'Copy',
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: isLink ? AppTheme.primary : context.textColor,
+              decoration: isLink ? TextDecoration.underline : null,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(hint, style: TextStyle(fontSize: 12, color: context.textMutedColor)),
+        ],
+      ),
     );
   }
 

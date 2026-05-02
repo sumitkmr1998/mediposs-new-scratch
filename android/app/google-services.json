@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "363693923093",
+    "project_id": "mediposs-64841",
+    "storage_bucket": "mediposs-64841.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:363693923093:android:38f68ec56eeaac9b79271c",
+        "android_client_info": {
+          "package_name": "com.medipos.medipos"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD84Pud-HYvei7wzXHQssToljYJo4EiCxs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -61,4 +61,46 @@ class Appointment {
     this.consultationBilled = false,
     this.paymentMethod = 'cash',
   }) : createdAt = createdAt ?? DateTime.now();
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'patientId': patientId,
+        'patientName': patientName,
+        'patientPhone': patientPhone,
+        'doctorId': doctorId,
+        'doctorName': doctorName,
+        'tokenNumber': tokenNumber,
+        'status': status,
+        'consultationFee': consultationFee,
+        'notes': notes,
+        'scheduledAt': scheduledAt.toIso8601String(),
+        'calledAt': calledAt?.toIso8601String(),
+        'pharmacyAt': pharmacyAt?.toIso8601String(),
+        'completedAt': completedAt?.toIso8601String(),
+        'createdAt': createdAt.toIso8601String(),
+        'isWalkIn': isWalkIn,
+        'consultationBilled': consultationBilled,
+        'paymentMethod': paymentMethod,
+      };
+
+  factory Appointment.fromJson(Map<String, dynamic> json) => Appointment(
+        id: json['id'] ?? 0,
+        patientId: json['patientId'],
+        patientName: json['patientName'],
+        patientPhone: json['patientPhone'] ?? '',
+        doctorId: json['doctorId'],
+        doctorName: json['doctorName'],
+        tokenNumber: json['tokenNumber'],
+        status: json['status'] ?? kStatusWaiting,
+        consultationFee: (json['consultationFee'] as num?)?.toDouble() ?? 0,
+        notes: json['notes'] ?? '',
+        scheduledAt: DateTime.tryParse(json['scheduledAt'] ?? '') ?? DateTime.now(),
+        createdAt: DateTime.tryParse(json['createdAt'] ?? ''),
+        isWalkIn: json['isWalkIn'] ?? true,
+        consultationBilled: json['consultationBilled'] ?? false,
+        paymentMethod: json['paymentMethod'] ?? 'cash',
+      )
+        ..calledAt = json['calledAt'] != null ? DateTime.tryParse(json['calledAt']) : null
+        ..pharmacyAt = json['pharmacyAt'] != null ? DateTime.tryParse(json['pharmacyAt']) : null
+        ..completedAt = json['completedAt'] != null ? DateTime.tryParse(json['completedAt']) : null;
 }

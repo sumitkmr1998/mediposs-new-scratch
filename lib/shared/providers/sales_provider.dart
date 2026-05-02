@@ -5,6 +5,7 @@ import '../models/sale.dart';
 import '../services/objectbox_service.dart';
 import '../services/local_server_service.dart';
 import '../services/sync_service.dart';
+import '../services/sync_queue_service.dart';
 import '../../objectbox.g.dart';
 import 'inventory_provider.dart';
 
@@ -239,8 +240,12 @@ class SalesProvider extends ChangeNotifier {
       if (Platform.isWindows && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
-      } else if (Platform.isAndroid && syncService != null) {
-        syncService.pushSaleDelete(sale.invoiceNo);
+      } else if (Platform.isAndroid) {
+        SyncQueueService.instance.addToQueue(
+          entity: 'sale',
+          action: 'delete',
+          data: {'invoiceNo': sale.invoiceNo},
+        );
       }
     } catch (e) {
       debugPrint('Error deleting sale: $e');

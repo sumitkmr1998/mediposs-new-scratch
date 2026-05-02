@@ -4,6 +4,7 @@ import '../models/medicine.dart';
 import '../services/objectbox_service.dart';
 import '../services/time_service.dart';
 import '../services/sync_service.dart';
+import '../services/sync_queue_service.dart';
 import '../../objectbox.g.dart';
 import 'inventory_provider.dart';
 import 'sales_provider.dart';
@@ -130,8 +131,12 @@ class WarehouseProvider extends ChangeNotifier {
     );
     ObjectBoxService.instance.transferBox.put(transfer);
 
-    if (Platform.isAndroid && syncService != null) {
-      syncService.pushTransfer(transfer);
+    if (Platform.isAndroid) {
+      SyncQueueService.instance.addToQueue(
+        entity: 'transfer',
+        action: 'create',
+        data: transfer.toJson(),
+      );
     }
 
     loadTransfers();

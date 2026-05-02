@@ -54,8 +54,52 @@ class Sale {
     this.synced = false,
     this.isReturn = false,
     this.itemsJson = '[]',
-  }) : createdAt = createdAt ?? DateTime.now(),
-       updatedAt = updatedAt ?? createdAt ?? DateTime.now();
+  })  : createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? createdAt ?? DateTime.now();
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'invoiceNo': invoiceNo,
+        'patientId': patientId,
+        'patientName': patientName,
+        'patientPhone': patientPhone,
+        'subtotal': subtotal,
+        'discount': discount,
+        'taxRate': taxRate,
+        'taxAmount': taxAmount,
+        'total': total,
+        'paymentMethod': paymentMethod,
+        'cashAmount': cashAmount,
+        'upiAmount': upiAmount,
+        'cardAmount': cardAmount,
+        'createdAt': createdAt.toIso8601String(),
+        'updatedAt': updatedAt.toIso8601String(),
+        'synced': synced,
+        'isReturn': isReturn,
+        'itemsJson': itemsJson,
+      };
+
+  factory Sale.fromJson(Map<String, dynamic> json) => Sale(
+        id: json['id'] ?? 0,
+        invoiceNo: json['invoiceNo'],
+        patientId: json['patientId'] ?? 0,
+        patientName: json['patientName'] ?? '',
+        patientPhone: json['patientPhone'] ?? '',
+        subtotal: (json['subtotal'] as num).toDouble(),
+        discount: (json['discount'] as num?)?.toDouble() ?? 0,
+        taxRate: (json['taxRate'] as num?)?.toDouble() ?? 0,
+        taxAmount: (json['taxAmount'] as num?)?.toDouble() ?? 0,
+        total: (json['total'] as num).toDouble(),
+        paymentMethod: json['paymentMethod'] ?? 'cash',
+        cashAmount: (json['cashAmount'] as num?)?.toDouble() ?? 0,
+        upiAmount: (json['upiAmount'] as num?)?.toDouble() ?? 0,
+        cardAmount: (json['cardAmount'] as num?)?.toDouble() ?? 0,
+        createdAt: DateTime.tryParse(json['createdAt'] ?? ''),
+        updatedAt: DateTime.tryParse(json['updatedAt'] ?? ''),
+        synced: json['synced'] ?? false,
+        isReturn: json['isReturn'] ?? false,
+        itemsJson: json['itemsJson'] ?? '[]',
+      );
 }
 
 // Transient model (not an ObjectBox entity)

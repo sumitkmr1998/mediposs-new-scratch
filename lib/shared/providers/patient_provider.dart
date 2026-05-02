@@ -8,6 +8,7 @@ import '../services/objectbox_service.dart';
 import '../../objectbox.g.dart';
 import '../services/local_server_service.dart';
 import '../services/sync_service.dart';
+import '../services/sync_queue_service.dart';
 
 class PatientProvider extends ChangeNotifier {
   List<Patient> _patients = [];
@@ -58,8 +59,12 @@ class PatientProvider extends ChangeNotifier {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
-    } else if (Platform.isAndroid && syncService != null) {
-      syncService.pushPatient(p);
+    } else if (Platform.isAndroid) {
+      SyncQueueService.instance.addToQueue(
+        entity: 'patient',
+        action: 'create',
+        data: p.toJson(),
+      );
     }
 
     return p;
@@ -81,8 +86,12 @@ class PatientProvider extends ChangeNotifier {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
-    } else if (Platform.isAndroid && syncService != null) {
-      syncService.pushPatientDelete(id);
+    } else if (Platform.isAndroid) {
+      SyncQueueService.instance.addToQueue(
+        entity: 'patient',
+        action: 'delete',
+        data: {'id': id},
+      );
     }
   }
 
@@ -135,13 +144,12 @@ class PatientProvider extends ChangeNotifier {
         if (LocalServerService.instance.isRunning) {
           LocalServerService.instance.broadcast({'event': 'sync_received'});
         }
-      } else if (Platform.isAndroid && syncService != null) {
-        // Look up UHID for UHID-based push
-        final patient = ObjectBoxService.instance.patientBox.get(patientId);
-        final uhid = patient?.uhid ?? '';
-        if (uhid.isNotEmpty) {
-          syncService.pushPatientPhoto(pImage, uhid);
-        }
+      } else if (Platform.isAndroid) {
+        SyncQueueService.instance.addToQueue(
+          entity: 'photo',
+          action: 'create',
+          data: {'id': pImage.id, 'patientId': patientId},
+        );
       }
     } catch (e) {
       debugPrint('Error saving patient photo: $e');
@@ -164,8 +172,12 @@ class PatientProvider extends ChangeNotifier {
 
       if (Platform.isWindows && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
-      } else if (Platform.isAndroid && syncService != null && uhid.isNotEmpty) {
-        syncService.pushPatientPhotoDelete(uhid, fileName);
+      } else if (Platform.isAndroid && uhid.isNotEmpty) {
+        SyncQueueService.instance.addToQueue(
+          entity: 'photo',
+          action: 'delete',
+          data: {'uhid': uhid, 'fileName': fileName},
+        );
       }
     } catch (e) {
       debugPrint('Error deleting patient photo: $e');

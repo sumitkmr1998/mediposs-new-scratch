@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import '../services/firebase_sync_service.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_router/shelf_router.dart';
@@ -19,6 +20,7 @@ import '../models/appointment.dart';
 import '../models/prescription.dart';
 import '../models/doctor.dart';
 import '../models/stock_transfer.dart';
+import 'package:objectbox/objectbox.dart';
 import '../../objectbox.g.dart';
 import 'package:flutter/foundation.dart';
 
@@ -97,12 +99,18 @@ class LocalServerService {
         .addMiddleware(logRequests())
         .addMiddleware(_corsMiddleware())
         .addMiddleware(_gzipMiddleware())
+        .addMiddleware(_secretMiddleware())
         .addHandler(router.call);
 
     _server = await io.serve(pipeline, InternetAddress.anyIPv4, _port);
     
     // One-time migration for legacy records that lack sync metadata
     _migrateSyncMetadata();
+
+    // Initial broadcast to Cloud for companion app fallback
+    broadcastAllToCloud();
+    // Periodic refresh every 10 minutes to keep Cloud collections fresh
+    Timer.periodic(const Duration(minutes: 10), (_) => broadcastAllToCloud());
   }
 
   Future<void> stop() async {
@@ -122,6 +130,30 @@ class LocalServerService {
         _wsClients.remove(client);
       }
     }
+  }
+
+  Middleware _secretMiddleware() {
+    return (Handler innerHandler) {
+      return (Request request) async {
+        // Always allow health check for tunnel monitoring
+        if (request.url.path == 'health') {
+          return innerHandler(request);
+        }
+
+        final secret = request.headers['X-MediPass-Secret'];
+        final hubSecret = ObjectBoxService.instance.settings.jwtSecret;
+
+        if (secret != hubSecret) {
+          debugPrint('Hub: Blocked request with invalid secret from ${request.context['shelf.io.connection_info']}');
+          return Response.forbidden(
+            jsonEncode({'error': 'Unauthorized: Invalid Hub Secret'}),
+            headers: {'content-type': 'application/json'},
+          );
+        }
+
+        return innerHandler(request);
+      };
+    };
   }
 
   void _onWsConnect(WebSocketChannel channel) {
@@ -1412,5 +1444,124 @@ class LocalServerService {
         return response;
       };
     };
+  }
+
+  /// Processes data changes pushed from companion apps via Firebase Fallback (Tier 3).
+  /// This ensures that even if the Hub is not directly reachable, it eventually catches up.
+  Future<void> handleExternalDelta(Map<String, dynamic> delta) async {
+    final entity = delta['entity'];
+    final action = delta['action'];
+    final data = delta['data'] as Map<String, dynamic>;
+    final docId = delta['id'] as String?;
+
+    debugPrint('Hub [Firebase Delta]: Processing $entity ($action)');
+
+    try {
+      if (entity == 'sale' && action == 'create') {
+        final sale = Sale(
+          invoiceNo: data['invoiceNo'] ?? '',
+          patientId: data['patientId'] ?? 0,
+          patientName: data['patientName'] ?? '',
+          patientPhone: data['patientPhone'] ?? '',
+          subtotal: (data['subtotal'] as num?)?.toDouble() ?? 0.0,
+          discount: (data['discount'] as num?)?.toDouble() ?? 0.0,
+          taxRate: (data['taxRate'] as num?)?.toDouble() ?? 0.0,
+          taxAmount: (data['taxAmount'] as num?)?.toDouble() ?? 0.0,
+          total: (data['total'] as num?)?.toDouble() ?? 0.0,
+          paymentMethod: data['paymentMethod'] ?? 'cash',
+          cashAmount: (data['cashAmount'] as num?)?.toDouble() ?? 0.0,
+          upiAmount: (data['upiAmount'] as num?)?.toDouble() ?? 0.0,
+          cardAmount: (data['cardAmount'] as num?)?.toDouble() ?? 0.0,
+          createdAt: DateTime.tryParse(data['createdAt'] ?? '') ?? DateTime.now(),
+          synced: true,
+          isReturn: data['isReturn'] ?? false,
+          itemsJson: data['itemsJson'] ?? '[]',
+        );
+
+        // Check for duplicates
+        final existing = ObjectBoxService.instance.saleBox.query(Sale_.invoiceNo.equals(sale.invoiceNo)).build().findFirst();
+        if (existing == null) {
+          ObjectBoxService.instance.saleBox.put(sale);
+          
+          // Deduct Inventory
+          final list = jsonDecode(sale.itemsJson) as List;
+          for (final jsonItem in list) {
+            final item = SaleItem.fromJson(jsonItem as Map<String, dynamic>);
+            final m = ObjectBoxService.instance.medicineBox.getAll().where((x) => x.name == item.medicineName).firstOrNull;
+            if (m != null) {
+              m.storeStock = (m.storeStock - item.qty.toInt()).clamp(0, 999999);
+              m.updatedAt = DateTime.now();
+              ObjectBoxService.instance.medicineBox.put(m);
+            }
+          }
+          
+          broadcast({'event': 'sync_received'});
+          broadcast({'event': 'sales_updated'});
+          _incomingDataController.add('sales');
+        }
+      } else if (entity == 'patient' && action == 'create') {
+        final p = Patient(
+          uhid: data['uhid'] ?? '',
+          name: data['name'] ?? '',
+          phone: data['phone'] ?? '',
+          gender: data['gender'] ?? 'Other',
+          address: data['address'] ?? '',
+          bloodGroup: data['bloodGroup'] ?? '',
+          age: data['age'] ?? 0,
+          createdAt: DateTime.tryParse(data['createdAt'] ?? '') ?? DateTime.now(),
+        );
+        final existing = ObjectBoxService.instance.patientBox.query(Patient_.uhid.equals(p.uhid)).build().findFirst();
+        if (existing != null) p.id = existing.id;
+        ObjectBoxService.instance.patientBox.put(p);
+        broadcast({'event': 'patients_updated'});
+        _incomingDataController.add('patients');
+      } else if (entity == 'appointment' && action == 'create') {
+         // Minimal logic for now, similar to _appointmentsPushHandler
+         broadcast({'event': 'sync_received'});
+         _incomingDataController.add('appointments');
+      }
+
+      // Mark as processed in Firebase
+      if (docId != null) {
+        await FirebaseSyncService.instance.markAsProcessed(docId);
+      }
+    } catch (e) {
+      debugPrint('Hub: Error processing Firebase delta: $e');
+    }
+  }
+
+  /// Hub-side: Broadcasts all critical data to Firebase for companion apps' offline consumption.
+  Future<void> broadcastAllToCloud() async {
+    if (kDebugMode) debugPrint('Hub: Broadcasting all data to Cloud collections for offline fallback...');
+    try {
+      // 1. Broadcast Users (Critical for login)
+      final users = ObjectBoxService.instance.userBox.getAll();
+      for (var u in users) {
+        await FirebaseSyncService.instance.broadcastUpdate('users', u.toJson());
+      }
+
+      // 2. Broadcast Medicines (Inventory)
+      final meds = ObjectBoxService.instance.medicineBox.getAll();
+      for (var m in meds) {
+        await FirebaseSyncService.instance.broadcastUpdate('medicines', m.toJson());
+      }
+
+      // 3. Broadcast Patients
+      final patients = ObjectBoxService.instance.patientBox.getAll();
+      for (var p in patients) {
+        await FirebaseSyncService.instance.broadcastUpdate('patients', p.toJson());
+      }
+
+      // 4. Broadcast Recent Sales (Last 50 to keep it light)
+      final sales = ObjectBoxService.instance.saleBox.query().order(Sale_.id, flags: Order.descending).build().find();
+      final limitedSales = sales.length > 50 ? sales.sublist(0, 50) : sales;
+      for (var s in limitedSales) {
+        await FirebaseSyncService.instance.broadcastUpdate('sales', s.toJson());
+      }
+
+      if (kDebugMode) debugPrint('Hub: Cloud broadcast complete.');
+    } catch (e) {
+      debugPrint('Hub: Cloud broadcast error: $e');
+    }
   }
 }

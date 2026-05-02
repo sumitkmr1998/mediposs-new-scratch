@@ -4,6 +4,7 @@ import '../models/medicine.dart';
 import '../models/purchase_record.dart';
 import '../services/objectbox_service.dart';
 import '../services/sync_service.dart';
+import '../services/sync_queue_service.dart';
 import 'dart:io';
 import '../services/local_server_service.dart';
 import '../../objectbox.g.dart';
@@ -139,8 +140,12 @@ class InventoryProvider extends ChangeNotifier {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
       }
-    } else if (Platform.isAndroid && syncService != null) {
-      syncService.pushMedicine(m);
+    } else if (Platform.isAndroid) {
+      SyncQueueService.instance.addToQueue(
+        entity: 'medicine',
+        action: 'create',
+        data: m.toJson(),
+      );
     }
   }
 
@@ -155,8 +160,12 @@ class InventoryProvider extends ChangeNotifier {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
       }
-    } else if (Platform.isAndroid && syncService != null) {
-      syncService.pushMedicine(m);
+    } else if (Platform.isAndroid) {
+      SyncQueueService.instance.addToQueue(
+        entity: 'medicine',
+        action: 'update',
+        data: m.toJson(),
+      );
     }
   }
 
@@ -168,8 +177,12 @@ class InventoryProvider extends ChangeNotifier {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
       }
-    } else if (Platform.isAndroid && syncService != null) {
-      syncService.pushMedicineDelete(id);
+    } else if (Platform.isAndroid) {
+      SyncQueueService.instance.addToQueue(
+        entity: 'medicine',
+        action: 'delete',
+        data: {'id': id},
+      );
     }
   }
 
@@ -259,8 +272,12 @@ class InventoryProvider extends ChangeNotifier {
       load();
       if (Platform.isWindows && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
-      } else if (Platform.isAndroid && syncService != null) {
-        syncService.pushMedicine(m);
+      } else if (Platform.isAndroid) {
+        SyncQueueService.instance.addToQueue(
+          entity: 'medicine',
+          action: 'update',
+          data: m.toJson(),
+        );
       }
     }
   }
@@ -334,8 +351,12 @@ class InventoryProvider extends ChangeNotifier {
           supplier: supplier,
         ));
 
-        if (Platform.isAndroid && syncService != null) {
-          syncService.pushMedicine(m);
+        if (Platform.isAndroid) {
+          SyncQueueService.instance.addToQueue(
+            entity: 'medicine',
+            action: 'update',
+            data: m.toJson(),
+          );
         }
       }
     }

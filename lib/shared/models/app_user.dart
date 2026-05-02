@@ -290,6 +290,14 @@ class AppSettings {
   bool navCollapsed;
   int? lastGlobalSync;
 
+  // New Cloud Sync Settings
+  String connectionMode; // "auto", "local", "cloudflare", "firebase"
+  String cloudflareUrl; // "https://xxx.trycloudflare.com"
+  int? lastCloudflareSync; // timestamp
+  bool firebaseEnabled; // true
+  int? lastFirebaseSync; // timestamp
+  String? deviceId; // UUID for this device
+
   AppSettings({
     this.id = 0,
     this.storeName = 'MediPoss Pharmacy',
@@ -320,6 +328,12 @@ class AppSettings {
     this.autoBackupTime = '22:00',
     this.navCollapsed = false,
     this.lastGlobalSync,
+    this.connectionMode = 'auto',
+    this.cloudflareUrl = '',
+    this.lastCloudflareSync,
+    this.firebaseEnabled = true,
+    this.lastFirebaseSync,
+    this.deviceId,
   });
 
   Map<String, dynamic> toJson() => {
@@ -352,6 +366,12 @@ class AppSettings {
         'autoBackupTime': autoBackupTime,
         'navCollapsed': navCollapsed,
         'lastGlobalSync': lastGlobalSync,
+        'connectionMode': connectionMode,
+        'cloudflareUrl': cloudflareUrl,
+        'lastCloudflareSync': lastCloudflareSync,
+        'firebaseEnabled': firebaseEnabled,
+        'lastFirebaseSync': lastFirebaseSync,
+        'deviceId': deviceId,
       };
 
   static AppSettings fromJson(Map<String, dynamic> json) => AppSettings(
@@ -386,5 +406,11 @@ class AppSettings {
         autoBackupTime: json['autoBackupTime'] ?? '22:00',
         navCollapsed: json['navCollapsed'] ?? false,
         lastGlobalSync: json['lastGlobalSync'],
+        connectionMode: json['connectionMode'] ?? 'auto',
+        cloudflareUrl: json['cloudflareUrl'] ?? '',
+        lastCloudflareSync: json['lastCloudflareSync'],
+        firebaseEnabled: json['firebaseEnabled'] ?? true,
+        lastFirebaseSync: json['lastFirebaseSync'],
+        deviceId: json['deviceId'],
       );
 }

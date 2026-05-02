@@ -11,6 +11,7 @@ import 'prescription_provider.dart';
 import 'opd_provider.dart';
 import '../services/local_server_service.dart';
 import '../services/sync_service.dart';
+import '../services/sync_queue_service.dart';
 import 'dart:io';
 import 'package:provider/provider.dart';
 
@@ -348,8 +349,12 @@ class CartProvider extends ChangeNotifier {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
       }
-    } else if (Platform.isAndroid && syncService != null) {
-      await syncService.pushSale(sale);
+    } else if (Platform.isAndroid) {
+      SyncQueueService.instance.addToQueue(
+        entity: 'sale',
+        action: 'create',
+        data: sale.toJson(),
+      );
     }
 
     return sale;

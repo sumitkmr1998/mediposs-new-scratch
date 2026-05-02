@@ -25,6 +25,7 @@ import 'shared/models/prescription_template.dart';
 import 'shared/models/purchase_record.dart';
 import 'shared/models/sale.dart';
 import 'shared/models/stock_transfer.dart';
+import 'shared/models/sync_queue_item.dart';
 
 export 'package:objectbox/objectbox.dart'; // so that callers only have to import this file
 
@@ -32,7 +33,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(1, 637942838794498612),
       name: 'AppSettings',
-      lastPropertyId: const obx_int.IdUid(29, 8186959899595310954),
+      lastPropertyId: const obx_int.IdUid(35, 4340623742765413633),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -179,6 +180,36 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(29, 8186959899595310954),
             name: 'lastGlobalSync',
             type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(30, 8701379204911734594),
+            name: 'connectionMode',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(31, 4347751216562088088),
+            name: 'cloudflareUrl',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(32, 4851008864204854886),
+            name: 'lastCloudflareSync',
+            type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(33, 7003841615539311009),
+            name: 'firebaseEnabled',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(34, 1601401516363467007),
+            name: 'lastFirebaseSync',
+            type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(35, 4340623742765413633),
+            name: 'deviceId',
+            type: 9,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
@@ -1057,6 +1088,50 @@ final _entities = <obx_int.ModelEntity>[
             relationTarget: 'Medicine')
       ],
       relations: <obx_int.ModelRelation>[],
+      backlinks: <obx_int.ModelBacklink>[]),
+  obx_int.ModelEntity(
+      id: const obx_int.IdUid(14, 3498411204338603542),
+      name: 'SyncQueueItem',
+      lastPropertyId: const obx_int.IdUid(7, 5351877504325314514),
+      flags: 0,
+      properties: <obx_int.ModelProperty>[
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(1, 6773449960909216032),
+            name: 'id',
+            type: 6,
+            flags: 1),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(2, 2289338267844409414),
+            name: 'entity',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(3, 765469904295025511),
+            name: 'action',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(4, 3434171103642353605),
+            name: 'dataJson',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(5, 1939216673384730349),
+            name: 'timestamp',
+            type: 10,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(6, 7093793653622907133),
+            name: 'processed',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(7, 5351877504325314514),
+            name: 'processingBy',
+            type: 9,
+            flags: 0)
+      ],
+      relations: <obx_int.ModelRelation>[],
       backlinks: <obx_int.ModelBacklink>[])
 ];
 
@@ -1095,7 +1170,7 @@ Future<obx.Store> openStore(
 obx_int.ModelDefinition getObjectBoxModel() {
   final model = obx_int.ModelInfo(
       entities: _entities,
-      lastEntityId: const obx_int.IdUid(13, 6725712331159432176),
+      lastEntityId: const obx_int.IdUid(14, 3498411204338603542),
       lastIndexId: const obx_int.IdUid(1, 5015225040438721990),
       lastRelationId: const obx_int.IdUid(1, 2143695166283597161),
       lastSequenceId: const obx_int.IdUid(0, 0),
@@ -1147,7 +1222,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final autoLoginNameOffset = object.autoLoginName == null
               ? null
               : fbb.writeString(object.autoLoginName!);
-          fbb.startTable(30);
+          final connectionModeOffset = fbb.writeString(object.connectionMode);
+          final cloudflareUrlOffset = fbb.writeString(object.cloudflareUrl);
+          final deviceIdOffset = object.deviceId == null
+              ? null
+              : fbb.writeString(object.deviceId!);
+          fbb.startTable(36);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, storeNameOffset);
           fbb.addOffset(2, storeAddressOffset);
@@ -1177,6 +1257,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addBool(26, object.navCollapsed);
           fbb.addOffset(27, autoLoginNameOffset);
           fbb.addInt64(28, object.lastGlobalSync);
+          fbb.addOffset(29, connectionModeOffset);
+          fbb.addOffset(30, cloudflareUrlOffset);
+          fbb.addInt64(31, object.lastCloudflareSync);
+          fbb.addBool(32, object.firebaseEnabled);
+          fbb.addInt64(33, object.lastFirebaseSync);
+          fbb.addOffset(34, deviceIdOffset);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -1252,6 +1338,20 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.BoolReader().vTableGet(buffer, rootOffset, 56, false);
           final lastGlobalSyncParam =
               const fb.Int64Reader().vTableGetNullable(buffer, rootOffset, 60);
+          final connectionModeParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGet(buffer, rootOffset, 62, '');
+          final cloudflareUrlParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGet(buffer, rootOffset, 64, '');
+          final lastCloudflareSyncParam =
+              const fb.Int64Reader().vTableGetNullable(buffer, rootOffset, 66);
+          final firebaseEnabledParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 68, false);
+          final lastFirebaseSyncParam =
+              const fb.Int64Reader().vTableGetNullable(buffer, rootOffset, 70);
+          final deviceIdParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGetNullable(buffer, rootOffset, 72);
           final object = AppSettings(
               id: idParam,
               storeName: storeNameParam,
@@ -1281,7 +1381,13 @@ obx_int.ModelDefinition getObjectBoxModel() {
               lastBackupMillis: lastBackupMillisParam,
               autoBackupTime: autoBackupTimeParam,
               navCollapsed: navCollapsedParam,
-              lastGlobalSync: lastGlobalSyncParam);
+              lastGlobalSync: lastGlobalSyncParam,
+              connectionMode: connectionModeParam,
+              cloudflareUrl: cloudflareUrlParam,
+              lastCloudflareSync: lastCloudflareSyncParam,
+              firebaseEnabled: firebaseEnabledParam,
+              lastFirebaseSync: lastFirebaseSyncParam,
+              deviceId: deviceIdParam);
 
           return object;
         }),
@@ -2209,6 +2315,61 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 14, 0);
           object.medicine.attach(store);
           return object;
+        }),
+    SyncQueueItem: obx_int.EntityDefinition<SyncQueueItem>(
+        model: _entities[13],
+        toOneRelations: (SyncQueueItem object) => [],
+        toManyRelations: (SyncQueueItem object) => {},
+        getId: (SyncQueueItem object) => object.id,
+        setId: (SyncQueueItem object, int id) {
+          object.id = id;
+        },
+        objectToFB: (SyncQueueItem object, fb.Builder fbb) {
+          final entityOffset = fbb.writeString(object.entity);
+          final actionOffset = fbb.writeString(object.action);
+          final dataJsonOffset = fbb.writeString(object.dataJson);
+          final processingByOffset = object.processingBy == null
+              ? null
+              : fbb.writeString(object.processingBy!);
+          fbb.startTable(8);
+          fbb.addInt64(0, object.id);
+          fbb.addOffset(1, entityOffset);
+          fbb.addOffset(2, actionOffset);
+          fbb.addOffset(3, dataJsonOffset);
+          fbb.addInt64(4, object.timestamp.millisecondsSinceEpoch);
+          fbb.addBool(5, object.processed);
+          fbb.addOffset(6, processingByOffset);
+          fbb.finish(fbb.endTable());
+          return object.id;
+        },
+        objectFromFB: (obx.Store store, ByteData fbData) {
+          final buffer = fb.BufferContext(fbData);
+          final rootOffset = buffer.derefObject(0);
+          final idParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0);
+          final entityParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 6, '');
+          final actionParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 8, '');
+          final dataJsonParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 10, '');
+          final timestampParam = DateTime.fromMillisecondsSinceEpoch(
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 12, 0));
+          final processedParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 14, false);
+          final processingByParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGetNullable(buffer, rootOffset, 16);
+          final object = SyncQueueItem(
+              id: idParam,
+              entity: entityParam,
+              action: actionParam,
+              dataJson: dataJsonParam,
+              timestamp: timestampParam,
+              processed: processedParam,
+              processingBy: processingByParam);
+
+          return object;
         })
   };
 
@@ -2332,6 +2493,30 @@ class AppSettings_ {
   /// See [AppSettings.lastGlobalSync].
   static final lastGlobalSync =
       obx.QueryIntegerProperty<AppSettings>(_entities[0].properties[28]);
+
+  /// See [AppSettings.connectionMode].
+  static final connectionMode =
+      obx.QueryStringProperty<AppSettings>(_entities[0].properties[29]);
+
+  /// See [AppSettings.cloudflareUrl].
+  static final cloudflareUrl =
+      obx.QueryStringProperty<AppSettings>(_entities[0].properties[30]);
+
+  /// See [AppSettings.lastCloudflareSync].
+  static final lastCloudflareSync =
+      obx.QueryIntegerProperty<AppSettings>(_entities[0].properties[31]);
+
+  /// See [AppSettings.firebaseEnabled].
+  static final firebaseEnabled =
+      obx.QueryBooleanProperty<AppSettings>(_entities[0].properties[32]);
+
+  /// See [AppSettings.lastFirebaseSync].
+  static final lastFirebaseSync =
+      obx.QueryIntegerProperty<AppSettings>(_entities[0].properties[33]);
+
+  /// See [AppSettings.deviceId].
+  static final deviceId =
+      obx.QueryStringProperty<AppSettings>(_entities[0].properties[34]);
 }
 
 /// [AppUser] entity fields to define ObjectBox queries.
@@ -2979,4 +3164,35 @@ class MedicineBatch_ {
   /// See [MedicineBatch.medicine].
   static final medicine = obx.QueryRelationToOne<MedicineBatch, Medicine>(
       _entities[12].properties[5]);
+}
+
+/// [SyncQueueItem] entity fields to define ObjectBox queries.
+class SyncQueueItem_ {
+  /// See [SyncQueueItem.id].
+  static final id =
+      obx.QueryIntegerProperty<SyncQueueItem>(_entities[13].properties[0]);
+
+  /// See [SyncQueueItem.entity].
+  static final entity =
+      obx.QueryStringProperty<SyncQueueItem>(_entities[13].properties[1]);
+
+  /// See [SyncQueueItem.action].
+  static final action =
+      obx.QueryStringProperty<SyncQueueItem>(_entities[13].properties[2]);
+
+  /// See [SyncQueueItem.dataJson].
+  static final dataJson =
+      obx.QueryStringProperty<SyncQueueItem>(_entities[13].properties[3]);
+
+  /// See [SyncQueueItem.timestamp].
+  static final timestamp =
+      obx.QueryDateProperty<SyncQueueItem>(_entities[13].properties[4]);
+
+  /// See [SyncQueueItem.processed].
+  static final processed =
+      obx.QueryBooleanProperty<SyncQueueItem>(_entities[13].properties[5]);
+
+  /// See [SyncQueueItem.processingBy].
+  static final processingBy =
+      obx.QueryStringProperty<SyncQueueItem>(_entities[13].properties[6]);
 }

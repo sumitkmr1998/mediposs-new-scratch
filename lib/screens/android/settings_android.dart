@@ -9,6 +9,7 @@ import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/models/app_user.dart';
 import '../../shared/services/sync_service.dart';
+import '../../shared/services/firebase_sync_service.dart';
 import '../../theme/app_theme.dart';
 import '../../shared/services/local_server_service.dart';
 import '../../shared/services/printing_service.dart';
@@ -41,6 +42,9 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
   String _paperSize = 'A6';
   List<DisplayMode> _displayModes = [];
   double _selectedFPS = -1.0;
+  String _connectionMode = 'auto';
+  String _cloudflareUrl = '';
+  bool _isFetchingHubStatus = false;
 
   @override
   void initState() {
@@ -62,9 +66,29 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
     _autoPrint = s.autoPrintReceipt;
     _paperSize = s.receiptPaperSize;
     _selectedFPS = s.preferredRefreshRate;
+    _connectionMode = s.connectionMode;
+    _cloudflareUrl = s.cloudflareUrl;
 
     _loadPrinters();
     _loadDisplayModes();
+    _fetchHubStatus();
+  }
+
+  Future<void> _fetchHubStatus() async {
+    if (!mounted) return;
+    setState(() => _isFetchingHubStatus = true);
+    try {
+      final status = await FirebaseSyncService.instance.getHubStatus();
+      if (status != null && mounted) {
+        setState(() {
+          _cloudflareUrl = status['cloudflareUrl'] ?? _cloudflareUrl;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching hub status: $e');
+    } finally {
+      if (mounted) setState(() => _isFetchingHubStatus = false);
+    }
   }
 
   Future<void> _loadDisplayModes() async {
@@ -112,7 +136,9 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
       ..autoPrintReceipt = _autoPrint
       ..receiptPaperSize = _paperSize
       ..serverPort = int.tryParse(_portCtrl.text) ?? 8080
-      ..preferredRefreshRate = _selectedFPS;
+      ..preferredRefreshRate = _selectedFPS
+      ..connectionMode = _connectionMode
+      ..cloudflareUrl = _cloudflareUrl;
 
     settingsProv.save(s, syncService: context.read<SyncService>());
 
@@ -522,6 +548,121 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                                 fontWeight: FontWeight.bold)),
                       ),
                     ]),
+                  ),
+                ],
+              ),
+              _buildSection(
+                'Hybrid Connectivity',
+                children: [
+                  Text(
+                    'Configure how this app connects to the Windows Hub when you are away from the clinic.',
+                    style:
+                        TextStyle(color: context.textMutedColor, fontSize: 13),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Text('Connection Mode',
+                          style: TextStyle(
+                              color: context.textMutedColor,
+                              fontWeight: FontWeight.w600)),
+                      const Spacer(),
+                      DropdownButton<String>(
+                        value: _connectionMode,
+                        dropdownColor: context.surfaceColor,
+                        underline: const SizedBox(),
+                        items: const [
+                          DropdownMenuItem(
+                              value: 'auto', child: Text('Auto (Preferred)')),
+                          DropdownMenuItem(
+                              value: 'local', child: Text('Local WiFi Only')),
+                          DropdownMenuItem(
+                              value: 'cloudflare',
+                              child: Text('Cloudflare Tunnel')),
+                          DropdownMenuItem(
+                              value: 'firebase', child: Text('Backup Cloud')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) setState(() => _connectionMode = val);
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: context.textMutedColor.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: context.borderColor.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.cloud_sync_rounded,
+                                color: AppTheme.primaryLight, size: 18),
+                            const SizedBox(width: 8),
+                            Text('Cloudflare Tunnel Link',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: context.textMutedColor)),
+                            const Spacer(),
+                            if (_isFetchingHubStatus)
+                              const SizedBox(
+                                  width: 12,
+                                  height: 12,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2))
+                            else
+                              IconButton(
+                                constraints: const BoxConstraints(),
+                                padding: EdgeInsets.zero,
+                                icon: const Icon(Icons.refresh, size: 16),
+                                onPressed: _fetchHubStatus,
+                                color: AppTheme.primary,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (_cloudflareUrl.isEmpty)
+                          Text('No active tunnel found. Is Hub running?',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color: context.textMutedColor,
+                                  fontStyle: FontStyle.italic))
+                        else
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _cloudflareUrl,
+                                  style: const TextStyle(
+                                      fontSize: 13,
+                                      color: AppTheme.primaryLight,
+                                      fontWeight: FontWeight.w600,
+                                      decoration: TextDecoration.underline),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.copy, size: 18),
+                                onPressed: () {
+                                  Clipboard.setData(
+                                      ClipboardData(text: _cloudflareUrl));
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                          content: Text('Link copied!')));
+                                },
+                                color: context.textMutedColor,
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
                   ),
                 ],
               ),

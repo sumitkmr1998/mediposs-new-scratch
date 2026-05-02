@@ -29,4 +29,29 @@ class PrescriptionTemplate {
     this.doctorId = 0,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'diagnosis': diagnosis,
+        'complaints': complaints,
+        'notes': notes,
+        'itemsJson': itemsJson,
+        'labTestsJson': labTestsJson,
+        'doctorId': doctorId,
+        'createdAt': createdAt.toIso8601String(),
+      };
+
+  factory PrescriptionTemplate.fromJson(Map<String, dynamic> json) =>
+      PrescriptionTemplate(
+        id: json['id'] ?? 0,
+        name: json['name'],
+        diagnosis: json['diagnosis'] ?? '',
+        complaints: json['complaints'] ?? '',
+        notes: json['notes'] ?? '',
+        itemsJson: json['itemsJson'] ?? '[]',
+        labTestsJson: json['labTestsJson'] ?? '[]',
+        doctorId: json['doctorId'] ?? 0,
+        createdAt: DateTime.tryParse(json['createdAt'] ?? ''),
+      );
 }

@@ -44,8 +44,50 @@ class Medicine {
     DateTime? createdAt,
     DateTime? updatedAt,
     this.synced = false,
-  }) : createdAt = createdAt ?? DateTime.now(),
-       updatedAt = updatedAt ?? createdAt ?? DateTime.now();
+  })  : createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? createdAt ?? DateTime.now();
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'barcode': barcode,
+        'category': category,
+        'unit': unit,
+        'purchasePrice': purchasePrice,
+        'sellingPrice': sellingPrice,
+        'mainStock': mainStock,
+        'storeStock': storeStock,
+        'lowStockThreshold': lowStockThreshold,
+        'createdAt': createdAt.toIso8601String(),
+        'updatedAt': updatedAt.toIso8601String(),
+        'synced': synced,
+        'batches': batches.map((b) => b.toJson()).toList(),
+      };
+
+  factory Medicine.fromJson(Map<String, dynamic> json) {
+    final medicine = Medicine(
+      id: json['id'] ?? 0,
+      name: json['name'],
+      barcode: json['barcode'] ?? '',
+      category: json['category'] ?? 'General',
+      unit: json['unit'] ?? 'Pcs',
+      purchasePrice: (json['purchasePrice'] as num).toDouble(),
+      sellingPrice: (json['sellingPrice'] as num).toDouble(),
+      mainStock: json['mainStock'] ?? 0,
+      storeStock: json['storeStock'] ?? 0,
+      lowStockThreshold: json['lowStockThreshold'] ?? 10,
+      createdAt: DateTime.tryParse(json['createdAt'] ?? ''),
+      updatedAt: DateTime.tryParse(json['updatedAt'] ?? ''),
+      synced: json['synced'] ?? false,
+    );
+    if (json['batches'] != null) {
+      final batchList = (json['batches'] as List)
+          .map((b) => MedicineBatch.fromJson(b))
+          .toList();
+      medicine.batches.addAll(batchList);
+    }
+    return medicine;
+  }
  
   /// Recalculates aggregate stock fields from individual batches.
   void recalculateStockFromBatches() {
@@ -109,4 +151,20 @@ class MedicineBatch {
     this.mainStock = 0,
     this.storeStock = 0,
   });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'batchNo': batchNo,
+        'expiryDate': expiryDate.toIso8601String(),
+        'mainStock': mainStock,
+        'storeStock': storeStock,
+      };
+
+  factory MedicineBatch.fromJson(Map<String, dynamic> json) => MedicineBatch(
+        id: json['id'] ?? 0,
+        batchNo: json['batchNo'],
+        expiryDate: DateTime.tryParse(json['expiryDate'] ?? '') ?? DateTime.now(),
+        mainStock: json['mainStock'] ?? 0,
+        storeStock: json['storeStock'] ?? 0,
+      );
 }

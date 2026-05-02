@@ -46,8 +46,46 @@ class Prescription {
     this.dispensed = false,
     DateTime? createdAt,
     DateTime? updatedAt,
-  }) : createdAt = createdAt ?? DateTime.now(),
-       updatedAt = updatedAt ?? createdAt ?? DateTime.now();
+  })  : createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? createdAt ?? DateTime.now();
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'appointmentId': appointmentId,
+        'patientId': patientId,
+        'patientName': patientName,
+        'doctorId': doctorId,
+        'doctorName': doctorName,
+        'diagnosis': diagnosis,
+        'complaints': complaints,
+        'notes': notes,
+        'itemsJson': itemsJson,
+        'labTestsJson': labTestsJson,
+        'vitalsJson': vitalsJson,
+        'imagesJson': imagesJson,
+        'dispensed': dispensed,
+        'createdAt': createdAt.toIso8601String(),
+        'updatedAt': updatedAt.toIso8601String(),
+      };
+
+  factory Prescription.fromJson(Map<String, dynamic> json) => Prescription(
+        id: json['id'] ?? 0,
+        appointmentId: json['appointmentId'],
+        patientId: json['patientId'],
+        patientName: json['patientName'],
+        doctorId: json['doctorId'],
+        doctorName: json['doctorName'],
+        diagnosis: json['diagnosis'] ?? '',
+        complaints: json['complaints'] ?? '',
+        notes: json['notes'] ?? '',
+        itemsJson: json['itemsJson'] ?? '[]',
+        labTestsJson: json['labTestsJson'] ?? '[]',
+        vitalsJson: json['vitalsJson'] ?? '{}',
+        imagesJson: json['imagesJson'] ?? '[]',
+        dispensed: json['dispensed'] ?? false,
+        createdAt: DateTime.tryParse(json['createdAt'] ?? ''),
+        updatedAt: DateTime.tryParse(json['updatedAt'] ?? ''),
+      );
 }
 
 // Transient models — not ObjectBox entities

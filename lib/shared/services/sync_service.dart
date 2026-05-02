@@ -17,8 +17,13 @@ import '../models/prescription_template.dart';
 import '../models/stock_transfer.dart';
 import '../services/objectbox_service.dart';
 import '../services/notification_service.dart';
+import '../services/firebase_sync_service.dart';
 
 class SyncService extends ChangeNotifier {
+  static final SyncService instance = SyncService._();
+  SyncService._();
+  factory SyncService() => instance;
+
   String? _hubIp;
   String? _jwtToken;
   String? _connectedRole;
@@ -32,23 +37,39 @@ class SyncService extends ChangeNotifier {
   String? get connectedRole => _connectedRole;
   Map<String, dynamic>? get lastUserMap => _lastUserMap;
 
-  String get _baseUrl => 'http://$_hubIp:8080';
+  String get _baseUrl {
+    final settings = ObjectBoxService.instance.settings;
+    if (settings.connectionMode == 'cloudflare' &&
+        settings.cloudflareUrl.isNotEmpty) {
+      return settings.cloudflareUrl;
+    }
+    // If hubIp is actually a full URL (from Cloudflare discovery), use it
+    if (_hubIp != null && _hubIp!.startsWith('http')) {
+      return _hubIp!;
+    }
+    return 'http://$_hubIp:8080';
+  }
 
-  Future<String?> connect(String ip) async {
+  Future<String?> connect(String address) async {
     try {
-      final ok = await testConnection(ip);
+      final isUrl = address.startsWith('http');
+      final ok = await testConnection(address);
       if (ok) {
-        _hubIp = ip;
+        _hubIp = address;
         _isConnected = true;
-        // Persist the IP
+        // Persist the address (IP or URL)
         final settings = ObjectBoxService.instance.settings;
-        settings.hubIp = ip;
+        if (isUrl) {
+          settings.cloudflareUrl = address;
+        } else {
+          settings.hubIp = address;
+        }
         ObjectBoxService.instance.settingsBox.put(settings);
 
         notifyListeners();
         return null;
       } else {
-        return 'Cannot verify Hub health at $ip.';
+        return 'Cannot verify Hub health at $address.';
       }
     } catch (e) {
       return 'Cannot reach hub: $e';
@@ -58,12 +79,11 @@ class SyncService extends ChangeNotifier {
   Future<String?> login(String name, String pin) async {
     if (_hubIp == null) return 'No Hub IP set.';
     try {
-      final url = Uri.parse('http://$_hubIp:8080/api/auth/login');
+      final url = Uri.parse('$_baseUrl/api/auth/login');
       final res = await http.post(url,
           body: jsonEncode({'name': name, 'pin': pin}),
-          headers: {
-            'content-type': 'application/json'
-          }).timeout(const Duration(seconds: 10));
+          headers: _authHeaders())
+          .timeout(const Duration(seconds: 10));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -95,11 +115,13 @@ class SyncService extends ChangeNotifier {
     }
   }
 
-  Future<bool> testConnection(String ip) async {
+  Future<bool> testConnection(String address) async {
     try {
-      final url = Uri.parse('http://$ip:8080/health');
+      final url = address.startsWith('http')
+          ? Uri.parse('$address/health')
+          : Uri.parse('http://$address:8080/health');
       debugPrint('SyncService: Testing connection to $url...');
-      final res = await http.get(url).timeout(const Duration(seconds: 4));
+      final res = await http.get(url, headers: _authHeaders()).timeout(const Duration(seconds: 4));
       debugPrint('SyncService: Connection test result: ${res.statusCode}');
       return res.statusCode == 200;
     } on SocketException catch (e) {
@@ -117,36 +139,93 @@ class SyncService extends ChangeNotifier {
   Future<bool> tryAutoConnect() async {
     final settings = ObjectBoxService.instance.settings;
     final savedIp = settings.hubIp;
+    bool success = false;
+
+    // 1. Try Local Hub IP first
     if (savedIp != null && savedIp.isNotEmpty) {
-      debugPrint('SyncService: Attempting auto-connect to $savedIp');
+      debugPrint('SyncService: Attempting auto-connect to Local IP: $savedIp');
       final errorMsg = await connect(savedIp);
       if (errorMsg == null) {
-        // Pull users first so local login works
-        await pullUsers();
-        // Auto-login with the stored PIN of the first active user to get JWT token
-        // This is critical: all push() methods need _jwtToken to be non-null
-        final userBox = ObjectBoxService.instance.userBox;
-        final users = userBox.getAll();
-        if (users.isNotEmpty) {
-          // Try to login using the hub PIN stored in settings (default: first user's PIN equivalent)
-          // We use a special auto-login PIN approach: pull token using admin PIN from settings
-          final savedPin = settings.autoLoginPin;
-          final savedName = settings.autoLoginName;
-          if (savedPin != null && savedPin.isNotEmpty && savedName != null) {
-            final loginErr = await login(savedName, savedPin);
-            if (loginErr == null) {
-              debugPrint('SyncService: Auto-login JWT obtained successfully.');
-              await syncAll();
-            } else {
-              debugPrint(
-                  'SyncService: Auto-login failed: $loginErr — push calls will fail until manual login.');
-            }
-          }
-        }
-        return true;
+        success = true;
       }
     }
-    return false;
+
+    // 2. Fallback: Check Firebase for latest Cloudflare Tunnel URL
+    if (!success && (settings.connectionMode == 'auto' || settings.connectionMode == 'cloudflare')) {
+      debugPrint('SyncService: Local Hub unreachable. Checking Firebase for Cloud Tunnel URL...');
+      final status = await FirebaseSyncService.instance.getHubStatus();
+      final cloudUrl = status?['cloudflareUrl'] as String?;
+      if (cloudUrl != null && cloudUrl.isNotEmpty) {
+        debugPrint('SyncService: Found Cloud Tunnel URL: $cloudUrl. Attempting connection...');
+        final errorMsg = await connect(cloudUrl);
+        if (errorMsg == null) {
+          success = true;
+        }
+      }
+    }
+
+    if (success) {
+      // Pull users first so local login works
+      await pullUsers();
+      final savedPin = settings.autoLoginPin;
+      final savedName = settings.autoLoginName;
+      if (savedPin != null && savedPin.isNotEmpty && savedName != null) {
+        final loginErr = await login(savedName, savedPin);
+        if (loginErr == null) {
+          debugPrint('SyncService: Auto-login JWT obtained successfully.');
+          await syncAll();
+        } else {
+          debugPrint('SyncService: Auto-login failed: $loginErr');
+        }
+      }
+      return true;
+    }
+
+    // 3. Fallback: Pull from Firebase collections if Hub is totally offline
+    debugPrint('SyncService: Hub completely offline. Falling back to Cloud Data...');
+    await syncAllFromCloud();
+    return true; // Return true so UI thinks we are "connected to cloud"
+  }
+
+  /// Pulls latest "Source of Truth" from Firebase if Hub is offline.
+  Future<void> syncAllFromCloud() async {
+    debugPrint('SyncService: syncAllFromCloud starting...');
+    try {
+      // 1. Pull Users (CRITICAL for login while offline)
+      final fbUsers = await FirebaseSyncService.instance.fetchCollection('users');
+      if (fbUsers.isNotEmpty) {
+        final box = ObjectBoxService.instance.userBox;
+        box.removeAll();
+        for (var u in fbUsers) {
+          box.put(AppUser.fromJson(u));
+        }
+        debugPrint('SyncService [Cloud]: Synced ${fbUsers.length} users.');
+      }
+
+      // 2. Pull Medicines/Inventory
+      final fbMeds = await FirebaseSyncService.instance.fetchCollection('medicines');
+      if (fbMeds.isNotEmpty) {
+        final box = ObjectBoxService.instance.medicineBox;
+        for (var m in fbMeds) {
+          box.put(Medicine.fromJson(m));
+        }
+        debugPrint('SyncService [Cloud]: Synced ${fbMeds.length} medicines.');
+      }
+
+      // 3. Pull Patients
+      final fbPatients = await FirebaseSyncService.instance.fetchCollection('patients');
+      if (fbPatients.isNotEmpty) {
+        final box = ObjectBoxService.instance.patientBox;
+        for (var p in fbPatients) {
+          box.put(Patient.fromJson(p));
+        }
+        debugPrint('SyncService [Cloud]: Synced ${fbPatients.length} patients.');
+      }
+
+      debugPrint('SyncService: syncAllFromCloud completed.');
+    } catch (e) {
+      debugPrint('SyncService: syncAllFromCloud error - $e');
+    }
   }
 
   /// Pulls all relevant data from Hub to ensure Android parity
@@ -202,8 +281,8 @@ class SyncService extends ChangeNotifier {
   Future<void> pullUsers() async {
     if (_hubIp == null) return;
     try {
-      final url = Uri.parse('http://$_hubIp:8080/api/users');
-      final res = await http.get(url).timeout(const Duration(seconds: 5));
+      final url = Uri.parse('$_baseUrl/api/users');
+      final res = await http.get(url, headers: _authHeaders()).timeout(const Duration(seconds: 5));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body)['data'] as List;
         final box = ObjectBoxService.instance.userBox;
@@ -843,27 +922,8 @@ class SyncService extends ChangeNotifier {
   }
 
   Future<bool> pushTemplate(PrescriptionTemplate t) async {
-    if (_jwtToken == null) return false;
-    try {
-      final url = Uri.parse('$_baseUrl/api/templates/push');
-      final body = jsonEncode({
-        'name': t.name,
-        'diagnosis': t.diagnosis,
-        'complaints': t.complaints,
-        'notes': t.notes,
-        'itemsJson': t.itemsJson,
-        'labTestsJson': t.labTestsJson,
-        'doctorId': t.doctorId,
-        'createdAt': t.createdAt.toIso8601String(),
-      });
-      final res = await http
-          .post(url, headers: _authHeaders(), body: body)
-          .timeout(const Duration(seconds: 10));
-      return res.statusCode == 200;
-    } catch (e) {
-      debugPrint('pushTemplate err: $e');
-      return false;
-    }
+    return await _unifiedPush('/api/templates/push', t.toJson(),
+        entity: 'template', action: 'create');
   }
 
   // ─── Patient Photos (lazy, per-patient) ───────────────────────────────────────────────────────
@@ -933,284 +993,82 @@ class SyncService extends ChangeNotifier {
   }
 
   Future<bool> pushPatientPhoto(PatientImage photo, String patientUhid) async {
-    if (_jwtToken == null) return false;
-    try {
-      final file = File(photo.imagePath);
-      if (!await file.exists()) return false;
-      final bytes = await file.readAsBytes();
-      final base64Data = base64Encode(bytes);
-      final filename = photo.imagePath.replaceAll('\\', '/').split('/').last;
-      final url = Uri.parse('$_baseUrl/api/patient-photos/push');
-      final body = jsonEncode({
-        'patientUhid': patientUhid, // ← UHID-based, not internal ID
-        'category': photo.category,
-        'date': photo.date.toIso8601String(),
-        'filename': filename,
-        'imageData': base64Data,
-      });
-      final res = await http
-          .post(url, headers: _authHeaders(), body: body)
-          .timeout(const Duration(seconds: 60));
-      return res.statusCode == 200;
-    } catch (e) {
-      debugPrint('pushPatientPhoto err: $e');
-      return false;
-    }
+    final file = File(photo.imagePath);
+    if (!await file.exists()) return false;
+    final bytes = await file.readAsBytes();
+    final base64Data = base64Encode(bytes);
+    final filename = photo.imagePath.replaceAll('\\', '/').split('/').last;
+    final data = {
+      'patientUhid': patientUhid,
+      'category': photo.category,
+      'date': photo.date.toIso8601String(),
+      'filename': filename,
+      'imageData': base64Data,
+    };
+
+    // Images are NOT synced via Firebase as per policy
+    return await _unifiedPush('/api/patient-photos/push', data);
   }
 
   Future<bool> pushSale(Sale sale) async {
-    if (_hubIp == null) return false;
-    try {
-      final url = Uri.parse('$_baseUrl/api/sales/push');
-      final body = jsonEncode({
-        'invoiceNo': sale.invoiceNo,
-        'patientId': sale.patientId,
-        'patientName': sale.patientName,
-        'patientPhone': sale.patientPhone,
-        'subtotal': sale.subtotal,
-        'discount': sale.discount,
-        'taxRate': sale.taxRate,
-        'taxAmount': sale.taxAmount,
-        'total': sale.total,
-        'paymentMethod': sale.paymentMethod,
-        'cashAmount': sale.cashAmount,
-        'upiAmount': sale.upiAmount,
-        'cardAmount': sale.cardAmount,
-        'createdAt': sale.createdAt.toIso8601String(),
-        'synced': true,
-        'isReturn': sale.isReturn,
-        'itemsJson': sale.itemsJson,
-      });
-
-      debugPrint('SyncService: Pushing sale ${sale.invoiceNo} to Hub');
-      final res = await http
-          .post(url, headers: _authHeaders(), body: body)
-          .timeout(const Duration(seconds: 10));
-
-      if (res.statusCode == 200) {
-        debugPrint('SyncService: Sale pushed successfully.');
-        return true;
-      } else {
-        debugPrint('SyncService: Failed to push sale - HTTP ${res.statusCode}');
-        return false;
-      }
-    } catch (e) {
-      debugPrint('SyncService: pushSale err: $e');
-      return false;
+    final ok = await _unifiedPush('/api/sales/push', sale.toJson(),
+        entity: 'sale', action: 'create');
+    if (ok) {
+      sale.synced = true;
+      ObjectBoxService.instance.saleBox.put(sale);
+      notifyListeners();
     }
+    return ok;
   }
 
   Future<bool> pushPatient(Patient p) async {
-    if (_hubIp == null) return false;
-    try {
-      final url = Uri.parse('$_baseUrl/api/patients/push');
-      final body = jsonEncode({
-        'uhid': p.uhid,
-        'name': p.name,
-        'phone': p.phone,
-        'gender': p.gender,
-        'address': p.address,
-        'bloodGroup': p.bloodGroup,
-        'age': p.age,
-        'createdAt': p.createdAt.toIso8601String(),
-      });
-
-      final res = await http.post(url, headers: _authHeaders(), body: body);
-      return res.statusCode == 200;
-    } catch (e) {
-      debugPrint('SyncService: pushPatient err: $e');
-      return false;
-    }
+    return await _unifiedPush('/api/patients/push', p.toJson(),
+        entity: 'patient', action: 'create');
   }
 
   Future<bool> pushAppointment(Appointment a) async {
-    if (_hubIp == null) return false;
-    try {
-      final url = Uri.parse('$_baseUrl/api/appointments/push');
-      final body = jsonEncode({
-        'id': a.id,
-        'patientId': a.patientId,
-        'patientName': a.patientName,
-        'patientPhone': a.patientPhone,
-        'doctorId': a.doctorId,
-        'doctorName': a.doctorName,
-        'tokenNumber': a.tokenNumber,
-        'status': a.status,
-        'consultationFee': a.consultationFee,
-        'notes': a.notes,
-        'scheduledAt': a.scheduledAt.toIso8601String(),
-        'createdAt': a.createdAt.toIso8601String(),
-        'isWalkIn': a.isWalkIn,
-        'consultationBilled': a.consultationBilled,
-      });
-
-      final res = await http.post(url, headers: _authHeaders(), body: body);
-      return res.statusCode == 200;
-    } catch (e) {
-      debugPrint('SyncService: pushAppointment err: $e');
-      return false;
-    }
+    return await _unifiedPush('/api/appointments/push', a.toJson(),
+        entity: 'appointment', action: 'create');
   }
 
   Future<bool> pushDoctor(Doctor d) async {
-    if (_hubIp == null) return false;
-    try {
-      final url = Uri.parse('$_baseUrl/api/doctors/push');
-      final body = jsonEncode({
-        'id': d.id,
-        'name': d.name,
-        'specialization': d.specialization,
-        'consultationFee': d.consultationFee,
-        'qualifications': d.qualifications,
-        'phone': d.phone,
-        'isActive': d.isActive,
-        'createdAt': d.createdAt.toIso8601String(),
-      });
-
-      final res = await http.post(url, headers: _authHeaders(), body: body);
-      return res.statusCode == 200;
-    } catch (e) {
-      debugPrint('SyncService: pushDoctor err: $e');
-      return false;
-    }
+    return await _unifiedPush('/api/doctors/push', d.toJson(),
+        entity: 'doctor', action: 'create');
   }
 
   Future<bool> pushDoctorDelete(int id) async {
-    if (_hubIp == null) return false;
-    try {
-      final url = Uri.parse('$_baseUrl/api/doctors/delete');
-      final body = jsonEncode({'id': id});
-      final res = await http.post(url, headers: _authHeaders(), body: body);
-      return res.statusCode == 200;
-    } catch (e) {
-      debugPrint('SyncService: pushDoctorDelete err: $e');
-      return false;
-    }
+    return await _unifiedPush('/api/doctors/delete', {'id': id},
+        entity: 'doctor', action: 'delete');
   }
 
   Future<bool> pushPatientDelete(int id) async {
-    if (_hubIp == null) return false;
-    try {
-      final url = Uri.parse('$_baseUrl/api/patients/delete');
-      final body = jsonEncode({'id': id});
-      final res = await http.post(url, headers: _authHeaders(), body: body);
-      return res.statusCode == 200;
-    } catch (e) {
-      debugPrint('SyncService: pushPatientDelete err: $e');
-      return false;
-    }
+    return await _unifiedPush('/api/patients/delete', {'id': id},
+        entity: 'patient', action: 'delete');
   }
 
   Future<bool> pushMedicineDelete(int id) async {
-    if (_hubIp == null) return false;
-    try {
-      final url = Uri.parse('$_baseUrl/api/medicines/delete');
-      final body = jsonEncode({'id': id});
-      final res = await http.post(url, headers: _authHeaders(), body: body);
-      return res.statusCode == 200;
-    } catch (e) {
-      debugPrint('SyncService: pushMedicineDelete err: $e');
-      return false;
-    }
+    return await _unifiedPush('/api/medicines/delete', {'id': id},
+        entity: 'medicine', action: 'delete');
   }
 
   Future<bool> pushPrescriptionDelete(int id) async {
-    if (_hubIp == null) return false;
-    try {
-      final url = Uri.parse('$_baseUrl/api/prescriptions/delete');
-      final body = jsonEncode({'id': id});
-      final res = await http.post(url, headers: _authHeaders(), body: body);
-      return res.statusCode == 200;
-    } catch (e) {
-      debugPrint('SyncService: pushPrescriptionDelete err: $e');
-      return false;
-    }
+    return await _unifiedPush('/api/prescriptions/delete', {'id': id},
+        entity: 'prescription', action: 'delete');
   }
 
   Future<bool> pushPrescription(Prescription p) async {
-    if (_hubIp == null) return false;
-    try {
-      final url = Uri.parse('$_baseUrl/api/prescriptions/push');
-      final body = jsonEncode({
-        'appointmentId': p.appointmentId,
-        'patientId': p.patientId,
-        'patientName': p.patientName,
-        'doctorId': p.doctorId,
-        'doctorName': p.doctorName,
-        'diagnosis': p.diagnosis,
-        'complaints': p.complaints,
-        'notes': p.notes,
-        'itemsJson': p.itemsJson,
-        'labTestsJson': p.labTestsJson,
-        'vitalsJson': p.vitalsJson,
-        'dispensed': p.dispensed,
-        'createdAt': p.createdAt.toIso8601String(),
-      });
-
-      final res = await http.post(url, headers: _authHeaders(), body: body);
-      return res.statusCode == 200;
-    } catch (e) {
-      debugPrint('SyncService: pushPrescription err: $e');
-      return false;
-    }
+    return await _unifiedPush('/api/prescriptions/push', p.toJson(),
+        entity: 'prescription', action: 'create');
   }
 
   Future<bool> pushTransfer(StockTransfer t) async {
-    if (_hubIp == null) return false;
-    try {
-      final url = Uri.parse('$_baseUrl/api/transfers/push');
-      final body = jsonEncode({
-        'medicineId': t.medicineId,
-        'medicineName': t.medicineName,
-        'qty': t.qty,
-        'fromWarehouse': t.fromWarehouse,
-        'toWarehouse': t.toWarehouse,
-        'transferredAt': t.transferredAt.toIso8601String(),
-        'note': t.note,
-        'transferredBy': t.transferredBy,
-      });
-
-      final res = await http.post(url, headers: _authHeaders(), body: body);
-      return res.statusCode == 200;
-    } catch (e) {
-      debugPrint('SyncService: pushTransfer err: $e');
-      return false;
-    }
+    return await _unifiedPush('/api/transfers/push', t.toJson(),
+        entity: 'transfer', action: 'create');
   }
 
   Future<bool> pushMedicine(Medicine m) async {
-    if (_hubIp == null) return false;
-    try {
-      final url = Uri.parse('$_baseUrl/api/medicines/push');
-      final body = jsonEncode({
-        'id': m.id,
-        'name': m.name,
-        'barcode': m.barcode,
-        'category': m.category,
-        'unit': m.unit,
-        'purchasePrice': m.purchasePrice,
-        'sellingPrice': m.sellingPrice,
-        'mainStock': m.mainStock,
-        'storeStock': m.storeStock,
-        'lowStockThreshold': m.lowStockThreshold,
-        'updatedAt': m.updatedAt.toIso8601String(),
-        'batches': m.batches
-            .map((b) => {
-                  'id': 0, // Let server assign
-                  'batchNo': b.batchNo,
-                  'expiryDate': b.expiryDate.toIso8601String(),
-                  'mainStock': b.mainStock,
-                  'storeStock': b.storeStock,
-                })
-            .toList(),
-      });
-
-      final res = await http.post(url, headers: _authHeaders(), body: body);
-      return res.statusCode == 200;
-    } catch (e) {
-      debugPrint('SyncService: pushMedicine err: $e');
-      return false;
-    }
+    return await _unifiedPush('/api/medicines/push', m.toJson(),
+        entity: 'medicine', action: 'create');
   }
 
   void disconnect() {
@@ -1227,10 +1085,73 @@ class SyncService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Map<String, String> _authHeaders() => {
-        'Authorization': 'Bearer $_jwtToken',
-        'Content-Type': 'application/json',
-      };
+  Map<String, String> _authHeaders() {
+    final settings = ObjectBoxService.instance.settings;
+    return {
+      'Content-Type': 'application/json',
+      if (_jwtToken != null) 'Authorization': 'Bearer $_jwtToken',
+      'X-MediPass-Secret': settings.jwtSecret,
+    };
+  }
+
+  Future<bool> _unifiedPush(String endpoint, Map<String, dynamic> data,
+      {String? entity, String? action}) async {
+    final settings = ObjectBoxService.instance.settings;
+    final mode = settings.connectionMode;
+
+    // 1. Local WiFi (Tier 1)
+    if (mode == 'auto' || mode == 'local') {
+      if (_isConnected && _hubIp != null && !_hubIp!.startsWith('http')) {
+        try {
+          final res = await http
+              .post(
+                Uri.parse('http://$_hubIp:8080$endpoint'),
+                body: jsonEncode(data),
+                headers: _authHeaders(),
+              )
+              .timeout(const Duration(seconds: 5));
+          if (res.statusCode == 200) return true;
+        } catch (_) {}
+      }
+    }
+
+    // 2. Cloudflare Tunnel (Tier 2)
+    if (mode == 'auto' || mode == 'cloudflare') {
+      final url = settings.cloudflareUrl.isNotEmpty 
+          ? settings.cloudflareUrl 
+          : (_hubIp != null && _hubIp!.startsWith('http') ? _hubIp : null);
+          
+      if (url != null) {
+        try {
+          final res = await http
+              .post(
+                Uri.parse('$url$endpoint'),
+                body: jsonEncode(data),
+                headers: _authHeaders(),
+              )
+              .timeout(const Duration(seconds: 12));
+          if (res.statusCode == 200) return true;
+        } catch (_) {}
+      }
+    }
+
+    // 3. Firebase Delta Sync (Tier 3 - Fallback)
+    if ((mode == 'auto' || mode == 'firebase') && 
+        settings.firebaseEnabled && entity != null && action != null) {
+      try {
+        await FirebaseSyncService.instance.pushDelta(
+          entity: entity,
+          action: action,
+          data: data,
+        );
+        return true;
+      } catch (e) {
+        debugPrint('SyncService: Firebase Fallback failed: $e');
+      }
+    }
+
+    return false;
+  }
 
   Future<void> pullSettings() async {
     if (!_isConnected || _jwtToken == null) return;
@@ -1260,56 +1181,22 @@ class SyncService extends ChangeNotifier {
   }
 
   Future<bool> pushUser(AppUser user) async {
-    if (!_isConnected || _jwtToken == null) return false;
-    try {
-      final url = Uri.parse('$_baseUrl/api/users/push');
-      final body = jsonEncode(user.toJson());
-      final res = await http.post(url, headers: _authHeaders(), body: body);
-      debugPrint('SyncService: pushUser result=${res.statusCode}');
-      return res.statusCode == 200;
-    } catch (e) {
-      debugPrint('SyncService: pushUser err: $e');
-      return false;
-    }
+    return await _unifiedPush('/api/users/push', user.toJson(),
+        entity: 'user', action: 'update');
   }
 
   Future<bool> pushSettings(AppSettings settings) async {
-    if (!_isConnected || _jwtToken == null) return false;
-    try {
-      final url = Uri.parse('$_baseUrl/api/settings/push');
-      final body = jsonEncode(settings.toJson());
-      final res = await http.post(url, headers: _authHeaders(), body: body);
-      debugPrint('SyncService: pushSettings result=${res.statusCode}');
-      return res.statusCode == 200;
-    } catch (e) {
-      debugPrint('SyncService: pushSettings err: $e');
-      return false;
-    }
+    return await _unifiedPush('/api/settings/push', settings.toJson(),
+        entity: 'settings', action: 'update');
   }
   Future<bool> pushSaleDelete(String invoiceNo) async {
-    if (!_isConnected || _jwtToken == null) return false;
-    try {
-      final url = Uri.parse('$_baseUrl/api/sales/delete');
-      final body = jsonEncode({'invoiceNo': invoiceNo});
-      final res = await http.post(url, headers: _authHeaders(), body: body);
-      return res.statusCode == 200;
-    } catch (e) {
-      debugPrint('SyncService: pushSaleDelete err: $e');
-      return false;
-    }
+    return await _unifiedPush('/api/sales/delete', {'invoiceNo': invoiceNo},
+        entity: 'sale', action: 'delete');
   }
 
   Future<bool> pushTemplateDelete(String name) async {
-    if (!_isConnected || _jwtToken == null) return false;
-    try {
-      final url = Uri.parse('$_baseUrl/api/templates/delete');
-      final body = jsonEncode({'name': name});
-      final res = await http.post(url, headers: _authHeaders(), body: body);
-      return res.statusCode == 200;
-    } catch (e) {
-      debugPrint('SyncService: pushTemplateDelete err: $e');
-      return false;
-    }
+    return await _unifiedPush('/api/templates/delete', {'name': name},
+        entity: 'template', action: 'delete');
   }
 
   Future<bool> pushPatientPhotoDelete(String uhid, String fileName) async {
@@ -1351,7 +1238,20 @@ class WebSocketService extends ChangeNotifier {
   void _doConnect(String ip) {
     if (_connected) return;
     try {
-      final uri = Uri.parse('ws://$ip:8080/ws/updates');
+      Uri uri;
+      if (ip.startsWith('http')) {
+        final base = Uri.parse(ip);
+        final scheme = base.scheme == 'https' ? 'wss' : 'ws';
+        // Ensure path ends with /ws/updates without duplicating slashes
+        String path = base.path;
+        if (!path.endsWith('/')) path += '/';
+        path += 'ws/updates';
+        uri = base.replace(scheme: scheme, path: path);
+      } else {
+        uri = Uri.parse('ws://$ip:8080/ws/updates');
+      }
+      
+      debugPrint('WebSocketService: Connecting to $uri');
       _channel = WebSocketChannel.connect(uri);
       _connected = true;
       _reconnectAttempts = 0; // Reset on successful connect

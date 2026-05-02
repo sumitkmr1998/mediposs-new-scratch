@@ -1,3 +1,5 @@
+import 'dart:ui';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -22,13 +24,40 @@ import 'dart:io';
 import 'shared/services/local_server_service.dart';
 import 'shared/services/discovery_service.dart';
 import 'shared/services/global_navigation_service.dart';
+import 'shared/services/sync_queue_service.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'shared/services/firebase_sync_service.dart';
+import 'shared/services/cloudflare_service.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // 1. Initialize DB FIRST (so settings are available)
   await ObjectBoxService.init();
+
+  // Initialize Firebase (Mobile Only)
+  if (defaultTargetPlatform != TargetPlatform.windows) {
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      await FirebaseSyncService.init();
+    } catch (e) {
+      debugPrint('Firebase Initialization Failed: $e');
+      await FirebaseSyncService.init();
+    }
+  } else {
+    // On Windows, initialize the service dummy so it doesn't crash on access
+    await FirebaseSyncService.init();
+  }
+
+  try {
+    await CloudflareService.init();
+  } catch (e) {
+    debugPrint('Cloudflare Initialization Failed: $e');
+  }
 
   // 2. Set high refresh rate for Android
   if (defaultTargetPlatform == TargetPlatform.android) {
@@ -69,6 +98,7 @@ void main() async {
 
   final syncService = SyncService();
   final wsService = WebSocketService();
+  SyncQueueService.instance.init();
 
   // Try to auto-connect to a saved Hub IP so companion app skips connection screen
   final isMobile = !kIsWeb &&
@@ -78,13 +108,29 @@ void main() async {
     final connected = await syncService.tryAutoConnect();
     if (connected && syncService.hubIp != null) {
       wsService.connect(syncService.hubIp!);
-      // Global listener for automatic pop-ups
+      // Global listener for automatic pop-ups and real-time data sync
       wsService.eventStream.listen((msg) {
-        if (msg['event'] == 'remote_camera_trigger') {
+        final event = msg['event'];
+        debugPrint('Mobile: Received WebSocket Event: $event');
+        
+        if (event == 'remote_camera_trigger') {
           GlobalNavigationService.handleRemoteCameraTrigger(msg);
-        } else if (msg['event'] == 'settings_updated') {
+        } else if (event == 'sync_received' || event == 'medicines_updated' || event == 'sales_updated') {
+          // Trigger a global sync to fetch whatever was updated
+          syncService.syncAll().then((_) {
+            // Reload relevant providers to reflect new data in UI
+            if (event == 'medicines_updated') inventoryProvider.load();
+            if (event == 'sales_updated') salesProvider.load();
+            if (event == 'sync_received') {
+              inventoryProvider.load();
+              salesProvider.load();
+              patientProvider.load();
+              opdProvider.loadAll();
+            }
+          });
+        } else if (event == 'settings_updated') {
           syncService.pullSettings().then((_) => settingsProvider.load());
-        } else if (msg['event'] == 'users_updated') {
+        } else if (event == 'users_updated') {
           syncService.pullUsers().then((_) => authProvider.notifyListeners());
         }
       });
@@ -94,6 +140,14 @@ void main() async {
     await LocalServerService.instance.start();
     await DiscoveryService.startAdvertising(
         ObjectBoxService.instance.settings.serverPort);
+    
+    // Start Cloudflare Tunnel if enabled or always for remote discovery
+    await CloudflareService.instance.start();
+
+    // Start Firebase Sync Listener (Tier 3 fallback)
+    FirebaseSyncService.instance.startQueueListener((delta) {
+      LocalServerService.instance.handleExternalDelta(delta);
+    });
   }
 
   // Load initial data
@@ -127,8 +181,76 @@ void main() async {
   );
 }
 
-class MediPossApp extends StatelessWidget {
+class MediPossApp extends StatefulWidget {
   const MediPossApp({super.key});
+
+  @override
+  State<MediPossApp> createState() => _MediPossAppState();
+}
+
+class _MediPossAppState extends State<MediPossApp> with WidgetsBindingObserver {
+  bool _isExiting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Future<AppExitResponse> didRequestAppExit() async {
+    if (defaultTargetPlatform == TargetPlatform.windows && !_isExiting) {
+      _isExiting = true;
+      
+      // Show "Syncing" dialog using GlobalNavigationService
+      final context = GlobalNavigationService.navigatorKey.currentContext;
+      if (context != null) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: Theme.of(ctx).colorScheme.surface,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            content: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 20),
+                  Text(
+                    'Syncing Data to Cloud...',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Please do not close the window.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+
+      try {
+        // Perform final cloud broadcast
+        await LocalServerService.instance.broadcastAllToCloud();
+      } catch (e) {
+        debugPrint('Final Sync Failed: $e');
+      }
+
+      return AppExitResponse.exit;
+    }
+    return AppExitResponse.exit;
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -29,4 +29,28 @@ class StockTransfer {
     this.note = '',
     this.transferredBy = '',
   }) : transferredAt = transferredAt ?? DateTime.now();
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'medicineId': medicineId,
+        'medicineName': medicineName,
+        'qty': qty,
+        'fromWarehouse': fromWarehouse,
+        'toWarehouse': toWarehouse,
+        'transferredAt': transferredAt.toIso8601String(),
+        'note': note,
+        'transferredBy': transferredBy,
+      };
+
+  factory StockTransfer.fromJson(Map<String, dynamic> json) => StockTransfer(
+        id: json['id'] ?? 0,
+        medicineId: json['medicineId'],
+        medicineName: json['medicineName'],
+        qty: json['qty'],
+        fromWarehouse: json['fromWarehouse'],
+        toWarehouse: json['toWarehouse'],
+        transferredAt: DateTime.tryParse(json['transferredAt'] ?? ''),
+        note: json['note'] ?? '',
+        transferredBy: json['transferredBy'] ?? '',
+      );
 }

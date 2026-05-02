@@ -9,6 +9,7 @@ import '../models/appointment.dart';
 import '../services/objectbox_service.dart';
 import '../services/local_server_service.dart';
 import '../services/sync_service.dart';
+import '../services/sync_queue_service.dart';
 import '../models/patient_image.dart';
 import 'patient_provider.dart';
 import 'opd_provider.dart';
@@ -143,11 +144,19 @@ class PrescriptionProvider extends ChangeNotifier {
 
     if (Platform.isWindows) {
       LocalServerService.instance.broadcast({'event': 'sync_received'});
-    } else if (Platform.isAndroid && syncService != null) {
-      syncService.pushPrescription(prescription);
+    } else if (Platform.isAndroid) {
+      SyncQueueService.instance.addToQueue(
+        entity: 'prescription',
+        action: 'create',
+        data: prescription.toJson(),
+      );
       // If we updated appointment status, push that too
       if (appt != null) {
-        syncService.pushAppointment(appt);
+        SyncQueueService.instance.addToQueue(
+          entity: 'appointment',
+          action: 'update',
+          data: appt.toJson(),
+        );
       }
     }
 
@@ -198,8 +207,12 @@ class PrescriptionProvider extends ChangeNotifier {
 
     if (Platform.isWindows) {
       LocalServerService.instance.broadcast({'event': 'sync_received'});
-    } else if (Platform.isAndroid && syncService != null) {
-      syncService.pushPrescription(p);
+    } else if (Platform.isAndroid) {
+      SyncQueueService.instance.addToQueue(
+        entity: 'prescription',
+        action: 'update',
+        data: p.toJson(),
+      );
     }
 
     load();
@@ -218,8 +231,12 @@ class PrescriptionProvider extends ChangeNotifier {
 
     if (Platform.isWindows) {
       LocalServerService.instance.broadcast({'event': 'sync_received'});
-    } else if (Platform.isAndroid && syncService != null) {
-      syncService.pushPrescriptionDelete(id);
+    } else if (Platform.isAndroid) {
+      SyncQueueService.instance.addToQueue(
+        entity: 'prescription',
+        action: 'delete',
+        data: {'id': id},
+      );
     }
 
     load();
