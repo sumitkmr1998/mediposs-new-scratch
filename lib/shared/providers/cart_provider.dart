@@ -14,6 +14,7 @@ import '../services/sync_service.dart';
 import '../services/sync_queue_service.dart';
 import 'dart:io';
 import 'package:provider/provider.dart';
+import '../services/firebase_sync_service.dart';
 
 class CartItem {
   final Medicine medicine;
@@ -347,7 +348,18 @@ class CartProvider extends ChangeNotifier {
     if (Platform.isWindows) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
+        LocalServerService.instance.broadcast({'event': 'sales_updated'});
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
+        
+        // Push to Firebase for offline companion fallback
+        FirebaseSyncService.instance.broadcastUpdate('sales', sale.toJson());
+        // Also push updated medicines (stock deducted)
+        for (final item in _items) {
+          final m = ObjectBoxService.instance.medicineBox.getAll().where((x) => x.name == item.medicine.name).firstOrNull;
+          if (m != null) {
+            FirebaseSyncService.instance.broadcastUpdate('medicines', m.toJson());
+          }
+        }
       }
     } else if (Platform.isAndroid) {
       SyncQueueService.instance.addToQueue(

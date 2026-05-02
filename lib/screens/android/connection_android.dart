@@ -184,15 +184,7 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
       } else {
         // Start WebSocket for real-time triggers/sync
         final wsService = context.read<WebSocketService>();
-        wsService.connect(sync.hubIp!);
-        wsService.eventStream.listen((msg) {
-          final event = msg['event'];
-          if (event == 'remote_camera_trigger') {
-            GlobalNavigationService.handleRemoteCameraTrigger(msg);
-          } else if (event == 'sync_received' || event == 'sales_updated') {
-            sync.syncAll();
-          }
-        });
+        wsService.connect(sync.hubIp!, sync.secret);
 
         // Just pull users for the Login Screen
         await sync.pullUsers();
@@ -410,7 +402,75 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
                         : 'Pair with Hub'),
                   ),
                 ),
-                if (sync.isConnected || _reachable == true) ...[
+                if (_errorMsg != null || _reachable == false) ...[
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppTheme.warning.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.warning.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.cloud_off, color: AppTheme.warning),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Hub is currently Offline.',
+                                style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.warning),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'You can continue in Cloud Mode to view data and make sales via Firebase.',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: () => sync.enterCloudMode(),
+                          icon: const Icon(Icons.cloud_sync),
+                          label: const Text('Enter Cloud Mode'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.warning,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(double.infinity, 40),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (sync.isCloudMode) ...[
+                   const SizedBox(height: 16),
+                   Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.cloud_done, color: AppTheme.primary),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Active in Cloud Mode (Firebase)',
+                            style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => sync.exitCloudMode(),
+                          child: const Text('Exit'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else if (sync.isConnected || _reachable == true) ...[
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.all(12),

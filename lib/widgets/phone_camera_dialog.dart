@@ -6,6 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import '../shared/services/local_server_service.dart';
+import '../shared/services/objectbox_service.dart';
 import '../theme/app_theme.dart';
 
 class PhoneCameraDialog extends StatefulWidget {
@@ -85,6 +86,7 @@ class _PhoneCameraDialogState extends State<PhoneCameraDialog> {
       'hubIp': _localIp,
       'patientUhid': widget.patientUhid,
       'patientName': widget.patientName,
+      'hubSecret': ObjectBoxService.instance.settings.jwtSecret,
       'timestamp': DateTime.now().millisecondsSinceEpoch,
     });
 

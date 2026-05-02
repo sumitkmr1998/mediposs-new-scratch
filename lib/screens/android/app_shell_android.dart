@@ -186,7 +186,7 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
         if (connected && sync.hubIp != null) {
           debugPrint(
               'AppShellAndroid [Android]: Auto-connect succeeded, starting WebSocket to ${sync.hubIp}');
-          context.read<WebSocketService>().connect(sync.hubIp!);
+          context.read<WebSocketService>().connect(sync.hubIp!, sync.secret);
         }
       }
 

@@ -86,7 +86,7 @@ class _LoginAndroidState extends State<LoginAndroid> {
           context.read<SalesProvider>().load();
 
           // Connect WS
-          context.read<WebSocketService>().connect(sync.hubIp!);
+          context.read<WebSocketService>().connect(sync.hubIp!, sync.secret);
 
           // Finally, tell AuthProvider we are logged in so `main.dart` navigates
           // We use forceLogin because Hub already approved the PIN.

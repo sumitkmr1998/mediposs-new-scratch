@@ -140,7 +140,7 @@ class LocalServerService {
           return innerHandler(request);
         }
 
-        final secret = request.headers['X-MediPass-Secret'];
+        final secret = request.headers['X-MediPass-Secret'] ?? request.url.queryParameters['secret'];
         final hubSecret = ObjectBoxService.instance.settings.jwtSecret;
 
         if (secret != hubSecret) {
@@ -339,8 +339,13 @@ class LocalServerService {
     int upserted = 0;
 
     for (final item in list) {
-      final existing =
-          ObjectBoxService.instance.medicineBox.get(item['id'] ?? 0);
+      final name = item['name'] as String? ?? '';
+      final barcode = item['barcode'] as String? ?? '';
+      Condition<Medicine> cond = Medicine_.name.equals(name);
+      if (barcode.isNotEmpty) {
+        cond = cond.and(Medicine_.barcode.equals(barcode));
+      }
+      final existing = ObjectBoxService.instance.medicineBox.query(cond).build().findFirst();
       if (existing != null) {
         final serverUpdated = existing.updatedAt;
         final clientUpdated =
@@ -409,8 +414,15 @@ class LocalServerService {
     try {
       final item = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
       final box = ObjectBoxService.instance.medicineBox;
-      final id = item['id'] as int? ?? 0;
-      final existing = id > 0 ? box.get(id) : null;
+      final name = item['name'] as String? ?? '';
+      final barcode = item['barcode'] as String? ?? '';
+      
+      // Match by Name + Barcode to prevent duplicates
+      Condition<Medicine> cond = Medicine_.name.equals(name);
+      if (barcode.isNotEmpty) {
+        cond = cond.and(Medicine_.barcode.equals(barcode));
+      }
+      var existing = box.query(cond).build().findFirst();
 
       if (existing != null) {
         existing
@@ -535,6 +547,19 @@ class LocalServerService {
         isReturn: body['isReturn'] ?? false,
         itemsJson: body['itemsJson'] ?? '[]',
       );
+
+      // Deduplication: check if invoiceNo already exists
+      final existing = ObjectBoxService.instance.saleBox
+          .query(Sale_.invoiceNo.equals(sale.invoiceNo))
+          .build()
+          .findFirst();
+
+      if (existing != null) {
+        return Response.ok(
+          jsonEncode({'status': 'success', 'saleId': existing.id, 'note': 'already exists'}),
+          headers: {'content-type': 'application/json'},
+        );
+      }
 
       // Save sale to Hub DB
       ObjectBoxService.instance.saleBox.put(sale);
@@ -1515,6 +1540,21 @@ class LocalServerService {
         ObjectBoxService.instance.patientBox.put(p);
         broadcast({'event': 'patients_updated'});
         _incomingDataController.add('patients');
+      } else if (entity == 'medicine') {
+        final m = Medicine.fromJson(data);
+        // Deduplicate by name or barcode
+        Condition<Medicine> cond = Medicine_.name.equals(m.name);
+        if (m.barcode.isNotEmpty) {
+          cond = cond.and(Medicine_.barcode.equals(m.barcode));
+        }
+        final existing = ObjectBoxService.instance.medicineBox.query(cond).build().findFirst();
+        
+        if (existing != null) {
+          m.id = existing.id;
+        }
+        ObjectBoxService.instance.medicineBox.put(m);
+        broadcast({'event': 'medicines_updated'});
+        _incomingDataController.add('inventory');
       } else if (entity == 'appointment' && action == 'create') {
          // Minimal logic for now, similar to _appointmentsPushHandler
          broadcast({'event': 'sync_received'});

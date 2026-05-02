@@ -100,6 +100,32 @@ void main() async {
   final wsService = WebSocketService();
   SyncQueueService.instance.init();
 
+  // Global listener for real-time data sync
+  wsService.eventStream.listen((msg) {
+    final event = msg['event'];
+    debugPrint('Mobile WebSocket Event: $event');
+    if (event == 'remote_camera_trigger') {
+      GlobalNavigationService.handleRemoteCameraTrigger(msg);
+    } else if (event == 'sync_received' || 
+               event == 'medicines_updated' || 
+               event == 'sales_updated' ||
+               event == 'patients_updated' ||
+               event == 'appointments_updated') {
+      syncService.syncAll().then((_) {
+        inventoryProvider.load();
+        salesProvider.load();
+        patientProvider.load();
+        opdProvider.loadAll();
+        prescriptionProvider.load();
+        templateProvider.load();
+      });
+    } else if (event == 'settings_updated') {
+      syncService.pullSettings().then((_) => settingsProvider.load());
+    } else if (event == 'users_updated') {
+      syncService.pullUsers().then((_) => authProvider.notifyListeners());
+    }
+  });
+
   // Try to auto-connect to a saved Hub IP so companion app skips connection screen
   final isMobile = !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
@@ -107,33 +133,7 @@ void main() async {
   if (isMobile) {
     final connected = await syncService.tryAutoConnect();
     if (connected && syncService.hubIp != null) {
-      wsService.connect(syncService.hubIp!);
-      // Global listener for automatic pop-ups and real-time data sync
-      wsService.eventStream.listen((msg) {
-        final event = msg['event'];
-        debugPrint('Mobile: Received WebSocket Event: $event');
-        
-        if (event == 'remote_camera_trigger') {
-          GlobalNavigationService.handleRemoteCameraTrigger(msg);
-        } else if (event == 'sync_received' || event == 'medicines_updated' || event == 'sales_updated') {
-          // Trigger a global sync to fetch whatever was updated
-          syncService.syncAll().then((_) {
-            // Reload relevant providers to reflect new data in UI
-            if (event == 'medicines_updated') inventoryProvider.load();
-            if (event == 'sales_updated') salesProvider.load();
-            if (event == 'sync_received') {
-              inventoryProvider.load();
-              salesProvider.load();
-              patientProvider.load();
-              opdProvider.loadAll();
-            }
-          });
-        } else if (event == 'settings_updated') {
-          syncService.pullSettings().then((_) => settingsProvider.load());
-        } else if (event == 'users_updated') {
-          syncService.pullUsers().then((_) => authProvider.notifyListeners());
-        }
-      });
+      wsService.connect(syncService.hubIp!, syncService.secret);
     }
   } else if (Platform.isWindows) {
     // Start Hub server immediately on Windows launch

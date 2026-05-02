@@ -30,12 +30,15 @@ class SyncService extends ChangeNotifier {
   Map<String, dynamic>? _lastUserMap;
   bool _isConnected = false;
   bool _isSyncing = false;
+  bool _isCloudMode = false;
 
   String? get hubIp => _hubIp;
   bool get isConnected => _isConnected;
+  bool get isCloudMode => _isCloudMode;
   bool get isSyncing => _isSyncing;
   String? get connectedRole => _connectedRole;
   Map<String, dynamic>? get lastUserMap => _lastUserMap;
+  String get secret => ObjectBoxService.instance.settings.jwtSecret;
 
   String get _baseUrl {
     final settings = ObjectBoxService.instance.settings;
@@ -181,10 +184,27 @@ class SyncService extends ChangeNotifier {
       return true;
     }
 
-    // 3. Fallback: Pull from Firebase collections if Hub is totally offline
-    debugPrint('SyncService: Hub completely offline. Falling back to Cloud Data...');
+    // Hub completely offline. Do NOT automatically fall back to cloud.
+    // Instead, we return false and the UI will show a prompt to "Enter Cloud Mode"
+    debugPrint('SyncService: Hub offline (Local & Tunnel). Standing by for user choice...');
+    return false;
+  }
+
+  /// Manually switches the app to Cloud Mode to work via Firebase.
+  Future<void> enterCloudMode() async {
+    _isCloudMode = true;
+    _isConnected = true; // Set connected to true so UI allows usage
+    notifyListeners();
+    
+    debugPrint('SyncService: Manual Cloud Mode activated. Syncing from Firebase...');
     await syncAllFromCloud();
-    return true; // Return true so UI thinks we are "connected to cloud"
+  }
+
+  /// Manually exits Cloud Mode
+  void exitCloudMode() {
+    _isCloudMode = false;
+    _isConnected = false;
+    notifyListeners();
   }
 
   /// Pulls latest "Source of Truth" from Firebase if Hub is offline.
@@ -1136,7 +1156,7 @@ class SyncService extends ChangeNotifier {
     }
 
     // 3. Firebase Delta Sync (Tier 3 - Fallback)
-    if ((mode == 'auto' || mode == 'firebase') && 
+    if (_isCloudMode && (mode == 'auto' || mode == 'firebase') && 
         settings.firebaseEnabled && entity != null && action != null) {
       try {
         await FirebaseSyncService.instance.pushDelta(
@@ -1228,14 +1248,14 @@ class WebSocketService extends ChangeNotifier {
       StreamController.broadcast();
   Stream<Map<String, dynamic>> get eventStream => _eventController.stream;
 
-  void connect(String ip) {
+  void connect(String ip, String secret) {
     _lastIp = ip;
     _intentionalDisconnect = false;
     _reconnectAttempts = 0;
-    _doConnect(ip);
+    _doConnect(ip, secret);
   }
 
-  void _doConnect(String ip) {
+  void _doConnect(String ip, String secret) {
     if (_connected) return;
     try {
       Uri uri;
@@ -1246,9 +1266,9 @@ class WebSocketService extends ChangeNotifier {
         String path = base.path;
         if (!path.endsWith('/')) path += '/';
         path += 'ws/updates';
-        uri = base.replace(scheme: scheme, path: path);
+        uri = base.replace(scheme: scheme, path: path, queryParameters: {'secret': secret});
       } else {
-        uri = Uri.parse('ws://$ip:8080/ws/updates');
+        uri = Uri.parse('ws://$ip:8080/ws/updates?secret=$secret');
       }
       
       debugPrint('WebSocketService: Connecting to $uri');
@@ -1362,7 +1382,8 @@ class WebSocketService extends ChangeNotifier {
     Future.delayed(Duration(seconds: delaySeconds), () {
       if (!_intentionalDisconnect && _lastIp != null && !_connected) {
         debugPrint('WebSocketService: Attempting reconnect to $_lastIp');
-        _doConnect(_lastIp!);
+        final secret = ObjectBoxService.instance.settings.jwtSecret;
+        _doConnect(_lastIp!, secret);
       }
     });
   }
