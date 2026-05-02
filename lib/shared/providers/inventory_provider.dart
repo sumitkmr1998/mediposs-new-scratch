@@ -170,18 +170,27 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   void deleteMedicine(int id, {SyncService? syncService}) {
+    final m = _box.get(id);
+    if (m == null) return;
+    final barcode = m.barcode;
+    final name = m.name;
+
     _box.remove(id);
     load();
 
     if (Platform.isWindows) {
       if (LocalServerService.instance.isRunning) {
-        LocalServerService.instance.broadcast({'event': 'medicines_updated'});
+        LocalServerService.instance.broadcast({
+          'event': 'medicine_deleted',
+          'barcode': barcode,
+          'name': name,
+        });
       }
     } else if (Platform.isAndroid) {
       SyncQueueService.instance.addToQueue(
         entity: 'medicine',
         action: 'delete',
-        data: {'id': id},
+        data: {'barcode': barcode, 'name': name},
       );
     }
   }

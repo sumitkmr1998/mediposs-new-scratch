@@ -80,6 +80,8 @@ class LocalServerService {
     router.get('/api/patient-photos', _withAuth(_patientPhotosGetHandler));
     router.post(
         '/api/patient-photos/push', _withAuth(_patientPhotosPushHandler));
+    router.post(
+        '/api/prescriptions/photos/push', _withAuth(_prescriptionPhotosPushHandler));
     router.post('/api/settings/push', _withAuth(_settingsPushHandler));
     router.post('/api/settings', _withAuth(_settingsGetHandler)); // Allow GET settings via POST for some clients
     router.get('/api/settings', _withAuth(_settingsGetHandler));
@@ -893,6 +895,7 @@ class LocalServerService {
         itemsJson: body['itemsJson'] ?? '[]',
         labTestsJson: body['labTestsJson'] ?? '[]',
         vitalsJson: body['vitalsJson'] ?? '{}',
+        imagesJson: body['imagesJson'] ?? '[]',
         dispensed: body['dispensed'] ?? false,
         createdAt: DateTime.tryParse(body['createdAt'] ?? '') ?? DateTime.now(),
       );
@@ -984,9 +987,21 @@ class LocalServerService {
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
       final id = body['id'] as int?;
+      final uhid = body['uhid'] as String? ?? '';
+      
+      final box = ObjectBoxService.instance.patientBox;
+      Patient? p;
       if (id != null && id > 0) {
-        ObjectBoxService.instance.patientBox.remove(id);
-        broadcast({'event': 'sync_received'});
+        p = box.get(id);
+      } else if (uhid.isNotEmpty) {
+        p = box.query(Patient_.uhid.equals(uhid)).build().findFirst();
+      }
+
+      if (p != null) {
+        final actualUhid = p.uhid;
+        box.remove(p.id);
+        // Broadcast specific deletion so Android can remove it from local Box
+        broadcast({'event': 'patient_deleted', 'uhid': actualUhid});
         _incomingDataController.add('patients');
       }
       return Response.ok(jsonEncode({'status': 'success'}));
@@ -1000,9 +1015,29 @@ class LocalServerService {
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
       final id = body['id'] as int?;
+      final barcode = body['barcode'] as String? ?? '';
+      final name = body['name'] as String? ?? '';
+
+      final box = ObjectBoxService.instance.medicineBox;
+      Medicine? m;
       if (id != null && id > 0) {
-        ObjectBoxService.instance.medicineBox.remove(id);
-        broadcast({'event': 'medicines_updated'});
+        m = box.get(id);
+      } else if (barcode.isNotEmpty) {
+        m = box.query(Medicine_.barcode.equals(barcode)).build().findFirst();
+      } else if (name.isNotEmpty) {
+        m = box.query(Medicine_.name.equals(name)).build().findFirst();
+      }
+
+      if (m != null) {
+        final actualBarcode = m.barcode;
+        final actualName = m.name;
+        box.remove(m.id);
+        broadcast({
+          'event': 'medicine_deleted',
+          'barcode': actualBarcode,
+          'name': actualName
+        });
+        _incomingDataController.add('inventory');
       }
       return Response.ok(jsonEncode({'status': 'success'}));
     } catch (e) {
@@ -1272,6 +1307,33 @@ class LocalServerService {
     }
   }
 
+  Future<Response> _prescriptionPhotosPushHandler(Request req) async {
+    try {
+      final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      final filename = body['filename'] as String? ??
+          'presc_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final imageData = body['imageData'] as String? ?? '';
+
+      if (imageData.isEmpty) return Response.badRequest();
+
+      final appDocDir = await getApplicationDocumentsDirectory();
+      final photoDir = Directory('${appDocDir.path}/prescription_photos');
+      if (!await photoDir.exists()) await photoDir.create(recursive: true);
+
+      final savedPath = '${photoDir.path}/$filename';
+      final bytes = base64Decode(imageData);
+      await File(savedPath).writeAsBytes(bytes);
+
+      return Response.ok(
+        jsonEncode({'status': 'success', 'path': savedPath}),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      debugPrint('Hub: Prescription Photos Push Err: $e');
+      return Response.internalServerError();
+    }
+  }
+
   // ---- Middleware ----
 
   Middleware _corsMiddleware() => (Handler inner) => (Request req) async {
@@ -1352,6 +1414,7 @@ class LocalServerService {
         box.remove(sale.id);
         broadcast({'event': 'sync_received'});
         broadcast({'event': 'medicines_updated'});
+        broadcast({'event': 'sale_deleted', 'invoiceNo': invoiceNo});
         _incomingDataController.add('sales');
       }
 
@@ -1523,6 +1586,17 @@ class LocalServerService {
           broadcast({'event': 'sync_received'});
           broadcast({'event': 'sales_updated'});
           _incomingDataController.add('sales');
+
+          // Mirror back to Cloud so all devices (including the one that sent it) see it confirmed
+          await FirebaseSyncService.instance.broadcastUpdate('sales', sale.toJson());
+          // Also broadcast updated medicines (stock deducted)
+          for (final jsonItem in list) {
+            final item = SaleItem.fromJson(jsonItem as Map<String, dynamic>);
+            final m = ObjectBoxService.instance.medicineBox.getAll().where((x) => x.name == item.medicineName).firstOrNull;
+            if (m != null) {
+              await FirebaseSyncService.instance.broadcastUpdate('medicines', m.toJson());
+            }
+          }
         }
       } else if (entity == 'patient' && action == 'create') {
         final p = Patient(
@@ -1540,6 +1614,9 @@ class LocalServerService {
         ObjectBoxService.instance.patientBox.put(p);
         broadcast({'event': 'patients_updated'});
         _incomingDataController.add('patients');
+        
+        // Mirror to cloud
+        await FirebaseSyncService.instance.broadcastUpdate('patients', p.toJson());
       } else if (entity == 'medicine') {
         final m = Medicine.fromJson(data);
         // Deduplicate by name or barcode
@@ -1555,10 +1632,58 @@ class LocalServerService {
         ObjectBoxService.instance.medicineBox.put(m);
         broadcast({'event': 'medicines_updated'});
         _incomingDataController.add('inventory');
-      } else if (entity == 'appointment' && action == 'create') {
-         // Minimal logic for now, similar to _appointmentsPushHandler
-         broadcast({'event': 'sync_received'});
-         _incomingDataController.add('appointments');
+          broadcast({'event': 'sync_received'});
+          _incomingDataController.add('appointments');
+      } else if (entity == 'prescription' && action == 'create') {
+        final sc = Prescription.fromJson(data);
+        final existing = ObjectBoxService.instance.prescriptionBox
+            .query(Prescription_.patientName.equals(sc.patientName))
+            .build()
+            .find()
+            .where((x) => x.createdAt == sc.createdAt)
+            .firstOrNull;
+        if (existing != null) sc.id = existing.id;
+        ObjectBoxService.instance.prescriptionBox.put(sc);
+        broadcast({'event': 'sync_received'});
+        _incomingDataController.add('prescriptions');
+        
+        // Mirror to cloud
+        await FirebaseSyncService.instance.broadcastUpdate('prescriptions', sc.toJson());
+      } else if (action == 'delete') {
+        if (entity == 'patient') {
+          final uhid = data['uhid'] as String? ?? '';
+          final p = ObjectBoxService.instance.patientBox.query(Patient_.uhid.equals(uhid)).build().findFirst();
+          if (p != null) {
+            ObjectBoxService.instance.patientBox.remove(p.id);
+            broadcast({'event': 'patient_deleted', 'uhid': uhid});
+            _incomingDataController.add('patients');
+          }
+        } else if (entity == 'medicine') {
+          final barcode = data['barcode'] as String? ?? '';
+          final name = data['name'] as String? ?? '';
+          Condition<Medicine>? cond;
+          if (barcode.isNotEmpty) cond = Medicine_.barcode.equals(barcode);
+          if (name.isNotEmpty) {
+            final nameCond = Medicine_.name.equals(name);
+            cond = cond == null ? nameCond : cond.and(nameCond);
+          }
+          if (cond != null) {
+            final m = ObjectBoxService.instance.medicineBox.query(cond).build().findFirst();
+            if (m != null) {
+              ObjectBoxService.instance.medicineBox.remove(m.id);
+              broadcast({'event': 'medicine_deleted', 'barcode': m.barcode, 'name': m.name});
+              _incomingDataController.add('inventory');
+            }
+          }
+        } else if (entity == 'sale') {
+          final invNo = data['invoiceNo'] as String? ?? '';
+          final s = ObjectBoxService.instance.saleBox.query(Sale_.invoiceNo.equals(invNo)).build().findFirst();
+          if (s != null) {
+            ObjectBoxService.instance.saleBox.remove(s.id);
+            broadcast({'event': 'sale_deleted', 'invoiceNo': invNo});
+            _incomingDataController.add('sales');
+          }
+        }
       }
 
       // Mark as processed in Firebase
@@ -1597,6 +1722,13 @@ class LocalServerService {
       final limitedSales = sales.length > 50 ? sales.sublist(0, 50) : sales;
       for (var s in limitedSales) {
         await FirebaseSyncService.instance.broadcastUpdate('sales', s.toJson());
+      }
+
+      // 5. Broadcast Recent Prescriptions
+      final scripts = ObjectBoxService.instance.prescriptionBox.query().order(Prescription_.id, flags: Order.descending).build().find();
+      final limitedScripts = scripts.length > 50 ? scripts.sublist(0, 50) : scripts;
+      for (var sc in limitedScripts) {
+        await FirebaseSyncService.instance.broadcastUpdate('prescriptions', sc.toJson());
       }
 
       if (kDebugMode) debugPrint('Hub: Cloud broadcast complete.');

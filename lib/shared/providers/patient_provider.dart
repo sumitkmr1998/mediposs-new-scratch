@@ -71,6 +71,10 @@ class PatientProvider extends ChangeNotifier {
   }
 
   void deletePatient(int id, {SyncService? syncService}) {
+    final patient = ObjectBoxService.instance.patientBox.get(id);
+    if (patient == null) return;
+    final uhid = patient.uhid;
+
     // Clean up images first
     final photos = getPatientPhotos(id);
     for (var photo in photos) {
@@ -84,13 +88,13 @@ class PatientProvider extends ChangeNotifier {
     // Broadcast sync
     if (Platform.isWindows) {
       if (LocalServerService.instance.isRunning) {
-        LocalServerService.instance.broadcast({'event': 'sync_received'});
+        LocalServerService.instance.broadcast({'event': 'patient_deleted', 'uhid': uhid});
       }
     } else if (Platform.isAndroid) {
       SyncQueueService.instance.addToQueue(
         entity: 'patient',
         action: 'delete',
-        data: {'id': id},
+        data: {'uhid': uhid},
       );
     }
   }

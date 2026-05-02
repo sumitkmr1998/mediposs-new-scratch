@@ -95,29 +95,34 @@ class FirebaseSyncService {
   // --- Sync Queue Logic ---
 
   /// Pushes a delta change to the Firestore sync queue.
-  Future<void> pushDelta({
+  Future<bool> pushDelta({
     required String entity,
     required String action,
     required Map<String, dynamic> data,
   }) async {
     if (defaultTargetPlatform == TargetPlatform.windows) {
-      await _pushDeltaREST(entity: entity, action: action, data: data);
-      return;
+      return await _pushDeltaREST(entity: entity, action: action, data: data);
     }
 
-    if (!_isInitialized) return;
-    final settings = ObjectBoxService.instance.settings;
-    await _db.collection('sync_queue').add({
-      'deviceId': settings.deviceId ?? 'unknown',
-      'entity': entity,
-      'action': action,
-      'data': data,
-      'timestamp': FieldValue.serverTimestamp(),
-      'processed': false,
-    });
+    if (!_isInitialized) return false;
+    try {
+      final settings = ObjectBoxService.instance.settings;
+      await _db.collection('sync_queue').add({
+        'deviceId': settings.deviceId ?? 'unknown',
+        'entity': entity,
+        'action': action,
+        'data': data,
+        'timestamp': FieldValue.serverTimestamp(),
+        'processed': false,
+      });
+      return true;
+    } catch (e) {
+      debugPrint('Firebase pushDelta error: $e');
+      return false;
+    }
   }
 
-  Future<void> _pushDeltaREST({
+  Future<bool> _pushDeltaREST({
     required String entity,
     required String action,
     required Map<String, dynamic> data,
@@ -140,13 +145,16 @@ class FirebaseSyncService {
       });
 
       final res = await http.post(url, body: body);
-      if (res.statusCode == 200) {
+      if (res.statusCode == 200 || res.statusCode == 201) {
         debugPrint('Firebase [REST]: Delta pushed successfully.');
+        return true;
       } else {
         debugPrint('Firebase [REST]: Push failed with ${res.statusCode}: ${res.body}');
+        return false;
       }
     } catch (e) {
       debugPrint('Firebase [REST]: Error pushing delta: $e');
+      return false;
     }
   }
 
@@ -272,7 +280,18 @@ class FirebaseSyncService {
     }
 
     if (!_isInitialized) return;
-    await _db.collection(entity).doc(data['id']?.toString() ?? data['barcode']?.toString()).set({
+    String docId = data['id']?.toString() ?? data['barcode']?.toString() ?? 'unknown';
+    
+    // Use natural keys for better cloud visibility and deduplication
+    if (entity == 'sales' || entity == 'sale') {
+      docId = data['invoiceNo']?.toString() ?? docId;
+    } else if (entity == 'patients' || entity == 'patient') {
+      docId = data['uhid']?.toString() ?? docId;
+    } else if (entity == 'users' || entity == 'user') {
+      docId = data['name']?.toString() ?? docId;
+    }
+
+    await _db.collection(entity).doc(docId).set({
       ...data,
       'updatedAt': FieldValue.serverTimestamp(),
       'syncedFrom': 'hub',
@@ -283,7 +302,16 @@ class FirebaseSyncService {
     try {
       final projectId = DefaultFirebaseOptions.windows.projectId;
       final apiKey = DefaultFirebaseOptions.windows.apiKey;
-      final docId = data['id']?.toString() ?? data['barcode']?.toString() ?? 'unknown';
+      
+      String docId = data['id']?.toString() ?? data['barcode']?.toString() ?? 'unknown';
+      if (entity == 'sales' || entity == 'sale') {
+        docId = data['invoiceNo']?.toString() ?? docId;
+      } else if (entity == 'patients' || entity == 'patient') {
+        docId = data['uhid']?.toString() ?? docId;
+      } else if (entity == 'users' || entity == 'user') {
+        docId = data['name']?.toString() ?? docId;
+      }
+
       final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/$entity/$docId?key=$apiKey');
       
       final body = jsonEncode({

@@ -25,6 +25,11 @@ import 'shared/services/local_server_service.dart';
 import 'shared/services/discovery_service.dart';
 import 'shared/services/global_navigation_service.dart';
 import 'shared/services/sync_queue_service.dart';
+import 'shared/models/patient.dart';
+import 'shared/models/medicine.dart';
+import 'shared/models/sale.dart';
+import 'objectbox.g.dart';
+import 'package:objectbox/objectbox.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'shared/services/firebase_sync_service.dart';
@@ -123,6 +128,45 @@ void main() async {
       syncService.pullSettings().then((_) => settingsProvider.load());
     } else if (event == 'users_updated') {
       syncService.pullUsers().then((_) => authProvider.notifyListeners());
+    } else if (event == 'patient_deleted') {
+      final uhid = msg['uhid'];
+      if (uhid != null) {
+        final box = ObjectBoxService.instance.patientBox;
+        final p = box.query(Patient_.uhid.equals(uhid)).build().findFirst();
+        if (p != null) {
+          box.remove(p.id);
+          patientProvider.load();
+        }
+      }
+    } else if (event == 'medicine_deleted') {
+      final barcode = msg['barcode'];
+      final name = msg['name'];
+      if (barcode != null || name != null) {
+        final box = ObjectBoxService.instance.medicineBox;
+        Condition<Medicine>? cond;
+        if (barcode != null) cond = Medicine_.barcode.equals(barcode);
+        if (name != null) {
+          final nameCond = Medicine_.name.equals(name);
+          cond = cond == null ? nameCond : cond.and(nameCond);
+        }
+        if (cond != null) {
+          final m = box.query(cond).build().findFirst();
+          if (m != null) {
+            box.remove(m.id);
+            inventoryProvider.load();
+          }
+        }
+      }
+    } else if (event == 'sale_deleted') {
+      final invoiceNo = msg['invoiceNo'];
+      if (invoiceNo != null) {
+        final box = ObjectBoxService.instance.saleBox;
+        final s = box.query(Sale_.invoiceNo.equals(invoiceNo)).build().findFirst();
+        if (s != null) {
+          box.remove(s.id);
+          salesProvider.load();
+        }
+      }
     }
   });
 

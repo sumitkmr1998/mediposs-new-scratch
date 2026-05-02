@@ -88,12 +88,25 @@ class SyncQueueService extends ChangeNotifier {
 
     try {
       switch (item.entity) {
-        case 'sale':
-          if (item.action == 'delete') return await syncService.pushSaleDelete(data['invoiceNo']);
-          return await syncService.pushSale(Sale.fromJson(data));
         case 'patient':
-          if (item.action == 'delete') return await syncService.pushPatientDelete(data['id']);
+          if (item.action == 'delete')
+            return await syncService.pushPatientDelete(data['uhid'] ?? '');
           return await syncService.pushPatient(Patient.fromJson(data));
+        case 'medicine':
+          if (item.action == 'create')
+            return await syncService.pushMedicine(Medicine.fromJson(data));
+          if (item.action == 'update')
+            return await syncService.pushMedicine(Medicine.fromJson(data));
+          if (item.action == 'delete')
+            return await syncService.pushMedicineDelete(
+                data['barcode'] ?? '', data['name'] ?? '');
+          break;
+        case 'sale':
+          if (item.action == 'create')
+            return await syncService.pushSale(Sale.fromJson(data));
+          if (item.action == 'delete')
+            return await syncService.pushSaleDelete(data['invoiceNo'] ?? '');
+          break;
         case 'appointment':
           return await syncService.pushAppointment(Appointment.fromJson(data));
         case 'doctor':
@@ -104,9 +117,6 @@ class SyncQueueService extends ChangeNotifier {
           return await syncService.pushPrescription(Prescription.fromJson(data));
         case 'transfer':
           return await syncService.pushTransfer(StockTransfer.fromJson(data));
-        case 'medicine':
-          if (item.action == 'delete') return await syncService.pushMedicineDelete(data['id']);
-          return await syncService.pushMedicine(Medicine.fromJson(data));
         case 'template':
           if (item.action == 'delete') return await syncService.pushTemplateDelete(data['name']);
           return await syncService.pushTemplate(PrescriptionTemplate.fromJson(data));
@@ -119,9 +129,9 @@ class SyncQueueService extends ChangeNotifier {
           if (photo == null) return true;
           return await syncService.pushPatientPhoto(photo, uhid);
         default:
-          debugPrint('SyncQueueService: Unknown entity ${item.entity}');
-          return true; // Don't block queue for unknown entities
+          return true; // Ignore unknown entities
       }
+      return false;
     } catch (e) {
       debugPrint('SyncQueueService: Error pushing ${item.entity}: $e');
       return false;

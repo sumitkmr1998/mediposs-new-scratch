@@ -42,6 +42,7 @@ class AppShellWindows extends StatefulWidget {
 class _AppShellWindowsState extends State<AppShellWindows> {
   int _selectedIndex = 0;
   bool _isForcedExit = false;
+  bool _isCloudSyncing = false;
 
   @override
   void initState() {
@@ -109,17 +110,9 @@ class _AppShellWindowsState extends State<AppShellWindows> {
         final settings = context.read<SettingsProvider>();
         final s = settings.settings;
 
-        // Check if "On Close" backup is enabled
-        bool shouldBackup = s.googleDriveLinked &&
-            s.autoBackupFrequency != 'Never' &&
-            s.autoBackupLogic == 'On Close';
-
-        if (shouldBackup) {
-          _showExitBackupDialog();
-          return AppExitResponse.cancel;
-        }
-
-        return AppExitResponse.exit;
+        // We always want to perform Cloud Sync on exit, even if GDrive backup is off
+        _showExitBackupDialog();
+        return AppExitResponse.cancel;
       },
     );
   }
@@ -136,8 +129,11 @@ class _AppShellWindowsState extends State<AppShellWindows> {
       ),
     );
 
-    // Run backup
-    context.read<SettingsProvider>().checkAndPerformAutoBackup('On Close').then((_) {
+    // Run both Google Drive backup AND Firebase Cloud Sync
+    Future.wait([
+      context.read<SettingsProvider>().checkAndPerformAutoBackup('On Close'),
+      LocalServerService.instance.broadcastAllToCloud(),
+    ]).then((_) {
       if (mounted && !_isForcedExit) {
         setState(() => _isForcedExit = true);
         SystemChannels.platform.invokeMethod('SystemNavigator.pop');
@@ -227,11 +223,35 @@ class _AppShellWindowsState extends State<AppShellWindows> {
               isCollapsed: context.watch<SettingsProvider>().settings.navCollapsed,
               onToggleCollapse: () => context.read<SettingsProvider>().toggleNavCollapse(),
               onConnectTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ConnectionScreen())),
+              onCloudSync: _performManualCloudSync,
+              isCloudSyncing: _isCloudSyncing,
             ),
           Expanded(child: _screenForId(currentDestId)),
         ],
       ),
     );
+  }
+
+  Future<void> _performManualCloudSync() async {
+    setState(() => _isCloudSyncing = true);
+    try {
+      await LocalServerService.instance.broadcastAllToCloud();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('✅ Cloud Sync Complete! All data pushed to Firebase.'),
+          backgroundColor: AppTheme.success,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('❌ Cloud Sync Failed: $e'),
+          backgroundColor: AppTheme.danger,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _isCloudSyncing = false);
+    }
   }
 
   void _showLogoutDialog(BuildContext context) {
@@ -273,6 +293,8 @@ class _SideNav extends StatelessWidget {
   final bool isCollapsed;
   final VoidCallback onToggleCollapse;
   final VoidCallback onConnectTap;
+  final VoidCallback onCloudSync;
+  final bool isCloudSyncing;
 
   const _SideNav({
     required this.selectedIndex,
@@ -283,6 +305,8 @@ class _SideNav extends StatelessWidget {
     required this.isCollapsed,
     required this.onToggleCollapse,
     required this.onConnectTap,
+    required this.onCloudSync,
+    required this.isCloudSyncing,
   });
 
   @override
@@ -350,9 +374,51 @@ class _SideNav extends StatelessWidget {
           ),
           _buildLogoutButton(context, expanded),
           const SizedBox(height: 8),
+          if (isWindowsHub) ...[
+            _buildCloudSyncButton(expanded),
+            const SizedBox(height: 8),
+          ],
           _buildStatusBadge(expanded),
           const SizedBox(height: 8),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCloudSyncButton(bool expanded) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      child: InkWell(
+        onTap: isCloudSyncing ? null : onCloudSync,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Row(
+            children: [
+              if (isCloudSyncing)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppTheme.sky,
+                  ),
+                )
+              else
+                const Icon(Icons.cloud_sync, color: AppTheme.sky, size: 20),
+              if (expanded) ...[
+                const SizedBox(width: 12),
+                const Text(
+                  'Cloud Sync',
+                  style: TextStyle(
+                    color: AppTheme.sky,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -137,7 +137,10 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
         }
       }
     } else {
-      setState(() => _testing = false);
+      setState(() {
+        _testing = false;
+        _reachable = false;
+      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text(
@@ -209,13 +212,14 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
     return Scaffold(
       appBar: AppBar(title: const Text('Connect to Hub')),
       body: Center(
-        child: SizedBox(
-          width: 400,
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+        child: SingleChildScrollView(
+          child: SizedBox(
+            width: 400,
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -493,7 +497,26 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
                     ),
                   ),
                 ],
+                if (sync.isConnected) ...[
+                   const SizedBox(height: 12),
+                   OutlinedButton.icon(
+                    onPressed: () async {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Starting full data refresh...')));
+                      await sync.forceFullSync();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Full Sync Complete'), backgroundColor: AppTheme.success));
+                      }
+                    },
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('Force Full Sync'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 40),
+                      side: BorderSide(color: AppTheme.primary.withValues(alpha: 0.5)),
+                    ),
+                  ),
+                ],
               ],
+            ),
             ),
           ),
         ),

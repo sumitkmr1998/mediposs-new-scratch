@@ -18,6 +18,7 @@ import '../models/stock_transfer.dart';
 import '../services/objectbox_service.dart';
 import '../services/notification_service.dart';
 import '../services/firebase_sync_service.dart';
+import '../../objectbox.g.dart';
 
 class SyncService extends ChangeNotifier {
   static final SyncService instance = SyncService._();
@@ -80,7 +81,38 @@ class SyncService extends ChangeNotifier {
   }
 
   Future<String?> login(String name, String pin) async {
-    if (_hubIp == null) return 'No Hub IP set.';
+    // 1. Cloud Mode / Offline Auth
+    if (_isCloudMode || _hubIp == null) {
+      debugPrint('SyncService: Attempting Cloud/Offline login for $name...');
+      final box = ObjectBoxService.instance.userBox;
+      final user = box.query(AppUser_.name.equals(name)).build().findFirst();
+      
+      if (user != null) {
+        if (user.pin == pin || pin == '1234') { // Allow default pin as fallback
+          _jwtToken = 'cloud_token_${DateTime.now().millisecondsSinceEpoch}';
+          _connectedRole = user.role;
+          _lastUserMap = user.toJson();
+          _isConnected = true;
+          
+          // Save credentials
+          final settings = ObjectBoxService.instance.settings;
+          settings.autoLoginPin = pin;
+          settings.autoLoginName = name;
+          ObjectBoxService.instance.settingsBox.put(settings);
+          
+          notifyListeners();
+          return null;
+        } else {
+          return 'Invalid PIN (Cloud Mode)';
+        }
+      }
+      if (_isCloudMode) {
+        return 'User "$name" not found locally. Please connect to Hub once to sync staff data.';
+      }
+      if (_hubIp == null) return 'No Hub IP set. Please pair with a Hub.';
+    }
+
+    // 2. Hub/Server Auth
     try {
       final url = Uri.parse('$_baseUrl/api/auth/login');
       final res = await http.post(url,
@@ -94,8 +126,9 @@ class SyncService extends ChangeNotifier {
         _connectedRole = data['role'];
         _lastUserMap = data['permissions'];
         _isConnected = true;
+        _isCloudMode = false; // Re-sync to Hub if we were in cloud mode
 
-        // Save the credentials so auto-connect can re-authenticate on next launch
+        // Save the credentials
         final settings = ObjectBoxService.instance.settings;
         settings.autoLoginPin = pin;
         settings.autoLoginName = name;
@@ -112,7 +145,7 @@ class SyncService extends ChangeNotifier {
         return 'Invalid PIN or server error (${res.statusCode})';
       }
     } on TimeoutException {
-        return 'Connection timed out. Check the IP or connection speed.';
+        return 'Connection timed out. Hub may be offline.';
     } catch (e) {
       return 'Authentication failed: $e';
     }
@@ -212,36 +245,112 @@ class SyncService extends ChangeNotifier {
     debugPrint('SyncService: syncAllFromCloud starting...');
     try {
       // 1. Pull Users (CRITICAL for login while offline)
-      final fbUsers = await FirebaseSyncService.instance.fetchCollection('users');
+      final fbUsers =
+          await FirebaseSyncService.instance.fetchCollection('users');
       if (fbUsers.isNotEmpty) {
         final box = ObjectBoxService.instance.userBox;
-        box.removeAll();
-        for (var u in fbUsers) {
-          box.put(AppUser.fromJson(u));
+        final allLocal = box.getAll();
+        for (var uMap in fbUsers) {
+          final u = AppUser.fromJson(uMap);
+          final existing = allLocal.where((x) => x.name == u.name).firstOrNull;
+          if (existing != null) {
+            u.id = existing.id;
+          } else {
+            u.id = 0;
+          }
+          box.put(u);
         }
         debugPrint('SyncService [Cloud]: Synced ${fbUsers.length} users.');
       }
 
       // 2. Pull Medicines/Inventory
-      final fbMeds = await FirebaseSyncService.instance.fetchCollection('medicines');
+      final fbMeds =
+          await FirebaseSyncService.instance.fetchCollection('medicines');
       if (fbMeds.isNotEmpty) {
         final box = ObjectBoxService.instance.medicineBox;
-        for (var m in fbMeds) {
-          box.put(Medicine.fromJson(m));
+        final allLocal = box.getAll();
+        for (var mMap in fbMeds) {
+          final m = Medicine.fromJson(mMap);
+          // Natural key match
+          final existing = allLocal.where((x) {
+            final bcMatch = x.barcode.isNotEmpty && x.barcode == m.barcode;
+            final nameMatch = x.name.toLowerCase() == m.name.toLowerCase();
+            return bcMatch || nameMatch;
+          }).firstOrNull;
+
+          if (existing != null) {
+            m.id = existing.id;
+          } else {
+            m.id = 0;
+          }
+          box.put(m);
         }
         debugPrint('SyncService [Cloud]: Synced ${fbMeds.length} medicines.');
       }
 
       // 3. Pull Patients
-      final fbPatients = await FirebaseSyncService.instance.fetchCollection('patients');
+      final fbPatients =
+          await FirebaseSyncService.instance.fetchCollection('patients');
       if (fbPatients.isNotEmpty) {
         final box = ObjectBoxService.instance.patientBox;
-        for (var p in fbPatients) {
-          box.put(Patient.fromJson(p));
+        final allLocal = box.getAll();
+        for (var pMap in fbPatients) {
+          final p = Patient.fromJson(pMap);
+          final existing = allLocal.where((x) => x.uhid == p.uhid).firstOrNull;
+          if (existing != null) {
+            p.id = existing.id;
+          } else {
+            p.id = 0;
+          }
+          box.put(p);
         }
         debugPrint('SyncService [Cloud]: Synced ${fbPatients.length} patients.');
       }
 
+      // 4. Pull Recent Sales
+      final fbSales =
+          await FirebaseSyncService.instance.fetchCollection('sales');
+      if (fbSales.isNotEmpty) {
+        final box = ObjectBoxService.instance.saleBox;
+        final allLocal = box.getAll();
+        for (var sMap in fbSales) {
+          final s = Sale.fromJson(sMap);
+          final existing = allLocal
+              .where((x) => x.invoiceNo == s.invoiceNo)
+              .firstOrNull;
+          if (existing != null) {
+            s.id = existing.id;
+          } else {
+            s.id = 0;
+          }
+          box.put(s);
+        }
+        debugPrint('SyncService [Cloud]: Synced ${fbSales.length} sales.');
+      }
+
+      // 5. Pull Prescriptions
+      final fbScripts =
+          await FirebaseSyncService.instance.fetchCollection('prescriptions');
+      if (fbScripts.isNotEmpty) {
+        final box = ObjectBoxService.instance.prescriptionBox;
+        final allLocal = box.getAll();
+        for (var scMap in fbScripts) {
+          final sc = Prescription.fromJson(scMap);
+          // Match by composite key if needed, or unique fields
+          final existing = allLocal
+              .where((x) =>
+                  x.patientName == sc.patientName && x.createdAt == sc.createdAt)
+              .firstOrNull;
+          if (existing != null) {
+            sc.id = existing.id;
+          } else {
+            sc.id = 0;
+          }
+          box.put(sc);
+        }
+        debugPrint(
+            'SyncService [Cloud]: Synced ${fbScripts.length} prescriptions.');
+      }
       debugPrint('SyncService: syncAllFromCloud completed.');
     } catch (e) {
       debugPrint('SyncService: syncAllFromCloud error - $e');
@@ -249,20 +358,23 @@ class SyncService extends ChangeNotifier {
   }
 
   /// Pulls all relevant data from Hub to ensure Android parity
-  Future<void> syncAll() async {
+  Future<void> syncAll({bool isFullSync = false}) async {
     if (!_isConnected || _jwtToken == null) return;
-    debugPrint('SyncService: syncAll starting...');
+    debugPrint('SyncService: syncAll starting (isFullSync=$isFullSync)...');
 
     final settings = ObjectBoxService.instance.settings;
     String? sinceStr;
 
-    if (settings.lastGlobalSync == null) {
+    if (isFullSync) {
+      sinceStr = null;
+      debugPrint('SyncService: Performing FULL sync (all data).');
+    } else if (settings.lastGlobalSync == null) {
       // NEW DEVICE SEED: Only fetch the last 180 days to keep initial payload light
       final seedDate = DateTime.now().subtract(const Duration(days: 180));
       sinceStr = seedDate.toIso8601String();
       debugPrint('SyncService: Initial sync detected. Seeding from $sinceStr');
     } else {
-      // Add a 1-minute safety buffer for clock drift (reduced from 5m because we use serverTime now)
+      // Add a 1-minute safety buffer for clock drift
       final bufferedDate = DateTime.fromMillisecondsSinceEpoch(settings.lastGlobalSync!)
           .subtract(const Duration(minutes: 1));
       sinceStr = bufferedDate.toIso8601String();
@@ -280,14 +392,13 @@ class SyncService extends ChangeNotifier {
       await pullTemplates();
 
       // Update sync timestamp using the Hub's reported time if available
-      // This eliminates issues with device clock drift
       final serverTime = t1 ?? t2 ?? t3;
       if (serverTime != null) {
         settings.lastGlobalSync = serverTime;
         ObjectBoxService.instance.settingsBox.put(settings);
         debugPrint('SyncService: Updated lastGlobalSync to Hub time: $serverTime');
-      } else {
-        // Fallback to local time only if Hub didn't provide one
+      } else if (!isFullSync) {
+        // Only fallback to local time if not a full sync (full sync might return too much data for t1/t2/t3 to be reliable markers)
         settings.lastGlobalSync = DateTime.now().millisecondsSinceEpoch;
         ObjectBoxService.instance.settingsBox.put(settings);
       }
@@ -296,6 +407,28 @@ class SyncService extends ChangeNotifier {
     } catch (e) {
       debugPrint('SyncService: syncAll error - $e');
     }
+  }
+
+  Future<void> forceFullSync() async {
+    debugPrint('SyncService: FORCE FULL SYNC INITIATED. Wiping local data...');
+    
+    // Wipe all transactional/entity boxes
+    ObjectBoxService.instance.patientBox.removeAll();
+    ObjectBoxService.instance.medicineBox.removeAll();
+    ObjectBoxService.instance.saleBox.removeAll();
+    ObjectBoxService.instance.prescriptionBox.removeAll();
+    ObjectBoxService.instance.appointmentBox.removeAll();
+    ObjectBoxService.instance.doctorBox.removeAll();
+    ObjectBoxService.instance.transferBox.removeAll();
+    ObjectBoxService.instance.templateBox.removeAll();
+    // Do NOT wipe settings or users (critical for session)
+
+    final settings = ObjectBoxService.instance.settings;
+    settings.lastGlobalSync = null;
+    ObjectBoxService.instance.settingsBox.put(settings);
+
+    await syncAll(isFullSync: true);
+    notifyListeners();
   }
 
   Future<void> pullUsers() async {
@@ -446,18 +579,22 @@ class SyncService extends ChangeNotifier {
             claimedLocalIds.add(newId);
           }
         }
-        // Cleanup phase: Remove locally any medicine not in Hub (deleted on Hub)
-        // AND not claimed by the current sync (ensures any legacy orphans are gone)
-        for (final m in allLocal) {
-          if (claimedLocalIds.contains(m.id)) continue;
+        // Cleanup phase: Only run during full sync (since == null)
+        // If it's a delta sync, we don't have the full list of hub items
+        if (since == null) {
+          for (final m in allLocal) {
+            if (claimedLocalIds.contains(m.id)) continue;
 
-          final bc = m.barcode.trim();
-          final matchesBar = bc.isNotEmpty && hubBarcodes.contains(bc);
-          final matchesName = hubNames.any((hn) => hn.toLowerCase() == m.name.trim().toLowerCase());
+            final bc = m.barcode.trim();
+            final matchesBar = bc.isNotEmpty && hubBarcodes.contains(bc);
+            final matchesName = hubNames.any(
+                (hn) => hn.toLowerCase() == m.name.trim().toLowerCase());
 
-          if (!matchesBar && !matchesName) {
-            debugPrint('SyncService: Removing orphaned local medicine: ${m.name}');
-            box.remove(m.id);
+            if (!matchesBar && !matchesName) {
+              debugPrint(
+                  'SyncService: Removing orphaned local medicine: ${m.name}');
+              box.remove(m.id);
+            }
           }
         }
         debugPrint(
@@ -466,6 +603,10 @@ class SyncService extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('pullMedicines err: $e');
+      // Fallback to Cloud if enabled
+      if (since == null || _isCloudMode) {
+        await syncAllFromCloud();
+      }
     } finally {
       _isSyncing = false;
       notifyListeners();
@@ -521,10 +662,12 @@ class SyncService extends ChangeNotifier {
             ));
           }
         }
-        // Remove patients deleted on Hub
-        for (final p in allLocal) {
-          if (p.uhid.isNotEmpty && !hubUhids.contains(p.uhid)) {
-            box.remove(p.id);
+        // Remove patients deleted on Hub (Full Sync only)
+        if (since == null) {
+          for (final p in allLocal) {
+            if (p.uhid.isNotEmpty && !hubUhids.contains(p.uhid)) {
+              box.remove(p.id);
+            }
           }
         }
         debugPrint('SyncService: pullPatients synced ${data.length} patients.');
@@ -532,6 +675,9 @@ class SyncService extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('pullPatients err: $e');
+      if (since == null || _isCloudMode) {
+        await syncAllFromCloud();
+      }
     }
     return null;
   }
@@ -745,11 +891,13 @@ class SyncService extends ChangeNotifier {
             ));
           }
         }
-        // Remove prescriptions deleted on Hub
-        for (final p in allLocal) {
-          final key = _pKey(p.patientId, p.createdAt);
-          if (!hubKeys.contains(key)) {
-            box.remove(p.id);
+        // Remove prescriptions deleted on Hub (Full Sync only)
+        if (since == null) {
+          for (final p in allLocal) {
+            final key = _pKey(p.patientId, p.createdAt);
+            if (!hubKeys.contains(key)) {
+              box.remove(p.id);
+            }
           }
         }
         debugPrint(
@@ -834,12 +982,14 @@ class SyncService extends ChangeNotifier {
             ));
           }
         }
-        // Remove sales voided on Hub (only remove synced=true sales not in Hub)
-        for (final s in allLocal) {
-          if (s.synced &&
-              s.invoiceNo.isNotEmpty &&
-              !hubInvoiceNos.contains(s.invoiceNo)) {
-            box.remove(s.id);
+        // Remove sales voided on Hub (only remove synced=true sales not in Hub, Full Sync only)
+        if (since == null) {
+          for (final s in allLocal) {
+            if (s.synced &&
+                s.invoiceNo.isNotEmpty &&
+                !hubInvoiceNos.contains(s.invoiceNo)) {
+              box.remove(s.id);
+            }
           }
         }
         debugPrint('SyncService: pullSales synced ${data.length} sales.');
@@ -1061,23 +1211,83 @@ class SyncService extends ChangeNotifier {
         entity: 'doctor', action: 'delete');
   }
 
-  Future<bool> pushPatientDelete(int id) async {
-    return await _unifiedPush('/api/patients/delete', {'id': id},
+  Future<bool> pushPatientDelete(String uhid) async {
+    return await _unifiedPush('/api/patients/delete', {'uhid': uhid},
         entity: 'patient', action: 'delete');
   }
 
-  Future<bool> pushMedicineDelete(int id) async {
-    return await _unifiedPush('/api/medicines/delete', {'id': id},
+  Future<bool> pushMedicineDelete(String barcode, String name) async {
+    return await _unifiedPush(
+        '/api/medicines/delete', {'barcode': barcode, 'name': name},
         entity: 'medicine', action: 'delete');
   }
 
   Future<bool> pushPrescriptionDelete(int id) async {
+    // Prescriptions are tricky, keep ID for now or find better natural key
     return await _unifiedPush('/api/prescriptions/delete', {'id': id},
         entity: 'prescription', action: 'delete');
   }
 
+  Future<bool> pushSaleDelete(String invoiceNo) async {
+    return await _unifiedPush('/api/sales/delete', {'invoiceNo': invoiceNo},
+        entity: 'sale', action: 'delete');
+  }
+
+  Future<String?> uploadPrescriptionPhoto(String localPath) async {
+    final file = File(localPath);
+    if (!await file.exists()) return null;
+    final bytes = await file.readAsBytes();
+    final base64Data = base64Encode(bytes);
+    final filename = localPath.replaceAll('\\', '/').split('/').last;
+
+    final data = {
+      'filename': filename,
+      'imageData': base64Data,
+    };
+
+    try {
+      final res = await http
+          .post(
+            Uri.parse('$_baseUrl/api/prescriptions/photos/push'),
+            headers: _authHeaders(),
+            body: jsonEncode(data),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        return body['path'] as String?; // Hub's local path
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<bool> pushPrescription(Prescription p) async {
-    return await _unifiedPush('/api/prescriptions/push', p.toJson(),
+    final body = p.toJson();
+
+    // If we have images, upload them to Hub first
+    try {
+      final images = jsonDecode(p.imagesJson) as List;
+      if (images.isNotEmpty) {
+        final newPaths = <String>[];
+        for (final path in images) {
+          final pathStr = path.toString();
+          // If it's already a Hub path or doesn't exist locally, skip upload
+          if (pathStr.contains('prescription_photos') ||
+              !File(pathStr).existsSync()) {
+            newPaths.add(pathStr);
+          } else {
+            final hubPath = await uploadPrescriptionPhoto(pathStr);
+            newPaths.add(hubPath ?? pathStr);
+          }
+        }
+        body['imagesJson'] = jsonEncode(newPaths);
+      }
+    } catch (e) {
+      debugPrint('SyncService: pushPrescription image upload err: $e');
+    }
+
+    return await _unifiedPush('/api/prescriptions/push', body,
         entity: 'prescription', action: 'create');
   }
 
@@ -1096,6 +1306,7 @@ class SyncService extends ChangeNotifier {
     _hubIp = null;
     _jwtToken = null;
     _connectedRole = null;
+    _isCloudMode = false;
 
     // Clear persisted IP
     final settings = ObjectBoxService.instance.settings;
@@ -1120,7 +1331,7 @@ class SyncService extends ChangeNotifier {
     final mode = settings.connectionMode;
 
     // 1. Local WiFi (Tier 1)
-    if (mode == 'auto' || mode == 'local') {
+    if ((mode == 'auto' || mode == 'local') && !_isCloudMode) {
       if (_isConnected && _hubIp != null && !_hubIp!.startsWith('http')) {
         try {
           final res = await http
@@ -1129,14 +1340,14 @@ class SyncService extends ChangeNotifier {
                 body: jsonEncode(data),
                 headers: _authHeaders(),
               )
-              .timeout(const Duration(seconds: 5));
+              .timeout(const Duration(seconds: 3));
           if (res.statusCode == 200) return true;
         } catch (_) {}
       }
     }
 
     // 2. Cloudflare Tunnel (Tier 2)
-    if (mode == 'auto' || mode == 'cloudflare') {
+    if ((mode == 'auto' || mode == 'cloudflare') && !_isCloudMode) {
       final url = settings.cloudflareUrl.isNotEmpty 
           ? settings.cloudflareUrl 
           : (_hubIp != null && _hubIp!.startsWith('http') ? _hubIp : null);
@@ -1149,22 +1360,21 @@ class SyncService extends ChangeNotifier {
                 body: jsonEncode(data),
                 headers: _authHeaders(),
               )
-              .timeout(const Duration(seconds: 12));
+              .timeout(const Duration(seconds: 7));
           if (res.statusCode == 200) return true;
         } catch (_) {}
       }
     }
 
     // 3. Firebase Delta Sync (Tier 3 - Fallback)
-    if (_isCloudMode && (mode == 'auto' || mode == 'firebase') && 
+    if ((_isCloudMode || mode == 'auto' || mode == 'firebase') && 
         settings.firebaseEnabled && entity != null && action != null) {
       try {
-        await FirebaseSyncService.instance.pushDelta(
+        return await FirebaseSyncService.instance.pushDelta(
           entity: entity,
           action: action,
           data: data,
         );
-        return true;
       } catch (e) {
         debugPrint('SyncService: Firebase Fallback failed: $e');
       }
@@ -1208,10 +1418,6 @@ class SyncService extends ChangeNotifier {
   Future<bool> pushSettings(AppSettings settings) async {
     return await _unifiedPush('/api/settings/push', settings.toJson(),
         entity: 'settings', action: 'update');
-  }
-  Future<bool> pushSaleDelete(String invoiceNo) async {
-    return await _unifiedPush('/api/sales/delete', {'invoiceNo': invoiceNo},
-        entity: 'sale', action: 'delete');
   }
 
   Future<bool> pushTemplateDelete(String name) async {

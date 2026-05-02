@@ -85,8 +85,10 @@ class _LoginAndroidState extends State<LoginAndroid> {
           context.read<OpdProvider>().loadAll();
           context.read<SalesProvider>().load();
 
-          // Connect WS
-          context.read<WebSocketService>().connect(sync.hubIp!, sync.secret);
+          // Connect WS only if Hub is available
+          if (sync.hubIp != null && !sync.isCloudMode) {
+            context.read<WebSocketService>().connect(sync.hubIp!, sync.secret);
+          }
 
           // Finally, tell AuthProvider we are logged in so `main.dart` navigates
           // We use forceLogin because Hub already approved the PIN.
@@ -182,7 +184,31 @@ class _LoginAndroidState extends State<LoginAndroid> {
                 const SizedBox(height: 4),
                 Text('Medical Store Management',
                     style: TextStyle(color: context.textMutedColor)),
-                const SizedBox(height: 40),
+                const SizedBox(height: 12),
+                if (context.watch<SyncService>().isCloudMode)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppTheme.warning.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: AppTheme.warning.withValues(alpha: 0.3)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.cloud_off, size: 14, color: AppTheme.warning),
+                        SizedBox(width: 6),
+                        Text('Cloud Mode (Hub Offline)',
+                            style: TextStyle(
+                                color: AppTheme.warning,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 28),
 
                 if (_selectedUser == null) ...[
                   Text('Select User',
