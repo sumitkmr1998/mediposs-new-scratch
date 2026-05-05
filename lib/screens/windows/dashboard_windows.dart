@@ -17,6 +17,7 @@ import 'opd/opd_queue_windows.dart';
 import '../../shared/widgets/interactive_hover.dart';
 import '../../shared/widgets/app_filter_chip.dart';
 import '../../shared/widgets/app_kpi_card.dart';
+import '../../shared/services/local_server_service.dart';
 
 class DashboardWindows extends StatelessWidget {
   const DashboardWindows({super.key});
@@ -141,17 +142,42 @@ class _DashboardHeader extends StatelessWidget {
           ],
         ),
 
-        // Right Side: Greeting + Filter Chips
+        // Right Side: Greeting + Filter Chips + Cloud Actions
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(
-              'Welcome back, ${auth.currentUser?.name ?? "Admin"}',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 16,
-                color: cs.onSurface,
-              ),
+            Row(
+              children: [
+                IconButton(
+                  tooltip: 'Manual Cloud Broadcast (Push all data to Cloud)',
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.cloud_upload_rounded, color: AppTheme.primary, size: 20),
+                  ),
+                  onPressed: () async {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Starting full cloud broadcast...'), duration: Duration(seconds: 2)),
+                    );
+                    await LocalServerService.instance.broadcastAllToCloud();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Cloud broadcast complete.')),
+                    );
+                  },
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Welcome back, ${auth.currentUser?.name ?? "Admin"}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                    color: cs.onSurface,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             _ModernFilterChips(isCashier: !(auth.currentUser?.canViewHistoricalData ?? true)),

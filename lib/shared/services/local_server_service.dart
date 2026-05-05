@@ -1720,44 +1720,82 @@ class LocalServerService {
   }
 
   /// Hub-side: Broadcasts all critical data to Firebase for companion apps' offline consumption.
+  /// Now performs "Mirroring" - deletes items from Cloud that no longer exist locally.
   Future<void> broadcastAllToCloud() async {
-    if (kDebugMode) debugPrint('Hub: Broadcasting all data to Cloud collections for offline fallback...');
+    debugPrint('Hub: Starting full Cloud Mirror Sync...');
+    int pushCount = 0;
+    int pruneCount = 0;
+    
     try {
-      // 1. Broadcast Users (Critical for login)
+      // --- 1. Mirror Users ---
       final users = ObjectBoxService.instance.userBox.getAll();
+      final localUserNames = users.map((u) => u.name).toSet();
+      final cloudUsers = await FirebaseSyncService.instance.fetchCollection('users');
+      for (var cu in cloudUsers) {
+        final name = cu['name']?.toString();
+        if (name != null && !localUserNames.contains(name)) {
+          await FirebaseSyncService.instance.deleteDocument('users', name);
+          pruneCount++;
+        }
+      }
       for (var u in users) {
         await FirebaseSyncService.instance.broadcastUpdate('users', u.toJson());
+        pushCount++;
       }
 
-      // 2. Broadcast Medicines (Inventory)
+      // --- 2. Mirror Medicines ---
       final meds = ObjectBoxService.instance.medicineBox.getAll();
+      // Barcode is our docId for medicines
+      final localBarcodes = meds.map((m) => m.barcode.isEmpty ? m.id.toString() : m.barcode).toSet();
+      final cloudMeds = await FirebaseSyncService.instance.fetchCollection('medicines');
+      for (var cm in cloudMeds) {
+        final cloudId = cm['cloudId']?.toString();
+        if (cloudId != null && !localBarcodes.contains(cloudId)) {
+          await FirebaseSyncService.instance.deleteDocument('medicines', cloudId);
+          pruneCount++;
+        }
+      }
       for (var m in meds) {
         await FirebaseSyncService.instance.broadcastUpdate('medicines', m.toJson());
+        pushCount++;
       }
 
-      // 3. Broadcast Patients
+      // --- 3. Mirror Patients ---
       final patients = ObjectBoxService.instance.patientBox.getAll();
+      final localUhids = patients.map((p) => p.uhid.isEmpty ? p.id.toString() : p.uhid).toSet();
+      final cloudPatients = await FirebaseSyncService.instance.fetchCollection('patients');
+      for (var cp in cloudPatients) {
+        final cloudId = cp['cloudId']?.toString();
+        if (cloudId != null && !localUhids.contains(cloudId)) {
+          await FirebaseSyncService.instance.deleteDocument('patients', cloudId);
+          pruneCount++;
+        }
+      }
       for (var p in patients) {
         await FirebaseSyncService.instance.broadcastUpdate('patients', p.toJson());
+        pushCount++;
       }
 
-      // 4. Broadcast Recent Sales (Last 50 to keep it light)
+      // --- 4. Mirror Sales (Limited to recent) ---
       final sales = ObjectBoxService.instance.saleBox.query().order(Sale_.id, flags: Order.descending).build().find();
       final limitedSales = sales.length > 50 ? sales.sublist(0, 50) : sales;
+      final localInvoices = limitedSales.map((s) => s.invoiceNo).toSet();
+      final cloudSales = await FirebaseSyncService.instance.fetchCollection('sales');
+      for (var cs in cloudSales) {
+        final cloudId = cs['cloudId']?.toString();
+        if (cloudId != null && !localInvoices.contains(cloudId)) {
+          await FirebaseSyncService.instance.deleteDocument('sales', cloudId);
+          pruneCount++;
+        }
+      }
       for (var s in limitedSales) {
         await FirebaseSyncService.instance.broadcastUpdate('sales', s.toJson());
+        pushCount++;
       }
 
-      // 5. Broadcast Recent Prescriptions
-      final scripts = ObjectBoxService.instance.prescriptionBox.query().order(Prescription_.id, flags: Order.descending).build().find();
-      final limitedScripts = scripts.length > 50 ? scripts.sublist(0, 50) : scripts;
-      for (var sc in limitedScripts) {
-        await FirebaseSyncService.instance.broadcastUpdate('prescriptions', sc.toJson());
-      }
-
-      if (kDebugMode) debugPrint('Hub: Cloud broadcast complete.');
+      debugPrint('Hub: Mirror Sync Complete. Pushed: $pushCount, Pruned: $pruneCount');
     } catch (e) {
-      debugPrint('Hub: Cloud broadcast error: $e');
+      debugPrint('Hub: Mirror Sync error: $e');
     }
   }
 }

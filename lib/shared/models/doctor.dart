@@ -1,4 +1,5 @@
 import 'package:objectbox/objectbox.dart';
+import '../utils/date_helper.dart';
 
 @Entity()
 class Doctor {
@@ -45,6 +46,6 @@ class Doctor {
         qualifications: json['qualifications'] ?? '',
         phone: json['phone'] ?? '',
         isActive: json['isActive'] ?? true,
-        createdAt: DateTime.tryParse(json['createdAt'] ?? ''),
+        createdAt: DateHelper.parseDateTime(json['createdAt']),
       );
 }

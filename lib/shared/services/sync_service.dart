@@ -230,7 +230,9 @@ class SyncService extends ChangeNotifier {
     notifyListeners();
     
     debugPrint('SyncService: Manual Cloud Mode activated. Syncing from Firebase...');
-    await syncAllFromCloud();
+    // We don't await here so UI can proceed to Login screen immediately,
+    // but syncAllFromCloud will notifyListeners when done.
+    syncAllFromCloud();
   }
 
   /// Manually exits Cloud Mode
@@ -245,115 +247,169 @@ class SyncService extends ChangeNotifier {
     debugPrint('SyncService: syncAllFromCloud starting...');
     try {
       // 1. Pull Users (CRITICAL for login while offline)
-      final fbUsers =
-          await FirebaseSyncService.instance.fetchCollection('users');
-      if (fbUsers.isNotEmpty) {
-        final box = ObjectBoxService.instance.userBox;
-        final allLocal = box.getAll();
-        for (var uMap in fbUsers) {
-          final u = AppUser.fromJson(uMap);
-          final existing = allLocal.where((x) => x.name == u.name).firstOrNull;
-          if (existing != null) {
-            u.id = existing.id;
-          } else {
-            u.id = 0;
+      try {
+        final fbUsers = await FirebaseSyncService.instance.fetchCollection('users');
+        if (fbUsers.isNotEmpty) {
+          final box = ObjectBoxService.instance.userBox;
+          final allLocal = box.getAll();
+          for (var uMap in fbUsers) {
+            final u = AppUser.fromJson(uMap);
+            final existing = allLocal.where((x) => x.name == u.name).firstOrNull;
+            if (existing != null) {
+              u.id = existing.id;
+            } else {
+              u.id = 0;
+            }
+            box.put(u);
           }
-          box.put(u);
+          debugPrint('SyncService [Cloud]: Synced ${fbUsers.length} users.');
+          notifyListeners(); // Notify early so Login screen shows users
         }
-        debugPrint('SyncService [Cloud]: Synced ${fbUsers.length} users.');
+      } catch (e) {
+        debugPrint('SyncService [Cloud]: Error syncing users: $e');
       }
 
       // 2. Pull Medicines/Inventory
-      final fbMeds =
-          await FirebaseSyncService.instance.fetchCollection('medicines');
-      if (fbMeds.isNotEmpty) {
-        final box = ObjectBoxService.instance.medicineBox;
-        final allLocal = box.getAll();
-        for (var mMap in fbMeds) {
-          final m = Medicine.fromJson(mMap);
-          // Natural key match
-          final existing = allLocal.where((x) {
-            final bcMatch = x.barcode.isNotEmpty && x.barcode == m.barcode;
-            final nameMatch = x.name.toLowerCase() == m.name.toLowerCase();
-            return bcMatch || nameMatch;
-          }).firstOrNull;
+      try {
+        final fbMeds = await FirebaseSyncService.instance.fetchCollection('medicines');
+        if (fbMeds.isNotEmpty) {
+          final box = ObjectBoxService.instance.medicineBox;
+          final allLocal = box.getAll();
+          for (var mMap in fbMeds) {
+            final m = Medicine.fromJson(mMap);
+            final existing = allLocal.where((x) {
+              final bcMatch = x.barcode.isNotEmpty && x.barcode == m.barcode;
+              final nameMatch = x.name.toLowerCase() == m.name.toLowerCase();
+              return bcMatch || nameMatch;
+            }).firstOrNull;
 
-          if (existing != null) {
-            m.id = existing.id;
-          } else {
-            m.id = 0;
+            if (existing != null) {
+              m.id = existing.id;
+            } else {
+              m.id = 0;
+            }
+            box.put(m);
           }
-          box.put(m);
+          debugPrint('SyncService [Cloud]: Synced ${fbMeds.length} medicines.');
         }
-        debugPrint('SyncService [Cloud]: Synced ${fbMeds.length} medicines.');
+      } catch (e) {
+        debugPrint('SyncService [Cloud]: Error syncing medicines: $e');
       }
 
       // 3. Pull Patients
-      final fbPatients =
-          await FirebaseSyncService.instance.fetchCollection('patients');
-      if (fbPatients.isNotEmpty) {
-        final box = ObjectBoxService.instance.patientBox;
-        final allLocal = box.getAll();
-        for (var pMap in fbPatients) {
-          final p = Patient.fromJson(pMap);
-          final existing = allLocal.where((x) => x.uhid == p.uhid).firstOrNull;
-          if (existing != null) {
-            p.id = existing.id;
-          } else {
-            p.id = 0;
+      try {
+        final fbPatients = await FirebaseSyncService.instance.fetchCollection('patients');
+        if (fbPatients.isNotEmpty) {
+          final box = ObjectBoxService.instance.patientBox;
+          final allLocal = box.getAll();
+          for (var pMap in fbPatients) {
+            final p = Patient.fromJson(pMap);
+            final existing = allLocal.where((x) => x.uhid == p.uhid).firstOrNull;
+            if (existing != null) {
+              p.id = existing.id;
+            } else {
+              p.id = 0;
+            }
+            box.put(p);
           }
-          box.put(p);
+          debugPrint('SyncService [Cloud]: Synced ${fbPatients.length} patients.');
         }
-        debugPrint('SyncService [Cloud]: Synced ${fbPatients.length} patients.');
+      } catch (e) {
+        debugPrint('SyncService [Cloud]: Error syncing patients: $e');
       }
 
-      // 4. Pull Recent Sales
-      final fbSales =
-          await FirebaseSyncService.instance.fetchCollection('sales');
-      if (fbSales.isNotEmpty) {
-        final box = ObjectBoxService.instance.saleBox;
-        final allLocal = box.getAll();
-        for (var sMap in fbSales) {
-          final s = Sale.fromJson(sMap);
-          final existing = allLocal
-              .where((x) => x.invoiceNo == s.invoiceNo)
-              .firstOrNull;
-          if (existing != null) {
-            s.id = existing.id;
-          } else {
-            s.id = 0;
+      // 4. Pull Doctors
+      try {
+        final fbDoctors = await FirebaseSyncService.instance.fetchCollection('doctors');
+        if (fbDoctors.isNotEmpty) {
+          final box = ObjectBoxService.instance.doctorBox;
+          final allLocal = box.getAll();
+          for (var dMap in fbDoctors) {
+            final d = Doctor.fromJson(dMap);
+            final existing = allLocal.where((x) => x.name.toLowerCase() == d.name.toLowerCase()).firstOrNull;
+            if (existing != null) {
+              d.id = existing.id;
+            } else {
+              d.id = 0;
+            }
+            box.put(d);
           }
-          box.put(s);
+          debugPrint('SyncService [Cloud]: Synced ${fbDoctors.length} doctors.');
         }
-        debugPrint('SyncService [Cloud]: Synced ${fbSales.length} sales.');
+      } catch (e) {
+        debugPrint('SyncService [Cloud]: Error syncing doctors: $e');
       }
 
-      // 5. Pull Prescriptions
-      final fbScripts =
-          await FirebaseSyncService.instance.fetchCollection('prescriptions');
-      if (fbScripts.isNotEmpty) {
-        final box = ObjectBoxService.instance.prescriptionBox;
-        final allLocal = box.getAll();
-        for (var scMap in fbScripts) {
-          final sc = Prescription.fromJson(scMap);
-          // Match by composite key if needed, or unique fields
-          final existing = allLocal
-              .where((x) =>
-                  x.patientName == sc.patientName && x.createdAt == sc.createdAt)
-              .firstOrNull;
-          if (existing != null) {
-            sc.id = existing.id;
-          } else {
-            sc.id = 0;
+      // 5. Pull Appointments
+      try {
+        final fbAppts = await FirebaseSyncService.instance.fetchCollection('appointments');
+        if (fbAppts.isNotEmpty) {
+          final box = ObjectBoxService.instance.appointmentBox;
+          final allLocal = box.getAll();
+          for (var aMap in fbAppts) {
+            final a = Appointment.fromJson(aMap);
+            final existing = allLocal.where((x) => x.scheduledAt == a.scheduledAt && x.patientName == a.patientName).firstOrNull;
+            if (existing != null) {
+              a.id = existing.id;
+            } else {
+              a.id = 0;
+            }
+            box.put(a);
           }
-          box.put(sc);
+          debugPrint('SyncService [Cloud]: Synced ${fbAppts.length} appointments.');
         }
-        debugPrint(
-            'SyncService [Cloud]: Synced ${fbScripts.length} prescriptions.');
+      } catch (e) {
+        debugPrint('SyncService [Cloud]: Error syncing appointments: $e');
       }
+
+      // 6. Pull Recent Sales
+      try {
+        final fbSales = await FirebaseSyncService.instance.fetchCollection('sales');
+        if (fbSales.isNotEmpty) {
+          final box = ObjectBoxService.instance.saleBox;
+          final allLocal = box.getAll();
+          for (var sMap in fbSales) {
+            final s = Sale.fromJson(sMap);
+            final existing = allLocal.where((x) => x.invoiceNo == s.invoiceNo).firstOrNull;
+            if (existing != null) {
+              s.id = existing.id;
+            } else {
+              s.id = 0;
+            }
+            box.put(s);
+          }
+          debugPrint('SyncService [Cloud]: Synced ${fbSales.length} sales.');
+        }
+      } catch (e) {
+        debugPrint('SyncService [Cloud]: Error syncing sales: $e');
+      }
+
+      // 7. Pull Prescriptions
+      try {
+        final fbScripts = await FirebaseSyncService.instance.fetchCollection('prescriptions');
+        if (fbScripts.isNotEmpty) {
+          final box = ObjectBoxService.instance.prescriptionBox;
+          final allLocal = box.getAll();
+          for (var scMap in fbScripts) {
+            final sc = Prescription.fromJson(scMap);
+            final existing = allLocal.where((x) => x.patientName == sc.patientName && x.createdAt == sc.createdAt).firstOrNull;
+            if (existing != null) {
+              sc.id = existing.id;
+            } else {
+              sc.id = 0;
+            }
+            box.put(sc);
+          }
+          debugPrint('SyncService [Cloud]: Synced ${fbScripts.length} prescriptions.');
+        }
+      } catch (e) {
+        debugPrint('SyncService [Cloud]: Error syncing prescriptions: $e');
+      }
+
       debugPrint('SyncService: syncAllFromCloud completed.');
+      notifyListeners();
     } catch (e) {
-      debugPrint('SyncService: syncAllFromCloud error - $e');
+      debugPrint('SyncService: syncAllFromCloud global error - $e');
     }
   }
 

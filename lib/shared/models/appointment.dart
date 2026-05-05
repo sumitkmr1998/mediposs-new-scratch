@@ -1,4 +1,5 @@
 import 'package:objectbox/objectbox.dart';
+import '../utils/date_helper.dart';
 
 // Status constants
 const String kStatusWaiting = 'waiting';
@@ -94,13 +95,13 @@ class Appointment {
         status: json['status'] ?? kStatusWaiting,
         consultationFee: (json['consultationFee'] as num?)?.toDouble() ?? 0,
         notes: json['notes'] ?? '',
-        scheduledAt: DateTime.tryParse(json['scheduledAt'] ?? '') ?? DateTime.now(),
-        createdAt: DateTime.tryParse(json['createdAt'] ?? ''),
+        scheduledAt: DateHelper.parseDateTime(json['scheduledAt']) ?? DateTime.now(),
+        createdAt: DateHelper.parseDateTime(json['createdAt']),
         isWalkIn: json['isWalkIn'] ?? true,
         consultationBilled: json['consultationBilled'] ?? false,
         paymentMethod: json['paymentMethod'] ?? 'cash',
       )
-        ..calledAt = json['calledAt'] != null ? DateTime.tryParse(json['calledAt']) : null
-        ..pharmacyAt = json['pharmacyAt'] != null ? DateTime.tryParse(json['pharmacyAt']) : null
-        ..completedAt = json['completedAt'] != null ? DateTime.tryParse(json['completedAt']) : null;
+        ..calledAt = DateHelper.parseDateTime(json['calledAt'])
+        ..pharmacyAt = DateHelper.parseDateTime(json['pharmacyAt'])
+        ..completedAt = DateHelper.parseDateTime(json['completedAt']);
 }

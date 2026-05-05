@@ -21,6 +21,9 @@ class FirebaseSyncService {
   FirebaseFirestore get _db => FirebaseFirestore.instance;
   bool _isInitialized = false;
 
+  String? _idToken;
+  DateTime? _tokenExpiry;
+
   FirebaseSyncService._();
 
   static Future<void> init() async {
@@ -61,6 +64,48 @@ class FirebaseSyncService {
     }
   }
 
+  DateTime? _lastAuthAttempt;
+  bool _authDisabled = false;
+
+  Future<String?> _getIdToken() async {
+    if (_idToken != null && _tokenExpiry != null && _tokenExpiry!.isAfter(DateTime.now())) {
+      return _idToken;
+    }
+    
+    // Fallback if auth is disabled in console to avoid spamming 400 errors
+    if (_authDisabled && _lastAuthAttempt != null && DateTime.now().difference(_lastAuthAttempt!).inMinutes < 10) {
+      return null;
+    }
+
+    _lastAuthAttempt = DateTime.now();
+    try {
+      final apiKey = DefaultFirebaseOptions.windows.apiKey;
+      final url = Uri.parse('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$apiKey');
+      
+      final res = await http.post(url, body: jsonEncode({'returnSecureToken': true}));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        _idToken = data['idToken'];
+        final expiresIn = int.tryParse(data['expiresIn'] ?? '3600') ?? 3600;
+        _tokenExpiry = DateTime.now().add(Duration(seconds: expiresIn - 60));
+        _authDisabled = false;
+        debugPrint('Firebase [Auth]: Anonymous login successful.');
+        return _idToken;
+      } else {
+        final err = res.body;
+        if (err.contains('CONFIGURATION_NOT_FOUND')) {
+          _authDisabled = true;
+          debugPrint('Firebase [Auth]: Anonymous login is NOT enabled in your Firebase Console. Please enable it under Authentication -> Sign-in method.');
+        } else {
+          debugPrint('Firebase [Auth]: Login failed (${res.statusCode}): $err');
+        }
+      }
+    } catch (e) {
+      debugPrint('Firebase [Auth]: Error: $e');
+    }
+    return null;
+  }
+
   /// Lightweight REST fallback for Windows to avoid crashing the Hub with native SDK
   Future<void> _updateHubStatusREST({
     required bool isOnline,
@@ -68,6 +113,7 @@ class FirebaseSyncService {
     int? port,
   }) async {
     try {
+      final token = await _getIdToken();
       final projectId = DefaultFirebaseOptions.windows.projectId;
       final apiKey = DefaultFirebaseOptions.windows.apiKey;
       final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/settings/hub_status?key=$apiKey');
@@ -81,7 +127,11 @@ class FirebaseSyncService {
         }
       });
 
-      final res = await http.patch(url, body: body);
+      final res = await http.patch(
+        url, 
+        headers: token != null ? {'Authorization': 'Bearer $token'} : {},
+        body: body
+      );
       if (res.statusCode == 200) {
         debugPrint('Firebase [REST]: Hub status updated successfully.');
       } else {
@@ -144,7 +194,12 @@ class FirebaseSyncService {
         }
       });
 
-      final res = await http.post(url, body: body);
+      final token = await _getIdToken();
+      final res = await http.post(
+        url, 
+        headers: token != null ? {'Authorization': 'Bearer $token'} : {},
+        body: body
+      );
       if (res.statusCode == 200 || res.statusCode == 201) {
         debugPrint('Firebase [REST]: Delta pushed successfully.');
         return true;
@@ -161,7 +216,7 @@ class FirebaseSyncService {
   Map<String, dynamic> _convertToFirestoreValue(dynamic value) {
     if (value == null) return {'nullValue': null};
     if (value is String) return {'stringValue': value};
-    if (value is int) return {'integerValue': value};
+    if (value is int) return {'integerValue': value.toString()};
     if (value is double) return {'doubleValue': value};
     if (value is bool) return {'booleanValue': value};
     if (value is Map<String, dynamic>) {
@@ -317,18 +372,29 @@ class FirebaseSyncService {
     try {
       final projectId = DefaultFirebaseOptions.windows.projectId;
       final apiKey = DefaultFirebaseOptions.windows.apiKey;
-      
-      String docId = data['id']?.toString() ?? data['barcode']?.toString() ?? 'unknown';
-      if (entity == 'sales' || entity == 'sale') {
-        docId = data['invoiceNo']?.toString() ?? docId;
-      } else if (entity == 'patients' || entity == 'patient') {
-        docId = data['uhid']?.toString() ?? docId;
-      } else if (entity == 'users' || entity == 'user') {
-        docId = data['name']?.toString() ?? docId;
+
+      // Prioritize global unique keys over local ObjectBox IDs to prevent collisions between hubs
+      String? rawId;
+      if (entity.contains('medicine')) {
+        rawId = data['barcode']?.toString();
+        if (rawId == null || rawId.isEmpty) rawId = data['id']?.toString();
+      } else if (entity.contains('sale')) {
+        rawId = data['invoiceNo']?.toString();
+        if (rawId == null || rawId.isEmpty) rawId = data['id']?.toString();
+      } else if (entity.contains('patient')) {
+        rawId = data['uhid']?.toString();
+        if (rawId == null || rawId.isEmpty) rawId = data['id']?.toString();
+      } else if (entity.contains('user') || entity.contains('doctor')) {
+        rawId = data['name']?.toString();
+      } else {
+        rawId = data['id']?.toString();
       }
 
-      // Sanitize docId for REST (replace slashes which break Firestore REST URLs)
-      docId = docId.replaceAll('/', '_').replaceAll('\\', '_');
+      String docId = rawId?.trim() ?? 'unknown';
+      if (docId.isEmpty) docId = 'unknown_${DateTime.now().millisecondsSinceEpoch}';
+
+      // Sanitize docId for REST (replace characters that break URLs)
+      docId = docId.replaceAll('/', '_').replaceAll('\\', '_').replaceAll(' ', '_');
 
       final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/$entity/$docId?key=$apiKey');
       
@@ -340,7 +406,12 @@ class FirebaseSyncService {
         }
       });
 
-      final res = await http.patch(url, body: body);
+      final token = await _getIdToken();
+      final res = await http.patch(
+        url, 
+        headers: token != null ? {'Authorization': 'Bearer $token'} : {},
+        body: body
+      );
       if (res.statusCode != 200) {
         debugPrint('Firebase [REST] Broadcast FAIL ($entity): ${res.statusCode} - ${res.body}');
       }
@@ -349,16 +420,96 @@ class FirebaseSyncService {
     }
   }
 
-  /// Companion-side: Pulls an entire collection from Firebase if Hub is offline.
-  Future<List<Map<String, dynamic>>> fetchCollection(String entity) async {
-    if (!_isInitialized) return [];
+  /// Hub-side: Deletes a document from Firebase REST.
+  Future<void> deleteDocument(String entity, String docId) async {
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      try {
+        final projectId = DefaultFirebaseOptions.windows.projectId;
+        final apiKey = DefaultFirebaseOptions.windows.apiKey;
+        // Sanitize docId
+        final sanitizedId = docId.replaceAll('/', '_').replaceAll('\\', '_').replaceAll(' ', '_');
+        final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/$entity/$sanitizedId?key=$apiKey');
+        
+        final token = await _getIdToken();
+        final res = await http.delete(
+          url,
+          headers: token != null ? {'Authorization': 'Bearer $token'} : {},
+        );
+        if (res.statusCode == 200 || res.statusCode == 204) {
+          debugPrint('Firebase [REST]: Document $entity/$sanitizedId deleted successfully.');
+        }
+      } catch (e) {
+        debugPrint('Firebase [REST]: Error deleting document: $e');
+      }
+      return;
+    }
+
+    if (!_isInitialized) return;
     try {
-      final snapshot = await _db.collection(entity).where('syncedFrom', isEqualTo: 'hub').get();
-      return snapshot.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList();
+      await _db.collection(entity).doc(docId).delete();
     } catch (e) {
-      debugPrint('Firebase fetchCollection failed: $e');
+      debugPrint('Firebase deleteDocument error: $e');
+    }
+  }
+
+  /// Pulls an entire collection from Firebase.
+  /// Hub-side: Uses REST to see what needs to be pruned.
+  /// Companion-side: Uses Native SDK.
+  Future<List<Map<String, dynamic>>> fetchCollection(String entity) async {
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      return await _fetchCollectionREST(entity);
+    }
+
+    if (!_isInitialized) {
+      debugPrint('Firebase: fetchCollection aborted (not initialized)');
       return [];
     }
+    try {
+      debugPrint('Firebase: Fetching collection "$entity" (Cloud Mode)...');
+      // Primary: Only items synced from Hub
+      var snapshot = await _db.collection(entity).where('syncedFrom', isEqualTo: 'hub').get();
+      
+      // Fallback: If no hub-synced items found, try fetching entire collection
+      if (snapshot.docs.isEmpty) {
+        debugPrint('Firebase: No "hub-synced" items found in "$entity", trying full fetch...');
+        snapshot = await _db.collection(entity).get();
+      }
+
+      debugPrint('Firebase: Found ${snapshot.docs.length} documents in "$entity".');
+      return snapshot.docs.map((doc) => {
+        ...doc.data(),
+        'cloudId': doc.id, // Store doc.id separately to avoid overwriting Hub's local id
+      }).toList();
+    } catch (e) {
+      debugPrint('Firebase fetchCollection failed for "$entity": $e');
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchCollectionREST(String entity) async {
+    try {
+      final projectId = DefaultFirebaseOptions.windows.projectId;
+      final apiKey = DefaultFirebaseOptions.windows.apiKey;
+      final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/$entity?key=$apiKey');
+      
+      final res = await http.get(url);
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final List docs = data['documents'] ?? [];
+        return docs.map((doc) {
+          final fields = doc['fields'] as Map<String, dynamic>? ?? {};
+          final name = doc['name'] as String;
+          final docId = name.split('/').last;
+          return {
+            ..._convertFromFirestoreMap(fields),
+            'cloudId': docId,
+          };
+        }).toList();
+      }
+    } catch (e) {
+      debugPrint('Firebase [_fetchCollectionREST] Error: $e');
+    }
+    return [];
   }
 
   /// Companion-side: Listens for global updates from the Hub.

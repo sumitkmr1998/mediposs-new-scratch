@@ -1,4 +1,5 @@
 import 'package:objectbox/objectbox.dart';
+import '../utils/date_helper.dart';
 
 @Entity()
 class Sale {
@@ -94,8 +95,8 @@ class Sale {
         cashAmount: (json['cashAmount'] as num?)?.toDouble() ?? 0,
         upiAmount: (json['upiAmount'] as num?)?.toDouble() ?? 0,
         cardAmount: (json['cardAmount'] as num?)?.toDouble() ?? 0,
-        createdAt: DateTime.tryParse(json['createdAt'] ?? ''),
-        updatedAt: DateTime.tryParse(json['updatedAt'] ?? ''),
+        createdAt: DateHelper.parseDateTime(json['createdAt']),
+        updatedAt: DateHelper.parseDateTime(json['updatedAt']),
         synced: json['synced'] ?? false,
         isReturn: json['isReturn'] ?? false,
         itemsJson: json['itemsJson'] ?? '[]',

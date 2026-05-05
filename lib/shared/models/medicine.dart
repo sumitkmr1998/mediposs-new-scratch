@@ -1,4 +1,5 @@
 import 'package:objectbox/objectbox.dart';
+import '../utils/date_helper.dart';
 
 @Entity()
 class Medicine {
@@ -76,8 +77,8 @@ class Medicine {
       mainStock: json['mainStock'] ?? 0,
       storeStock: json['storeStock'] ?? 0,
       lowStockThreshold: json['lowStockThreshold'] ?? 10,
-      createdAt: DateTime.tryParse(json['createdAt'] ?? ''),
-      updatedAt: DateTime.tryParse(json['updatedAt'] ?? ''),
+      createdAt: DateHelper.parseDateTime(json['createdAt']),
+      updatedAt: DateHelper.parseDateTime(json['updatedAt']),
       synced: json['synced'] ?? false,
     );
     if (json['batches'] != null) {
@@ -163,7 +164,7 @@ class MedicineBatch {
   factory MedicineBatch.fromJson(Map<String, dynamic> json) => MedicineBatch(
         id: json['id'] ?? 0,
         batchNo: json['batchNo'],
-        expiryDate: DateTime.tryParse(json['expiryDate'] ?? '') ?? DateTime.now(),
+        expiryDate: DateHelper.parseDateTime(json['expiryDate']) ?? DateTime.now(),
         mainStock: json['mainStock'] ?? 0,
         storeStock: json['storeStock'] ?? 0,
       );

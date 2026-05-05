@@ -93,6 +93,34 @@ class DashboardAndroid extends StatelessWidget {
               ),
             ),
             actions: [
+              Consumer<SyncService>(
+                builder: (context, sync, _) {
+                  if (!sync.isCloudMode) return const SizedBox.shrink();
+                  return IconButton(
+                    tooltip: 'Force Cloud Sync',
+                    icon: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.cloud_download_rounded, color: AppTheme.primary, size: 20),
+                    ),
+                    onPressed: () async {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Starting cloud sync...'), duration: Duration(seconds: 1)),
+                      );
+                      await sync.syncAllFromCloud();
+                      context.read<InventoryProvider>().load();
+                      context.read<SalesProvider>().load();
+                      context.read<OpdProvider>().loadAll();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Cloud sync completed.')),
+                      );
+                    },
+                  );
+                },
+              ),
               Consumer<WebSocketService>(
                 builder: (context, wsvc, _) {
                   return IconButton(
