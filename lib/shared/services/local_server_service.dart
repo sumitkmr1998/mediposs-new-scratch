@@ -1619,6 +1619,11 @@ class LocalServerService {
         await FirebaseSyncService.instance.broadcastUpdate('patients', p.toJson());
       } else if (entity == 'medicine') {
         final m = Medicine.fromJson(data);
+        m.id = 0; // Force ID 0 for Hub (ObjectBox IDs are local)
+        for (var b in m.batches) {
+          b.id = 0; // Force Batch IDs to 0 as well
+        }
+
         // Deduplicate by name or barcode
         Condition<Medicine> cond = Medicine_.name.equals(m.name);
         if (m.barcode.isNotEmpty) {
@@ -1631,16 +1636,35 @@ class LocalServerService {
         }
         ObjectBoxService.instance.medicineBox.put(m);
         broadcast({'event': 'medicines_updated'});
+        broadcast({'event': 'sync_received'});
         _incomingDataController.add('inventory');
-          broadcast({'event': 'sync_received'});
-          _incomingDataController.add('appointments');
+      } else if (entity == 'appointment' && action == 'create') {
+        final appt = Appointment.fromJson(data);
+        appt.id = 0; // Force ID 0
+        
+        // Deduplicate by patient name and date
+        final existing = ObjectBoxService.instance.appointmentBox.query(
+          Appointment_.patientName.equals(appt.patientName).and(
+          Appointment_.scheduledAt.equals(appt.scheduledAt.millisecondsSinceEpoch))
+        ).build().findFirst();
+        
+        if (existing != null) appt.id = existing.id;
+        ObjectBoxService.instance.appointmentBox.put(appt);
+        
+        broadcast({'event': 'appointments_updated'});
+        broadcast({'event': 'sync_received'});
+        _incomingDataController.add('appointments');
+        
+        // Mirror to cloud
+        await FirebaseSyncService.instance.broadcastUpdate('appointments', appt.toJson());
       } else if (entity == 'prescription' && action == 'create') {
         final sc = Prescription.fromJson(data);
+        sc.id = 0; // Reset ID for Hub
         final existing = ObjectBoxService.instance.prescriptionBox
             .query(Prescription_.patientName.equals(sc.patientName))
             .build()
             .find()
-            .where((x) => x.createdAt == sc.createdAt)
+            .where((x) => x.createdAt.millisecondsSinceEpoch == sc.createdAt.millisecondsSinceEpoch)
             .firstOrNull;
         if (existing != null) sc.id = existing.id;
         ObjectBoxService.instance.prescriptionBox.put(sc);

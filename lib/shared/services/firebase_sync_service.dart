@@ -158,39 +158,52 @@ class FirebaseSyncService {
     }
   }
 
+  Map<String, dynamic> _convertToFirestoreValue(dynamic value) {
+    if (value == null) return {'nullValue': null};
+    if (value is String) return {'stringValue': value};
+    if (value is int) return {'integerValue': value};
+    if (value is double) return {'doubleValue': value};
+    if (value is bool) return {'booleanValue': value};
+    if (value is Map<String, dynamic>) {
+      return {'mapValue': {'fields': _convertToFirestoreMap(value)}};
+    }
+    if (value is List) {
+      return {
+        'arrayValue': {
+          'values': value.map((e) => _convertToFirestoreValue(e)).toList()
+        }
+      };
+    }
+    // Fallback for DateTime or other types
+    return {'stringValue': value.toString()};
+  }
+
   Map<String, dynamic> _convertToFirestoreMap(Map<String, dynamic> data) {
     final Map<String, dynamic> firestoreMap = {};
     data.forEach((key, value) {
-      if (value is String) {
-        firestoreMap[key] = {'stringValue': value};
-      } else if (value is int) {
-        firestoreMap[key] = {'integerValue': value};
-      } else if (value is double) {
-        firestoreMap[key] = {'doubleValue': value};
-      } else if (value is bool) {
-        firestoreMap[key] = {'booleanValue': value};
-      } else if (value is Map<String, dynamic>) {
-        firestoreMap[key] = {'mapValue': {'fields': _convertToFirestoreMap(value)}};
-      }
-      // Add more types if needed
+      firestoreMap[key] = _convertToFirestoreValue(value);
     });
     return firestoreMap;
+  }
+
+  dynamic _convertFromFirestoreValue(Map<String, dynamic> value) {
+    if (value.containsKey('stringValue')) return value['stringValue'];
+    if (value.containsKey('integerValue')) return int.tryParse(value['integerValue'].toString()) ?? 0;
+    if (value.containsKey('doubleValue')) return (value['doubleValue'] as num).toDouble();
+    if (value.containsKey('booleanValue')) return value['booleanValue'];
+    if (value.containsKey('nullValue')) return null;
+    if (value.containsKey('mapValue')) return _convertFromFirestoreMap(value['mapValue']['fields'] ?? {});
+    if (value.containsKey('arrayValue')) {
+      final list = value['arrayValue']['values'] as List? ?? [];
+      return list.map((e) => _convertFromFirestoreValue(e as Map<String, dynamic>)).toList();
+    }
+    return null;
   }
 
   Map<String, dynamic> _convertFromFirestoreMap(Map<String, dynamic> fields) {
     final Map<String, dynamic> data = {};
     fields.forEach((key, value) {
-      if (value.containsKey('stringValue')) {
-        data[key] = value['stringValue'];
-      } else if (value.containsKey('integerValue')) {
-        data[key] = int.tryParse(value['integerValue'].toString()) ?? 0;
-      } else if (value.containsKey('doubleValue')) {
-        data[key] = (value['doubleValue'] as num).toDouble();
-      } else if (value.containsKey('booleanValue')) {
-        data[key] = value['booleanValue'];
-      } else if (value.containsKey('mapValue')) {
-        data[key] = _convertFromFirestoreMap(value['mapValue']['fields'] ?? {});
-      }
+      data[key] = _convertFromFirestoreValue(value as Map<String, dynamic>);
     });
     return data;
   }
@@ -262,7 +275,9 @@ class FirebaseSyncService {
         final apiKey = DefaultFirebaseOptions.windows.apiKey;
         final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/sync_queue/$docId?key=$apiKey');
         await http.delete(url);
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('Firebase [REST] MarkAsProcessed Error: $e');
+      }
       return;
     }
 
@@ -312,6 +327,9 @@ class FirebaseSyncService {
         docId = data['name']?.toString() ?? docId;
       }
 
+      // Sanitize docId for REST (replace slashes which break Firestore REST URLs)
+      docId = docId.replaceAll('/', '_').replaceAll('\\', '_');
+
       final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/$entity/$docId?key=$apiKey');
       
       final body = jsonEncode({
@@ -322,8 +340,13 @@ class FirebaseSyncService {
         }
       });
 
-      await http.patch(url, body: body);
-    } catch (_) {}
+      final res = await http.patch(url, body: body);
+      if (res.statusCode != 200) {
+        debugPrint('Firebase [REST] Broadcast FAIL ($entity): ${res.statusCode} - ${res.body}');
+      }
+    } catch (e) {
+      debugPrint('Firebase [REST] Broadcast Error ($entity): $e');
+    }
   }
 
   /// Companion-side: Pulls an entire collection from Firebase if Hub is offline.
