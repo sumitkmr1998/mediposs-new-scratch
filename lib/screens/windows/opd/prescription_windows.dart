@@ -1314,6 +1314,7 @@ class _MedicineAdderState extends State<_MedicineAdder> {
   @override
   Widget build(BuildContext context) {
     final inv = context.watch<InventoryProvider>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Column(
       children: [
@@ -1345,7 +1346,7 @@ class _MedicineAdderState extends State<_MedicineAdder> {
                       hintStyle: TextStyle(
                           color: context.textMutedColor, fontSize: 13),
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: isDark ? AppTheme.darkBg : Colors.white,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide(color: context.borderColor),
@@ -1395,7 +1396,7 @@ class _MedicineAdderState extends State<_MedicineAdder> {
                                           : FontWeight.normal,
                                       color: isHovered
                                           ? AppTheme.primary
-                                          : Colors.black)),
+                                          : (isDark ? Colors.white : Colors.black))),
                               onTap: () => onSelected(option),
                             );
                           },
@@ -1449,7 +1450,7 @@ class _MedicineAdderState extends State<_MedicineAdder> {
                       hintStyle: TextStyle(
                           color: context.textMutedColor, fontSize: 13),
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: isDark ? AppTheme.darkBg : Colors.white,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide(color: context.borderColor),
@@ -1558,7 +1559,7 @@ class _SmallField extends StatelessWidget {
           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
           decoration: InputDecoration(
             filled: true,
-            fillColor: Colors.white,
+            fillColor: isDark ? AppTheme.darkBg : Colors.white,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(24),
               borderSide: BorderSide(color: context.borderColor),
@@ -1612,7 +1613,7 @@ class _MedicineListItem extends StatelessWidget {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isDark ? AppTheme.darkCard : Colors.white,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: context.borderColor),
             ),

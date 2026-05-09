@@ -18,7 +18,9 @@ import '../../shared/services/sync_service.dart';
 import '../../shared/widgets/app_kpi_card.dart';
 import '../../shared/widgets/app_filter_chip.dart';
 import '../../shared/models/appointment.dart';
-import '../../shared/models/medicine.dart' as model;
+import '../../shared/providers/navigation_provider.dart';
+import '../../shared/services/local_server_service.dart';
+import '../../shared/services/discovery_service.dart'; // Added just in case
 
 class DashboardAndroid extends StatelessWidget {
   const DashboardAndroid({super.key});
@@ -142,6 +144,26 @@ class DashboardAndroid extends StatelessWidget {
                       context,
                       MaterialPageRoute(builder: (_) => ConnectionScreen()),
                     ),
+                  );
+                },
+              ),
+              Consumer<NavigationProvider>(
+                builder: (context, nav, _) {
+                  return IconButton(
+                    tooltip: nav.isBottomNavVisible ? 'Hide Bottom Nav' : 'Show Bottom Nav',
+                    icon: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        nav.isBottomNavVisible ? Icons.expand_more_rounded : Icons.expand_less_rounded,
+                        color: AppTheme.primary,
+                        size: 20,
+                      ),
+                    ),
+                    onPressed: () => nav.toggleBottomNav(),
                   );
                 },
               ),

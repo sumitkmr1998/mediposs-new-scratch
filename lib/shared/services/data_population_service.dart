@@ -153,8 +153,12 @@ class DataPopulationService {
       subtotal += med.sellingPrice * qty;
     }
 
+    final dateStr = '${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}';
+    final timeStr = '${date.hour.toString().padLeft(2, '0')}${date.minute.toString().padLeft(2, '0')}${date.second.toString().padLeft(2, '0')}';
+    final invoiceNo = 'INV-$dateStr-$timeStr';
+
     return Sale(
-      invoiceNo: 'INV-${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}-${_random.nextInt(10000)}',
+      invoiceNo: invoiceNo,
       patientName: 'Customer ${_random.nextInt(1000)}',
       subtotal: subtotal,
       discount: 0,

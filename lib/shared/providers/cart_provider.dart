@@ -251,12 +251,12 @@ class CartProvider extends ChangeNotifier {
     final db = ObjectBoxService.instance;
     final settings = db.settings;
 
-    // Build invoice number: (RET/INV)-YYYYMMDD-NNNN
+    // Build invoice number: (RET/INV)-YYYYMMDD-HHMMSS
     final now = await TimeService.getRobustTime();
-    final count = db.saleBox.count();
     final prefix = _isReturnMode ? 'RET' : 'INV';
-    final invoiceNo =
-        '$prefix-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${(count + 1).toString().padLeft(4, '0')}';
+    final dateStr = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final timeStr = '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+    final invoiceNo = '$prefix-$dateStr-$timeStr';
 
     // Build items (returns have negative quantities inherently when we record them in the DB to keep history straight)
     final saleItems = _items.map(

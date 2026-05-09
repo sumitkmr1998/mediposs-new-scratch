@@ -28,6 +28,8 @@ import '../../shared/providers/prescription_provider.dart';
 import '../../shared/providers/template_provider.dart';
 import '../../shared/widgets/interactive_hover.dart';
 import 'opd/remote_camera_screen_android.dart';
+import 'package:flutter/services.dart';
+import '../../shared/providers/navigation_provider.dart';
 
 class AppShellAndroid extends StatefulWidget {
   const AppShellAndroid({super.key});
@@ -38,6 +40,7 @@ class AppShellAndroid extends StatefulWidget {
 
 class _AppShellAndroidState extends State<AppShellAndroid> {
   int _selectedIndex = 0;
+  DateTime? _lastBackPress;
 
   List<_Dest> _buildDestinations(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -255,6 +258,7 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width > 700;
     final wsvc = context.watch<WebSocketService>();
+    final navProvider = context.watch<NavigationProvider>();
     final dests = _buildDestinations(context);
 
     // Safety check just in case permissions shrunk and index is out of bounds
@@ -264,42 +268,73 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
 
     final currentDestId = dests[_selectedIndex].id;
 
-    return Scaffold(
-      appBar: null,
-      body: isWide
-          ? Row(
-              children: [
-                _SideNav(
-                  selectedIndex: _selectedIndex,
-                  onDestinationSelected: (i) =>
-                      setState(() => _selectedIndex = i),
-                  destinations: dests,
-                  isWindowsHub: Platform.isWindows,
-                  isConnected: wsvc.connected,
-                  onConnectTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => ConnectionScreen())),
-                ),
-                Expanded(child: _screenForId(currentDestId)),
-              ],
-            )
-          : Scaffold(
-              body: _screenForId(currentDestId),
-              bottomNavigationBar: NavigationBar(
-                selectedIndex: _selectedIndex,
-                onDestinationSelected: (i) =>
-                    setState(() => _selectedIndex = i),
-                destinations: dests
-                    .map((d) => NavigationDestination(
-                          icon: Icon(d.icon),
-                          selectedIcon: Icon(d.selectedIcon),
-                          label: d.label,
-                        ))
-                    .toList(),
-              ),
-              floatingActionButton: null,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+
+        // 1. If not on Dashboard, go to Dashboard
+        if (_selectedIndex != 0) {
+          setState(() => _selectedIndex = 0);
+          return;
+        }
+
+        // 2. If on Dashboard, implement double-back-to-exit
+        final now = DateTime.now();
+        if (_lastBackPress == null ||
+            now.difference(_lastBackPress!) > const Duration(seconds: 2)) {
+          _lastBackPress = now;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Swipe back again to exit'),
+              duration: Duration(seconds: 2),
             ),
+          );
+          return;
+        }
+
+        // 3. Exit the app
+        SystemNavigator.pop();
+      },
+      child: Scaffold(
+        appBar: null,
+        body: isWide
+            ? Row(
+                children: [
+                  _SideNav(
+                    selectedIndex: _selectedIndex,
+                    onDestinationSelected: (i) =>
+                        setState(() => _selectedIndex = i),
+                    destinations: dests,
+                    isWindowsHub: Platform.isWindows,
+                    isConnected: wsvc.connected,
+                    onConnectTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => ConnectionScreen())),
+                  ),
+                  Expanded(child: _screenForId(currentDestId)),
+                ],
+              )
+            : Scaffold(
+                body: _screenForId(currentDestId),
+                bottomNavigationBar: navProvider.isBottomNavVisible
+                    ? NavigationBar(
+                        selectedIndex: _selectedIndex,
+                        onDestinationSelected: (i) =>
+                            setState(() => _selectedIndex = i),
+                        destinations: dests
+                            .map((d) => NavigationDestination(
+                                  icon: Icon(d.icon),
+                                  selectedIcon: Icon(d.selectedIcon),
+                                  label: d.label,
+                                ))
+                            .toList(),
+                      )
+                    : null,
+                floatingActionButton: null,
+              ),
+      ),
     );
   }
 }

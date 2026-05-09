@@ -24,6 +24,7 @@ import 'dart:io';
 import 'shared/services/local_server_service.dart';
 import 'shared/services/discovery_service.dart';
 import 'shared/services/global_navigation_service.dart';
+import 'shared/providers/navigation_provider.dart';
 import 'shared/services/sync_queue_service.dart';
 import 'shared/models/patient.dart';
 import 'shared/models/medicine.dart';
@@ -207,6 +208,7 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => NavigationProvider()),
         ChangeNotifierProvider.value(value: authProvider),
         ChangeNotifierProvider.value(value: settingsProvider),
         ChangeNotifierProvider.value(value: inventoryProvider),

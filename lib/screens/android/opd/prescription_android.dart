@@ -960,6 +960,7 @@ class _MedicineAdderState extends State<_MedicineAdder> {
   @override
   Widget build(BuildContext context) {
     final inv = context.watch<InventoryProvider>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Column(
       children: [
@@ -982,7 +983,7 @@ class _MedicineAdderState extends State<_MedicineAdder> {
               hintText: 'Search medicine, Enter to select...',
               hintStyle: TextStyle(color: context.textMutedColor, fontSize: 13),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: isDark ? AppTheme.darkBg : Colors.white,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(24),
                 borderSide: BorderSide(color: context.borderColor),
@@ -1039,7 +1040,7 @@ class _MedicineAdderState extends State<_MedicineAdder> {
                       hintStyle: TextStyle(
                           color: context.textMutedColor, fontSize: 13),
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: isDark ? AppTheme.darkBg : Colors.white,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide(color: context.borderColor),
@@ -1114,6 +1115,7 @@ class _SmallField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1127,7 +1129,7 @@ class _SmallField extends StatelessWidget {
           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
           decoration: InputDecoration(
             filled: true,
-            fillColor: Colors.white,
+            fillColor: isDark ? AppTheme.darkBg : Colors.white,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(24),
               borderSide: BorderSide(color: context.borderColor),
@@ -1181,7 +1183,7 @@ class _MedicineListItem extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isDark ? AppTheme.darkCard : Colors.white,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(color: context.borderColor),
             ),
