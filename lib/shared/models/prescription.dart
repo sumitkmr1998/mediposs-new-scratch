@@ -21,6 +21,7 @@ class Prescription {
   String labTestsJson; // List<String> — test names requested
   String vitalsJson; // {bp, weight, temp, spo2, pulse}
   String imagesJson; // List<String> — paths to attached images
+  String proceduresJson; // List<String> — procedures recommended (e.g. "Pico Laser")
 
   bool dispensed; // Whether pharmacy has fulfilled this prescription
 
@@ -44,6 +45,7 @@ class Prescription {
     this.labTestsJson = '[]',
     this.vitalsJson = '{}',
     this.imagesJson = '[]',
+    this.proceduresJson = '[]',
     this.dispensed = false,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -64,6 +66,7 @@ class Prescription {
         'labTestsJson': labTestsJson,
         'vitalsJson': vitalsJson,
         'imagesJson': imagesJson,
+        'proceduresJson': proceduresJson,
         'dispensed': dispensed,
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
@@ -83,6 +86,7 @@ class Prescription {
         labTestsJson: json['labTestsJson'] ?? '[]',
         vitalsJson: json['vitalsJson'] ?? '{}',
         imagesJson: json['imagesJson'] ?? '[]',
+        proceduresJson: json['proceduresJson'] ?? '[]',
         dispensed: json['dispensed'] ?? false,
         createdAt: DateHelper.parseDateTime(json['createdAt']),
         updatedAt: DateHelper.parseDateTime(json['updatedAt']),

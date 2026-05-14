@@ -24,4 +24,13 @@ class PatientImage {
     DateTime? createdAt,
   })  : date = date ?? DateTime.now(),
         createdAt = createdAt ?? DateTime.now();
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'patientId': patientId,
+        'imagePath': imagePath,
+        'category': category,
+        'date': date.toIso8601String(),
+        'createdAt': createdAt.toIso8601String(),
+      };
 }

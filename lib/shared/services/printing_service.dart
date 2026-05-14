@@ -159,7 +159,10 @@ class PrintingService {
                       children: [
                         pw.Expanded(
                             flex: 3,
-                            child: pw.Text(item.medicineName,
+                            child: pw.Text(
+                                item.isProcedure
+                                    ? '[P] ${item.medicineName}'
+                                    : item.medicineName,
                                 style: const pw.TextStyle(fontSize: 10))),
                         pw.Expanded(
                             flex: 1,
@@ -387,11 +390,13 @@ class PrintingService {
     final saleItems = decoded.map((j) => SaleItem.fromJson(j)).toList();
     
     // Map to InvoiceItem
-    final invoiceItems = saleItems.map((si) => InvoiceItem(
-      name: si.medicineName,
-      quantity: si.qty.abs(),
-      rate: si.unitPrice,
-    )).toList();
+    final invoiceItems = saleItems
+        .map((si) => InvoiceItem(
+              name: si.isProcedure ? '[P] ${si.medicineName}' : si.medicineName,
+              quantity: si.qty.abs(),
+              rate: si.unitPrice,
+            ))
+        .toList();
 
     // Try to find a related prescription for diagnosis/doctor
     String diagnosis = 'General Consultation';

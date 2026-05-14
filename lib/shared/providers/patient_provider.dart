@@ -44,7 +44,9 @@ class PatientProvider extends ChangeNotifier {
     final now = DateTime.now();
     final dateStr = DateFormat('ddMMyy').format(now);
     final count = ObjectBoxService.instance.patientBox.count() + 1;
-    return 'OPD-$dateStr-${count.toString().padLeft(4, '0')}';
+    // Add a small random suffix to prevent collisions between Android and Hub
+    final random = (DateTime.now().microsecondsSinceEpoch % 1000).toString().padLeft(3, '0');
+    return 'OPD-$dateStr-${count.toString().padLeft(3, '0')}-$random';
   }
 
   Patient savePatient(Patient p, [SyncService? syncService]) {
@@ -103,6 +105,24 @@ class PatientProvider extends ChangeNotifier {
     return _patients.where((p) => p.id == id).firstOrNull;
   }
 
+  Patient? getByUhid(String uhid) {
+    if (uhid.isEmpty) return null;
+    return _patients.where((p) => p.uhid == uhid).firstOrNull;
+  }
+
+  Patient? getByInfo(String name, String phone) {
+    if (name.isEmpty) return null;
+    // Normalize for comparison
+    final n = name.trim().toLowerCase();
+    final p = phone.trim();
+
+    return _patients.where((pt) {
+      final nameMatch = pt.name.trim().toLowerCase() == n;
+      final phoneMatch = p.isNotEmpty && pt.phone.trim() == p;
+      return nameMatch && (p.isEmpty || phoneMatch);
+    }).firstOrNull;
+  }
+
   // --- Photograph Management ---
 
   List<PatientImage> getPatientPhotos(int patientId) {
@@ -113,12 +133,27 @@ class PatientProvider extends ChangeNotifier {
         .find();
   }
 
-  Future<void> savePatientPhoto(
+  List<PatientImage> getPatientPhotosRobust(Patient patient) {
+    if (patient.id == 0 && patient.name.isEmpty) return [];
+
+    // Photos are only linked by patientId currently.
+    // To be robust, we fetch by ID but we should ideally have a way to verify.
+    // For now, we fetch by ID but we can also search for photos that might have been synced with wrong ID?
+    // But PatientImage doesn't have patientName.
+    
+    // So for photos, we have to rely on ID or we add patientName to PatientImage.
+    // Given the current situation, let's just use the ID but keep the method for future robustness.
+    return getPatientPhotos(patient.id);
+  }
+
+  Future<void> savePatientPhotos(
     int patientId,
-    String sourcePath, {
+    List<String> sourcePaths, {
     String category = 'General',
     SyncService? syncService,
   }) async {
+    if (sourcePaths.isEmpty) return;
+
     try {
       final appDocDir = await getApplicationDocumentsDirectory();
       final photoDir = Directory('${appDocDir.path}/patient_photos/$patientId');
@@ -126,38 +161,47 @@ class PatientProvider extends ChangeNotifier {
         await photoDir.create(recursive: true);
       }
 
-      final fileName =
-          '${DateTime.now().millisecondsSinceEpoch}_${sourcePath.replaceAll('\\', '/').split('/').last}';
-      final savedPath = '${photoDir.path}/$fileName';
+      for (var sourcePath in sourcePaths) {
+        final fileName =
+            '${DateTime.now().millisecondsSinceEpoch}_${sourcePath.replaceAll('\\', '/').split('/').last}';
+        final savedPath = '${photoDir.path}/$fileName';
 
-      await File(sourcePath).copy(savedPath);
+        await File(sourcePath).copy(savedPath);
 
-      final pImage = PatientImage(
-        patientId: patientId,
-        imagePath: savedPath,
-        category: category,
-        date: DateTime.now(),
-      );
-
-      ObjectBoxService.instance.patientImageBox.put(pImage);
-      notifyListeners();
-
-      // Sync: on Windows, broadcast so Android Gallery lazy-pulls on next open.
-      // On Android, push the photo to Hub using the patient's UHID.
-      if (Platform.isWindows) {
-        if (LocalServerService.instance.isRunning) {
-          LocalServerService.instance.broadcast({'event': 'sync_received'});
-        }
-      } else if (Platform.isAndroid) {
-        SyncQueueService.instance.addToQueue(
-          entity: 'photo',
-          action: 'create',
-          data: {'id': pImage.id, 'patientId': patientId},
+        final pImage = PatientImage(
+          patientId: patientId,
+          imagePath: savedPath,
+          category: category,
+          date: DateTime.now(),
         );
+
+        ObjectBoxService.instance.patientImageBox.put(pImage);
+
+        if (Platform.isWindows) {
+          if (LocalServerService.instance.isRunning) {
+            LocalServerService.instance.broadcast({'event': 'sync_received'});
+          }
+        } else if (Platform.isAndroid) {
+          SyncQueueService.instance.addToQueue(
+            entity: 'photo',
+            action: 'create',
+            data: {'id': pImage.id, 'patientId': patientId},
+          );
+        }
       }
+      notifyListeners();
     } catch (e) {
-      debugPrint('Error saving patient photo: $e');
+      debugPrint('Error saving patient photos: $e');
     }
+  }
+
+  Future<void> savePatientPhoto(
+    int patientId,
+    String sourcePath, {
+    String category = 'General',
+    SyncService? syncService,
+  }) async {
+    await savePatientPhotos(patientId, [sourcePath], category: category, syncService: syncService);
   }
 
   void deletePatientPhoto(PatientImage pImage, {SyncService? syncService}) {

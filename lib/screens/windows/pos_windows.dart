@@ -11,11 +11,14 @@ import '../../shared/providers/prescription_provider.dart';
 import '../../shared/providers/patient_provider.dart';
 import '../../shared/models/medicine.dart';
 import '../../shared/models/patient.dart';
+import '../../shared/models/procedure.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/medicine_dialog.dart';
 import '../../widgets/patient_dialogs.dart';
+import '../../widgets/procedure_dialog.dart';
 import '../../shared/services/printing_service.dart';
 import '../../shared/services/sync_service.dart';
+import '../../shared/providers/procedure_provider.dart';
 
 class PosWindows extends StatefulWidget {
   const PosWindows({super.key});
@@ -45,8 +48,10 @@ class _PosWindowsState extends State<PosWindows> {
   final _checkoutFocus = FocusNode();
 
   // Map of cart items to their quantity FocusNodes
-  final Map<int, FocusNode> _qtyFocusNodes = {};
-  final Map<int, TextEditingController> _qtyControllers = {};
+  final Map<String, FocusNode> _qtyFocusNodes = {};
+  final Map<String, TextEditingController> _qtyControllers = {};
+  final Map<String, FocusNode> _priceFocusNodes = {};
+  final Map<String, TextEditingController> _priceControllers = {};
 
   @override
   void initState() {
@@ -83,48 +88,87 @@ class _PosWindowsState extends State<PosWindows> {
     for (var node in _qtyFocusNodes.values) {
       node.dispose();
     }
+    for (var node in _priceFocusNodes.values) {
+      node.dispose();
+    }
     for (var ctrl in _qtyControllers.values) {
+      ctrl.dispose();
+    }
+    for (var ctrl in _priceControllers.values) {
       ctrl.dispose();
     }
     super.dispose();
   }
 
   // Gets or creates a focus node for a specific cart item's quantity field
-  FocusNode _getQtyFocusNode(int medicineId) {
-    if (!_qtyFocusNodes.containsKey(medicineId)) {
+  FocusNode _getQtyFocusNode(String key) {
+    if (!_qtyFocusNodes.containsKey(key)) {
       final node = FocusNode();
       node.addListener(() {
-        if (node.hasFocus && _qtyControllers.containsKey(medicineId)) {
-          final ctrl = _qtyControllers[medicineId]!;
+        if (node.hasFocus && _qtyControllers.containsKey(key)) {
+          final ctrl = _qtyControllers[key]!;
           ctrl.selection = TextSelection(
             baseOffset: 0,
             extentOffset: ctrl.text.length,
           );
         }
       });
-      _qtyFocusNodes[medicineId] = node;
+      _qtyFocusNodes[key] = node;
     }
-    return _qtyFocusNodes[medicineId]!;
+    return _qtyFocusNodes[key]!;
   }
 
-  TextEditingController _getQtyController(int medicineId, int qty) {
-    if (!_qtyControllers.containsKey(medicineId)) {
-      _qtyControllers[medicineId] = TextEditingController(text: qty.toString());
+  TextEditingController _getQtyController(String key, int qty) {
+    if (!_qtyControllers.containsKey(key)) {
+      _qtyControllers[key] = TextEditingController(text: qty.toString());
     } else {
       // If the user isn't actively typing, sync the controller with the cart state
-      if (!_qtyFocusNodes[medicineId]!.hasFocus) {
-        _qtyControllers[medicineId]!.text = qty.toString();
+      if (!_qtyFocusNodes[key]!.hasFocus) {
+        _qtyControllers[key]!.text = qty.toString();
       }
     }
-    return _qtyControllers[medicineId]!;
+    return _qtyControllers[key]!;
+  }
+
+  FocusNode _getPriceFocusNode(String key) {
+    if (!_priceFocusNodes.containsKey(key)) {
+      final node = FocusNode();
+      node.addListener(() {
+        if (node.hasFocus && _priceControllers.containsKey(key)) {
+          final ctrl = _priceControllers[key]!;
+          ctrl.selection = TextSelection(
+            baseOffset: 0,
+            extentOffset: ctrl.text.length,
+          );
+        }
+      });
+      _priceFocusNodes[key] = node;
+    }
+    return _priceFocusNodes[key]!;
+  }
+
+  TextEditingController _getPriceController(String key, double price) {
+    if (!_priceControllers.containsKey(key)) {
+      _priceControllers[key] = TextEditingController(text: price.toStringAsFixed(2));
+    } else {
+      if (!_priceFocusNodes[key]!.hasFocus) {
+        _priceControllers[key]!.text = price.toStringAsFixed(2);
+      }
+    }
+    return _priceControllers[key]!;
   }
 
   // --- Pipeline Navigation Logic ---
 
-  void _onMedicineAddedToCart(int medicineId) {
-    // Pipeline Step 3: When an item is added, focus its Qty field
+  void _onItemAddedToCart(String key) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _getQtyFocusNode(medicineId).requestFocus();
+      if (mounted) {
+        if (key.startsWith('p_')) {
+          _getPriceFocusNode(key).requestFocus();
+        } else {
+          _getQtyFocusNode(key).requestFocus();
+        }
+      }
     });
   }
 
@@ -310,8 +354,9 @@ class _PosWindowsState extends State<PosWindows> {
                                 },
                                 onAddToGrid: (medicine) {
                                   cart.addItem(medicine);
-                                  _onMedicineAddedToCart(medicine.id);
+                                  _onItemAddedToCart('m_${medicine.id}');
                                 },
+                                onItemAddedToCart: _onItemAddedToCart,
                                 onScanTap: _showScannerDialog,
                               ),
                             ),
@@ -334,7 +379,10 @@ class _PosWindowsState extends State<PosWindows> {
                                 paymentMethod: _paymentMethod,
                                 getQtyFocusNode: _getQtyFocusNode,
                                 getQtyController: _getQtyController,
+                                getPriceFocusNode: _getPriceFocusNode,
+                                getPriceController: _getPriceController,
                                 onQtyConfirm: _onQtyConfirm,
+                                onPriceConfirm: _onQtyConfirm,
                                 onDiscountConfirm: _onDiscountConfirm,
                                 onPaymentMethodConfirm: _onPaymentMethodConfirm,
                                 onPaymentMethodChanged: (v) =>
@@ -362,8 +410,9 @@ class _PosWindowsState extends State<PosWindows> {
                                 },
                                 onAddToGrid: (medicine) {
                                   cart.addItem(medicine);
-                                  _onMedicineAddedToCart(medicine.id);
+                                  _onItemAddedToCart('m_${medicine.id}');
                                 },
+                                onItemAddedToCart: _onItemAddedToCart,
                                 onScanTap: _showScannerDialog,
                               ),
                             ),
@@ -385,7 +434,10 @@ class _PosWindowsState extends State<PosWindows> {
                                 paymentMethod: _paymentMethod,
                                 getQtyFocusNode: _getQtyFocusNode,
                                 getQtyController: _getQtyController,
+                                getPriceFocusNode: _getPriceFocusNode,
+                                getPriceController: _getPriceController,
                                 onQtyConfirm: _onQtyConfirm,
+                                onPriceConfirm: _onQtyConfirm,
                                 onDiscountConfirm: _onDiscountConfirm,
                                 onPaymentMethodConfirm: _onPaymentMethodConfirm,
                                 onPaymentMethodChanged: (v) =>
@@ -733,6 +785,17 @@ class _PosWindowsState extends State<PosWindows> {
       }
     }
 
+    // Load procedures
+    final procProv = context.read<ProcedureProvider>();
+    final procedures = pProvider.getProcedures(prescription);
+    for (final pName in procedures) {
+      final proc = procProv.procedures.where((p) => p.name.toLowerCase() == pName.toLowerCase()).firstOrNull;
+      if (proc != null) {
+        cart.addProcedure(proc);
+        foundCount++;
+      }
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -786,25 +849,16 @@ class _PosWindowsState extends State<PosWindows> {
     final medicines = inv.medicines.where((m) => m.barcode == code).toList();
 
     if (medicines.isNotEmpty) {
-      final m = medicines.first;
-      if (m.storeStock > 0) {
-        cart.addItem(m);
-        _onMedicineAddedToCart(m.id);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ Added ${m.name}'),
-            backgroundColor: AppTheme.success,
-            duration: const Duration(seconds: 1),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ ${m.name} is out of stock'),
-            backgroundColor: AppTheme.danger,
-          ),
-        );
-      }
+      final match = medicines.first;
+      cart.addItem(match);
+      _onItemAddedToCart('m_${match.id}');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ Added ${match.name}'),
+          backgroundColor: AppTheme.success,
+          duration: const Duration(seconds: 1),
+        ),
+      );
     } else {
       // If no exact match, set search text
       _searchCtrl.text = code;
@@ -826,7 +880,8 @@ class _MedicinesGrid extends StatefulWidget {
   final FocusNode searchFocus;
   final VoidCallback onSearchEnter;
   final ValueChanged<FocusNode> onFirstGridFocusNodeCreated;
-  final ValueChanged<Medicine> onAddToGrid;
+  final Function(Medicine) onAddToGrid;
+  final Function(String) onItemAddedToCart;
   final VoidCallback onScanTap;
 
   const _MedicinesGrid({
@@ -837,6 +892,7 @@ class _MedicinesGrid extends StatefulWidget {
     required this.onSearchEnter,
     required this.onFirstGridFocusNodeCreated,
     required this.onAddToGrid,
+    required this.onItemAddedToCart,
     required this.onScanTap,
   });
 
@@ -845,8 +901,8 @@ class _MedicinesGrid extends StatefulWidget {
 }
 
 class _MedicinesGridState extends State<_MedicinesGrid> {
-  // Map of Grid Medicine ID -> FocusNode (for keyboard navigation in the grid)
-  final Map<int, FocusNode> _gridFocusNodes = {};
+  // Map of Grid Item ID -> FocusNode (for keyboard navigation in the grid)
+  final Map<String, FocusNode> _gridFocusNodes = {};
 
   @override
   void dispose() {
@@ -856,31 +912,38 @@ class _MedicinesGridState extends State<_MedicinesGrid> {
     super.dispose();
   }
 
-  FocusNode _getGridFocusNode(int medicineId, bool isFirst) {
-    if (!_gridFocusNodes.containsKey(medicineId)) {
+  FocusNode _getGridFocusNode(String key, bool isFirst) {
+    if (!_gridFocusNodes.containsKey(key)) {
       final node = FocusNode();
-      _gridFocusNodes[medicineId] = node;
+      _gridFocusNodes[key] = node;
       if (isFirst) {
         widget.onFirstGridFocusNodeCreated(node);
       }
     }
-    return _gridFocusNodes[medicineId]!;
+    return _gridFocusNodes[key]!;
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final procProv = context.watch<ProcedureProvider>();
+    final query = widget.searchCtrl.text.toLowerCase();
+
     final medicines = widget.inv.medicines
         .where((m) => m.storeStock > 0)
         .where(
           (m) =>
-              widget.searchCtrl.text.isEmpty ||
-              m.name.toLowerCase().contains(
-                    widget.searchCtrl.text.toLowerCase(),
-                  ) ||
-              m.barcode.contains(widget.searchCtrl.text),
+              query.isEmpty ||
+              m.name.toLowerCase().contains(query) ||
+              m.barcode.contains(query),
         )
         .toList();
+
+    final procedures = procProv.procedures
+        .where((p) => query.isEmpty || p.name.toLowerCase().contains(query))
+        .toList();
+
+    final List<dynamic> combined = [...medicines, ...procedures];
 
     return Column(
       children: [
@@ -895,9 +958,13 @@ class _MedicinesGridState extends State<_MedicinesGrid> {
                     if (event is KeyDownEvent) {
                       if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
                         // Pipeline Step 1: User presses Down Arrow in search -> Focus First Grid Item
-                        if (medicines.isNotEmpty) {
+                        if (combined.isNotEmpty) {
+                          final first = combined.first;
+                          final key = first is Medicine
+                              ? 'm_${first.id}'
+                              : 'p_${first.id}';
                           _getGridFocusNode(
-                            medicines.first.id,
+                            key,
                             true,
                           ).requestFocus();
                         }
@@ -951,6 +1018,23 @@ class _MedicinesGridState extends State<_MedicinesGrid> {
                     );
                   },
                 ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: Icon(
+                    Icons.auto_awesome_motion,
+                    color: widget.cart.isReturnMode
+                        ? AppTheme.danger
+                        : AppTheme.primaryLight,
+                    size: 28,
+                  ),
+                  tooltip: 'Quick Add Procedure',
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) => const ProcedureDialog(),
+                    );
+                  },
+                ),
               ],
             ],
           ),
@@ -970,63 +1054,89 @@ class _MedicinesGridState extends State<_MedicinesGrid> {
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
                 ),
-                itemCount: medicines.length,
+                itemCount: combined.length,
                 itemBuilder: (ctx, i) {
-                  final m = medicines[i];
-                  final focusNode = _getGridFocusNode(m.id, i == 0);
+                  final item = combined[i];
+                  final isProcedure = item is Procedure;
+                  final key = isProcedure ? 'p_${item.id}' : 'm_${item.id}';
+                  final focusNode = _getGridFocusNode(key, i == 0);
+
                   return Focus(
                     onKeyEvent: (node, event) {
                       if (event is KeyDownEvent) {
                         if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-                          final nextIdx = (i + 1) % medicines.length;
-                          _getGridFocusNode(medicines[nextIdx].id, false)
-                              .requestFocus();
+                          final nextIdx = (i + 1) % combined.length;
+                          final nextItem = combined[nextIdx];
+                          final nextKey = nextItem is Procedure
+                              ? 'p_${nextItem.id}'
+                              : 'm_${nextItem.id}';
+                          _getGridFocusNode(nextKey, false).requestFocus();
                           return KeyEventResult.handled;
                         } else if (event.logicalKey ==
                             LogicalKeyboardKey.arrowLeft) {
                           final prevIdx =
-                              (i - 1 + medicines.length) % medicines.length;
-                          _getGridFocusNode(medicines[prevIdx].id, false)
-                              .requestFocus();
+                              (i - 1 + combined.length) % combined.length;
+                          final prevItem = combined[prevIdx];
+                          final prevKey = prevItem is Procedure
+                              ? 'p_${prevItem.id}'
+                              : 'm_${prevItem.id}';
+                          _getGridFocusNode(prevKey, false).requestFocus();
                           return KeyEventResult.handled;
                         } else if (event.logicalKey ==
                             LogicalKeyboardKey.arrowDown) {
                           final nextIdx = i + crossAxisCount;
-                          if (nextIdx < medicines.length) {
-                            _getGridFocusNode(medicines[nextIdx].id, false)
-                                .requestFocus();
+                          if (nextIdx < combined.length) {
+                            final nextItem = combined[nextIdx];
+                            final nextKey = nextItem is Procedure
+                                ? 'p_${nextItem.id}'
+                                : 'm_${nextItem.id}';
+                            _getGridFocusNode(nextKey, false).requestFocus();
                           } else {
                             final topIdx = i % crossAxisCount;
-                            _getGridFocusNode(medicines[topIdx].id, false)
-                                .requestFocus();
+                            final topItem = combined[topIdx];
+                            final topKey = topItem is Procedure
+                                ? 'p_${topItem.id}'
+                                : 'm_${topItem.id}';
+                            _getGridFocusNode(topKey, false).requestFocus();
                           }
                           return KeyEventResult.handled;
                         } else if (event.logicalKey ==
                             LogicalKeyboardKey.arrowUp) {
                           final prevIdx = i - crossAxisCount;
                           if (prevIdx >= 0) {
-                            _getGridFocusNode(medicines[prevIdx].id, false)
-                                .requestFocus();
+                            final prevItem = combined[prevIdx];
+                            final prevKey = prevItem is Procedure
+                                ? 'p_${prevItem.id}'
+                                : 'm_${prevItem.id}';
+                            _getGridFocusNode(prevKey, false).requestFocus();
                           } else {
                             int lastVisibleIdx = i;
                             while (lastVisibleIdx + crossAxisCount <
-                                medicines.length) {
+                                combined.length) {
                               lastVisibleIdx += crossAxisCount;
                             }
-                            _getGridFocusNode(
-                              medicines[lastVisibleIdx].id,
-                              false,
-                            ).requestFocus();
+                            final lastItem = combined[lastVisibleIdx];
+                            final lastKey = lastItem is Procedure
+                                ? 'p_${lastItem.id}'
+                                : 'm_${lastItem.id}';
+                            _getGridFocusNode(lastKey, false).requestFocus();
                           }
                           return KeyEventResult.handled;
                         }
                       }
                       return KeyEventResult.ignored;
                     },
-                    child: _MedicineCard(
-                      medicine: m,
+                    child: _ProductCard(
+                      item: item,
                       focusNode: focusNode,
-                      onTap: () => widget.onAddToGrid(m),
+                      onTap: () {
+                        if (isProcedure) {
+                          widget.cart.addProcedure(item);
+                          widget.onItemAddedToCart(key);
+                        } else {
+                          widget.onAddToGrid(item);
+                        }
+                      },
                     ),
                   );
                 },
@@ -1039,27 +1149,29 @@ class _MedicinesGridState extends State<_MedicinesGrid> {
   }
 }
 
-class _MedicineCard extends StatelessWidget {
-  final Medicine medicine;
+class _ProductCard extends StatelessWidget {
+  final dynamic item;
   final VoidCallback onTap;
   final FocusNode focusNode;
 
-  const _MedicineCard({
-    required this.medicine,
+  const _ProductCard({
+    required this.item,
     required this.onTap,
     required this.focusNode,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isProcedure = item is Procedure;
+    final name = item.name;
+    final price = isProcedure ? item.basePrice : item.sellingPrice;
+    final icon = isProcedure ? Icons.auto_awesome : Icons.medication;
+    final isLowStock = !isProcedure && item.isLowStock;
+    final cart = context.read<CartProvider>();
+
     return InkWell(
       onTap: onTap,
       focusNode: focusNode,
-      onFocusChange: (hasFocus) {
-        if (hasFocus) {
-          // Optionally add a subtle visual highlight when focused via keyboard
-        }
-      },
       borderRadius: BorderRadius.circular(12),
       child: Card(
         // Use a slight border when focused
@@ -1067,9 +1179,9 @@ class _MedicineCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           side: focusNode.hasFocus
               ? BorderSide(
-                  color: medicine.isLowStock
+                  color: isLowStock
                       ? AppTheme.warning
-                      : (context.read<CartProvider>().isReturnMode
+                      : (cart.isReturnMode
                           ? AppTheme.danger
                           : AppTheme.primary),
                   width: 2)
@@ -1083,15 +1195,13 @@ class _MedicineCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: (context.read<CartProvider>().isReturnMode
-                          ? AppTheme.danger
-                          : AppTheme.primary)
+                  color: (cart.isReturnMode ? AppTheme.danger : AppTheme.primary)
                       .withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
-                  Icons.medication,
-                  color: context.read<CartProvider>().isReturnMode
+                  icon,
+                  color: cart.isReturnMode
                       ? AppTheme.danger
                       : AppTheme.primaryLight,
                   size: 22,
@@ -1099,7 +1209,7 @@ class _MedicineCard extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                medicine.name,
+                name,
                 style: const TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 13,
@@ -1108,17 +1218,17 @@ class _MedicineCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               Text(
-                medicine.unit,
+                isProcedure ? 'Procedure' : item.unit,
                 style: TextStyle(color: context.textMutedColor, fontSize: 11),
               ),
               const SizedBox(height: 4),
-              if (medicine.activeBatch != null) ...[
+              if (!isProcedure && item.activeBatch != null) ...[
                 Row(
                   children: [
                     Icon(Icons.layers, size: 10, color: context.textMutedColor),
                     const SizedBox(width: 4),
                     Text(
-                      'Batch: ${medicine.activeBatch!.batchNo}',
+                      'Batch: ${item.activeBatch!.batchNo}',
                       style: TextStyle(
                         fontSize: 10,
                         color: context.textMutedColor,
@@ -1130,20 +1240,20 @@ class _MedicineCard extends StatelessWidget {
                   children: [
                     Icon(Icons.event,
                         size: 10,
-                        color: medicine.activeBatch!.expiryDate.isBefore(
+                        color: item.activeBatch!.expiryDate.isBefore(
                                 DateTime.now().add(const Duration(days: 90)))
                             ? AppTheme.danger
                             : context.textMutedColor),
                     const SizedBox(width: 4),
                     Text(
-                      'Exp: ${medicine.activeBatch!.expiryDate.day}/${medicine.activeBatch!.expiryDate.month}/${medicine.activeBatch!.expiryDate.year}',
+                      'Exp: ${item.activeBatch!.expiryDate.day}/${item.activeBatch!.expiryDate.month}/${item.activeBatch!.expiryDate.year}',
                       style: TextStyle(
                         fontSize: 10,
-                        color: medicine.activeBatch!.expiryDate.isBefore(
+                        color: item.activeBatch!.expiryDate.isBefore(
                                 DateTime.now().add(const Duration(days: 90)))
                             ? AppTheme.danger
                             : context.textMutedColor,
-                        fontWeight: medicine.activeBatch!.expiryDate.isBefore(
+                        fontWeight: item.activeBatch!.expiryDate.isBefore(
                                 DateTime.now().add(const Duration(days: 90)))
                             ? FontWeight.bold
                             : FontWeight.normal,
@@ -1157,43 +1267,50 @@ class _MedicineCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '₹${medicine.sellingPrice.toStringAsFixed(0)}',
+                    '₹${price.toStringAsFixed(0)}',
                     style: TextStyle(
-                      color: context.read<CartProvider>().isReturnMode
+                      color: cart.isReturnMode
                           ? AppTheme.danger
                           : AppTheme.primaryLight,
                       fontWeight: FontWeight.w800,
                       fontSize: 15,
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: medicine.isLowStock
-                          ? AppTheme.warning.withValues(alpha: 0.2)
-                          : context.borderColor,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppTheme.primary.withValues(alpha: 0.3),
-                        width: 1,
+                  if (!isProcedure)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
                       ),
-                    ),
-                    child: Text(
-                      '${medicine.storeStock}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: medicine.isLowStock
-                            ? AppTheme.warning
-                            : (Theme.of(context).brightness == Brightness.dark
-                                ? AppTheme.primaryLight
-                                : AppTheme.primary),
+                      decoration: BoxDecoration(
+                        color: item.isLowStock
+                            ? AppTheme.warning.withValues(alpha: 0.2)
+                            : context.borderColor,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: AppTheme.primary.withValues(alpha: 0.3),
+                          width: 1,
+                        ),
                       ),
+                      child: Text(
+                        '${item.storeStock}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: item.isLowStock
+                              ? AppTheme.warning
+                              : (Theme.of(context).brightness == Brightness.dark
+                                  ? AppTheme.primaryLight
+                                  : AppTheme.primary),
+                        ),
+                      ),
+                    )
+                  else
+                    const Icon(
+                      Icons.add_circle_outline,
+                      size: 20,
+                      color: AppTheme.primaryLight,
                     ),
-                  ),
                 ],
               ),
             ],
@@ -1218,9 +1335,12 @@ class _CartPanel extends StatelessWidget {
   final FocusNode mixCardFocus;
   final FocusNode checkoutFocus;
   final String paymentMethod;
-  final FocusNode Function(int) getQtyFocusNode;
-  final TextEditingController Function(int, int) getQtyController;
+  final FocusNode Function(String) getQtyFocusNode;
+  final TextEditingController Function(String, int) getQtyController;
+  final FocusNode Function(String) getPriceFocusNode;
+  final TextEditingController Function(String, double) getPriceController;
   final VoidCallback onQtyConfirm;
+  final VoidCallback onPriceConfirm;
   final VoidCallback onDiscountConfirm;
   final VoidCallback onPaymentMethodConfirm;
   final ValueChanged<String> onPaymentMethodChanged;
@@ -1243,7 +1363,10 @@ class _CartPanel extends StatelessWidget {
     required this.paymentMethod,
     required this.getQtyFocusNode,
     required this.getQtyController,
+    required this.getPriceFocusNode,
+    required this.getPriceController,
     required this.onQtyConfirm,
+    required this.onPriceConfirm,
     required this.onDiscountConfirm,
     required this.onPaymentMethodConfirm,
     required this.onPaymentMethodChanged,
@@ -1373,18 +1496,52 @@ class _CartPanel extends StatelessWidget {
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (ctx, i) {
                       final item = cart.items[i];
+                      final key =
+                          item.isProcedure ? 'p_${item.id}' : 'm_${item.id}';
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(vertical: 4),
                         title: Text(
-                          item.medicine.name,
+                          item.name,
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 13,
                           ),
                         ),
-                        subtitle: Text(
-                          '₹${item.medicine.sellingPrice.toStringAsFixed(2)} × ${item.qty}',
-                        ),
+                        subtitle: item.isProcedure
+                            ? Row(
+                                children: [
+                                  const Text('₹', style: TextStyle(fontSize: 12)),
+                                  SizedBox(
+                                    width: 60,
+                                    child: TextField(
+                                      controller: getPriceController(
+                                          key,
+                                          item.customPrice ??
+                                              item.procedure!.basePrice),
+                                      focusNode: getPriceFocusNode(key),
+                                      style: const TextStyle(fontSize: 12),
+                                      decoration: const InputDecoration(
+                                        isDense: true,
+                                        border: InputBorder.none,
+                                        contentPadding: EdgeInsets.zero,
+                                      ),
+                                      keyboardType: TextInputType.number,
+                                      onSubmitted: (val) {
+                                        final p = double.tryParse(val);
+                                        if (p != null) {
+                                          cart.updatePrice(item.id, p);
+                                          onPriceConfirm();
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                  Text(' × ${item.qty}',
+                                      style: const TextStyle(fontSize: 12)),
+                                ],
+                              )
+                            : Text(
+                                '₹${(item.medicine?.sellingPrice ?? item.customPrice ?? item.procedure!.basePrice).toStringAsFixed(2)} × ${item.qty}',
+                              ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -1399,7 +1556,8 @@ class _CartPanel extends StatelessWidget {
                             ),
                             const SizedBox(width: 8),
                             InkWell(
-                              onTap: () => cart.removeItem(item.medicine.id),
+                              onTap: () => cart.removeItem(item.id,
+                                  isProcedure: item.isProcedure),
                               child: const Icon(
                                 Icons.close,
                                 size: 16,
@@ -1426,9 +1584,9 @@ class _CartPanel extends StatelessWidget {
                           ),
                           alignment: Alignment.center,
                           child: TextField(
-                            focusNode: getQtyFocusNode(item.medicine.id),
+                            focusNode: getQtyFocusNode(key),
                             controller: getQtyController(
-                              item.medicine.id,
+                              key,
                               item.qty,
                             ),
                             keyboardType: TextInputType.number,
@@ -1452,11 +1610,12 @@ class _CartPanel extends StatelessWidget {
                               final newQty = int.tryParse(val);
                               if (newQty != null && newQty > 0) {
                                 int finalQty = newQty;
-                                if (!cart.isReturnMode &&
-                                    finalQty > item.medicine.storeStock) {
-                                  finalQty = item.medicine.storeStock;
+                                if (!item.isProcedure &&
+                                    !cart.isReturnMode &&
+                                    finalQty > item.medicine!.storeStock) {
+                                  finalQty = item.medicine!.storeStock;
                                   final ctrl = getQtyController(
-                                    item.medicine.id,
+                                    key,
                                     item.qty,
                                   );
                                   ctrl.text = finalQty.toString();
@@ -1464,19 +1623,23 @@ class _CartPanel extends StatelessWidget {
                                     offset: finalQty.toString().length,
                                   );
                                 }
-                                cart.updateQty(item.medicine.id, finalQty);
+                                cart.updateQty(item.id, finalQty,
+                                    isProcedure: item.isProcedure);
                               }
                             },
                             onSubmitted: (val) {
                               int newQty = int.tryParse(val) ?? 1;
                               if (newQty > 0) {
-                                if (!cart.isReturnMode &&
-                                    newQty > item.medicine.storeStock) {
-                                  newQty = item.medicine.storeStock;
+                                if (!item.isProcedure &&
+                                    !cart.isReturnMode &&
+                                    newQty > item.medicine!.storeStock) {
+                                  newQty = item.medicine!.storeStock;
                                 }
-                                cart.updateQty(item.medicine.id, newQty);
+                                cart.updateQty(item.id, newQty,
+                                    isProcedure: item.isProcedure);
                               } else {
-                                cart.updateQty(item.medicine.id, 1);
+                                cart.updateQty(item.id, 1,
+                                    isProcedure: item.isProcedure);
                               }
                               onQtyConfirm();
                             },

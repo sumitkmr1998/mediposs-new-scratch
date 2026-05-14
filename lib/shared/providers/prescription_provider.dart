@@ -11,6 +11,7 @@ import '../services/local_server_service.dart';
 import '../services/sync_service.dart';
 import '../services/sync_queue_service.dart';
 import '../models/patient_image.dart';
+import '../models/patient.dart';
 import 'patient_provider.dart';
 import 'opd_provider.dart';
 
@@ -46,6 +47,7 @@ class PrescriptionProvider extends ChangeNotifier {
     String notes = '',
     List<PrescriptionItem> items = const [],
     List<String> labTests = const [],
+    List<String> procedures = const [],
     List<String> images = const [],
     Vitals? vitals,
     SyncService? syncService,
@@ -81,6 +83,7 @@ class PrescriptionProvider extends ChangeNotifier {
     final labTestsJson = jsonEncode(labTests);
     final vitalsJson = jsonEncode((vitals ?? const Vitals()).toJson());
     final imagesJson = jsonEncode(savedImagePaths);
+    final proceduresJson = jsonEncode(procedures);
 
     // Check if one already exists for this appointment (update it)
     final existing = _prescriptions
@@ -102,6 +105,8 @@ class PrescriptionProvider extends ChangeNotifier {
     prescription.labTestsJson = labTestsJson;
     prescription.vitalsJson = vitalsJson;
     prescription.imagesJson = imagesJson;
+    prescription.proceduresJson = proceduresJson;
+    prescription.updatedAt = DateTime.now();
 
     ObjectBoxService.instance.prescriptionBox.put(prescription);
 
@@ -113,7 +118,14 @@ class PrescriptionProvider extends ChangeNotifier {
         category: 'Prescription',
         date: DateTime.now(),
       );
-      ObjectBoxService.instance.patientImageBox.put(pImage);
+      final pImageId = ObjectBoxService.instance.patientImageBox.put(pImage);
+      pImage.id = pImageId;
+
+      // Sync to Hub gallery
+      if (syncService != null && !syncService.isHub) {
+        SyncQueueService.instance.addToQueue(
+            entity: 'photo', action: 'create', data: pImage.toJson());
+      }
     }
 
     // Notify PatientProvider to refresh Gallery if context is available
@@ -145,10 +157,17 @@ class PrescriptionProvider extends ChangeNotifier {
     if (Platform.isWindows) {
       LocalServerService.instance.broadcast({'event': 'sync_received'});
     } else if (Platform.isAndroid) {
+      final patient = ObjectBoxService.instance.patientBox.get(patientId);
+      final syncData = prescription.toJson();
+      syncData['patientUhid'] = patient?.uhid ?? '';
+      syncData['tokenNumber'] = appt?.tokenNumber ?? 0;
+
+      debugPrint('PrescriptionProvider: Queuing sync for ${prescription.patientName} (UHID: ${patient?.uhid}, Token: ${appt?.tokenNumber})');
+      
       SyncQueueService.instance.addToQueue(
         entity: 'prescription',
         action: 'create',
-        data: prescription.toJson(),
+        data: syncData,
       );
       // If we updated appointment status, push that too
       if (appt != null) {
@@ -190,6 +209,15 @@ class PrescriptionProvider extends ChangeNotifier {
     }
   }
 
+  List<String> getProcedures(Prescription p) {
+    try {
+      final List<dynamic> decoded = jsonDecode(p.proceduresJson);
+      return decoded.cast<String>();
+    } catch (_) {
+      return [];
+    }
+  }
+
   Vitals getVitals(Prescription p) {
     try {
       final Map<String, dynamic> decoded = jsonDecode(p.vitalsJson);
@@ -197,6 +225,38 @@ class PrescriptionProvider extends ChangeNotifier {
     } catch (_) {
       return const Vitals();
     }
+  }
+
+  /// Resolves an image path by looking for the filename locally if the absolute path fails.
+  /// This is crucial for cross-platform sync (Windows paths on Android).
+  Future<String> resolveImagePath(String originalPath) async {
+    final file = File(originalPath);
+    if (await file.exists()) return originalPath;
+
+    // If not found, try to resolve by filename in local prescription directory
+    try {
+      final fileName = p_path.basename(originalPath);
+      final appDocDir = await getApplicationDocumentsDirectory();
+      // Try prescriptions directory first
+      final pPath = p_path.join(appDocDir.path, 'prescriptions', 'images', fileName);
+      if (await File(pPath).exists()) return pPath;
+      
+      // Try patient_photos directory (gallery)
+      final gPath = p_path.join(appDocDir.path, 'patient_photos');
+      if (await Directory(gPath).exists()) {
+         // Search recursively in patient_photos
+         final entities = await Directory(gPath).list(recursive: true).toList();
+         for (final entity in entities) {
+           if (entity is File && p_path.basename(entity.path) == fileName) {
+             return entity.path;
+           }
+         }
+      }
+    } catch (e) {
+      debugPrint('Error resolving image path: $e');
+    }
+
+    return originalPath; // Fallback to original
   }
 
   void markDispensed(int prescriptionId, {SyncService? syncService}) {
@@ -242,8 +302,22 @@ class PrescriptionProvider extends ChangeNotifier {
     load();
   }
 
-  List<Prescription> getPrescriptionsForPatient(int patientId) {
-    return _prescriptions.where((p) => p.patientId == patientId).toList()
+  List<Prescription> getPrescriptionsForPatient(Patient patient) {
+    if (patient.id == 0 && patient.name.isEmpty) return [];
+
+    return _prescriptions.where((p) {
+      final idMatch = p.patientId == patient.id;
+      final nameMatch = p.patientName.trim().toLowerCase() == patient.name.trim().toLowerCase();
+      final phoneMatch = patient.phone.isNotEmpty && (p.vitalsJson.contains(patient.phone) || nameMatch); // Prescriptions don't have phone in root, but name match is usually enough
+      
+      // If ID matches, we still check name to avoid collisions
+      if (idMatch && nameMatch) return true;
+      
+      // Fallback to name match for synced data
+      if (nameMatch) return true;
+
+      return false;
+    }).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 

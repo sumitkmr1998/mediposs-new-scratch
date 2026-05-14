@@ -174,7 +174,7 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                                     letterSpacing: 1.5,
                                     color: AppTheme.primaryLight))),
                         const SizedBox(
-                            width: 180,
+                            width: 150,
                             child: Center(
                                 child: Text('WAIT DURATION',
                                     style: TextStyle(
@@ -183,7 +183,7 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                                         letterSpacing: 1.5,
                                         color: AppTheme.primaryLight)))),
                         const SizedBox(
-                            width: 180,
+                            width: 150,
                             child: Center(
                                 child: Text('CURRENT STATUS',
                                     style: TextStyle(
@@ -192,7 +192,7 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                                         letterSpacing: 1.5,
                                         color: AppTheme.primaryLight)))),
                         const SizedBox(
-                            width: 180,
+                            width: 240,
                             child: Align(
                                 alignment: Alignment.centerRight,
                                 child: Text('ACTIONS',
@@ -531,7 +531,7 @@ class _QueueRowState extends State<_QueueRow> {
                                 fontWeight: FontWeight.w700,
                                 color: context.textMutedColor)),
                         Text(
-                            'UHID: ${context.read<PatientProvider>().getById(a.patientId)?.uhid ?? a.patientId}',
+                            'UHID: ${context.read<PatientProvider>().getById(a.patientId)?.uhid ?? context.read<PatientProvider>().getByInfo(a.patientName, a.patientPhone)?.uhid ?? 'ID: ${a.patientId}'}',
                             style: TextStyle(
                                 fontSize: 10,
                                 color: context.textMutedColor
@@ -550,7 +550,7 @@ class _QueueRowState extends State<_QueueRow> {
                         color: context.textMutedColor)),
               ),
               SizedBox(
-                width: 180,
+                width: 150,
                 child: Center(
                   child: Text('-- : --',
                       style: TextStyle(
@@ -560,7 +560,7 @@ class _QueueRowState extends State<_QueueRow> {
                 ),
               ),
               SizedBox(
-                width: 180,
+                width: 150,
                 child: Center(
                   child: AppStatusBadge(
                     label: 'DONE',
@@ -572,7 +572,7 @@ class _QueueRowState extends State<_QueueRow> {
                 ),
               ),
               SizedBox(
-                width: 180,
+                width: 240,
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: Icon(Icons.more_vert_rounded,
@@ -638,7 +638,7 @@ class _QueueRowState extends State<_QueueRow> {
                                     color: AppTheme.primary)),
                             const SizedBox(height: 2),
                             Text(
-                                'UHID: ${context.read<PatientProvider>().getById(a.patientId)?.uhid ?? a.patientId}',
+                                'UHID: ${context.read<PatientProvider>().getById(a.patientId)?.uhid ?? context.read<PatientProvider>().getByInfo(a.patientName, a.patientPhone)?.uhid ?? 'ID: ${a.patientId}'}',
                                 style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,
@@ -668,7 +668,7 @@ class _QueueRowState extends State<_QueueRow> {
               ),
             ),
             SizedBox(
-              width: 180,
+              width: 150,
               child: Column(
                 children: [
                   Text('ELAPSED',
@@ -688,7 +688,7 @@ class _QueueRowState extends State<_QueueRow> {
               ),
             ),
             SizedBox(
-              width: 180,
+              width: 150,
               child: Column(
                 children: [
                   Container(
@@ -721,7 +721,7 @@ class _QueueRowState extends State<_QueueRow> {
               ),
             ),
             SizedBox(
-              width: 180,
+              width: 240,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -793,7 +793,7 @@ class _QueueRowState extends State<_QueueRow> {
                                     color: AppTheme.primary)),
                             const SizedBox(height: 2),
                             Text(
-                                'UHID: ${context.read<PatientProvider>().getById(a.patientId)?.uhid ?? a.patientId}',
+                                'UHID: ${context.read<PatientProvider>().getById(a.patientId)?.uhid ?? context.read<PatientProvider>().getByInfo(a.patientName, a.patientPhone)?.uhid ?? 'ID: ${a.patientId}'}',
                                 style: TextStyle(
                                     fontSize: 10,
                                     color: context.textMutedColor)),
@@ -814,7 +814,7 @@ class _QueueRowState extends State<_QueueRow> {
                       color: context.textMutedColor)),
             ),
             SizedBox(
-              width: 180,
+              width: 150,
               child: Center(
                 child: Text(_waitTime(),
                     style: const TextStyle(
@@ -825,7 +825,7 @@ class _QueueRowState extends State<_QueueRow> {
               ),
             ),
             SizedBox(
-              width: 180,
+              width: 150,
               child: Center(
                 child: AppStatusBadge(
                   label: 'AT PHARMACY',
@@ -836,7 +836,7 @@ class _QueueRowState extends State<_QueueRow> {
               ),
             ),
             SizedBox(
-              width: 180,
+              width: 240,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -902,7 +902,7 @@ class _QueueRowState extends State<_QueueRow> {
                                   fontWeight: FontWeight.w700,
                                   color: AppTheme.primary)),
                           const SizedBox(height: 2),
-                          Text('UHID: ${context.read<PatientProvider>().getById(a.patientId)?.uhid ?? a.patientId}',
+                          Text('UHID: ${context.read<PatientProvider>().getById(a.patientId)?.uhid ?? context.read<PatientProvider>().getByInfo(a.patientName, a.patientPhone)?.uhid ?? 'ID: ${a.patientId}'}',
                               style: TextStyle(
                                   fontSize: 10, color: context.textMutedColor)),
                         ],
@@ -922,7 +922,7 @@ class _QueueRowState extends State<_QueueRow> {
                     color: context.textMutedColor)),
           ),
           SizedBox(
-            width: 180,
+            width: 150,
             child: Center(
               child: Text(_waitTime(),
                   style: const TextStyle(
@@ -933,7 +933,7 @@ class _QueueRowState extends State<_QueueRow> {
             ),
           ),
           SizedBox(
-            width: 180,
+            width: 150,
             child: Center(
               child: AppStatusBadge(
                 label: 'WAITING',
@@ -944,7 +944,7 @@ class _QueueRowState extends State<_QueueRow> {
             ),
           ),
           SizedBox(
-            width: 180,
+            width: 240,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [

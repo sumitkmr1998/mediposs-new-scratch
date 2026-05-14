@@ -38,24 +38,54 @@ class PatientDetailsWindows extends StatefulWidget {
 class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
   @override
   Widget build(BuildContext context) {
-    final patient = context.watch<PatientProvider>().getById(widget.patientId);
-    if (patient == null) {
+    final patientById = context.watch<PatientProvider>().getById(widget.patientId);
+    
+    // Fallback for ID mismatch (common after sync)
+    Patient? resolvedPatient = patientById;
+    if (resolvedPatient == null && widget.fromAppointmentId != null) {
+      final appt = context.read<OpdProvider>().getAppointmentById(widget.fromAppointmentId!);
+      if (appt != null) {
+        resolvedPatient = context.read<PatientProvider>().getByInfo(appt.patientName, appt.patientPhone);
+      }
+    }
+
+    if (resolvedPatient == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Patient Details')),
-        body: const Center(child: Text('Patient not found')),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.person_off_rounded, size: 64, color: Colors.grey),
+              const SizedBox(height: 16),
+              const Text('Patient not found',
+                  style: TextStyle(fontSize: 18, color: Colors.grey)),
+              const SizedBox(height: 8),
+              Text('ID: ${widget.patientId}',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Go Back')),
+            ],
+          ),
+        ),
       );
     }
 
-    final sales = context.watch<SalesProvider>().getSalesByPatient(patient.id);
+    final Patient patient = resolvedPatient;
+
+    final sales = context.watch<SalesProvider>().getSalesForPatient(patient);
+    final appts = context.watch<OpdProvider>().getAppointmentsForPatient(patient);
     final auth = context.read<AuthProvider>();
     final prescriptions = auth.canAccessMedicalRecords
         ? context
             .watch<PrescriptionProvider>()
-            .getPrescriptionsForPatient(patient.id)
+            .getPrescriptionsForPatient(patient)
         : <Prescription>[];
         
     final photos = auth.canAccessMedicalRecords
-        ? context.watch<PatientProvider>().getPatientPhotos(patient.id)
+        ? context.watch<PatientProvider>().getPatientPhotosRobust(patient)
         : <PatientImage>[];
         
     final totalSpent =
@@ -374,7 +404,7 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
                 title: const Text('Take Photo'),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _pickImage(patient, ImageSource.camera);
+                  _pickImages(patient, ImageSource.camera);
                 }),
             ListTile(
                 leading:
@@ -382,30 +412,41 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
                 title: const Text('Choose from Gallery'),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _pickImage(patient, ImageSource.gallery);
+                  _pickImages(patient, ImageSource.gallery);
                 }),
           ]),
         ),
       );
     } else {
       final result = await FilePicker.platform
-          .pickFiles(type: FileType.image, allowMultiple: false);
-      if (result != null && result.files.single.path != null) {
+          .pickFiles(type: FileType.image, allowMultiple: true);
+      if (result != null && result.paths.isNotEmpty) {
         if (!context.mounted) return;
-        await context.read<PatientProvider>().savePatientPhoto(
-            patient.id, result.files.single.path!,
+        final validPaths = result.paths.whereType<String>().toList();
+        await context.read<PatientProvider>().savePatientPhotos(
+            patient.id, validPaths,
             syncService: context.read<SyncService>());
       }
     }
   }
 
-  Future<void> _pickImage(Patient patient, ImageSource source) async {
-    final picked = await ImagePicker().pickImage(source: source);
-    if (picked != null && mounted) {
-      final sync = Platform.isAndroid ? context.read<SyncService>() : null;
-      await context
-          .read<PatientProvider>()
-          .savePatientPhoto(patient.id, picked.path, syncService: sync);
+  Future<void> _pickImages(Patient patient, ImageSource source) async {
+    if (source == ImageSource.camera) {
+      final picked = await ImagePicker().pickImage(source: source);
+      if (picked != null && mounted) {
+        final sync = Platform.isAndroid ? context.read<SyncService>() : null;
+        await context
+            .read<PatientProvider>()
+            .savePatientPhotos(patient.id, [picked.path], syncService: sync);
+      }
+    } else {
+      final pickedList = await ImagePicker().pickMultiImage();
+      if (pickedList.isNotEmpty && mounted) {
+        final sync = Platform.isAndroid ? context.read<SyncService>() : null;
+        await context
+            .read<PatientProvider>()
+            .savePatientPhotos(patient.id, pickedList.map((e) => e.path).toList(), syncService: sync);
+      }
     }
   }
 
@@ -1174,6 +1215,28 @@ class _ExpandablePrescriptionState extends State<_ExpandablePrescription> {
                         style: TextStyle(
                             fontSize: 12, color: context.textMutedColor)),
                   ],
+                  // Procedures
+                  if (widget.pProvider.getProcedures(p).isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    const Text('Procedures',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.primaryLight,
+                            letterSpacing: 0.5)),
+                    const SizedBox(height: 6),
+                    ...widget.pProvider.getProcedures(p).map((proc) => Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.check_circle_outline,
+                                  size: 12, color: AppTheme.primaryLight),
+                              const SizedBox(width: 6),
+                              Text(proc, style: const TextStyle(fontSize: 12)),
+                            ],
+                          ),
+                        )),
+                  ],
                   // Images
                   if (widget.pProvider.getImages(p).isNotEmpty) ...[
                     const SizedBox(height: 14),
@@ -1184,44 +1247,53 @@ class _ExpandablePrescriptionState extends State<_ExpandablePrescription> {
                             color: AppTheme.primaryLight,
                             letterSpacing: 0.5)),
                     const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: widget.pProvider
-                          .getImages(p)
-                          .map((path) => GestureDetector(
-                                onTap: () =>
-                                    _viewPrescriptionImage(context, path),
-                                child: MouseRegion(
-                                  cursor: SystemMouseCursors.click,
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                          color: AppTheme.primaryLight
-                                              .withValues(alpha: 0.2)),
-                                    ),
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Image.file(
-                                        File(path),
-                                        width: 60,
-                                        height: 60,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) => Container(
-                                          width: 60,
-                                          height: 60,
-                                          color: Colors.grey.shade200,
-                                          child: const Icon(Icons.broken_image,
-                                              size: 20, color: Colors.grey),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: widget.pProvider
+                            .getImages(p)
+                            .map((path) => FutureBuilder<String>(
+                                  future: widget.pProvider.resolveImagePath(path),
+                                  builder: (context, snapshot) {
+                                    final resolvedPath = snapshot.data ?? path;
+                                    return GestureDetector(
+                                      onTap: () => _viewPrescriptionImage(
+                                          context, resolvedPath),
+                                      child: MouseRegion(
+                                        cursor: SystemMouseCursors.click,
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(
+                                                color: AppTheme.primaryLight
+                                                    .withValues(alpha: 0.2)),
+                                          ),
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: Image.file(
+                                              File(resolvedPath),
+                                              width: 60,
+                                              height: 60,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) =>
+                                                  Container(
+                                                width: 60,
+                                                height: 60,
+                                                color: Colors.grey.shade200,
+                                                child: const Icon(
+                                                    Icons.broken_image,
+                                                    size: 20,
+                                                    color: Colors.grey),
+                                              ),
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ),
-                                ),
-                              ))
-                          .toList(),
-                    ),
+                                    );
+                                  },
+                                ))
+                            .toList(),
+                      ),
                   ],
                 ],
               ),

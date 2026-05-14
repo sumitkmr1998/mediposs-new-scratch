@@ -58,7 +58,7 @@ class GoogleDriveService {
   }
 
   /// Performs a full system backup (Local + Google Drive).
-  Future<bool> uploadBackup() async {
+  Future<File?> generateFullBackupZip() async {
     try {
       // 1. Determine Source Paths
       final appDocDir = await getApplicationDocumentsDirectory();
@@ -88,7 +88,8 @@ class GoogleDriveService {
       }
 
       if (!foundAnything) {
-        throw Exception('Source data folders not found at $dbDirStr');
+        debugPrint('Source data folders not found at $dbDirStr');
+        return null;
       }
 
       // 3. Create the master ZIP
@@ -99,7 +100,23 @@ class GoogleDriveService {
       encoder.addDirectory(stagingDir);
       encoder.close();
 
-      final zipFile = File(zipFilePath);
+      // Clean up staging dir
+      await stagingDir.delete(recursive: true);
+
+      return File(zipFilePath);
+    } catch (e) {
+      debugPrint('Error generating backup zip: $e');
+      return null;
+    }
+  }
+
+  /// Performs a full system backup (Local + Google Drive).
+  Future<bool> uploadBackup() async {
+    try {
+      final zipFile = await generateFullBackupZip();
+      if (zipFile == null) return false;
+
+      final zipFileName = p.basename(zipFile.path);
 
       // 4. STEP 1: Offline Local Backup
       await _handleLocalBackup(zipFile);
@@ -120,9 +137,8 @@ class GoogleDriveService {
         debugPrint('Google Drive not connected - Cloud upload skipped.');
       }
       
-      // 6. Clean up temp files
+      // 6. Clean up temp zip
       if (await zipFile.exists()) await zipFile.delete();
-      if (await stagingDir.exists()) await stagingDir.delete(recursive: true);
       
       return true;
     } catch (e) {

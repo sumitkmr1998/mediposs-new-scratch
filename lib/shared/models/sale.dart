@@ -106,30 +106,39 @@ class Sale {
 // Transient model (not an ObjectBox entity)
 class SaleItem {
   final int medicineId;
+  final int procedureId;
   final String medicineName;
   final int qty;
   final double unitPrice;
+  final bool isProcedure;
+
   double get lineTotal => qty * unitPrice;
 
   SaleItem({
-    required this.medicineId,
+    this.medicineId = 0,
+    this.procedureId = 0,
     required this.medicineName,
     required this.qty,
     required this.unitPrice,
+    this.isProcedure = false,
   });
 
   Map<String, dynamic> toJson() => {
         'medicineId': medicineId,
+        'procedureId': procedureId,
         'medicineName': medicineName,
         'qty': qty,
         'unitPrice': unitPrice,
         'lineTotal': lineTotal,
+        'isProcedure': isProcedure,
       };
 
   factory SaleItem.fromJson(Map<String, dynamic> json) => SaleItem(
-        medicineId: json['medicineId'],
+        medicineId: json['medicineId'] ?? 0,
+        procedureId: json['procedureId'] ?? 0,
         medicineName: json['medicineName'],
         qty: json['qty'],
         unitPrice: (json['unitPrice'] as num).toDouble(),
+        isProcedure: json['isProcedure'] ?? false,
       );
 }

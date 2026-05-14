@@ -9,6 +9,8 @@ import '../../../shared/providers/prescription_provider.dart';
 import '../../../shared/providers/inventory_provider.dart';
 import '../../../shared/providers/template_provider.dart';
 import '../../../shared/services/sync_service.dart';
+import '../../../shared/providers/procedure_provider.dart';
+import '../../../shared/providers/patient_provider.dart';
 import '../../../theme/app_theme.dart';
 
 class PrescriptionAndroid extends StatefulWidget {
@@ -41,6 +43,8 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
   List<PrescriptionItem> _items = [];
   List<String> _labTests = [];
   final _labTestCtrl = TextEditingController();
+  List<String> _procedures = [];
+  final _procedureCtrl = TextEditingController();
 
   // Attached images
   final List<String> _imagePaths = [];
@@ -50,8 +54,19 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final pProvider = context.read<PrescriptionProvider>();
+      final syncService = context.read<SyncService>();
+      
+      // Pull latest photos for this patient from Hub to ensure we have them locally
+      final patient = context.read<PatientProvider>().getById(widget.appointment.patientId);
+      if (patient != null && !syncService.isHub) {
+        syncService.pullPatientPhotosForPatient(patient.uhid, patient.id).then((_) {
+          // Re-trigger resolution if new photos were downloaded
+          pProvider.load();
+        });
+      }
+
       final existing =
           pProvider.getPrescriptionForAppointment(widget.appointment.id);
       if (existing != null) {
@@ -64,10 +79,23 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
         _tempCtrl.text = vitals.temp;
         _spo2Ctrl.text = vitals.spo2;
         _pulseCtrl.text = vitals.pulse;
+        
+        final existingImages = pProvider.getImages(existing);
+        
         setState(() {
           _items = pProvider.getItems(existing);
           _labTests = pProvider.getLabTests(existing);
+          _procedures = pProvider.getProcedures(existing);
         });
+
+        // Resolve image paths asynchronously
+        for (final path in existingImages) {
+          pProvider.resolveImagePath(path).then((resolved) {
+            if (mounted) {
+              setState(() => _imagePaths.add(resolved));
+            }
+          });
+        }
       }
     });
   }
@@ -87,6 +115,7 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
     _daysCtrl.dispose();
     _qtyCtrl.dispose();
     _labTestCtrl.dispose();
+    _procedureCtrl.dispose();
     super.dispose();
   }
 
@@ -431,6 +460,80 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
                 ],
               ),
             ),
+            // ── Cosmetic Procedures ─────────────────────
+            _buildCard(
+              isDark: isDark,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SectionBadge(
+                    icon: Icons.auto_awesome_outlined,
+                    label: 'Cosmetic Procedures',
+                  ),
+                  const SizedBox(height: 20),
+                  Consumer<ProcedureProvider>(
+                    builder: (context, procProv, _) {
+                      return Autocomplete<String>(
+                        optionsBuilder: (textEditingValue) {
+                          final query = textEditingValue.text.toLowerCase();
+                          return procProv.procedures
+                              .where((p) => p.name.toLowerCase().contains(query))
+                              .map((p) => p.name)
+                              .toList();
+                        },
+                        onSelected: (selection) => _addProcedure(selection),
+                        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                          return TextField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            style: const TextStyle(fontSize: 13),
+                            decoration: InputDecoration(
+                              hintText: 'Search procedures (Laser, Peel, etc.)...',
+                              hintStyle: TextStyle(
+                                  color: context.textMutedColor, fontSize: 13),
+                              prefixIcon: Icon(Icons.search,
+                                  color: context.textMutedColor, size: 20),
+                              filled: true,
+                              fillColor:
+                                  isDark ? AppTheme.darkBg : const Color(0xFFF7F9FB),
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(24),
+                                borderSide: BorderSide(
+                                  color: AppTheme.primary.withValues(alpha: 0.2),
+                                  width: 2,
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 14),
+                            ),
+                            onSubmitted: (val) {
+                              _addProcedure(val);
+                              controller.clear();
+                            },
+                          );
+                        },
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      ..._procedures.asMap().entries.map((entry) {
+                        return _LabTestChip( // Reusing LabTestChip style
+                          label: entry.value,
+                          onDelete: () =>
+                              setState(() => _procedures.removeAt(entry.key)),
+                        );
+                      }),
+                    ],
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 16),
 
             // ── Attach Images ──────────────────────────
@@ -516,6 +619,18 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
     }
   }
 
+  void _addProcedure(String name) {
+    final proc = name.trim();
+    if (proc.isNotEmpty) {
+      setState(() {
+        if (!_procedures.contains(proc)) {
+          _procedures.add(proc);
+        }
+        _procedureCtrl.clear();
+      });
+    }
+  }
+
   Future<void> _pickImage(ImageSource source) async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: source, imageQuality: 80);
@@ -547,6 +662,7 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
             notes: _notesCtrl.text.trim(),
             items: _items,
             labTests: _labTests,
+            procedures: _procedures,
             images: _imagePaths,
             vitals: vitals,
             syncService: syncService,
@@ -881,6 +997,7 @@ class _MedicineAdderState extends State<_MedicineAdder> {
   String? _selectedId;
   String? _selectedName;
 
+  final _searchFocus = FocusNode();
   final _qtyFocus = FocusNode();
   final _daysFocus = FocusNode();
   final _dosageFocus = FocusNode();
@@ -888,6 +1005,7 @@ class _MedicineAdderState extends State<_MedicineAdder> {
 
   @override
   void dispose() {
+    _searchFocus.dispose();
     _qtyFocus.dispose();
     _daysFocus.dispose();
     _dosageFocus.dispose();
@@ -906,13 +1024,17 @@ class _MedicineAdderState extends State<_MedicineAdder> {
     return trimmed;
   }
 
+  TextEditingController? _autoCompleteCtrl;
+
   void _onMedicineSelected(String option) {
     final parts = option.split('||');
     setState(() {
       _selectedId = parts[0];
       _selectedName = parts[1];
     });
-    widget.searchCtrl.text = parts[1];
+    if (_autoCompleteCtrl != null) {
+      _autoCompleteCtrl!.text = parts[1];
+    }
     _qtyFocus.requestFocus();
   }
 
@@ -922,24 +1044,33 @@ class _MedicineAdderState extends State<_MedicineAdder> {
 
   void _onDosageEditingComplete() {
     widget.dosageCtrl.text = _formatDosage(widget.dosageCtrl.text);
-    _addBtnFocus.requestFocus();
+    _addItem(); // Auto-add on enter in dosage field
   }
 
   void _addItem() {
-    if (_selectedName == null) return;
+    final name = _autoCompleteCtrl?.text.trim() ?? '';
+    if (name.isEmpty) return;
+
     final formattedDosage = _formatDosage(widget.dosageCtrl.text.trim());
     widget.dosageCtrl.text = formattedDosage;
 
     final qty = int.tryParse(widget.qtyCtrl.text) ?? 1;
     final days = int.tryParse(widget.daysCtrl.text) ?? 3;
     final inv = context.read<InventoryProvider>();
-    final med =
-        inv.medicines.where((m) => m.id.toString() == _selectedId).firstOrNull;
+    
+    // Try to find the selected ID if name matches a known medicine
+    String? resolvedId = _selectedId;
+    if (resolvedId == null) {
+      final match = inv.medicines.where((m) => m.name.toLowerCase() == name.toLowerCase()).firstOrNull;
+      if (match != null) resolvedId = match.id.toString();
+    }
+
+    final med = inv.medicines.where((m) => m.id.toString() == resolvedId).firstOrNull;
     final isAvailable = med != null && med.storeStock > 0;
 
     widget.onAdd(PrescriptionItem(
-      medicineId: int.tryParse(_selectedId ?? '0') ?? 0,
-      medicineName: _selectedName!,
+      medicineId: int.tryParse(resolvedId ?? '0') ?? 0,
+      medicineName: name,
       qty: qty,
       dosage: formattedDosage,
       days: days,
@@ -950,11 +1081,12 @@ class _MedicineAdderState extends State<_MedicineAdder> {
       _selectedId = null;
       _selectedName = null;
     });
-    widget.searchCtrl.clear();
+    _autoCompleteCtrl?.clear();
     widget.dosageCtrl.clear();
     widget.qtyCtrl.text = '1';
     widget.daysCtrl.text = '3';
-    FocusScope.of(context).unfocus();
+    // Return focus to search for next medicine
+    _searchFocus.requestFocus();
   }
 
   @override
@@ -965,6 +1097,7 @@ class _MedicineAdderState extends State<_MedicineAdder> {
     return Column(
       children: [
         Autocomplete<String>(
+          focusNode: _searchFocus,
           optionsBuilder: (textEditingValue) {
             if (textEditingValue.text.isEmpty) return const [];
             final q = textEditingValue.text.toLowerCase();
@@ -975,9 +1108,11 @@ class _MedicineAdderState extends State<_MedicineAdder> {
           },
           displayStringForOption: (opt) => opt.split('||').last,
           onSelected: _onMedicineSelected,
-          fieldViewBuilder: (ctx, ctrl, focus, onSubmit) => TextField(
-            controller: ctrl,
-            focusNode: focus,
+          fieldViewBuilder: (ctx, ctrl, focus, onSubmit) {
+            _autoCompleteCtrl = ctrl;
+            return TextField(
+              controller: ctrl,
+              focusNode: focus,
             style: const TextStyle(fontSize: 13),
             decoration: InputDecoration(
               hintText: 'Search medicine, Enter to select...',
@@ -999,8 +1134,9 @@ class _MedicineAdderState extends State<_MedicineAdder> {
               ),
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            ),
-          ),
+              ),
+            );
+          },
         ),
         const SizedBox(height: 12),
         Row(

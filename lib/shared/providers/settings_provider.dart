@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/app_user.dart';
 import '../services/objectbox_service.dart';
 import '../services/sync_service.dart';
@@ -105,9 +107,40 @@ class SettingsProvider extends ChangeNotifier {
     }
   }
 
+  Future<String?> exportFullLocalBackup() async {
+    _isGoogleLoading = true;
+    notifyListeners();
+
+    try {
+      final zipFile = await _googleDrive.generateFullBackupZip();
+      if (zipFile == null) return null;
+
+      String? outputPath = Platform.isWindows 
+          ? '${Platform.environment['USERPROFILE']}\\Downloads' 
+          : (await getDownloadsDirectory())?.path;
+      
+      if (outputPath == null) throw Exception('Downloads folder not found');
+
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final targetPath = "$outputPath/mediposs_full_backup_$timestamp.zip";
+      
+      await zipFile.copy(targetPath);
+      await zipFile.delete(); // Clean up temp
+
+      _isGoogleLoading = false;
+      notifyListeners();
+      return targetPath;
+    } catch (e) {
+      debugPrint('Export Local Backup Err: $e');
+      _isGoogleLoading = false;
+      notifyListeners();
+      return null;
+    }
+  }
+
   /// Triggers auto-backup based on the specified logic ('At Startup', 'On Close', 'Periodic')
   Future<void> checkAndPerformAutoBackup(String trigger) async {
-    if (!_settings.googleDriveLinked || _settings.autoBackupFrequency == 'Never') return;
+    if (_settings.autoBackupFrequency == 'Never') return;
     if (_settings.autoBackupLogic != trigger) return;
 
     // Logic for Daily/Weekly/Monthly timing (Simplified for check)

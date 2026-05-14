@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/sale.dart';
+import '../models/patient.dart';
 import '../services/objectbox_service.dart';
 import '../services/local_server_service.dart';
 import '../services/sync_service.dart';
@@ -263,12 +264,28 @@ class SalesProvider extends ChangeNotifier {
     }
   }
 
-  List<Sale> getSalesByPatient(int patientId) {
-    if (patientId == 0) return [];
-    return ObjectBoxService.instance.saleBox
-        .query(Sale_.patientId.equals(patientId))
-        .order(Sale_.createdAt, flags: Order.descending)
-        .build()
-        .find();
+  List<Sale> getSalesForPatient(Patient patient) {
+    if (patient.id == 0 && patient.name.isEmpty) return [];
+
+    // Robust matching:
+    // 1. Same patientId (local consistency)
+    // 2. OR same Name + Phone (for synced data with ID mismatches)
+    // BUT we must also ensure that if patientId matches, it's not a false positive (different name)
+    
+    final allSales = ObjectBoxService.instance.saleBox.getAll();
+    return allSales.where((s) {
+      final idMatch = s.patientId == patient.id;
+      final nameMatch = s.patientName.trim().toLowerCase() == patient.name.trim().toLowerCase();
+      final phoneMatch = patient.phone.isNotEmpty && s.patientPhone.trim() == patient.phone.trim();
+      
+      // If ID matches, we still check name to avoid collisions on Hub from different devices
+      if (idMatch && nameMatch) return true;
+      
+      // If ID doesn't match (or patient is new), fallback to Name + Phone
+      if (nameMatch && (patient.phone.isEmpty || phoneMatch)) return true;
+      
+      return false;
+    }).toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 }

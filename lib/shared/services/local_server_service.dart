@@ -530,11 +530,26 @@ class LocalServerService {
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
 
+      // Resolve correct Hub patient ID (Robust resolution)
+      int hubPatientId = 0;
+      final pName = body['patientName'] as String? ?? '';
+      final pPhone = body['patientPhone'] as String? ?? '';
+
+      if (pName.isNotEmpty) {
+        final patients = ObjectBoxService.instance.patientBox.getAll();
+        final match = patients.where((p) {
+          final nMatch = p.name.trim().toLowerCase() == pName.trim().toLowerCase();
+          final phMatch = pPhone.isNotEmpty && p.phone.trim() == pPhone.trim();
+          return nMatch && (pPhone.isEmpty || phMatch);
+        }).firstOrNull;
+        if (match != null) hubPatientId = match.id;
+      }
+
       final sale = Sale(
         invoiceNo: body['invoiceNo'] ?? '',
-        patientId: body['patientId'] ?? 0,
-        patientName: body['patientName'] ?? '',
-        patientPhone: body['patientPhone'] ?? '',
+        patientId: hubPatientId > 0 ? hubPatientId : (body['patientId'] ?? 0),
+        patientName: pName,
+        patientPhone: pPhone,
         subtotal: (body['subtotal'] as num?)?.toDouble() ?? 0.0,
         discount: (body['discount'] as num?)?.toDouble() ?? 0.0,
         taxRate: (body['taxRate'] as num?)?.toDouble() ?? 0.0,
@@ -629,7 +644,17 @@ class LocalServerService {
           .findFirst();
 
       if (existing != null) {
-        p.id = existing.id;
+        // Only merge if the name matches (or is very similar)
+        // This prevents overwriting ABC with XYZ if they happen to get the same UHID (collision)
+        final nameMatches = existing.name.trim().toLowerCase() == p.name.trim().toLowerCase();
+        if (nameMatches) {
+          p.id = existing.id;
+        } else {
+          // Collision detected: Same UHID but different name.
+          // Append a suffix to the new UHID to make it unique on the Hub.
+          p.uhid = "${p.uhid}-DUP";
+          p.id = 0;
+        }
       }
 
       ObjectBoxService.instance.patientBox.put(p);
@@ -649,20 +674,30 @@ class LocalServerService {
   Future<Response> _appointmentsPushHandler(Request req) async {
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
-      // 1. Resolve correct patient ID on Hub by Name and Phone
+      // 1. Resolve correct patient ID on Hub (Robust resolution)
       int hubPatientId = 0;
-      final pName = body['patientName'] ?? '';
-      final pPhone = body['patientPhone'] ?? '';
-      if (pName.isNotEmpty) {
-        final p = ObjectBoxService.instance.patientBox
-                .getAll()
-                .where((p) => p.name == pName && p.phone == pPhone)
-                .firstOrNull ??
-            ObjectBoxService.instance.patientBox
-                .getAll()
-                .where((p) => p.name == pName)
-                .firstOrNull;
+      final pName = body['patientName'] as String? ?? '';
+      final pPhone = body['patientPhone'] as String? ?? '';
+      final pUhid = body['patientUhid'] as String? ?? ''; // Future-proofing
+
+      final patientBox = ObjectBoxService.instance.patientBox;
+      
+      // Try by UHID first (Stable key)
+      if (pUhid.isNotEmpty) {
+        final p = patientBox.query(Patient_.uhid.equals(pUhid)).build().findFirst();
         if (p != null) hubPatientId = p.id;
+      }
+
+      // Fallback: Try by Name + Phone
+      if (hubPatientId == 0 && pName.isNotEmpty) {
+        final patients = patientBox.getAll();
+        final match = patients.where((p) {
+          final nMatch = p.name.trim().toLowerCase() == pName.trim().toLowerCase();
+          final phMatch = pPhone.isNotEmpty && p.phone.trim() == pPhone.trim();
+          return nMatch && (pPhone.isEmpty || phMatch);
+        }).firstOrNull;
+        
+        if (match != null) hubPatientId = match.id;
       }
 
       // 2. Resolve correct doctor ID on Hub by Name
@@ -763,24 +798,27 @@ class LocalServerService {
 
   Response _appointmentsGetHandler(Request req) {
     final appointments = ObjectBoxService.instance.appointmentBox.getAll();
-    final json = appointments
-        .map((a) => {
-              'id': a.id,
-              'patientId': a.patientId,
-              'patientName': a.patientName,
-              'patientPhone': a.patientPhone,
-              'doctorId': a.doctorId,
-              'doctorName': a.doctorName,
-              'tokenNumber': a.tokenNumber,
-              'status': a.status,
-              'consultationFee': a.consultationFee,
-              'notes': a.notes,
-              'scheduledAt': a.scheduledAt.toIso8601String(),
-              'createdAt': a.createdAt.toIso8601String(),
-              'isWalkIn': a.isWalkIn,
-              'consultationBilled': a.consultationBilled,
-            })
-        .toList();
+    final patientBox = ObjectBoxService.instance.patientBox;
+    final json = appointments.map((a) {
+      final patient = patientBox.get(a.patientId);
+      return {
+        'id': a.id,
+        'patientId': a.patientId,
+        'patientUhid': patient?.uhid ?? '', // Added UHID for robust sync
+        'patientName': a.patientName,
+        'patientPhone': a.patientPhone,
+        'doctorId': a.doctorId,
+        'doctorName': a.doctorName,
+        'tokenNumber': a.tokenNumber,
+        'status': a.status,
+        'consultationFee': a.consultationFee,
+        'notes': a.notes,
+        'scheduledAt': a.scheduledAt.toIso8601String(),
+        'createdAt': a.createdAt.toIso8601String(),
+        'isWalkIn': a.isWalkIn,
+        'consultationBilled': a.consultationBilled,
+      };
+    }).toList();
     return Response.ok(
       jsonEncode({'data': json, 'count': json.length}),
       headers: {'content-type': 'application/json'},
@@ -848,32 +886,31 @@ class LocalServerService {
   Response _prescriptionsGetHandler(Request req) {
     final sinceStr = req.url.queryParameters['since'];
     final since = DateTime.tryParse(sinceStr ?? '') ?? DateTime(2000);
-
-    final box = ObjectBoxService.instance.prescriptionBox;
-    final prescriptions = box
-        .query(Prescription_.updatedAt.greaterThan(since.millisecondsSinceEpoch))
-        .build()
-        .find();
-
-    final json = prescriptions
-        .map((p) => {
-              'id': p.id,
-              'appointmentId': p.appointmentId,
-              'patientId': p.patientId,
-              'patientName': p.patientName,
-              'doctorId': p.doctorId,
-              'doctorName': p.doctorName,
-              'diagnosis': p.diagnosis,
-              'complaints': p.complaints,
-              'notes': p.notes,
-              'itemsJson': p.itemsJson,
-              'labTestsJson': p.labTestsJson,
-              'vitalsJson': p.vitalsJson,
-              'dispensed': p.dispensed,
-              'createdAt': p.createdAt.toIso8601String(),
-              'updatedAt': p.updatedAt.toIso8601String(),
-            })
-        .toList();
+    final prescriptions = ObjectBoxService.instance.prescriptionBox.getAll();
+    final patientBox = ObjectBoxService.instance.patientBox;
+    final json = prescriptions.map((p) {
+      final patient = patientBox.get(p.patientId);
+      return {
+        'id': p.id,
+        'appointmentId': p.appointmentId,
+        'patientId': p.patientId,
+        'patientUhid': patient?.uhid ?? '',
+        'patientName': p.patientName,
+        'doctorId': p.doctorId,
+        'doctorName': p.doctorName,
+        'diagnosis': p.diagnosis,
+        'complaints': p.complaints,
+        'notes': p.notes,
+        'itemsJson': p.itemsJson,
+        'labTestsJson': p.labTestsJson,
+        'vitalsJson': p.vitalsJson,
+        'imagesJson': p.imagesJson,
+        'proceduresJson': p.proceduresJson,
+        'dispensed': p.dispensed,
+        'createdAt': p.createdAt.toIso8601String(),
+        'updatedAt': p.updatedAt.toIso8601String(),
+      };
+    }).toList();
     return Response.ok(
       jsonEncode({'data': json, 'count': json.length}),
       headers: {'content-type': 'application/json'},
@@ -883,9 +920,38 @@ class LocalServerService {
   Future<Response> _prescriptionsPushHandler(Request req) async {
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      
+      // 1. Resolve local IDs using natural keys (UHID and Token+Date)
+      final uhid = body['patientUhid'] as String? ?? '';
+      final token = body['tokenNumber'] as int? ?? 0;
+      final createdAt = DateTime.tryParse(body['createdAt'] ?? '') ?? DateTime.now();
+      
+      int resolvedPatientId = 0;
+      if (uhid.isNotEmpty) {
+        final p = ObjectBoxService.instance.patientBox
+            .query(Patient_.uhid.equals(uhid))
+            .build()
+            .findFirst();
+        if (p != null) resolvedPatientId = p.id;
+      }
+
+      int resolvedApptId = 0;
+      if (token > 0) {
+        final appt = ObjectBoxService.instance.appointmentBox
+            .getAll()
+            .where((a) =>
+                a.tokenNumber == token &&
+                a.scheduledAt.year == createdAt.year &&
+                a.scheduledAt.month == createdAt.month &&
+                a.scheduledAt.day == createdAt.day)
+            .firstOrNull;
+        if (appt != null) resolvedApptId = appt.id;
+      }
+
+      // 2. Create/Update Prescription object
       final p = Prescription(
-        appointmentId: body['appointmentId'] ?? 0,
-        patientId: body['patientId'] ?? 0,
+        appointmentId: resolvedApptId > 0 ? resolvedApptId : (body['appointmentId'] ?? 0),
+        patientId: resolvedPatientId > 0 ? resolvedPatientId : (body['patientId'] ?? 0),
         patientName: body['patientName'] ?? '',
         doctorId: body['doctorId'] ?? 0,
         doctorName: body['doctorName'] ?? '',
@@ -896,15 +962,16 @@ class LocalServerService {
         labTestsJson: body['labTestsJson'] ?? '[]',
         vitalsJson: body['vitalsJson'] ?? '{}',
         imagesJson: body['imagesJson'] ?? '[]',
+        proceduresJson: body['proceduresJson'] ?? '[]',
         dispensed: body['dispensed'] ?? false,
-        createdAt: DateTime.tryParse(body['createdAt'] ?? '') ?? DateTime.now(),
+        createdAt: createdAt,
       );
 
-      // Use natural key mapping to prevent local sequence collisions
+      // Check for existing prescription by natural key (Patient + Date)
       final existing = ObjectBoxService.instance.prescriptionBox
           .getAll()
           .where((x) =>
-              x.patientName == p.patientName &&
+              x.patientId == p.patientId &&
               x.createdAt.year == p.createdAt.year &&
               x.createdAt.month == p.createdAt.month &&
               x.createdAt.day == p.createdAt.day)
@@ -912,45 +979,22 @@ class LocalServerService {
 
       if (existing != null) {
         p.id = existing.id;
-        // Fix up foreign keys in case they were Android-local IDs
-        p.appointmentId = existing.appointmentId;
-        p.patientId = existing.patientId;
-        p.doctorId = existing.doctorId;
-      } else {
-        p.id = 0;
-
-        // Let's resolve correct hub IDs
-        final hubPatient = ObjectBoxService.instance.patientBox
-            .getAll()
-            .where((x) => x.name == p.patientName)
-            .firstOrNull;
-        if (hubPatient != null) p.patientId = hubPatient.id;
-
-        final hubDoctor = ObjectBoxService.instance.doctorBox
-            .getAll()
-            .where((x) => x.name == p.doctorName)
-            .firstOrNull;
-        if (hubDoctor != null) p.doctorId = hubDoctor.id;
       }
-
+      
       ObjectBoxService.instance.prescriptionBox.put(p);
-
-      // Also ensure appointment status is updated to pharmacy if it was with_doctor
-      // Resolve Hub appointment by natural key
-      final appt = ObjectBoxService.instance.appointmentBox
-          .getAll()
-          .where((x) =>
-              x.patientName == p.patientName &&
-              x.scheduledAt.year == p.createdAt.year &&
-              x.scheduledAt.month == p.createdAt.month &&
-              x.scheduledAt.day == p.createdAt.day)
-          .firstOrNull;
-
-      if (appt != null && appt.status == kStatusWithDoctor) {
-        appt.status = kStatusPharmacy;
-        ObjectBoxService.instance.appointmentBox.put(appt);
+      
+      // 3. Update appointment status to 'pharmacy' on Hub if needed
+      if (resolvedApptId > 0) {
+        final appt = ObjectBoxService.instance.appointmentBox.get(resolvedApptId);
+        if (appt != null && (appt.status == kStatusWithDoctor || appt.status == kStatusWaiting)) {
+          appt.status = kStatusPharmacy;
+          ObjectBoxService.instance.appointmentBox.put(appt);
+          debugPrint('Hub: Updated appointment $resolvedApptId to pharmacy status');
+        }
       }
 
+      debugPrint('Hub: Processed prescription for ${p.patientName} (Resolved IDs: Patient=$resolvedPatientId, Appt=$resolvedApptId)');
+      
       broadcast({'event': 'sync_received'});
       _incomingDataController.add('prescriptions');
 

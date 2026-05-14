@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/appointment.dart';
+import '../models/patient.dart';
 import '../models/doctor.dart';
 import '../services/objectbox_service.dart';
 import '../services/time_service.dart';
@@ -349,8 +350,18 @@ class OpdProvider extends ChangeNotifier {
     return _appointments.where((a) => a.id == id).firstOrNull;
   }
 
-  List<Appointment> getAppointmentsForPatient(int patientId) {
-    return _appointments.where((a) => a.patientId == patientId).toList()
+  List<Appointment> getAppointmentsForPatient(Patient patient) {
+    if (patient.id == 0 && patient.name.isEmpty) return [];
+    
+    return _appointments.where((a) {
+      final idMatch = a.patientId == patient.id;
+      final nameMatch = a.patientName.trim().toLowerCase() == patient.name.trim().toLowerCase();
+      final phoneMatch = patient.phone.isNotEmpty && a.patientPhone.trim() == patient.phone.trim();
+
+      if (idMatch && nameMatch) return true;
+      if (nameMatch && (patient.phone.isEmpty || phoneMatch)) return true;
+      return false;
+    }).toList()
       ..sort((a, b) => b.scheduledAt.compareTo(a.scheduledAt));
   }
 }

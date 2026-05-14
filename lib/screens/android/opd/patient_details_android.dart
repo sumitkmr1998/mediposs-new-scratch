@@ -155,11 +155,11 @@ class _HistoryTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.read<AuthProvider>();
-    final sales = context.watch<SalesProvider>().getSalesByPatient(patient.id);
+    final sales = context.watch<SalesProvider>().getSalesForPatient(patient);
     final prescriptions = auth.canAccessMedicalRecords
         ? context
             .watch<PrescriptionProvider>()
-            .getPrescriptionsForPatient(patient.id)
+            .getPrescriptionsForPatient(patient)
         : <Prescription>[];
 
     // Merge and sort by date
@@ -574,9 +574,82 @@ class _PrescriptionDetailDialog extends StatelessWidget {
                     style:
                         TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                 Text(prescription.notes, style: const TextStyle(fontSize: 13)),
+                const SizedBox(height: 16),
+              ],
+
+              // Procedures
+              if (pProvider.getProcedures(prescription).isNotEmpty) ...[
+                const Text('📋 Procedures',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                ...pProvider.getProcedures(prescription).map((p) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text('• $p', style: const TextStyle(fontSize: 13)),
+                    )),
+                const SizedBox(height: 16),
+              ],
+
+              // Images
+              if (pProvider.getImages(prescription).isNotEmpty) ...[
+                const Text('🖼️ Attachments',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: pProvider.getImages(prescription).map((path) {
+                    return FutureBuilder<String>(
+                      future: pProvider.resolveImagePath(path),
+                      builder: (context, snapshot) {
+                        final resolvedPath = snapshot.data ?? path;
+                        return GestureDetector(
+                          onTap: () => _viewImage(context, resolvedPath),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(
+                              File(resolvedPath),
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                width: 80,
+                                height: 80,
+                                color: Colors.grey.shade200,
+                                child: const Icon(Icons.broken_image,
+                                    size: 20, color: Colors.grey),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  }).toList(),
+                ),
               ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  void _viewImage(BuildContext context, String path) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            InteractiveViewer(
+              child: Center(child: Image.file(File(path))),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.white, size: 30),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ],
         ),
       ),
     );
@@ -679,7 +752,7 @@ class _GalleryTabState extends State<_GalleryTab> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final pProvider = context.watch<PatientProvider>();
-    final photos = pProvider.getPatientPhotos(widget.patient.id);
+    final photos = pProvider.getPatientPhotosRobust(widget.patient);
 
     return Scaffold(
       floatingActionButton: auth.canAccessMedicalRecords
@@ -784,7 +857,6 @@ class _GalleryTabState extends State<_GalleryTab> {
 
   void _addPhoto() async {
     if (Platform.isAndroid || Platform.isIOS) {
-      // Mobile: Show modal bottom sheet to choose Camera or Gallery
       showModalBottomSheet(
         context: context,
         builder: (ctx) => SafeArea(
@@ -796,7 +868,7 @@ class _GalleryTabState extends State<_GalleryTab> {
                 title: const Text('Take Photo'),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _pickImage(ImageSource.camera);
+                  _pickImages(ImageSource.camera);
                 },
               ),
               ListTile(
@@ -804,7 +876,7 @@ class _GalleryTabState extends State<_GalleryTab> {
                 title: const Text('Choose from Gallery'),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _pickImage(ImageSource.gallery);
+                  _pickImages(ImageSource.gallery);
                 },
               ),
             ],
@@ -812,30 +884,37 @@ class _GalleryTabState extends State<_GalleryTab> {
         ),
       );
     } else {
-      // Desktop: Fall back to FilePicker
       final result = await FilePicker.platform.pickFiles(
         type: FileType.image,
-        allowMultiple: false,
+        allowMultiple: true,
       );
-      if (result != null && result.files.single.path != null) {
-        _saveCapturedPhoto(result.files.single.path!);
+      if (result != null && result.paths.isNotEmpty) {
+        final validPaths = result.paths.whereType<String>().toList();
+        _saveCapturedPhotos(validPaths);
       }
     }
   }
 
-  Future<void> _pickImage(ImageSource source) async {
+  Future<void> _pickImages(ImageSource source) async {
     final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: source);
-    if (pickedFile != null) {
-      _saveCapturedPhoto(pickedFile.path);
+    if (source == ImageSource.camera) {
+      final pickedFile = await picker.pickImage(source: source);
+      if (pickedFile != null) {
+        _saveCapturedPhotos([pickedFile.path]);
+      }
+    } else {
+      final pickedFiles = await picker.pickMultiImage();
+      if (pickedFiles.isNotEmpty) {
+        _saveCapturedPhotos(pickedFiles.map((e) => e.path).toList());
+      }
     }
   }
 
-  Future<void> _saveCapturedPhoto(String path) async {
+  Future<void> _saveCapturedPhotos(List<String> paths) async {
     final syncService = Platform.isAndroid ? context.read<SyncService>() : null;
-    await context.read<PatientProvider>().savePatientPhoto(
+    await context.read<PatientProvider>().savePatientPhotos(
           widget.patient.id,
-          path,
+          paths,
           syncService: syncService,
         );
     setState(() {});

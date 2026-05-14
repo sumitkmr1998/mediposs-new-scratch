@@ -12,6 +12,7 @@ import '../../../shared/providers/template_provider.dart';
 import '../../../shared/providers/patient_provider.dart';
 import '../../../shared/services/sync_service.dart';
 import '../../../theme/app_theme.dart';
+import '../../../shared/providers/procedure_provider.dart';
 import 'patient_details_windows.dart';
 import '../../../widgets/windows_camera_dialog.dart';
 import '../../../widgets/phone_camera_dialog.dart';
@@ -53,6 +54,8 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
   List<PrescriptionItem> _items = [];
   List<String> _labTests = [];
   final _labTestCtrl = TextEditingController();
+  List<String> _procedures = [];
+  final _procedureCtrl = TextEditingController();
 
   // Attached images
   final List<String> _imagePaths = [];
@@ -77,6 +80,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
         setState(() {
           _items = draft['items'] ?? [];
           _labTests = draft['labTests'] ?? [];
+          _procedures = draft['procedures'] ?? [];
           _imagePaths.addAll(draft['imagePaths'] ?? []);
         });
         return;
@@ -99,6 +103,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
         setState(() {
           _items = pProvider.getItems(existing);
           _labTests = pProvider.getLabTests(existing);
+          _procedures = pProvider.getProcedures(existing);
           _imagePaths.addAll(pProvider.getImages(existing));
         });
       }
@@ -117,6 +122,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
       'pulse': _pulseCtrl.text,
       'items': _items,
       'labTests': _labTests,
+      'procedures': _procedures,
       'imagePaths': _imagePaths,
     };
   }
@@ -137,6 +143,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
     _daysCtrl.dispose();
     _qtyCtrl.dispose();
     _labTestCtrl.dispose();
+    _procedureCtrl.dispose();
     super.dispose();
   }
 
@@ -587,6 +594,94 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
                       ),
                       const SizedBox(height: 20),
 
+                      // ── Cosmetic Procedures ─────────────────────
+                      _buildCard(
+                        isDark: isDark,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _SectionBadge(
+                              icon: Icons.auto_awesome_outlined,
+                              label: 'Cosmetic Procedures',
+                            ),
+                            const SizedBox(height: 20),
+                            Consumer<ProcedureProvider>(
+                              builder: (context, procProv, _) {
+                                return Autocomplete<String>(
+                                  optionsBuilder: (textEditingValue) {
+                                    final query =
+                                        textEditingValue.text.toLowerCase();
+                                    return procProv.procedures
+                                        .where((p) => p.name
+                                            .toLowerCase()
+                                            .contains(query))
+                                        .map((p) => p.name)
+                                        .toList();
+                                  },
+                                  onSelected: (selection) =>
+                                      _addProcedure(selection),
+                                  fieldViewBuilder: (context, controller,
+                                      focusNode, onFieldSubmitted) {
+                                    return TextField(
+                                      controller: controller,
+                                      focusNode: focusNode,
+                                      style: const TextStyle(fontSize: 13),
+                                      decoration: InputDecoration(
+                                        hintText:
+                                            'Search procedures (Laser, Peel, etc.)...',
+                                        hintStyle: TextStyle(
+                                            color: context.textMutedColor,
+                                            fontSize: 13),
+                                        prefixIcon: Icon(Icons.search,
+                                            color: context.textMutedColor,
+                                            size: 20),
+                                        filled: true,
+                                        fillColor: isDark
+                                            ? AppTheme.darkBg
+                                            : AppTheme.inputBg,
+                                        border: InputBorder.none,
+                                        enabledBorder: InputBorder.none,
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(24),
+                                          borderSide: BorderSide(
+                                            color: AppTheme.primary
+                                                .withValues(alpha: 0.2),
+                                            width: 2,
+                                          ),
+                                        ),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 20, vertical: 14),
+                                      ),
+                                      onSubmitted: (val) {
+                                        _addProcedure(val);
+                                        controller.clear();
+                                      },
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              children: [
+                                ..._procedures.asMap().entries.map((entry) {
+                                  return _LabTestChip(
+                                    label: entry.value,
+                                    onDelete: () => setState(() =>
+                                        _procedures.removeAt(entry.key)),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
                       // ── Attach Images ──────────────────────────
                       _buildCard(
                         isDark: isDark,
@@ -676,6 +771,18 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
       setState(() {
         _labTests.add(test);
         _labTestCtrl.clear();
+      });
+    }
+  }
+
+  void _addProcedure(String name) {
+    final proc = name.trim();
+    if (proc.isNotEmpty) {
+      setState(() {
+        if (!_procedures.contains(proc)) {
+          _procedures.add(proc);
+        }
+        _procedureCtrl.clear();
       });
     }
   }
@@ -772,6 +879,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
             notes: _notesCtrl.text.trim(),
             items: _items,
             labTests: _labTests,
+            procedures: _procedures,
             images: _imagePaths,
             vitals: vitals,
             syncService: syncService,
@@ -934,8 +1042,16 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
 
   void _showImportPreviousDialog(BuildContext context) {
     final pProvider = context.read<PrescriptionProvider>();
+    final patient = context.read<PatientProvider>().getById(widget.appointment.patientId);
+    if (patient == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Error: Patient record not found.'),
+      ));
+      return;
+    }
+    
     final past = pProvider
-        .getPrescriptionsForPatient(widget.appointment.patientId)
+        .getPrescriptionsForPatient(patient)
         .where((p) => p.appointmentId != widget.appointment.id)
         .toList();
 

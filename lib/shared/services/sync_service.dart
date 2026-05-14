@@ -37,6 +37,7 @@ class SyncService extends ChangeNotifier {
   bool get isConnected => _isConnected;
   bool get isCloudMode => _isCloudMode;
   bool get isSyncing => _isSyncing;
+  bool get isHub => defaultTargetPlatform == TargetPlatform.windows;
   String? get connectedRole => _connectedRole;
   Map<String, dynamic>? get lastUserMap => _lastUserMap;
   String get secret => ObjectBoxService.instance.settings.jwtSecret;
@@ -749,57 +750,63 @@ class SyncService extends ChangeNotifier {
         final box = ObjectBoxService.instance.appointmentBox;
         final allLocal = box.getAll();
 
-        // Natural key: tokenNumber + patientId + scheduledAt date (YYYY-MM-DD)
-        // This uniquely identifies an appointment without relying on IDs
-        String _apptKey(int token, int patientId, DateTime scheduledAt) =>
-            '${token}_${patientId}_${scheduledAt.year}-${scheduledAt.month}-${scheduledAt.day}';
+        // Natural key: tokenNumber + patientUhid + scheduledAt date (YYYY-MM-DD)
+        String _apptKey(int token, String uhid, DateTime scheduledAt) =>
+            '${token}_${uhid}_${scheduledAt.year}-${scheduledAt.month}-${scheduledAt.day}';
 
         final hubKeys = <String>{};
         for (final item in data) {
-          final scheduledAt =
-              DateTime.tryParse(item['scheduledAt'] ?? '') ?? DateTime.now();
-          final createdAt =
-              DateTime.tryParse(item['createdAt'] ?? '') ?? DateTime.now();
+          final uhid = item['patientUhid'] as String? ?? '';
+          final scheduledAt = DateTime.tryParse(item['scheduledAt'] ?? '') ?? DateTime.now();
+          final createdAt = DateTime.tryParse(item['createdAt'] ?? '') ?? DateTime.now();
           final token = item['tokenNumber'] as int? ?? 0;
-          final patientId = item['patientId'] as int? ?? 0;
-          final key = _apptKey(token, patientId, scheduledAt);
+
+          // Resolve local patient ID using UHID
+          int localPatientId = 0;
+          if (uhid.isNotEmpty) {
+            final p = ObjectBoxService.instance.patientBox
+                .query(Patient_.uhid.equals(uhid))
+                .build()
+                .findFirst();
+            if (p != null) localPatientId = p.id;
+          }
+
+          if (localPatientId == 0) {
+            debugPrint('SyncService: Warning — Could not resolve local patient for UHID $uhid. Skipping appointment.');
+            continue;
+          }
+
+          final key = _apptKey(token, uhid, scheduledAt);
           hubKeys.add(key);
 
-          // Find existing by natural key
-          final existing = allLocal
-              .where((a) =>
-                  _apptKey(a.tokenNumber, a.patientId, a.scheduledAt) == key)
-              .firstOrNull;
+          // Find existing by natural key (requires looking up UHID for local patients)
+          final existing = allLocal.where((a) {
+            final p = ObjectBoxService.instance.patientBox.get(a.patientId);
+            if (p == null) return false;
+            final lKey = _apptKey(a.tokenNumber, p.uhid, a.scheduledAt);
+            return lKey == key;
+          }).firstOrNull;
 
           if (existing != null) {
             existing
-              ..patientId = patientId
-              ..patientName = item['patientName'] ?? ''
-              ..patientPhone = item['patientPhone'] ?? ''
-              ..doctorId = item['doctorId'] ?? 0
-              ..doctorName = item['doctorName'] ?? ''
-              ..tokenNumber = token
+              ..patientId = localPatientId
               ..status = item['status'] ?? 'waiting'
-              ..consultationFee =
-                  (item['consultationFee'] as num?)?.toDouble() ?? 0.0
+              ..consultationFee = (item['consultationFee'] as num?)?.toDouble() ?? 0.0
               ..notes = item['notes'] ?? ''
-              ..scheduledAt = scheduledAt
-              ..createdAt = createdAt
               ..isWalkIn = item['isWalkIn'] ?? true
               ..consultationBilled = item['consultationBilled'] ?? false;
             box.put(existing);
           } else {
             box.put(Appointment(
-              id: 0, // Auto-assign — never force Hub IDs
-              patientId: patientId,
+              id: 0,
+              patientId: localPatientId,
               patientName: item['patientName'] ?? '',
               patientPhone: item['patientPhone'] ?? '',
               doctorId: item['doctorId'] ?? 0,
               doctorName: item['doctorName'] ?? '',
               tokenNumber: token,
               status: item['status'] ?? 'waiting',
-              consultationFee:
-                  (item['consultationFee'] as num?)?.toDouble() ?? 0.0,
+              consultationFee: (item['consultationFee'] as num?)?.toDouble() ?? 0.0,
               notes: item['notes'] ?? '',
               scheduledAt: scheduledAt,
               createdAt: createdAt,
@@ -810,13 +817,17 @@ class SyncService extends ChangeNotifier {
         }
         // Remove appointments deleted on Hub
         for (final a in allLocal) {
-          final key = _apptKey(a.tokenNumber, a.patientId, a.scheduledAt);
+          final p = ObjectBoxService.instance.patientBox.get(a.patientId);
+          if (p == null) {
+             box.remove(a.id);
+             continue;
+          }
+          final key = _apptKey(a.tokenNumber, p.uhid, a.scheduledAt);
           if (!hubKeys.contains(key)) {
             box.remove(a.id);
           }
         }
-        debugPrint(
-            'SyncService: pullAppointments synced ${data.length} appointments.');
+        debugPrint('SyncService: pullAppointments synced ${data.length} appointments.');
       }
     } catch (e) {
       debugPrint('pullAppointments err: $e');
@@ -897,43 +908,71 @@ class SyncService extends ChangeNotifier {
         final box = ObjectBoxService.instance.prescriptionBox;
         final allLocal = box.getAll();
 
-        // Natural key: patientId + createdAt date (one prescripton per patient per day max)
-        String _pKey(int pId, DateTime dt) =>
-            '${pId}_${dt.year}-${dt.month}-${dt.day}';
+        // Natural key: patientUhid + createdAt date
+        String _pKey(String uhid, DateTime dt) =>
+            '${uhid}_${dt.year}-${dt.month}-${dt.day}';
 
         final hubKeys = <String>{};
         for (final item in data) {
-          final patientId = item['patientId'] as int? ?? 0;
-          final createdAt =
-              DateTime.tryParse(item['createdAt'] ?? '') ?? DateTime.now();
-          final key = _pKey(patientId, createdAt);
+          final uhid = item['patientUhid'] as String? ?? '';
+          final token = item['tokenNumber'] as int? ?? 0;
+          final createdAt = DateTime.tryParse(item['createdAt'] ?? '') ?? DateTime.now();
+          final patientName = item['patientName'] ?? '';
+
+          // Resolve local patient ID using UHID
+          int localPatientId = 0;
+          if (uhid.isNotEmpty) {
+            final p = ObjectBoxService.instance.patientBox
+                .query(Patient_.uhid.equals(uhid))
+                .build()
+                .findFirst();
+            if (p != null) localPatientId = p.id;
+          }
+
+          // Resolve local appointment ID using tokenNumber and date
+          int localApptId = 0;
+          if (token > 0) {
+            final appt = ObjectBoxService.instance.appointmentBox
+                .getAll()
+                .where((a) =>
+                    a.tokenNumber == token &&
+                    a.scheduledAt.year == createdAt.year &&
+                    a.scheduledAt.month == createdAt.month &&
+                    a.scheduledAt.day == createdAt.day)
+                .firstOrNull;
+            if (appt != null) localApptId = appt.id;
+          }
+
+          final key = _pKey(uhid, createdAt);
           hubKeys.add(key);
 
-          final existing = allLocal
-              .where((p) => _pKey(p.patientId, p.createdAt) == key)
-              .firstOrNull;
+          final existing = allLocal.where((p) {
+            final patient = ObjectBoxService.instance.patientBox.get(p.patientId);
+            if (patient == null) return false;
+            final lKey = _pKey(patient.uhid, p.createdAt);
+            return lKey == key;
+          }).firstOrNull;
+
           if (existing != null) {
             existing
-              ..appointmentId = item['appointmentId'] ?? 0
-              ..patientId = patientId
-              ..patientName = item['patientName'] ?? ''
-              ..doctorId = item['doctorId'] ?? 0
-              ..doctorName = item['doctorName'] ?? ''
+              ..appointmentId = localApptId > 0 ? localApptId : existing.appointmentId
+              ..patientId = localPatientId > 0 ? localPatientId : existing.patientId
               ..diagnosis = item['diagnosis'] ?? ''
               ..complaints = item['complaints'] ?? ''
               ..notes = item['notes'] ?? ''
               ..itemsJson = item['itemsJson'] ?? '[]'
               ..labTestsJson = item['labTestsJson'] ?? '[]'
+              ..imagesJson = item['imagesJson'] ?? '[]'
+              ..proceduresJson = item['proceduresJson'] ?? '[]'
               ..vitalsJson = item['vitalsJson'] ?? '{}'
-              ..dispensed = item['dispensed'] ?? false
-              ..createdAt = createdAt;
+              ..dispensed = item['dispensed'] ?? false;
             box.put(existing);
           } else {
             box.put(Prescription(
-              id: 0, // Auto-assign
-              appointmentId: item['appointmentId'] ?? 0,
-              patientId: patientId,
-              patientName: item['patientName'] ?? '',
+              id: 0,
+              appointmentId: localApptId,
+              patientId: localPatientId,
+              patientName: patientName,
               doctorId: item['doctorId'] ?? 0,
               doctorName: item['doctorName'] ?? '',
               diagnosis: item['diagnosis'] ?? '',
@@ -942,6 +981,8 @@ class SyncService extends ChangeNotifier {
               itemsJson: item['itemsJson'] ?? '[]',
               labTestsJson: item['labTestsJson'] ?? '[]',
               vitalsJson: item['vitalsJson'] ?? '{}',
+              imagesJson: item['imagesJson'] ?? '[]',
+              proceduresJson: item['proceduresJson'] ?? '[]',
               dispensed: item['dispensed'] ?? false,
               createdAt: createdAt,
             ));
@@ -950,14 +991,18 @@ class SyncService extends ChangeNotifier {
         // Remove prescriptions deleted on Hub (Full Sync only)
         if (since == null) {
           for (final p in allLocal) {
-            final key = _pKey(p.patientId, p.createdAt);
+            final patient = ObjectBoxService.instance.patientBox.get(p.patientId);
+            if (patient == null) {
+              box.remove(p.id);
+              continue;
+            }
+            final key = _pKey(patient.uhid, p.createdAt);
             if (!hubKeys.contains(key)) {
               box.remove(p.id);
             }
           }
         }
-        debugPrint(
-            'SyncService: pullPrescriptions synced ${data.length} prescriptions.');
+        debugPrint('SyncService: pullPrescriptions synced ${data.length} prescriptions.');
       }
     } catch (e) {
       debugPrint('pullPrescriptions err: $e');
@@ -1111,6 +1156,7 @@ class SyncService extends ChangeNotifier {
           hubNames.add(name);
           final createdAt =
               DateTime.tryParse(item['createdAt'] ?? '') ?? DateTime.now();
+
           final existing = allLocal.where((t) => t.name == name).firstOrNull;
           if (existing != null) {
             existing
@@ -1492,6 +1538,11 @@ class SyncService extends ChangeNotifier {
       debugPrint('SyncService: pushPatientPhotoDelete err: $e');
       return false;
     }
+  }
+
+  Future<bool> syncEntity(String entity, Map<String, dynamic> data) async {
+    return await _unifiedPush('/api/$entity/push', data,
+        entity: entity.toLowerCase(), action: 'create');
   }
 }
 

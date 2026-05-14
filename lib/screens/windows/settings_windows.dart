@@ -8,6 +8,8 @@ import 'package:intl/intl.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:network_info_plus/network_info_plus.dart';
+import 'package:path/path.dart' as p;
+import 'package:url_launcher/url_launcher.dart';
 import '../../shared/services/cloudflare_service.dart';
 
 import '../../shared/providers/auth_provider.dart';
@@ -326,7 +328,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     );
   }
 
-  Widget _buildSectionContent(String title, SettingsProvider prov, AuthProvider auth) {
+  Widget _buildSectionContent(String title, SettingsProvider settingsProv, AuthProvider auth) {
     switch (title) {
       case 'Store Details':
         return _buildStoreSection();
@@ -335,13 +337,13 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       case 'Interface':
         return _buildInterfaceSection();
       case 'Cloud Sync':
-        return _buildCloudSection(prov);
+        return _buildCloudSection(settingsProv);
       case 'Networking':
         return _buildNetworkingSection();
       case 'Inventory':
         return _buildInventorySection();
       case 'Data':
-        return _buildDataSection();
+        return _buildDataSection(settingsProv);
       case 'Staff':
         return UserManagementWindows(isEmbedded: true);
       case 'Doctors':
@@ -369,7 +371,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     );
   }
 
-  Widget _buildCloudSection(SettingsProvider prov) {
+  Widget _buildCloudSection(SettingsProvider settingsProv) {
     return Column(
       children: [
         SettingsSection(
@@ -380,10 +382,10 @@ class _SettingsWindowsState extends State<SettingsWindows> {
               children: [
                 CircleAvatar(
                   radius: 24,
-                  backgroundColor: prov.settings.googleDriveLinked ? AppTheme.success.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.1),
+                  backgroundColor: settingsProv.settings.googleDriveLinked ? AppTheme.success.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.1),
                   child: Icon(
-                    prov.settings.googleDriveLinked ? LucideIcons.cloudLightning : LucideIcons.cloudOff,
-                    color: prov.settings.googleDriveLinked ? AppTheme.success : AppTheme.danger,
+                    settingsProv.settings.googleDriveLinked ? LucideIcons.cloudLightning : LucideIcons.cloudOff,
+                    color: settingsProv.settings.googleDriveLinked ? AppTheme.success : AppTheme.danger,
                   ),
                 ),
                 const SizedBox(width: 20),
@@ -392,11 +394,11 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        prov.settings.googleDriveLinked ? 'Google Account Connected' : 'Google Drive Not Linked',
+                        settingsProv.settings.googleDriveLinked ? 'Google Account Connected' : 'Google Drive Not Linked',
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
                       Text(
-                        prov.settings.googleDriveLinked 
+                        settingsProv.settings.googleDriveLinked 
                           ? 'Automated backups are configured according to your schedule.' 
                           : 'Connect your Google account to enable full database zipping and cloud storage.',
                         style: TextStyle(color: context.textMutedColor, fontSize: 13),
@@ -405,23 +407,23 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                if (!prov.settings.googleDriveLinked)
+                if (!settingsProv.settings.googleDriveLinked)
                   ElevatedButton.icon(
-                    onPressed: prov.isGoogleLoading ? null : () => prov.linkGoogleDrive(),
+                    onPressed: settingsProv.isGoogleLoading ? null : () => settingsProv.linkGoogleDrive(),
                     icon: const Icon(LucideIcons.chrome, size: 18),
-                    label: Text(prov.isGoogleLoading ? 'Opening Browser...' : 'Link Account'),
+                    label: Text(settingsProv.isGoogleLoading ? 'Opening Browser...' : 'Link Account'),
                     style: ElevatedButton.styleFrom(backgroundColor: AppTheme.sky),
                   )
                 else
                   TextButton.icon(
-                    onPressed: () => prov.unlinkGoogleDrive(),
+                    onPressed: () => settingsProv.unlinkGoogleDrive(),
                     icon: const Icon(LucideIcons.logOut, size: 18),
                     label: const Text('Disconnect'),
                     style: TextButton.styleFrom(foregroundColor: AppTheme.danger),
                   ),
               ],
             ),
-            if (prov.settings.googleDriveLinked) ...[
+            if (settingsProv.settings.googleDriveLinked) ...[
               const Divider(height: 48),
               Row(
                 children: [
@@ -431,8 +433,8 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                       children: [
                         const Text('Last Cloud Sync', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                         Text(
-                          prov.settings.lastBackupMillis != null 
-                            ? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.fromMillisecondsSinceEpoch(prov.settings.lastBackupMillis!))
+                          settingsProv.settings.lastBackupMillis != null 
+                            ? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.fromMillisecondsSinceEpoch(settingsProv.settings.lastBackupMillis!))
                             : 'No backups recorded recently',
                           style: TextStyle(color: context.textMutedColor, fontSize: 12),
                         ),
@@ -440,19 +442,19 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                     ),
                   ),
                   ElevatedButton.icon(
-                    onPressed: prov.isGoogleLoading ? null : () async {
-                      final success = await prov.performManualBackup();
+                    onPressed: settingsProv.isGoogleLoading ? null : () async {
+                      final success = await settingsProv.performManualBackup();
                       if (success && mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Full Data Folder Backup Success!'), backgroundColor: AppTheme.success));
                       } else if (!success && mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text('Backup Failed: ${prov.googleError ?? 'Unknown Error'}'), 
+                          content: Text('Backup Failed: ${settingsProv.googleError ?? 'Unknown Error'}'), 
                           backgroundColor: AppTheme.danger,
                           duration: const Duration(seconds: 5),
                         ));
                       }
                     },
-                    icon: prov.isGoogleLoading 
+                    icon: settingsProv.isGoogleLoading 
                       ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Icon(LucideIcons.uploadCloud, size: 18),
                     label: const Text('Full Backup Now'),
@@ -460,7 +462,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                   ),
                   const SizedBox(width: 12),
                   OutlinedButton.icon(
-                    onPressed: prov.isGoogleLoading ? null : () => _showRestoreDialog(context, prov),
+                    onPressed: settingsProv.isGoogleLoading ? null : () => _showRestoreDialog(context, settingsProv),
                     icon: const Icon(LucideIcons.downloadCloud, size: 18),
                     label: const Text('Restore from Cloud'),
                     style: OutlinedButton.styleFrom(
@@ -473,9 +475,8 @@ class _SettingsWindowsState extends State<SettingsWindows> {
             ],
           ],
         ),
-        if (prov.settings.googleDriveLinked)
-          SettingsSection(
-            title: 'Auto-Backup Automation',
+        SettingsSection(
+          title: 'Auto-Backup Automation',
             icon: LucideIcons.calendarClock,
             children: [
               SettingsDropdown<String>(
@@ -488,9 +489,9 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                 onChanged: (val) {
                   if (val != null) {
                     setState(() => _autoBackupFreq = val);
-                    final updated = prov.settings;
+                    final updated = settingsProv.settings;
                     updated.autoBackupFrequency = val;
-                    prov.save(updated);
+                    settingsProv.save(updated);
                   }
                 },
               ),
@@ -498,21 +499,21 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                 ListTile(
                   leading: const Icon(LucideIcons.clock, size: 20),
                   title: const Text('Scheduled Time', style: TextStyle(fontSize: 14)),
-                  subtitle: Text(prov.settings.autoBackupTime ?? 'Select Time', style: TextStyle(color: AppTheme.primary)),
+                  subtitle: Text(settingsProv.settings.autoBackupTime ?? 'Select Time', style: TextStyle(color: AppTheme.primary)),
                   trailing: const Icon(LucideIcons.chevronRight, size: 16),
                   onTap: () async {
                     final time = await showTimePicker(
                       context: context,
                       initialTime: TimeOfDay(
-                        hour: int.parse((prov.settings.autoBackupTime ?? '22:00').split(':').first),
-                        minute: int.parse((prov.settings.autoBackupTime ?? '22:00').split(':').last),
+                        hour: int.parse((settingsProv.settings.autoBackupTime ?? '22:00').split(':').first),
+                        minute: int.parse((settingsProv.settings.autoBackupTime ?? '22:00').split(':').last),
                       ),
                     );
                     if (time != null) {
                       final timeStr = '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
-                      final updated = prov.settings;
+                      final updated = settingsProv.settings;
                       updated.autoBackupTime = timeStr;
-                      prov.save(updated);
+                      settingsProv.save(updated);
                       setState(() {});
                     }
                   },
@@ -733,7 +734,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     );
   }
 
-  Widget _buildDataSection() {
+  Widget _buildDataSection(SettingsProvider settingsProv) {
     return Column(
       children: [
         SettingsSection(
@@ -771,7 +772,6 @@ class _SettingsWindowsState extends State<SettingsWindows> {
               'Perform individual database file operations. Restoring will reset local data.',
               style: TextStyle(fontSize: 13, color: Colors.grey),
             ),
-            const SizedBox(height: 20),
             Row(
               children: [
                 Expanded(
@@ -791,6 +791,53 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: settingsProv.isGoogleLoading ? null : () async {
+                      final path = await settingsProv.exportFullLocalBackup();
+                      if (path != null && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text('Full Backup Saved: ${p.basename(path)}'),
+                          backgroundColor: AppTheme.success,
+                        ));
+                      }
+                    },
+                    icon: settingsProv.isGoogleLoading 
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(LucideIcons.archive),
+                    label: const Text('Generate Full System Backup (.zip)'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final appSupportDir = await getApplicationSupportDirectory();
+                    final backupDir = Directory(p.join(appSupportDir.path, 'backups'));
+                    if (await backupDir.exists()) {
+                      launchUrl(Uri.file(backupDir.path));
+                    } else {
+                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No automated backups created yet.')));
+                    }
+                  },
+                  icon: const Icon(LucideIcons.folder),
+                  label: const Text('Open Backup Folder'),
+                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Recommended: Includes all database records, patient photos, and prescriptions.',
+              style: TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -914,8 +961,8 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     }
   }
 
-  Future<void> _showRestoreDialog(BuildContext context, SettingsProvider prov) async {
-    final backups = await prov.fetchCloudBackups();
+  Future<void> _showRestoreDialog(BuildContext context, SettingsProvider settingsProv) async {
+    final backups = await settingsProv.fetchCloudBackups();
     if (!mounted) return;
 
     if (backups.isEmpty) {
@@ -956,7 +1003,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                       trailing: const Icon(LucideIcons.chevronRight, size: 16),
                       onTap: () {
                         Navigator.pop(ctx);
-                        _confirmAndRestore(context, prov, b.id!, b.name!);
+                        _confirmAndRestore(context, settingsProv, b.id!, b.name!);
                       },
                     );
                   },
@@ -972,7 +1019,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     );
   }
 
-  Future<void> _confirmAndRestore(BuildContext context, SettingsProvider prov, String fileId, String fileName) async {
+  Future<void> _confirmAndRestore(BuildContext context, SettingsProvider settingsProv, String fileId, String fileName) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -990,7 +1037,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     );
 
     if (confirm == true && mounted) {
-      final success = await prov.restoreFromCloud(fileId);
+      final success = await settingsProv.restoreFromCloud(fileId);
       if (success && mounted) {
         showDialog(
           context: context,
@@ -1008,7 +1055,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
         );
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Restore Failed: ${prov.googleError}'),
+          content: Text('Restore Failed: ${settingsProv.googleError}'),
           backgroundColor: AppTheme.danger,
         ));
       }

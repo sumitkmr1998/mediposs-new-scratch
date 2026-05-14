@@ -15,6 +15,7 @@ import 'shared/providers/patient_provider.dart';
 import 'shared/providers/opd_provider.dart';
 import 'shared/providers/prescription_provider.dart';
 import 'shared/providers/template_provider.dart';
+import 'shared/providers/procedure_provider.dart';
 import 'theme/app_theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/app_shell.dart';
@@ -221,6 +222,7 @@ void main() async {
         ChangeNotifierProvider.value(value: opdProvider),
         ChangeNotifierProvider.value(value: prescriptionProvider),
         ChangeNotifierProvider.value(value: templateProvider),
+        ChangeNotifierProvider(create: (_) => ProcedureProvider()),
       ],
       child: const MediPossApp(),
     ),

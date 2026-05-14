@@ -16,13 +16,25 @@ import 'dart:io';
 import 'package:provider/provider.dart';
 import '../services/firebase_sync_service.dart';
 
+import '../models/procedure.dart';
+
 class CartItem {
-  final Medicine medicine;
+  final Medicine? medicine;
+  final Procedure? procedure;
   int qty;
+  double? customPrice; // For procedures
 
-  CartItem({required this.medicine, this.qty = 1});
+  CartItem({this.medicine, this.procedure, this.qty = 1, this.customPrice});
 
-  double get lineTotal => medicine.sellingPrice * qty;
+  double get lineTotal {
+    if (medicine != null) return medicine!.sellingPrice * qty;
+    if (procedure != null) return (customPrice ?? procedure!.basePrice) * qty;
+    return 0;
+  }
+
+  String get name => medicine?.name ?? procedure?.name ?? 'Unknown';
+  int get id => medicine?.id ?? procedure?.id ?? 0;
+  bool get isProcedure => procedure != null;
 }
 
 class PendingCart {
@@ -114,7 +126,7 @@ class CartProvider extends ChangeNotifier {
   bool get isEmpty => _items.isEmpty;
 
   void addItem(Medicine medicine, {int qty = 1}) {
-    final idx = _items.indexWhere((i) => i.medicine.id == medicine.id);
+    final idx = _items.indexWhere((i) => i.medicine?.id == medicine.id && !i.isProcedure);
     if (idx >= 0) {
       _items[idx].qty += qty;
     } else {
@@ -123,8 +135,22 @@ class CartProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void removeItem(int medicineId) {
-    _items.removeWhere((i) => i.medicine.id == medicineId);
+  void addProcedure(Procedure procedure, {double? price, int qty = 1}) {
+    final idx = _items.indexWhere((i) => i.procedure?.id == procedure.id && i.isProcedure);
+    if (idx >= 0) {
+      _items[idx].qty += qty;
+    } else {
+      _items.add(CartItem(procedure: procedure, qty: qty, customPrice: price));
+    }
+    notifyListeners();
+  }
+
+  void removeItem(int id, {bool isProcedure = false}) {
+    if (isProcedure) {
+      _items.removeWhere((i) => i.procedure?.id == id && i.isProcedure);
+    } else {
+      _items.removeWhere((i) => i.medicine?.id == id && !i.isProcedure);
+    }
     notifyListeners();
   }
 
@@ -135,14 +161,26 @@ class CartProvider extends ChangeNotifier {
     }
   }
 
-  void updateQty(int medicineId, int qty) {
+  void updateQty(int id, int qty, {bool isProcedure = false}) {
     if (qty <= 0) {
-      removeItem(medicineId);
+      removeItem(id, isProcedure: isProcedure);
       return;
     }
-    final idx = _items.indexWhere((i) => i.medicine.id == medicineId);
+    final idx = _items.indexWhere((i) =>
+        (isProcedure ? i.procedure?.id : i.medicine?.id) == id &&
+        i.isProcedure == isProcedure);
     if (idx >= 0) {
       _items[idx].qty = qty;
+      notifyListeners();
+    }
+  }
+
+  void updatePrice(int id, double price, {bool isProcedure = true}) {
+    if (!isProcedure) return;
+    final idx =
+        _items.indexWhere((i) => i.procedure?.id == id && i.isProcedure);
+    if (idx >= 0) {
+      _items[idx].customPrice = price;
       notifyListeners();
     }
   }
@@ -261,21 +299,24 @@ class CartProvider extends ChangeNotifier {
     // Build items (returns have negative quantities inherently when we record them in the DB to keep history straight)
     final saleItems = _items.map(
       (i) => SaleItem(
-        medicineId: i.medicine.id,
-        medicineName: i.medicine.name,
+        medicineId: i.medicine?.id ?? 0,
+        procedureId: i.procedure?.id ?? 0,
+        medicineName: i.name,
         qty: _isReturnMode ? -i.qty : i.qty,
-        unitPrice: i.medicine.sellingPrice,
+        unitPrice: i.medicine?.sellingPrice ?? i.customPrice ?? i.procedure?.basePrice ?? 0,
+        isProcedure: i.isProcedure,
       ),
     );
 
     // Deduct or Restock storeStock
     for (final item in _items) {
+      if (item.isProcedure) continue;
       if (_isReturnMode) {
         // Restock
-        _inventoryProvider.deductStoreStock(item.medicine.id, -item.qty);
+        _inventoryProvider.deductStoreStock(item.medicine!.id, -item.qty);
       } else {
         // Deduct
-        _inventoryProvider.deductStoreStock(item.medicine.id, item.qty);
+        _inventoryProvider.deductStoreStock(item.medicine!.id, item.qty);
       }
     }
 
@@ -355,9 +396,14 @@ class CartProvider extends ChangeNotifier {
         FirebaseSyncService.instance.broadcastUpdate('sales', sale.toJson());
         // Also push updated medicines (stock deducted)
         for (final item in _items) {
-          final m = ObjectBoxService.instance.medicineBox.getAll().where((x) => x.name == item.medicine.name).firstOrNull;
+          if (item.isProcedure || item.medicine == null) continue;
+          final m = ObjectBoxService.instance.medicineBox
+              .getAll()
+              .where((x) => x.name == item.medicine!.name)
+              .firstOrNull;
           if (m != null) {
-            FirebaseSyncService.instance.broadcastUpdate('medicines', m.toJson());
+            FirebaseSyncService.instance
+                .broadcastUpdate('medicines', m.toJson());
           }
         }
       }

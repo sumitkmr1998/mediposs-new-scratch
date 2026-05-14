@@ -22,6 +22,7 @@ import 'shared/models/patient.dart';
 import 'shared/models/patient_image.dart';
 import 'shared/models/prescription.dart';
 import 'shared/models/prescription_template.dart';
+import 'shared/models/procedure.dart';
 import 'shared/models/purchase_record.dart';
 import 'shared/models/sale.dart';
 import 'shared/models/stock_transfer.dart';
@@ -701,7 +702,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(8, 387908478841800652),
       name: 'Prescription',
-      lastPropertyId: const obx_int.IdUid(16, 8919199574799020885),
+      lastPropertyId: const obx_int.IdUid(17, 8339814046622998906),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -783,6 +784,11 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(16, 8919199574799020885),
             name: 'updatedAt',
             type: 10,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(17, 8339814046622998906),
+            name: 'proceduresJson',
+            type: 9,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
@@ -1132,6 +1138,139 @@ final _entities = <obx_int.ModelEntity>[
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
+      backlinks: <obx_int.ModelBacklink>[]),
+  obx_int.ModelEntity(
+      id: const obx_int.IdUid(15, 7894753628761862830),
+      name: 'Procedure',
+      lastPropertyId: const obx_int.IdUid(8, 2923414877789790482),
+      flags: 0,
+      properties: <obx_int.ModelProperty>[
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(1, 1370443394412664729),
+            name: 'id',
+            type: 6,
+            flags: 1),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(2, 3271290696467256532),
+            name: 'name',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(3, 306438371526458154),
+            name: 'category',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(4, 902763654949287638),
+            name: 'basePrice',
+            type: 8,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(5, 5500156690904440977),
+            name: 'description',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(6, 870251372847231400),
+            name: 'createdAt',
+            type: 10,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(7, 3610055297168236774),
+            name: 'updatedAt',
+            type: 10,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(8, 2923414877789790482),
+            name: 'synced',
+            type: 1,
+            flags: 0)
+      ],
+      relations: <obx_int.ModelRelation>[],
+      backlinks: <obx_int.ModelBacklink>[]),
+  obx_int.ModelEntity(
+      id: const obx_int.IdUid(16, 8472677541860163168),
+      name: 'ProcedureRecord',
+      lastPropertyId: const obx_int.IdUid(15, 4533822227646839900),
+      flags: 0,
+      properties: <obx_int.ModelProperty>[
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(1, 7935573424094808098),
+            name: 'id',
+            type: 6,
+            flags: 1),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(2, 1372737765954953660),
+            name: 'procedureId',
+            type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(3, 8585316514770386964),
+            name: 'procedureName',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(4, 2889727589377638965),
+            name: 'patientId',
+            type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(5, 5384076682246148402),
+            name: 'patientName',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(6, 4612451374249821949),
+            name: 'doctorId',
+            type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(7, 3962357424472290234),
+            name: 'doctorName',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(8, 5939754294661425749),
+            name: 'date',
+            type: 10,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(9, 5748635977863976796),
+            name: 'notes',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(10, 2536231327746229953),
+            name: 'settingsJson',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(11, 1910494960787749330),
+            name: 'imagesJson',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(12, 7573085083639393308),
+            name: 'priceCharged',
+            type: 8,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(13, 3025298309787649066),
+            name: 'invoiceNo',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(14, 6861709333493464306),
+            name: 'createdAt',
+            type: 10,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(15, 4533822227646839900),
+            name: 'synced',
+            type: 1,
+            flags: 0)
+      ],
+      relations: <obx_int.ModelRelation>[],
       backlinks: <obx_int.ModelBacklink>[])
 ];
 
@@ -1170,7 +1309,7 @@ Future<obx.Store> openStore(
 obx_int.ModelDefinition getObjectBoxModel() {
   final model = obx_int.ModelInfo(
       entities: _entities,
-      lastEntityId: const obx_int.IdUid(14, 3498411204338603542),
+      lastEntityId: const obx_int.IdUid(16, 8472677541860163168),
       lastIndexId: const obx_int.IdUid(1, 5015225040438721990),
       lastRelationId: const obx_int.IdUid(1, 2143695166283597161),
       lastSequenceId: const obx_int.IdUid(0, 0),
@@ -1907,7 +2046,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final labTestsJsonOffset = fbb.writeString(object.labTestsJson);
           final vitalsJsonOffset = fbb.writeString(object.vitalsJson);
           final imagesJsonOffset = fbb.writeString(object.imagesJson);
-          fbb.startTable(17);
+          final proceduresJsonOffset = fbb.writeString(object.proceduresJson);
+          fbb.startTable(18);
           fbb.addInt64(0, object.id);
           fbb.addInt64(1, object.appointmentId);
           fbb.addInt64(2, object.patientId);
@@ -1924,6 +2064,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addInt64(13, object.createdAt.millisecondsSinceEpoch);
           fbb.addOffset(14, imagesJsonOffset);
           fbb.addInt64(15, object.updatedAt.millisecondsSinceEpoch);
+          fbb.addOffset(16, proceduresJsonOffset);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -1958,6 +2099,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
               .vTableGet(buffer, rootOffset, 26, '');
           final imagesJsonParam = const fb.StringReader(asciiOptimization: true)
               .vTableGet(buffer, rootOffset, 32, '');
+          final proceduresJsonParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGet(buffer, rootOffset, 36, '');
           final dispensedParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 28, false);
           final createdAtParam = DateTime.fromMillisecondsSinceEpoch(
@@ -1978,6 +2122,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
               labTestsJson: labTestsJsonParam,
               vitalsJson: vitalsJsonParam,
               imagesJson: imagesJsonParam,
+              proceduresJson: proceduresJsonParam,
               dispensed: dispensedParam,
               createdAt: createdAtParam,
               updatedAt: updatedAtParam);
@@ -2368,6 +2513,152 @@ obx_int.ModelDefinition getObjectBoxModel() {
               timestamp: timestampParam,
               processed: processedParam,
               processingBy: processingByParam);
+
+          return object;
+        }),
+    Procedure: obx_int.EntityDefinition<Procedure>(
+        model: _entities[14],
+        toOneRelations: (Procedure object) => [],
+        toManyRelations: (Procedure object) => {},
+        getId: (Procedure object) => object.id,
+        setId: (Procedure object, int id) {
+          object.id = id;
+        },
+        objectToFB: (Procedure object, fb.Builder fbb) {
+          final nameOffset = fbb.writeString(object.name);
+          final categoryOffset = fbb.writeString(object.category);
+          final descriptionOffset = fbb.writeString(object.description);
+          fbb.startTable(9);
+          fbb.addInt64(0, object.id);
+          fbb.addOffset(1, nameOffset);
+          fbb.addOffset(2, categoryOffset);
+          fbb.addFloat64(3, object.basePrice);
+          fbb.addOffset(4, descriptionOffset);
+          fbb.addInt64(5, object.createdAt.millisecondsSinceEpoch);
+          fbb.addInt64(6, object.updatedAt.millisecondsSinceEpoch);
+          fbb.addBool(7, object.synced);
+          fbb.finish(fbb.endTable());
+          return object.id;
+        },
+        objectFromFB: (obx.Store store, ByteData fbData) {
+          final buffer = fb.BufferContext(fbData);
+          final rootOffset = buffer.derefObject(0);
+          final idParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0);
+          final nameParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 6, '');
+          final categoryParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 8, '');
+          final basePriceParam =
+              const fb.Float64Reader().vTableGet(buffer, rootOffset, 10, 0);
+          final descriptionParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGet(buffer, rootOffset, 12, '');
+          final createdAtParam = DateTime.fromMillisecondsSinceEpoch(
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 14, 0));
+          final updatedAtParam = DateTime.fromMillisecondsSinceEpoch(
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 16, 0));
+          final syncedParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 18, false);
+          final object = Procedure(
+              id: idParam,
+              name: nameParam,
+              category: categoryParam,
+              basePrice: basePriceParam,
+              description: descriptionParam,
+              createdAt: createdAtParam,
+              updatedAt: updatedAtParam,
+              synced: syncedParam);
+
+          return object;
+        }),
+    ProcedureRecord: obx_int.EntityDefinition<ProcedureRecord>(
+        model: _entities[15],
+        toOneRelations: (ProcedureRecord object) => [],
+        toManyRelations: (ProcedureRecord object) => {},
+        getId: (ProcedureRecord object) => object.id,
+        setId: (ProcedureRecord object, int id) {
+          object.id = id;
+        },
+        objectToFB: (ProcedureRecord object, fb.Builder fbb) {
+          final procedureNameOffset = fbb.writeString(object.procedureName);
+          final patientNameOffset = fbb.writeString(object.patientName);
+          final doctorNameOffset = fbb.writeString(object.doctorName);
+          final notesOffset = fbb.writeString(object.notes);
+          final settingsJsonOffset = fbb.writeString(object.settingsJson);
+          final imagesJsonOffset = fbb.writeString(object.imagesJson);
+          final invoiceNoOffset = fbb.writeString(object.invoiceNo);
+          fbb.startTable(16);
+          fbb.addInt64(0, object.id);
+          fbb.addInt64(1, object.procedureId);
+          fbb.addOffset(2, procedureNameOffset);
+          fbb.addInt64(3, object.patientId);
+          fbb.addOffset(4, patientNameOffset);
+          fbb.addInt64(5, object.doctorId);
+          fbb.addOffset(6, doctorNameOffset);
+          fbb.addInt64(7, object.date.millisecondsSinceEpoch);
+          fbb.addOffset(8, notesOffset);
+          fbb.addOffset(9, settingsJsonOffset);
+          fbb.addOffset(10, imagesJsonOffset);
+          fbb.addFloat64(11, object.priceCharged);
+          fbb.addOffset(12, invoiceNoOffset);
+          fbb.addInt64(13, object.createdAt.millisecondsSinceEpoch);
+          fbb.addBool(14, object.synced);
+          fbb.finish(fbb.endTable());
+          return object.id;
+        },
+        objectFromFB: (obx.Store store, ByteData fbData) {
+          final buffer = fb.BufferContext(fbData);
+          final rootOffset = buffer.derefObject(0);
+          final idParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0);
+          final procedureIdParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 6, 0);
+          final procedureNameParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGet(buffer, rootOffset, 8, '');
+          final patientIdParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 10, 0);
+          final patientNameParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGet(buffer, rootOffset, 12, '');
+          final doctorIdParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 14, 0);
+          final doctorNameParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 16, '');
+          final dateParam = DateTime.fromMillisecondsSinceEpoch(
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 18, 0));
+          final notesParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 20, '');
+          final settingsJsonParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGet(buffer, rootOffset, 22, '');
+          final imagesJsonParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 24, '');
+          final priceChargedParam =
+              const fb.Float64Reader().vTableGet(buffer, rootOffset, 26, 0);
+          final invoiceNoParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 28, '');
+          final createdAtParam = DateTime.fromMillisecondsSinceEpoch(
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 30, 0));
+          final syncedParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 32, false);
+          final object = ProcedureRecord(
+              id: idParam,
+              procedureId: procedureIdParam,
+              procedureName: procedureNameParam,
+              patientId: patientIdParam,
+              patientName: patientNameParam,
+              doctorId: doctorIdParam,
+              doctorName: doctorNameParam,
+              date: dateParam,
+              notes: notesParam,
+              settingsJson: settingsJsonParam,
+              imagesJson: imagesJsonParam,
+              priceCharged: priceChargedParam,
+              invoiceNo: invoiceNoParam,
+              createdAt: createdAtParam,
+              synced: syncedParam);
 
           return object;
         })
@@ -2946,6 +3237,10 @@ class Prescription_ {
   /// See [Prescription.updatedAt].
   static final updatedAt =
       obx.QueryDateProperty<Prescription>(_entities[7].properties[15]);
+
+  /// See [Prescription.proceduresJson].
+  static final proceduresJson =
+      obx.QueryStringProperty<Prescription>(_entities[7].properties[16]);
 }
 
 /// [PrescriptionTemplate] entity fields to define ObjectBox queries.
@@ -3195,4 +3490,102 @@ class SyncQueueItem_ {
   /// See [SyncQueueItem.processingBy].
   static final processingBy =
       obx.QueryStringProperty<SyncQueueItem>(_entities[13].properties[6]);
+}
+
+/// [Procedure] entity fields to define ObjectBox queries.
+class Procedure_ {
+  /// See [Procedure.id].
+  static final id =
+      obx.QueryIntegerProperty<Procedure>(_entities[14].properties[0]);
+
+  /// See [Procedure.name].
+  static final name =
+      obx.QueryStringProperty<Procedure>(_entities[14].properties[1]);
+
+  /// See [Procedure.category].
+  static final category =
+      obx.QueryStringProperty<Procedure>(_entities[14].properties[2]);
+
+  /// See [Procedure.basePrice].
+  static final basePrice =
+      obx.QueryDoubleProperty<Procedure>(_entities[14].properties[3]);
+
+  /// See [Procedure.description].
+  static final description =
+      obx.QueryStringProperty<Procedure>(_entities[14].properties[4]);
+
+  /// See [Procedure.createdAt].
+  static final createdAt =
+      obx.QueryDateProperty<Procedure>(_entities[14].properties[5]);
+
+  /// See [Procedure.updatedAt].
+  static final updatedAt =
+      obx.QueryDateProperty<Procedure>(_entities[14].properties[6]);
+
+  /// See [Procedure.synced].
+  static final synced =
+      obx.QueryBooleanProperty<Procedure>(_entities[14].properties[7]);
+}
+
+/// [ProcedureRecord] entity fields to define ObjectBox queries.
+class ProcedureRecord_ {
+  /// See [ProcedureRecord.id].
+  static final id =
+      obx.QueryIntegerProperty<ProcedureRecord>(_entities[15].properties[0]);
+
+  /// See [ProcedureRecord.procedureId].
+  static final procedureId =
+      obx.QueryIntegerProperty<ProcedureRecord>(_entities[15].properties[1]);
+
+  /// See [ProcedureRecord.procedureName].
+  static final procedureName =
+      obx.QueryStringProperty<ProcedureRecord>(_entities[15].properties[2]);
+
+  /// See [ProcedureRecord.patientId].
+  static final patientId =
+      obx.QueryIntegerProperty<ProcedureRecord>(_entities[15].properties[3]);
+
+  /// See [ProcedureRecord.patientName].
+  static final patientName =
+      obx.QueryStringProperty<ProcedureRecord>(_entities[15].properties[4]);
+
+  /// See [ProcedureRecord.doctorId].
+  static final doctorId =
+      obx.QueryIntegerProperty<ProcedureRecord>(_entities[15].properties[5]);
+
+  /// See [ProcedureRecord.doctorName].
+  static final doctorName =
+      obx.QueryStringProperty<ProcedureRecord>(_entities[15].properties[6]);
+
+  /// See [ProcedureRecord.date].
+  static final date =
+      obx.QueryDateProperty<ProcedureRecord>(_entities[15].properties[7]);
+
+  /// See [ProcedureRecord.notes].
+  static final notes =
+      obx.QueryStringProperty<ProcedureRecord>(_entities[15].properties[8]);
+
+  /// See [ProcedureRecord.settingsJson].
+  static final settingsJson =
+      obx.QueryStringProperty<ProcedureRecord>(_entities[15].properties[9]);
+
+  /// See [ProcedureRecord.imagesJson].
+  static final imagesJson =
+      obx.QueryStringProperty<ProcedureRecord>(_entities[15].properties[10]);
+
+  /// See [ProcedureRecord.priceCharged].
+  static final priceCharged =
+      obx.QueryDoubleProperty<ProcedureRecord>(_entities[15].properties[11]);
+
+  /// See [ProcedureRecord.invoiceNo].
+  static final invoiceNo =
+      obx.QueryStringProperty<ProcedureRecord>(_entities[15].properties[12]);
+
+  /// See [ProcedureRecord.createdAt].
+  static final createdAt =
+      obx.QueryDateProperty<ProcedureRecord>(_entities[15].properties[13]);
+
+  /// See [ProcedureRecord.synced].
+  static final synced =
+      obx.QueryBooleanProperty<ProcedureRecord>(_entities[15].properties[14]);
 }

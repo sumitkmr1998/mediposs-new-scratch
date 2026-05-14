@@ -462,16 +462,18 @@ class _PosAndroidState extends State<PosAndroid> {
                         final item = cart.items[i];
                         return _CartItemTile(
                           item: item,
-                          qtyFocusNode: _getQtyFocusNode(item.medicine.id),
+                          qtyFocusNode: _getQtyFocusNode(item.id),
                           qtyController:
-                              _getQtyController(item.medicine.id, item.qty),
+                              _getQtyController(item.id, item.qty),
                           onQtyChanged: (val) {
                             final newQty = int.tryParse(val);
                             if (newQty != null && newQty > 0) {
-                              cart.updateQty(item.medicine.id, newQty);
+                              cart.updateQty(item.id, newQty,
+                                  isProcedure: item.isProcedure);
                             }
                           },
-                          onRemove: () => cart.removeItem(item.medicine.id),
+                          onRemove: () => cart.removeItem(item.id,
+                              isProcedure: item.isProcedure),
                         );
                       },
                     ),
@@ -835,7 +837,7 @@ class _CartItemTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.medicine.name.toUpperCase(),
+                  item.name.toUpperCase(),
                   style: const TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
@@ -848,12 +850,13 @@ class _CartItemTile extends StatelessWidget {
                   children: [
                     _Tag(
                         label:
-                            '₹${item.medicine.sellingPrice.toStringAsFixed(0)}',
+                            '₹${item.isProcedure ? (item.customPrice ?? item.procedure!.basePrice).toStringAsFixed(0) : item.medicine!.sellingPrice.toStringAsFixed(0)}',
                         color: context.textMutedColor),
                     const SizedBox(width: 4),
                     _Tag(
-                        label:
-                            'BATCH: ${item.medicine.batches.isNotEmpty ? item.medicine.batches.first.batchNo : "N/A"}',
+                        label: item.isProcedure
+                            ? 'PROCEDURE'
+                            : 'BATCH: ${item.medicine!.batches.isNotEmpty ? item.medicine!.batches.first.batchNo : "N/A"}',
                         color: AppTheme.accent),
                   ],
                 ),

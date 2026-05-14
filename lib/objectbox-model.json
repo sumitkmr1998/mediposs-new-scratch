@@ -674,7 +674,7 @@
     },
     {
       "id": "8:387908478841800652",
-      "lastPropertyId": "16:8919199574799020885",
+      "lastPropertyId": "17:8339814046622998906",
       "name": "Prescription",
       "properties": [
         {
@@ -757,6 +757,11 @@
           "id": "16:8919199574799020885",
           "name": "updatedAt",
           "type": 10
+        },
+        {
+          "id": "17:8339814046622998906",
+          "name": "proceduresJson",
+          "type": 9
         }
       ],
       "relations": []
@@ -1107,9 +1112,142 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "15:7894753628761862830",
+      "lastPropertyId": "8:2923414877789790482",
+      "name": "Procedure",
+      "properties": [
+        {
+          "id": "1:1370443394412664729",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:3271290696467256532",
+          "name": "name",
+          "type": 9
+        },
+        {
+          "id": "3:306438371526458154",
+          "name": "category",
+          "type": 9
+        },
+        {
+          "id": "4:902763654949287638",
+          "name": "basePrice",
+          "type": 8
+        },
+        {
+          "id": "5:5500156690904440977",
+          "name": "description",
+          "type": 9
+        },
+        {
+          "id": "6:870251372847231400",
+          "name": "createdAt",
+          "type": 10
+        },
+        {
+          "id": "7:3610055297168236774",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "8:2923414877789790482",
+          "name": "synced",
+          "type": 1
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "16:8472677541860163168",
+      "lastPropertyId": "15:4533822227646839900",
+      "name": "ProcedureRecord",
+      "properties": [
+        {
+          "id": "1:7935573424094808098",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:1372737765954953660",
+          "name": "procedureId",
+          "type": 6
+        },
+        {
+          "id": "3:8585316514770386964",
+          "name": "procedureName",
+          "type": 9
+        },
+        {
+          "id": "4:2889727589377638965",
+          "name": "patientId",
+          "type": 6
+        },
+        {
+          "id": "5:5384076682246148402",
+          "name": "patientName",
+          "type": 9
+        },
+        {
+          "id": "6:4612451374249821949",
+          "name": "doctorId",
+          "type": 6
+        },
+        {
+          "id": "7:3962357424472290234",
+          "name": "doctorName",
+          "type": 9
+        },
+        {
+          "id": "8:5939754294661425749",
+          "name": "date",
+          "type": 10
+        },
+        {
+          "id": "9:5748635977863976796",
+          "name": "notes",
+          "type": 9
+        },
+        {
+          "id": "10:2536231327746229953",
+          "name": "settingsJson",
+          "type": 9
+        },
+        {
+          "id": "11:1910494960787749330",
+          "name": "imagesJson",
+          "type": 9
+        },
+        {
+          "id": "12:7573085083639393308",
+          "name": "priceCharged",
+          "type": 8
+        },
+        {
+          "id": "13:3025298309787649066",
+          "name": "invoiceNo",
+          "type": 9
+        },
+        {
+          "id": "14:6861709333493464306",
+          "name": "createdAt",
+          "type": 10
+        },
+        {
+          "id": "15:4533822227646839900",
+          "name": "synced",
+          "type": 1
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "14:3498411204338603542",
+  "lastEntityId": "16:8472677541860163168",
   "lastIndexId": "1:5015225040438721990",
   "lastRelationId": "1:2143695166283597161",
   "lastSequenceId": "0:0",
