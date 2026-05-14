@@ -297,6 +297,8 @@ class AppSettings {
   bool firebaseEnabled; // true
   int? lastFirebaseSync; // timestamp
   String? deviceId; // UUID for this device
+  bool isWindowsClient = false; // If true, this PC acts as a terminal/client
+  List<String> dashboardActions = ['new_pos', 'add_patient', 'stock_list', 'reports', 'patients', 'returns', 'settings'];
 
   AppSettings({
     this.id = 0,
@@ -334,6 +336,8 @@ class AppSettings {
     this.firebaseEnabled = true,
     this.lastFirebaseSync,
     this.deviceId,
+    this.isWindowsClient = false,
+    this.dashboardActions = const ['new_pos', 'add_patient', 'stock_list', 'reports', 'patients', 'returns', 'settings'],
   });
 
   Map<String, dynamic> toJson() => {
@@ -372,6 +376,8 @@ class AppSettings {
         'firebaseEnabled': firebaseEnabled,
         'lastFirebaseSync': lastFirebaseSync,
         'deviceId': deviceId,
+        'isWindowsClient': isWindowsClient,
+        'dashboardActions': dashboardActions,
       };
 
   static AppSettings fromJson(Map<String, dynamic> json) => AppSettings(
@@ -412,5 +418,7 @@ class AppSettings {
         firebaseEnabled: json['firebaseEnabled'] ?? true,
         lastFirebaseSync: json['lastFirebaseSync'],
         deviceId: json['deviceId'],
+        isWindowsClient: json['isWindowsClient'] ?? false,
+        dashboardActions: List<String>.from(json['dashboardActions'] ?? const ['new_pos', 'add_patient', 'stock_list', 'reports', 'patients', 'returns', 'settings']),
       );
 }

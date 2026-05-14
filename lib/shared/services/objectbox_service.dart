@@ -19,6 +19,7 @@ import '../../objectbox.g.dart';
 
 class ObjectBoxService {
   static ObjectBoxService? _instance;
+  static bool get isInitialized => _instance != null;
   static ObjectBoxService get instance => _instance!;
 
   late final Store _store;

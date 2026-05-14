@@ -20,6 +20,7 @@ import '../models/appointment.dart';
 import '../models/prescription.dart';
 import '../models/doctor.dart';
 import '../models/stock_transfer.dart';
+import '../models/procedure.dart';
 import 'package:objectbox/objectbox.dart';
 import '../../objectbox.g.dart';
 import 'package:flutter/foundation.dart';
@@ -53,6 +54,7 @@ class LocalServerService {
     router.get('/health', _healthHandler);
     router.post('/api/auth/login', _loginHandler);
     router.get('/api/users', _usersGetHandler);
+    router.get('/download-apk', _apkDownloadHandler);
 
     // ------ Protected endpoints ------
     router.get('/api/medicines', _withAuth(_medicinesGetHandler));
@@ -86,6 +88,9 @@ class LocalServerService {
     router.post('/api/settings', _withAuth(_settingsGetHandler)); // Allow GET settings via POST for some clients
     router.get('/api/settings', _withAuth(_settingsGetHandler));
     router.post('/api/users/push', _withAuth(_usersPushHandler));
+    router.get('/api/procedures', _withAuth(_proceduresGetHandler));
+    router.post('/api/procedures/push', _withAuth(_proceduresPushHandler));
+    router.post('/api/procedures/delete', _withAuth(_proceduresDeleteHandler));
     router.post('/api/sync', _withAuth(_syncHandler));
 
     // Deletion Endpoints
@@ -137,8 +142,8 @@ class LocalServerService {
   Middleware _secretMiddleware() {
     return (Handler innerHandler) {
       return (Request request) async {
-        // Always allow health check for tunnel monitoring
-        if (request.url.path == 'health') {
+        // Always allow health check and APK download for easier distribution
+        if (request.url.path == 'health' || request.url.path == 'download-apk') {
           return innerHandler(request);
         }
 
@@ -230,6 +235,87 @@ class LocalServerService {
     return Response.ok(
       jsonEncode({'data': json, 'count': json.length}),
       headers: {'content-type': 'application/json'},
+    );
+  }
+
+  Response _proceduresGetHandler(Request req) {
+    final list = ObjectBoxService.instance.procedureBox.getAll();
+    return Response.ok(
+      jsonEncode(
+          {'data': list.map((e) => e.toJson()).toList(), 'count': list.length}),
+      headers: {'content-type': 'application/json'},
+    );
+  }
+
+  Future<Response> _proceduresPushHandler(Request req) async {
+    try {
+      final data = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      final name = data['name'] as String? ?? '';
+      if (name.isEmpty) return Response.badRequest();
+
+      final box = ObjectBoxService.instance.procedureBox;
+      final existing =
+          box.query(Procedure_.name.equals(name)).build().findFirst();
+
+      final p = Procedure.fromJson(data);
+      if (existing != null) {
+        p.id = existing.id;
+      } else {
+        p.id = 0;
+      }
+
+      box.put(p);
+      broadcast({'event': 'procedures_updated'});
+      _incomingDataController.add('procedures');
+
+      return Response.ok(jsonEncode({'success': true}));
+    } catch (e) {
+      return Response.internalServerError(
+          body: jsonEncode({'error': e.toString()}));
+    }
+  }
+
+  Future<Response> _proceduresDeleteHandler(Request req) async {
+    try {
+      final data = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      final id = data['id'] as int? ?? 0;
+      final name = data['name'] as String? ?? '';
+
+      final box = ObjectBoxService.instance.procedureBox;
+      Procedure? target;
+      if (id > 0) {
+        target = box.get(id);
+      } else if (name.isNotEmpty) {
+        target = box.query(Procedure_.name.equals(name)).build().findFirst();
+      }
+
+      if (target != null) {
+        box.remove(target.id);
+        broadcast({'event': 'procedures_updated'});
+        _incomingDataController.add('procedures');
+      }
+      return Response.ok(jsonEncode({'success': true}));
+    } catch (e) {
+      return Response.internalServerError(
+          body: jsonEncode({'error': e.toString()}));
+    }
+  }
+
+  Future<Response> _apkDownloadHandler(Request req) async {
+    final apkPath = 'build/app/outputs/flutter-apk/app-release.apk';
+    final file = File(apkPath);
+    if (!await file.exists()) {
+      return Response.notFound('APK not found on Hub. Please compile it first.');
+    }
+
+    final size = await file.length();
+    return Response.ok(
+      file.openRead(),
+      headers: {
+        'content-type': 'application/vnd.android.package-archive',
+        'content-length': size.toString(),
+        'content-disposition': 'attachment; filename="MediPoss_v1.2.apk"',
+      },
     );
   }
 
@@ -592,12 +678,35 @@ class LocalServerService {
             .firstOrNull;
 
         if (m != null) {
-          if (sale.isReturn) {
-            m.storeStock = (m.storeStock - item.qty.toInt()).clamp(
-                0, 999999); // Note: qty is negative for returns in SaleItem
-          } else {
-            m.storeStock = (m.storeStock - item.qty.toInt()).clamp(0, 999999);
+          final int qty = item.qty.toInt();
+          
+          if (qty > 0) {
+            // DEDUCTION (Sale) - FIFO
+            int remaining = qty;
+            final batches = m.batches.toList();
+            batches.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
+            for (var b in batches) {
+              if (remaining <= 0) break;
+              if (b.storeStock > 0) {
+                final d = remaining > b.storeStock ? b.storeStock : remaining;
+                b.storeStock -= d;
+                remaining -= d;
+                ObjectBoxService.instance.batchBox.put(b);
+              }
+            }
+          } else if (qty < 0) {
+            // RESTOCKING (Return) - Add to latest batch
+            int toRestore = qty.abs();
+            final batches = m.batches.toList();
+            if (batches.isNotEmpty) {
+              batches.sort((a, b) => b.expiryDate.compareTo(a.expiryDate));
+              final latest = batches.first;
+              latest.storeStock += toRestore;
+              ObjectBoxService.instance.batchBox.put(latest);
+            }
           }
+
+          m.storeStock = (m.storeStock - qty).clamp(0, 999999);
           m.updatedAt = DateTime.now();
           ObjectBoxService.instance.medicineBox.put(m);
         }
@@ -1751,7 +1860,30 @@ class LocalServerService {
             broadcast({'event': 'sale_deleted', 'invoiceNo': invNo});
             _incomingDataController.add('sales');
           }
+        } else if (entity == 'procedure') {
+          final name = data['name'] as String? ?? '';
+          final p = ObjectBoxService.instance.procedureBox
+              .query(Procedure_.name.equals(name))
+              .build()
+              .findFirst();
+          if (p != null) {
+            ObjectBoxService.instance.procedureBox.remove(p.id);
+            broadcast({'event': 'procedures_updated'});
+            _incomingDataController.add('procedures');
+          }
         }
+      } else if (entity == 'procedure') {
+        final p = Procedure.fromJson(data);
+        p.id = 0;
+        final existing = ObjectBoxService.instance.procedureBox
+            .query(Procedure_.name.equals(p.name))
+            .build()
+            .findFirst();
+        if (existing != null) p.id = existing.id;
+        ObjectBoxService.instance.procedureBox.put(p);
+        broadcast({'event': 'procedures_updated'});
+        _incomingDataController.add('procedures');
+        await FirebaseSyncService.instance.broadcastUpdate('procedures', p.toJson());
       }
 
       // Mark as processed in Firebase
@@ -1834,6 +1966,25 @@ class LocalServerService {
       }
       for (var s in limitedSales) {
         await FirebaseSyncService.instance.broadcastUpdate('sales', s.toJson());
+        pushCount++;
+      }
+
+      // --- 5. Mirror Procedures ---
+      final procs = ObjectBoxService.instance.procedureBox.getAll();
+      final localProcNames = procs.map((p) => p.name).toSet();
+      final cloudProcs =
+          await FirebaseSyncService.instance.fetchCollection('procedures');
+      for (var cp in cloudProcs) {
+        final cloudId = cp['cloudId']?.toString();
+        if (cloudId != null && !localProcNames.contains(cloudId)) {
+          await FirebaseSyncService.instance.deleteDocument(
+              'procedures', cloudId);
+          pruneCount++;
+        }
+      }
+      for (var p in procs) {
+        await FirebaseSyncService.instance.broadcastUpdate(
+            'procedures', p.toJson());
         pushCount++;
       }
 

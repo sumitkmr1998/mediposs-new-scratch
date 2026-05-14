@@ -34,7 +34,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(1, 637942838794498612),
       name: 'AppSettings',
-      lastPropertyId: const obx_int.IdUid(35, 4340623742765413633),
+      lastPropertyId: const obx_int.IdUid(37, 8233132176523200008),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -211,6 +211,16 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(35, 4340623742765413633),
             name: 'deviceId',
             type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(36, 2875356191445970270),
+            name: 'isWindowsClient',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(37, 8233132176523200008),
+            name: 'dashboardActions',
+            type: 30,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
@@ -1366,7 +1376,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final deviceIdOffset = object.deviceId == null
               ? null
               : fbb.writeString(object.deviceId!);
-          fbb.startTable(36);
+          final dashboardActionsOffset = fbb.writeList(object.dashboardActions
+              .map(fbb.writeString)
+              .toList(growable: false));
+          fbb.startTable(38);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, storeNameOffset);
           fbb.addOffset(2, storeAddressOffset);
@@ -1402,6 +1415,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addBool(32, object.firebaseEnabled);
           fbb.addInt64(33, object.lastFirebaseSync);
           fbb.addOffset(34, deviceIdOffset);
+          fbb.addBool(35, object.isWindowsClient);
+          fbb.addOffset(36, dashboardActionsOffset);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -1491,6 +1506,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.Int64Reader().vTableGetNullable(buffer, rootOffset, 70);
           final deviceIdParam = const fb.StringReader(asciiOptimization: true)
               .vTableGetNullable(buffer, rootOffset, 72);
+          final isWindowsClientParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 74, false);
+          final dashboardActionsParam = const fb.ListReader<String>(
+                  fb.StringReader(asciiOptimization: true),
+                  lazy: false)
+              .vTableGet(buffer, rootOffset, 76, []);
           final object = AppSettings(
               id: idParam,
               storeName: storeNameParam,
@@ -1526,7 +1547,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
               lastCloudflareSync: lastCloudflareSyncParam,
               firebaseEnabled: firebaseEnabledParam,
               lastFirebaseSync: lastFirebaseSyncParam,
-              deviceId: deviceIdParam);
+              deviceId: deviceIdParam,
+              isWindowsClient: isWindowsClientParam,
+              dashboardActions: dashboardActionsParam);
 
           return object;
         }),
@@ -2808,6 +2831,14 @@ class AppSettings_ {
   /// See [AppSettings.deviceId].
   static final deviceId =
       obx.QueryStringProperty<AppSettings>(_entities[0].properties[34]);
+
+  /// See [AppSettings.isWindowsClient].
+  static final isWindowsClient =
+      obx.QueryBooleanProperty<AppSettings>(_entities[0].properties[35]);
+
+  /// See [AppSettings.dashboardActions].
+  static final dashboardActions =
+      obx.QueryStringVectorProperty<AppSettings>(_entities[0].properties[36]);
 }
 
 /// [AppUser] entity fields to define ObjectBox queries.

@@ -15,6 +15,7 @@ import '../models/app_user.dart';
 import '../models/prescription.dart';
 import '../models/prescription_template.dart';
 import '../models/stock_transfer.dart';
+import '../models/procedure.dart';
 import '../services/objectbox_service.dart';
 import '../services/notification_service.dart';
 import '../services/firebase_sync_service.dart';
@@ -174,6 +175,10 @@ class SyncService extends ChangeNotifier {
   }
 
   Future<bool> tryAutoConnect() async {
+    if (!ObjectBoxService.isInitialized) {
+      debugPrint('SyncService: tryAutoConnect ABORTED - ObjectBox not initialized.');
+      return false;
+    }
     final settings = ObjectBoxService.instance.settings;
     final savedIp = settings.hubIp;
     bool success = false;
@@ -341,6 +346,29 @@ class SyncService extends ChangeNotifier {
         debugPrint('SyncService [Cloud]: Error syncing doctors: $e');
       }
 
+      // 5. Pull Procedures
+      try {
+        final fbProcs =
+            await FirebaseSyncService.instance.fetchCollection('procedures');
+        if (fbProcs.isNotEmpty) {
+          final box = ObjectBoxService.instance.procedureBox;
+          final allLocal = box.getAll();
+          for (var pMap in fbProcs) {
+            final p = Procedure.fromJson(pMap);
+            final existing = allLocal.where((x) => x.name == p.name).firstOrNull;
+            if (existing != null) {
+              p.id = existing.id;
+            } else {
+              p.id = 0;
+            }
+            box.put(p);
+          }
+          debugPrint('SyncService [Cloud]: Synced ${fbProcs.length} procedures.');
+        }
+      } catch (e) {
+        debugPrint('SyncService [Cloud]: Error syncing procedures: $e');
+      }
+
       // 5. Pull Appointments
       try {
         final fbAppts = await FirebaseSyncService.instance.fetchCollection('appointments');
@@ -443,6 +471,7 @@ class SyncService extends ChangeNotifier {
       final t2 = await pullPatients(since: sinceStr);
       await pullAppointments();
       await pullDoctors();
+      await pullProcedures();
       await pullPrescriptions(since: sinceStr);
       final t3 = await pullSales(since: sinceStr);
       await pullTransfers();
@@ -892,6 +921,45 @@ class SyncService extends ChangeNotifier {
       debugPrint('pullDoctors err: $e');
     }
     debugPrint('SyncService: pullDoctors done.');
+  }
+
+  Future<void> pullProcedures() async {
+    if (!_isConnected || _jwtToken == null) return;
+    debugPrint('SyncService: pullProcedures starting...');
+    try {
+      final url = Uri.parse('$_baseUrl/api/procedures');
+      final res = await http.get(url, headers: _authHeaders());
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body)['data'] as List;
+        final box = ObjectBoxService.instance.procedureBox;
+        final allLocal = box.getAll();
+
+        final hubNames = <String>{};
+        for (final item in data) {
+          final name = item['name'] as String? ?? '';
+          hubNames.add(name);
+
+          final existing = allLocal.where((p) => p.name == name).firstOrNull;
+          final p = Procedure.fromJson(item as Map<String, dynamic>);
+          if (existing != null) {
+            p.id = existing.id;
+          } else {
+            p.id = 0;
+          }
+          box.put(p);
+        }
+        // Cleanup phase
+        for (final p in allLocal) {
+          if (!hubNames.contains(p.name)) {
+            box.remove(p.id);
+          }
+        }
+        debugPrint(
+            'SyncService: pullProcedures synced ${data.length} procedures.');
+      }
+    } catch (e) {
+      debugPrint('pullProcedures err: $e');
+    }
   }
 
   Future<void> pullPrescriptions({String? since}) async {
@@ -1396,6 +1464,16 @@ class SyncService extends ChangeNotifier {
   Future<bool> pushTransfer(StockTransfer t) async {
     return await _unifiedPush('/api/transfers/push', t.toJson(),
         entity: 'transfer', action: 'create');
+  }
+
+  Future<bool> pushProcedure(Procedure p) async {
+    return await _unifiedPush('/api/procedures/push', p.toJson(),
+        entity: 'procedure', action: 'create');
+  }
+
+  Future<bool> pushProcedureDelete(String name) async {
+    return await _unifiedPush('/api/procedures/delete', {'name': name},
+        entity: 'procedure', action: 'delete');
   }
 
   Future<bool> pushMedicine(Medicine m) async {

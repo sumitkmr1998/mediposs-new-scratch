@@ -529,7 +529,7 @@ class FirebaseSyncService {
   Future<Map<String, dynamic>?> getHubStatus() async {
     if (!_isInitialized) return null;
     try {
-      final doc = await _db.collection('settings').doc('hub_status').get();
+      final doc = await _db.collection('settings').doc('hub_status').get().timeout(const Duration(seconds: 5));
       return doc.data();
     } catch (e) {
       debugPrint('Firebase getHubStatus failed: $e');

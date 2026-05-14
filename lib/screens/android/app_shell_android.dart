@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../shared/providers/inventory_provider.dart';
@@ -30,6 +31,8 @@ import '../../shared/widgets/interactive_hover.dart';
 import 'opd/remote_camera_screen_android.dart';
 import 'package:flutter/services.dart';
 import '../../shared/providers/navigation_provider.dart';
+import '../../shared/widgets/connectivity_overlay.dart';
+import 'dart:async';
 
 class AppShellAndroid extends StatefulWidget {
   const AppShellAndroid({super.key});
@@ -41,6 +44,14 @@ class AppShellAndroid extends StatefulWidget {
 class _AppShellAndroidState extends State<AppShellAndroid> {
   int _selectedIndex = 0;
   DateTime? _lastBackPress;
+  Timer? _hubCheckTimer;
+  bool _isHubBackOnline = false;
+
+  @override
+  void dispose() {
+    _hubCheckTimer?.cancel();
+    super.dispose();
+  }
 
   List<_Dest> _buildDestinations(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -151,6 +162,18 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
   @override
   void initState() {
     super.initState();
+    
+    // Start periodic Hub availability check for Cloud Mode
+    _hubCheckTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
+      final sync = context.read<SyncService>();
+      if (sync.isCloudMode && sync.hubIp != null) {
+        final reachable = await sync.testConnection(sync.hubIp!);
+        if (reachable != _isHubBackOnline) {
+          setState(() => _isHubBackOnline = reachable);
+        }
+      }
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       // Load data
       context.read<InventoryProvider>().load();
@@ -267,6 +290,7 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
     }
 
     final currentDestId = dests[_selectedIndex].id;
+    final sync = context.watch<SyncService>();
 
     return PopScope(
       canPop: false,
@@ -296,44 +320,101 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
         // 3. Exit the app
         SystemNavigator.pop();
       },
-      child: Scaffold(
-        appBar: null,
-        body: isWide
-            ? Row(
-                children: [
-                  _SideNav(
-                    selectedIndex: _selectedIndex,
-                    onDestinationSelected: (i) =>
-                        setState(() => _selectedIndex = i),
-                    destinations: dests,
-                    isWindowsHub: Platform.isWindows,
-                    isConnected: wsvc.connected,
-                    onConnectTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => ConnectionScreen())),
-                  ),
-                  Expanded(child: _screenForId(currentDestId)),
-                ],
-              )
-            : Scaffold(
-                body: _screenForId(currentDestId),
-                bottomNavigationBar: navProvider.isBottomNavVisible
-                    ? NavigationBar(
+      child: Stack(
+        children: [
+          Scaffold(
+            appBar: null,
+            body: isWide
+                ? Row(
+                    children: [
+                      _SideNav(
                         selectedIndex: _selectedIndex,
                         onDestinationSelected: (i) =>
                             setState(() => _selectedIndex = i),
-                        destinations: dests
-                            .map((d) => NavigationDestination(
-                                  icon: Icon(d.icon),
-                                  selectedIcon: Icon(d.selectedIcon),
-                                  label: d.label,
-                                ))
-                            .toList(),
-                      )
-                    : null,
-                floatingActionButton: null,
-              ),
+                        destinations: dests,
+                        isWindowsHub: Platform.isWindows,
+                        isConnected: wsvc.connected,
+                        onConnectTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => ConnectionScreen())),
+                      ),
+                      Expanded(child: _screenForId(currentDestId)),
+                    ],
+                  )
+                : Scaffold(
+                    body: _screenForId(currentDestId),
+                    bottomNavigationBar: navProvider.isBottomNavVisible
+                        ? _ScrollableNavigationBar(
+                            selectedIndex: _selectedIndex,
+                            onDestinationSelected: (i) =>
+                                setState(() => _selectedIndex = i),
+                            destinations: dests,
+                          )
+                        : null,
+                    floatingActionButton: null,
+                  ),
+          ),
+          
+          // --- HUB OFFLINE OVERLAY (BLOCKING) ---
+          if (!sync.isCloudMode && !wsvc.connected && sync.hubIp != null)
+            ConnectivityOverlay(
+              title: 'Hub Connection Lost',
+              message: 'The Windows Hub is offline or unreachable. What would you like to do?',
+              actions: [
+                ElevatedButton.icon(
+                  onPressed: () => sync.enterCloudMode(),
+                  icon: const Icon(Icons.cloud_sync),
+                  label: const Text('Enter Cloud Mode (Firebase)'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.warning,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 50),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    wsvc.connect(sync.hubIp!, sync.secret);
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry Connection'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 50),
+                  ),
+                ),
+              ],
+            ),
+
+          // --- HUB BACK ONLINE OVERLAY (NON-BLOCKING PROMPT) ---
+          if (sync.isCloudMode && _isHubBackOnline)
+            ConnectivityOverlay(
+              isBlocking: false,
+              title: 'Hub is Back Online!',
+              message: 'The Windows Hub is now reachable. Would you like to return to Live Mode for faster sync?',
+              actions: [
+                ElevatedButton.icon(
+                  onPressed: () {
+                    sync.exitCloudMode();
+                    setState(() => _isHubBackOnline = false);
+                    wsvc.connect(sync.hubIp!, sync.secret);
+                  },
+                  icon: const Icon(Icons.flash_on),
+                  label: const Text('Return to Live Mode'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.success,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 50),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () => setState(() => _isHubBackOnline = false),
+                  child: const Text('Dismiss (Stay in Cloud Mode)'),
+                ),
+              ],
+            ),
+        ],
       ),
     );
   }
@@ -567,6 +648,130 @@ class _StatusBadge extends StatelessWidget {
                     color: color, fontSize: 11, fontWeight: FontWeight.w600)),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _ScrollableNavigationBar extends StatelessWidget {
+  final int selectedIndex;
+  final ValueChanged<int> onDestinationSelected;
+  final List<_Dest> destinations;
+
+  const _ScrollableNavigationBar({
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+    required this.destinations,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.surfaceColor.withValues(alpha: 0.8),
+        border: Border(
+            top: BorderSide(color: context.borderColor.withValues(alpha: 0.3))),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -5),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+            child: SizedBox(
+              height: 72,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  children: List.generate(destinations.length, (i) {
+                    final d = destinations[i];
+                    final isSelected = selectedIndex == i;
+                    return _NavItem(
+                      dest: d,
+                      isSelected: isSelected,
+                      onTap: () => onDestinationSelected(i),
+                    );
+                  }),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  final _Dest dest;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _NavItem(
+      {required this.dest, required this.isSelected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isSelected ? AppTheme.primary : context.textMutedColor;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        width: 90,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppTheme.primary.withValues(alpha: 0.12)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedScale(
+              scale: isSelected ? 1.1 : 1.0,
+              duration: const Duration(milliseconds: 300),
+              child: Icon(
+                isSelected ? dest.selectedIcon : dest.icon,
+                color: color,
+                size: 26,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              dest.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                letterSpacing: isSelected ? 0.2 : 0,
+              ),
+            ),
+            if (isSelected)
+              Container(
+                margin: const EdgeInsets.only(top: 4),
+                width: 4,
+                height: 4,
+                decoration: const BoxDecoration(
+                  color: AppTheme.primary,
+                  shape: BoxShape.circle,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

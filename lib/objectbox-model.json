@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:637942838794498612",
-      "lastPropertyId": "35:4340623742765413633",
+      "lastPropertyId": "37:8233132176523200008",
       "name": "AppSettings",
       "properties": [
         {
@@ -183,6 +183,16 @@
           "id": "35:4340623742765413633",
           "name": "deviceId",
           "type": 9
+        },
+        {
+          "id": "36:2875356191445970270",
+          "name": "isWindowsClient",
+          "type": 1
+        },
+        {
+          "id": "37:8233132176523200008",
+          "name": "dashboardActions",
+          "type": 30
         }
       ],
       "relations": []

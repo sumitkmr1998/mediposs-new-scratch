@@ -196,26 +196,42 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   // Called after a sale checkout to deduct storeStock using FIFO (soonest expiry first)
+  // Or called after a return to restock (negative qty)
   void deductStoreStock(int medicineId, int qty) {
     final m = _box.get(medicineId);
     if (m != null) {
-      int remainingToDeduct = qty;
+      if (qty > 0) {
+        // DEDUCTION (Sale) - Use FIFO (soonest expiry first)
+        int remainingToDeduct = qty;
+        final batches = m.batches.toList();
+        batches.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
 
-      // Get batches sorted by expiry date
-      final batches = m.batches.toList();
-      batches.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
+        for (var batch in batches) {
+          if (remainingToDeduct <= 0) break;
 
-      for (var batch in batches) {
-        if (remainingToDeduct <= 0) break;
+          if (batch.storeStock > 0) {
+            final deduction = remainingToDeduct > batch.storeStock
+                ? batch.storeStock
+                : remainingToDeduct;
 
-        if (batch.storeStock > 0) {
-          final deduction = remainingToDeduct > batch.storeStock
-              ? batch.storeStock
-              : remainingToDeduct;
-
-          batch.storeStock -= deduction;
-          remainingToDeduct -= deduction;
-          _batchBox.put(batch);
+            batch.storeStock -= deduction;
+            remainingToDeduct -= deduction;
+            _batchBox.put(batch);
+          }
+        }
+      } else if (qty < 0) {
+        // RESTOCKING (Return) - Add back to the latest batch (furthest expiry)
+        int qToRestore = qty.abs();
+        final batches = m.batches.toList();
+        if (batches.isNotEmpty) {
+          // Sort furthest expiry first
+          batches.sort((a, b) => b.expiryDate.compareTo(a.expiryDate));
+          final latestBatch = batches.first;
+          latestBatch.storeStock += qToRestore;
+          _batchBox.put(latestBatch);
+        } else {
+          // No batches? Create a dummy one or just update aggregate
+          // Aggregrate is updated below anyway
         }
       }
 

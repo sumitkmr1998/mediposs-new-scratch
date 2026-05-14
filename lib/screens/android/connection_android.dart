@@ -7,9 +7,11 @@ import '../../shared/services/discovery_service.dart';
 import 'qr_scanner_screen.dart';
 import 'opd/remote_camera_screen_android.dart';
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/services.dart';
 import '../../shared/services/firebase_sync_service.dart';
 import '../../shared/providers/settings_provider.dart';
+import 'package:battery_optimization_helper/battery_optimization_helper.dart';
 
 class ConnectionAndroid extends StatefulWidget {
   const ConnectionAndroid({super.key});
@@ -26,6 +28,14 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
   String _connectionMode = 'auto';
   String _cloudflareUrl = '';
   bool _isFetchingCloudflare = false;
+  Timer? _hubCheckTimer;
+  bool _isHubBackOnline = false;
+
+  @override
+  void dispose() {
+    _hubCheckTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -35,6 +45,45 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
     _connectionMode = s.connectionMode;
     _cloudflareUrl = s.cloudflareUrl;
     _fetchCloudflareUrl();
+    _checkBatteryOptimization();
+
+    // Start periodic Hub availability check for Cloud Mode
+    _hubCheckTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
+      final sync = context.read<SyncService>();
+      if (sync.isCloudMode && sync.hubIp != null) {
+        final reachable = await sync.testConnection(sync.hubIp!);
+        if (reachable != _isHubBackOnline) {
+          setState(() => _isHubBackOnline = reachable);
+        }
+      }
+    });
+  }
+
+  Future<void> _checkBatteryOptimization() async {
+    final isOptimized = await BatteryOptimizationHelper.isBatteryOptimizationEnabled();
+    if (isOptimized && mounted) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Background Sync Optimization'),
+          content: const Text(
+              'For real-time background syncing to work reliably, please disable battery optimization for MediPoss.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Later'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                BatteryOptimizationHelper.openBatteryOptimizationSettings();
+                Navigator.pop(ctx);
+              },
+              child: const Text('Disable Now'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   Future<void> _fetchCloudflareUrl() async {

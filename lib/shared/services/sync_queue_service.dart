@@ -11,6 +11,7 @@ import '../models/prescription.dart';
 import '../models/stock_transfer.dart';
 import '../models/medicine.dart';
 import '../models/prescription_template.dart';
+import '../models/procedure.dart';
 import 'sync_service.dart';
 import '../../objectbox.g.dart';
 
@@ -128,6 +129,10 @@ class SyncQueueService extends ChangeNotifier {
           final photo = ObjectBoxService.instance.patientImageBox.get(data['id']);
           if (photo == null) return true;
           return await syncService.pushPatientPhoto(photo, uhid);
+        case 'procedure':
+          if (item.action == 'delete')
+            return await syncService.pushProcedureDelete(data['name'] ?? '');
+          return await syncService.pushProcedure(Procedure.fromJson(data));
         default:
           return true; // Ignore unknown entities
       }

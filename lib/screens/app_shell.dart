@@ -3,15 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'windows/app_shell_windows.dart';
 import 'android/app_shell_android.dart';
+import '../shared/services/objectbox_service.dart';
 
 class AppShell extends StatelessWidget {
   const AppShell({super.key});
 
   @override
   Widget build(BuildContext context) {
-    if (!kIsWeb && Platform.isAndroid) {
-      return AppShellAndroid();
+    final settings = ObjectBoxService.instance.settings;
+    if (Platform.isAndroid || (Platform.isWindows && settings.isWindowsClient)) {
+      return const AppShellAndroid();
     }
-    return AppShellWindows();
+    return const AppShellWindows();
   }
 }

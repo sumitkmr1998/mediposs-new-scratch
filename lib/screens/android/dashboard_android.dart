@@ -14,13 +14,18 @@ import 'user_management_android.dart';
 import '../connection_screen.dart';
 import 'opd/opd_queue_android.dart';
 import 'opd/opd_report_android.dart';
+import 'opd/patient_list_android.dart';
 import '../../shared/services/sync_service.dart';
 import '../../shared/widgets/app_kpi_card.dart';
 import '../../shared/widgets/app_filter_chip.dart';
 import '../../shared/models/appointment.dart';
 import '../../shared/providers/navigation_provider.dart';
 import '../../shared/services/local_server_service.dart';
-import '../../shared/services/discovery_service.dart'; // Added just in case
+import '../../shared/services/discovery_service.dart';
+import '../../widgets/invoice_search_dialog.dart';
+import 'package:reorderable_grid_view/reorderable_grid_view.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import '../../shared/services/objectbox_service.dart';
 
 class DashboardAndroid extends StatelessWidget {
   const DashboardAndroid({super.key});
@@ -461,7 +466,7 @@ class _PrimaryStats extends StatelessWidget {
             const SizedBox(width: 14),
             Expanded(
               child: AppKpiCard(
-                label: 'OPD ($labelSuffix)',
+                label: 'Patients ($labelSuffix)',
                 value: '${opd.filteredPatientCount}',
                 icon: Icons.medical_services_rounded,
                 color: AppTheme.primary,
@@ -659,138 +664,399 @@ class _RevenueTotalBadge extends StatelessWidget {
   }
 }
 
-class _ActionItemData {
+class _DashboardActionData {
+  final String id;
   final String label;
   final IconData icon;
   final Color color;
-  final Widget screen;
-  final bool isAllowed;
+  final Widget? screen;
+  final VoidCallback? onTap;
+  final bool Function(AuthProvider) isAllowed;
 
-  _ActionItemData({
+  _DashboardActionData({
+    required this.id,
     required this.label,
     required this.icon,
     required this.color,
-    required this.screen,
+    this.screen,
+    this.onTap,
     required this.isAllowed,
   });
 }
 
-class _QuickActionsCard extends StatelessWidget {
+class _QuickActionsCard extends StatefulWidget {
+  @override
+  State<_QuickActionsCard> createState() => _QuickActionsCardState();
+}
+
+class _QuickActionsCardState extends State<_QuickActionsCard> {
+  bool _isEditMode = false;
+
+  final Map<String, _DashboardActionData> _allActionsMap = {
+    'new_pos': _DashboardActionData(
+      id: 'new_pos',
+      label: 'New POS',
+      icon: Icons.add_shopping_cart_rounded,
+      color: AppTheme.primary,
+      screen: const PosAndroid(),
+      isAllowed: (auth) => auth.canAccessPOS,
+    ),
+    'add_patient': _DashboardActionData(
+      id: 'add_patient',
+      label: 'Add Patient',
+      icon: Icons.person_add_alt_rounded,
+      color: AppTheme.teal,
+      screen: const OpdQueueAndroid(),
+      isAllowed: (auth) => auth.canAccessOPD,
+    ),
+    'stock_list': _DashboardActionData(
+      id: 'stock_list',
+      label: 'Stock List',
+      icon: Icons.inventory_2_rounded,
+      color: AppTheme.orange,
+      screen: const WarehouseAndroid(),
+      isAllowed: (auth) => auth.canViewWarehouse,
+    ),
+    'reports': _DashboardActionData(
+      id: 'reports',
+      label: 'Sales History',
+      icon: Icons.analytics_rounded,
+      color: AppTheme.purple,
+      screen: const SalesHistoryAndroid(),
+      isAllowed: (auth) => auth.canViewSalesHistory,
+    ),
+    'patients': _DashboardActionData(
+      id: 'patients',
+      label: 'Patients',
+      icon: Icons.people_alt_rounded,
+      color: AppTheme.indigo,
+      screen: const PatientListAndroid(),
+      isAllowed: (auth) => auth.canAccessOPD,
+    ),
+    'returns': _DashboardActionData(
+      id: 'returns',
+      label: 'Process Return',
+      icon: Icons.assignment_return_rounded,
+      color: AppTheme.danger,
+      onTap: () {}, // Handled in UI to show dialog
+      isAllowed: (auth) => auth.canProcessReturns,
+    ),
+    'settings': _DashboardActionData(
+      id: 'settings',
+      label: 'Settings',
+      icon: Icons.settings_rounded,
+      color: Colors.blueGrey,
+      screen: const SettingsAndroid(),
+      isAllowed: (auth) => auth.canAccessSettings,
+    ),
+    'users': _DashboardActionData(
+      id: 'users',
+      label: 'Staff & Roles',
+      icon: Icons.manage_accounts_rounded,
+      color: AppTheme.primary,
+      screen: const UserManagementAndroid(),
+      isAllowed: (auth) => auth.canManageUsers,
+    ),
+    'opd_report': _DashboardActionData(
+      id: 'opd_report',
+      label: 'OPD Report',
+      icon: Icons.summarize_rounded,
+      color: AppTheme.teal,
+      screen: const OpdReportAndroid(),
+      isAllowed: (auth) => auth.canAccessOPD,
+    ),
+  };
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final db = ObjectBoxService.instance;
+    final settings = db.settings;
+    var currentActionIds = settings.dashboardActions;
+    if (currentActionIds.isEmpty) {
+      currentActionIds = ['new_pos', 'add_patient', 'stock_list', 'reports', 'patients', 'returns', 'settings'];
+      settings.dashboardActions = currentActionIds;
+      db.settingsBox.put(settings);
+    }
 
-    final List<_ActionItemData> allActions = [
-      _ActionItemData(
-        label: 'New POS',
-        icon: Icons.add_shopping_cart_rounded,
-        color: AppTheme.primary,
-        screen: const PosAndroid(),
-        isAllowed: auth.canAccessPOS,
-      ),
-      _ActionItemData(
-        label: 'Add Patient',
-        icon: Icons.person_add_alt_rounded,
-        color: AppTheme.teal,
-        screen: const OpdQueueAndroid(),
-        isAllowed: auth.canAccessOPD,
-      ),
-      _ActionItemData(
-        label: 'Stock List',
-        icon: Icons.inventory_2_rounded,
-        color: AppTheme.orange,
-        screen: const WarehouseAndroid(),
-        isAllowed: auth.canViewWarehouse,
-      ),
-      _ActionItemData(
-        label: 'Reports',
-        icon: Icons.analytics_rounded,
-        color: AppTheme.purple,
-        screen: const SalesHistoryAndroid(),
-        isAllowed: auth.canViewSalesHistory,
-      ),
-      _ActionItemData(
-        label: 'Staff',
-        icon: Icons.security_rounded,
-        color: AppTheme.indigo,
-        screen: const UserManagementAndroid(),
-        isAllowed: auth.canManageUsers,
-      ),
-      _ActionItemData(
-        label: 'Settings',
-        icon: Icons.settings_rounded,
-        color: Colors.blueGrey,
-        screen: const SettingsAndroid(),
-        isAllowed: auth.canAccessSettings,
-      ),
-    ];
-
-    final allowedActions = allActions.where((a) => a.isAllowed).toList();
+    // Filter by permissions
+    final allowedActions = currentActionIds
+        .where((id) => _allActionsMap.containsKey(id) && _allActionsMap[id]!.isAllowed(auth))
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(left: 4, bottom: 16),
-          child: Text('QUICK ACTIONS',
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.5,
-                  color: AppTheme.primary)),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(left: 4, bottom: 16),
+              child: Text('QUICK ACTIONS',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5,
+                      color: AppTheme.primary)),
+            ),
+            if (_isEditMode)
+              TextButton.icon(
+                onPressed: () => setState(() => _isEditMode = false),
+                icon: const Icon(Icons.check_circle_rounded, size: 18),
+                label: const Text('Done'),
+                style: TextButton.styleFrom(foregroundColor: AppTheme.success),
+              )
+            else
+              TextButton.icon(
+                onPressed: () => setState(() => _isEditMode = true),
+                icon: const Icon(Icons.add_circle_outline_rounded, size: 16),
+                label: const Text('Add/Edit Card', style: TextStyle(fontSize: 11)),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppTheme.primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+              ),
+          ],
         ),
-        GridView.count(
+        ReorderableGridView.count(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           crossAxisCount: 3,
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
-          children: allowedActions.map((action) {
-            return _QuickActionItem(
-              icon: action.icon,
-              label: action.label,
-              color: action.color,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => action.screen),
+          onReorder: (oldIndex, newIndex) {
+            final visibleCount = allowedActions.length;
+            if (oldIndex >= visibleCount || newIndex >= visibleCount) return;
+            
+            setState(() {
+              final actions = List<String>.from(settings.dashboardActions);
+              final String movedId = allowedActions[oldIndex];
+              final String targetId = allowedActions[newIndex];
+              
+              final int actualOldIdx = actions.indexOf(movedId);
+              final int actualNewIdx = actions.indexOf(targetId);
+              
+              if (actualOldIdx != -1 && actualNewIdx != -1) {
+                final item = actions.removeAt(actualOldIdx);
+                actions.insert(actualNewIdx, item);
+                settings.dashboardActions = actions;
+                db.settingsBox.put(settings);
+              }
+            });
+          },
+          children: [
+            ...allowedActions.map((id) {
+              final action = _allActionsMap[id]!;
+              return _QuickActionItem(
+                key: ValueKey(id),
+                id: id,
+                icon: action.icon,
+                label: action.label,
+                color: action.color,
+                isEditMode: _isEditMode,
+                onLongPress: () => setState(() => _isEditMode = true),
+                onTap: () {
+                  if (_isEditMode) return;
+                  if (action.id == 'returns') {
+                    showDialog(context: context, builder: (_) => const InvoiceSearchDialog());
+                  } else {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => action.screen!));
+                  }
+                },
+                onEdit: () => _showActionPicker(context, id),
+                onDelete: () {
+                  setState(() {
+                    final actions = List<String>.from(settings.dashboardActions);
+                    actions.remove(id);
+                    settings.dashboardActions = actions;
+                    db.settingsBox.put(settings);
+                  });
+                },
+              );
+            }).toList(),
+            if (_isEditMode)
+              _AddCardItem(
+                key: const ValueKey('add_button'),
+                onTap: () => _showActionPicker(context, null),
               ),
-            );
-          }).toList(),
+          ],
         ),
       ],
+    );
+  }
+
+  void _showActionPicker(BuildContext context, String? targetId) {
+    final auth = context.read<AuthProvider>();
+    final db = ObjectBoxService.instance;
+    final settings = db.settings;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(targetId == null ? 'Add New Card' : 'Replace Card',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 16),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
+                child: ListView(
+                  shrinkWrap: true,
+                  children: _allActionsMap.values.where((a) => a.isAllowed(auth)).map((a) {
+                    final bool isAlreadyIn = settings.dashboardActions.contains(a.id);
+                    return ListTile(
+                      leading: Icon(a.icon, color: a.color),
+                      title: Text(a.label),
+                      trailing: isAlreadyIn ? const Icon(Icons.check_circle, color: AppTheme.success) : null,
+                      onTap: (isAlreadyIn && targetId != a.id)
+                          ? null
+                          : () {
+                              setState(() {
+                                final actions = List<String>.from(settings.dashboardActions);
+                                if (targetId == null) {
+                                  actions.add(a.id);
+                                } else {
+                                  final idx = actions.indexOf(targetId);
+                                  if (idx != -1) actions[idx] = a.id;
+                                }
+                                settings.dashboardActions = actions;
+                                db.settingsBox.put(settings);
+                              });
+                              Navigator.pop(context);
+                            },
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AddCardItem extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AddCardItem({super.key, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: context.surfaceColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3), style: BorderStyle.solid, width: 2),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.add_circle_outline_rounded, color: AppTheme.primary, size: 30),
+            const SizedBox(height: 8),
+            Text('Add Card', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppTheme.primary)),
+          ],
+        ),
+      ),
     );
   }
 }
 
 class _QuickActionItem extends StatelessWidget {
+  final String id;
   final IconData icon;
   final String label;
   final Color color;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  final bool isEditMode;
 
-  const _QuickActionItem({required this.icon, required this.label, required this.color, required this.onTap});
+  const _QuickActionItem({
+    super.key,
+    required this.id,
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+    required this.onLongPress,
+    required this.onEdit,
+    required this.onDelete,
+    required this.isEditMode,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        decoration: BoxDecoration(
-          color: context.surfaceColor,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
-          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle), child: Icon(icon, color: color, size: 22)),
-            const SizedBox(height: 10),
-            Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700), textAlign: TextAlign.center),
-          ],
-        ),
+    Widget content = Container(
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
       ),
+      child: Stack(
+        children: [
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
+                    child: Icon(icon, color: color, size: 22)),
+                const SizedBox(height: 10),
+                Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700), textAlign: TextAlign.center),
+              ],
+            ),
+          ),
+          if (isEditMode) ...[
+            Positioned(
+              top: 8,
+              right: 8,
+              child: GestureDetector(
+                onTap: onEdit,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(color: AppTheme.primary, shape: BoxShape.circle),
+                  child: const Icon(Icons.edit_rounded, color: Colors.white, size: 12),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              left: 8,
+              child: GestureDetector(
+                onTap: onDelete,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(color: AppTheme.danger, shape: BoxShape.circle),
+                  child: const Icon(Icons.close_rounded, color: Colors.white, size: 12),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+
+    if (isEditMode) {
+      content = content
+          .animate(onPlay: (controller) => controller.repeat(reverse: true))
+          .rotate(begin: -0.004, end: 0.004, duration: 250.ms)
+          .scale(begin: const Offset(0.99, 0.99), end: const Offset(1.01, 1.01), duration: 250.ms);
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      onLongPress: isEditMode ? null : onLongPress,
+      child: content,
     );
   }
 }

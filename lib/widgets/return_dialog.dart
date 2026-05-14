@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+import '../shared/services/sync_queue_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../shared/models/sale.dart';
@@ -178,11 +181,19 @@ class _ReturnDialogState extends State<ReturnDialog> {
       createdAt: now,
     );
 
-    returnSale.itemsJson =
-        '[\n${returnedItems.map((i) => i.toJson().toString().replaceAll("'", '"')).join(',\n')}\n]';
+    returnSale.itemsJson = jsonEncode(returnedItems.map((i) => i.toJson()).toList());
 
     db.saleBox.put(returnSale);
     salesProvider.load(); // Refresh sales history
+
+    // SYNC: Push return record to Hub if on Android
+    if (Platform.isAndroid) {
+      SyncQueueService.instance.addToQueue(
+        entity: 'sale',
+        action: 'create',
+        data: returnSale.toJson(),
+      );
+    }
 
     if (!mounted) return;
     Navigator.pop(context);

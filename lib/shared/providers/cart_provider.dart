@@ -145,6 +145,14 @@ class CartProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateProcedurePrice(int id, double newPrice) {
+    final idx = _items.indexWhere((i) => i.procedure?.id == id && i.isProcedure);
+    if (idx >= 0) {
+      _items[idx].customPrice = newPrice;
+      notifyListeners();
+    }
+  }
+
   void removeItem(int id, {bool isProcedure = false}) {
     if (isProcedure) {
       _items.removeWhere((i) => i.procedure?.id == id && i.isProcedure);
@@ -243,7 +251,13 @@ class CartProvider extends ChangeNotifier {
   void holdCurrentCart() {
     if (_items.isEmpty) return;
     _pendingCarts.add(PendingCart(
-      items: _items.map((i) => CartItem(medicine: i.medicine, qty: i.qty)).toList(),
+      items: _items
+          .map((i) => CartItem(
+              medicine: i.medicine,
+              procedure: i.procedure,
+              qty: i.qty,
+              customPrice: i.customPrice))
+          .toList(),
       discountAmount: _discountAmount,
       patientName: _patientName,
       patientPhone: _patientPhone,

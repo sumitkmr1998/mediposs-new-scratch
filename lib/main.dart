@@ -38,15 +38,49 @@ import 'shared/services/firebase_sync_service.dart';
 import 'shared/services/cloudflare_service.dart';
 import 'firebase_options.dart';
 
+import 'shared/services/background_sync_service.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // 1. Initialize DB FIRST (so settings are available)
-  await ObjectBoxService.init();
+  // 0. On Android, if background service is already running, we MUST stop it 
+  // to release the ObjectBox lock before the main isolate can open it.
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    try {
+      final service = FlutterBackgroundService();
+      if (await service.isRunning()) {
+        debugPrint('Main: Background service is already running. Stopping to release DB lock...');
+        service.invoke('stopService');
+        // Give it time to close the store
+        await Future.delayed(const Duration(milliseconds: 1500));
+      }
+    } catch (e) {
+      debugPrint('Main: Error stopping background service: $e');
+    }
+  }
 
-  // Initialize Firebase (Mobile Only)
+  // 1. Initialize DB FIRST - Most critical for both UI and background
+  try {
+    debugPrint('Main: Initializing ObjectBox...');
+    await ObjectBoxService.init();
+    debugPrint('Main: ObjectBox initialized.');
+  } catch (e) {
+    debugPrint('Main: ObjectBox initialization failed: $e');
+  }
+
+  // 2. Initialize Background Service (Android)
+  // We start this AFTER DB init so main isolate has the handle
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    debugPrint('Main: Initializing Background Service...');
+    await initializeBackgroundService();
+    debugPrint('Main: Background Service initialized.');
+  }
+
+  // 3. Initialize Firebase (Mobile Only)
   if (defaultTargetPlatform != TargetPlatform.windows) {
     try {
+      debugPrint('Main: Initializing Firebase...');
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
@@ -107,7 +141,15 @@ void main() async {
   final wsService = WebSocketService();
   SyncQueueService.instance.init();
 
-  // Global listener for real-time data sync
+  // Global listener for real-time data sync (Mobile Only)
+  setupForegroundSyncListeners(
+      inventoryProvider,
+      salesProvider,
+      patientProvider,
+      opdProvider,
+      prescriptionProvider,
+      templateProvider);
+
   wsService.eventStream.listen((msg) {
     final event = msg['event'];
     debugPrint('Mobile WebSocket Event: $event');
@@ -176,8 +218,10 @@ void main() async {
   final isMobile = !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
-  if (isMobile) {
-    final connected = await syncService.tryAutoConnect();
+  final isClient = isMobile || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+
+  if (isClient) {
+    final connected = await syncService.tryAutoConnect().timeout(const Duration(seconds: 5), onTimeout: () => false);
     if (connected && syncService.hubIp != null) {
       wsService.connect(syncService.hubIp!, syncService.secret);
     }
@@ -249,6 +293,29 @@ class _MediPossAppState extends State<MediPossApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('App Resumed: Refreshing sync...');
+      final syncService = context.read<SyncService>();
+      final wsService = context.read<WebSocketService>();
+      
+      // Re-trigger sync and check WS
+      syncService.syncAll().then((_) {
+        context.read<InventoryProvider>().load();
+        context.read<SalesProvider>().load();
+        context.read<PatientProvider>().load();
+        context.read<OpdProvider>().loadAll();
+        context.read<PrescriptionProvider>().load();
+        context.read<TemplateProvider>().load();
+      });
+
+      if (!wsService.connected && syncService.hubIp != null) {
+        wsService.connect(syncService.hubIp!, syncService.secret);
+      }
+    }
   }
 
   @override

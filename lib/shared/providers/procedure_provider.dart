@@ -58,9 +58,16 @@ class ProcedureProvider with ChangeNotifier {
   }
 
   Future<void> deleteProcedure(int id, {SyncService? syncService}) async {
-    ObjectBoxService.instance.procedureBox.remove(id);
-    loadProcedures();
-    // Logic for sync delete could be added here
+    final box = ObjectBoxService.instance.procedureBox;
+    final p = box.get(id);
+    if (p != null) {
+      final name = p.name;
+      box.remove(id);
+      loadProcedures();
+      if (syncService != null) {
+        await syncService.pushProcedureDelete(name);
+      }
+    }
   }
 
   Future<void> saveRecord(ProcedureRecord record, {SyncService? syncService}) async {

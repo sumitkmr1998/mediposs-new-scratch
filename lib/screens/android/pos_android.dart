@@ -12,6 +12,8 @@ import '../../widgets/android/patient_dialogs_android.dart';
 import '../../shared/services/printing_service.dart';
 import '../../shared/services/sync_service.dart';
 import '../../shared/providers/patient_provider.dart';
+import '../../shared/providers/procedure_provider.dart';
+import '../../shared/models/procedure.dart';
 
 class PosAndroid extends StatefulWidget {
   const PosAndroid({super.key});
@@ -187,6 +189,82 @@ class _PosAndroidState extends State<PosAndroid> {
     );
   }
 
+  void _showItemContextMenu(CartItem item, CartProvider cart) {
+    if (!item.isProcedure) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(item.name.toUpperCase(),
+                style:
+                    const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.edit_rounded, color: AppTheme.primary),
+              title: const Text('Edit Price'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _editProcedurePrice(item, cart);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_rounded, color: AppTheme.danger),
+              title: const Text('Remove from Cart'),
+              onTap: () {
+                Navigator.pop(ctx);
+                cart.removeItem(item.id, isProcedure: true);
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _editProcedurePrice(CartItem item, CartProvider cart) {
+    final ctrl = TextEditingController(
+        text: (item.customPrice ?? item.procedure!.basePrice)
+            .toStringAsFixed(0));
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit Procedure Price'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Price',
+            prefixText: '₹',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL')),
+          ElevatedButton(
+            onPressed: () {
+              final newPrice = double.tryParse(ctrl.text);
+              if (newPrice != null) {
+                cart.updateProcedurePrice(item.id, newPrice);
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('UPDATE'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final inv = context.watch<InventoryProvider>();
@@ -293,22 +371,31 @@ class _PosAndroidState extends State<PosAndroid> {
                       ],
                     ),
                   ),
-                Autocomplete<Medicine>(
-                  displayStringForOption: (m) => m.name,
+                Autocomplete<Object>(
+                  displayStringForOption: (item) => (item as dynamic).name,
                   optionsBuilder: (TextEditingValue val) {
                     if (val.text.isEmpty) return const Iterable.empty();
                     final q = val.text.toLowerCase();
-                    return inv.medicines.where((m) =>
+                    final meds = inv.medicines.where((m) =>
                         m.storeStock > 0 &&
                         (m.name.toLowerCase().contains(q) ||
                             m.barcode.contains(val.text)));
+                    final procs = context
+                        .read<ProcedureProvider>()
+                        .procedures
+                        .where((p) => p.name.toLowerCase().contains(q));
+                    return [...meds, ...procs];
                   },
-                  onSelected: (m) {
-                    cart.addItem(m);
+                  onSelected: (item) {
+                    if (item is Medicine) {
+                      cart.addItem(item);
+                      _onMedicineAddedToCart(item.id);
+                    } else if (item is Procedure) {
+                      cart.addProcedure(item);
+                    }
                     _searchCtrl.clear();
                     _autocompleteCtrl?.clear();
                     _currentSearchFocusNode?.requestFocus();
-                    _onMedicineAddedToCart(m.id);
                   },
                   fieldViewBuilder: (ctx, ctrl, focusNode, onFieldSubmitted) {
                     _currentSearchFocusNode = focusNode;
@@ -378,40 +465,44 @@ class _PosAndroidState extends State<PosAndroid> {
                             separatorBuilder: (_, __) =>
                                 const Divider(height: 1),
                             itemBuilder: (ctx, i) {
-                              final m = options.elementAt(i);
+                              final item = options.elementAt(i);
+                              final isProc = item is Procedure;
                               return ListTile(
                                 leading: Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color:
-                                        AppTheme.primary.withValues(alpha: 0.1),
+                                    color: (isProc ? AppTheme.accent : AppTheme.primary)
+                                        .withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
-                                  child: const Icon(Icons.medication,
-                                      color: AppTheme.primary, size: 20),
+                                  child: Icon(
+                                      isProc ? Icons.biotech : Icons.medication,
+                                      color: isProc ? AppTheme.accent : AppTheme.primary,
+                                      size: 20),
                                 ),
-                                title: Text(m.name,
+                                title: Text((item as dynamic).name,
                                     style: const TextStyle(
                                         fontWeight: FontWeight.bold)),
-                                subtitle: Text(m.unit),
+                                subtitle: Text(isProc ? 'Procedure' : (item as Medicine).unit),
                                 trailing: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Text(
-                                        '₹${m.sellingPrice.toStringAsFixed(0)}',
+                                        '₹${isProc ? (item as Procedure).basePrice.toStringAsFixed(0) : (item as Medicine).sellingPrice.toStringAsFixed(0)}',
                                         style: const TextStyle(
                                             color: AppTheme.primaryLight,
                                             fontWeight: FontWeight.bold)),
-                                    Text('Stock: ${m.storeStock}',
-                                        style: TextStyle(
-                                            fontSize: 11,
-                                            color: m.isLowStock
-                                                ? AppTheme.warning
-                                                : context.textMutedColor)),
+                                    if (!isProc)
+                                      Text('Stock: ${(item as Medicine).storeStock}',
+                                          style: TextStyle(
+                                              fontSize: 11,
+                                              color: (item as Medicine).isLowStock
+                                                  ? AppTheme.warning
+                                                  : context.textMutedColor)),
                                   ],
                                 ),
-                                onTap: () => onSelected(m),
+                                onTap: () => onSelected(item),
                               );
                             },
                           ),
@@ -474,6 +565,7 @@ class _PosAndroidState extends State<PosAndroid> {
                           },
                           onRemove: () => cart.removeItem(item.id,
                               isProcedure: item.isProcedure),
+                          onLongPress: () => _showItemContextMenu(item, cart),
                         );
                       },
                     ),
@@ -793,6 +885,7 @@ class _CartItemTile extends StatelessWidget {
   final TextEditingController qtyController;
   final ValueChanged<String> onQtyChanged;
   final VoidCallback onRemove;
+  final VoidCallback onLongPress;
 
   const _CartItemTile({
     required this.item,
@@ -800,97 +893,101 @@ class _CartItemTile extends StatelessWidget {
     required this.qtyController,
     required this.onQtyChanged,
     required this.onRemove,
+    required this.onLongPress,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Center(
-              child: TextField(
-                focusNode: qtyFocusNode,
-                controller: qtyController,
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 18,
-                    color: AppTheme.primary),
-                decoration: const InputDecoration(
-                    border: InputBorder.none, isDense: true),
-                onChanged: onQtyChanged,
+    return GestureDetector(
+      onLongPress: onLongPress,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(14),
               ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.name.toUpperCase(),
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      letterSpacing: 0.5),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    _Tag(
-                        label:
-                            '₹${item.isProcedure ? (item.customPrice ?? item.procedure!.basePrice).toStringAsFixed(0) : item.medicine!.sellingPrice.toStringAsFixed(0)}',
-                        color: context.textMutedColor),
-                    const SizedBox(width: 4),
-                    _Tag(
-                        label: item.isProcedure
-                            ? 'PROCEDURE'
-                            : 'BATCH: ${item.medicine!.batches.isNotEmpty ? item.medicine!.batches.first.batchNo : "N/A"}',
-                        color: AppTheme.accent),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text('₹${item.lineTotal.toStringAsFixed(0)}',
+              child: Center(
+                child: TextField(
+                  focusNode: qtyFocusNode,
+                  controller: qtyController,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
                   style: const TextStyle(
                       fontWeight: FontWeight.w800,
                       fontSize: 18,
-                      letterSpacing: -0.5)),
-              const SizedBox(height: 4),
-              GestureDetector(
-                onTap: onRemove,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppTheme.danger.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text('REMOVE',
-                      style: TextStyle(
-                          color: AppTheme.danger,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700)),
+                      color: AppTheme.primary),
+                  decoration: const InputDecoration(
+                      border: InputBorder.none, isDense: true),
+                  onChanged: onQtyChanged,
                 ),
               ),
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.name.toUpperCase(),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        letterSpacing: 0.5),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      _Tag(
+                          label:
+                              '₹${item.isProcedure ? (item.customPrice ?? item.procedure!.basePrice).toStringAsFixed(0) : item.medicine!.sellingPrice.toStringAsFixed(0)}',
+                          color: context.textMutedColor),
+                      const SizedBox(width: 4),
+                      _Tag(
+                          label: item.isProcedure
+                              ? 'PROCEDURE'
+                              : 'BATCH: ${item.medicine!.batches.isNotEmpty ? item.medicine!.batches.first.batchNo : "N/A"}',
+                          color: AppTheme.accent),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text('₹${item.lineTotal.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                        letterSpacing: -0.5)),
+                const SizedBox(height: 4),
+                GestureDetector(
+                  onTap: onRemove,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.danger.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text('REMOVE',
+                        style: TextStyle(
+                            color: AppTheme.danger,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

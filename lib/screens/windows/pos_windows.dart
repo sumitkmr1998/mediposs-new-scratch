@@ -1004,19 +1004,14 @@ class _MedicinesGridState extends State<_MedicinesGrid> {
                 const SizedBox(width: 8),
                 IconButton(
                   icon: Icon(
-                    Icons.add_box,
+                    Icons.person_add_alt_1,
                     color: widget.cart.isReturnMode
                         ? AppTheme.danger
                         : AppTheme.primaryLight,
                     size: 28,
                   ),
-                  tooltip: 'Quick Add Medicine',
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (_) => const MedicineDialog(),
-                    );
-                  },
+                  tooltip: 'Add Patient to OPD',
+                  onPressed: () => _showPatientQueueDialog(context),
                 ),
                 const SizedBox(width: 8),
                 IconButton(
@@ -1137,6 +1132,10 @@ class _MedicinesGridState extends State<_MedicinesGrid> {
                           widget.onAddToGrid(item);
                         }
                       },
+                      onSecondaryTap: isProcedure
+                          ? (details) =>
+                              _showProcedureContextMenu(context, details, item)
+                          : null,
                     ),
                   );
                 },
@@ -1147,6 +1146,130 @@ class _MedicinesGridState extends State<_MedicinesGrid> {
       ],
     );
   }
+
+  void _showPatientQueueDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 12),
+          ListTile(
+            leading:
+                const Icon(Icons.app_registration, color: AppTheme.primary),
+            title: const Text('Register New Patient'),
+            subtitle: const Text('For first-time clinic visit'),
+            onTap: () async {
+              Navigator.pop(ctx);
+              final patient = await showDialog<Patient>(
+                context: context,
+                builder: (ctx) => const PatientDialog(),
+              );
+              if (patient != null && context.mounted) {
+                _showBookingDialog(context, patient);
+              }
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.person_search, color: AppTheme.primary),
+            title: const Text('Existing Patient'),
+            subtitle: const Text('Search by name, phone or UHID'),
+            onTap: () {
+              Navigator.pop(ctx);
+              showDialog(
+                context: context,
+                builder: (ctx) => PatientSearchDialog(
+                  showSkip: false,
+                  onSelected: (p) => _showBookingDialog(context, p),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  void _showBookingDialog(BuildContext context, Patient patient) {
+    showDialog(
+      context: context,
+      builder: (ctx) => BookAppointmentDialog(patient: patient),
+    );
+  }
+
+  void _showProcedureContextMenu(
+      BuildContext context, TapDownDetails details, Procedure procedure) {
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+    showMenu(
+      context: context,
+      position: RelativeRect.fromRect(
+        details.globalPosition & const Size(40, 40),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        PopupMenuItem(
+          child: const ListTile(
+            leading: Icon(Icons.edit, color: AppTheme.primary),
+            title: Text('Edit Procedure'),
+          ),
+          onTap: () {
+            Future.delayed(Duration.zero, () {
+              showDialog(
+                context: context,
+                builder: (_) => ProcedureDialog(procedure: procedure),
+              );
+            });
+          },
+        ),
+        PopupMenuItem(
+          child: const ListTile(
+            leading: Icon(Icons.delete, color: AppTheme.danger),
+            title: Text('Delete Procedure'),
+          ),
+          onTap: () {
+            _confirmDeleteProcedure(context, procedure);
+          },
+        ),
+      ],
+    );
+  }
+
+  void _confirmDeleteProcedure(BuildContext context, Procedure p) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Procedure'),
+        content: Text('Are you sure you want to delete "${p.name}"?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              context.read<ProcedureProvider>().deleteProcedure(p.id,
+                  syncService: context.read<SyncService>());
+              Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ProductCard extends StatelessWidget {
@@ -1154,10 +1277,13 @@ class _ProductCard extends StatelessWidget {
   final VoidCallback onTap;
   final FocusNode focusNode;
 
+  final void Function(TapDownDetails)? onSecondaryTap;
+
   const _ProductCard({
     required this.item,
     required this.onTap,
     required this.focusNode,
+    this.onSecondaryTap,
   });
 
   @override
@@ -1171,6 +1297,7 @@ class _ProductCard extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
+      onSecondaryTapDown: onSecondaryTap,
       focusNode: focusNode,
       borderRadius: BorderRadius.circular(12),
       child: Card(
@@ -1526,6 +1653,12 @@ class _CartPanel extends StatelessWidget {
                                         contentPadding: EdgeInsets.zero,
                                       ),
                                       keyboardType: TextInputType.number,
+                                      onChanged: (val) {
+                                        final p = double.tryParse(val);
+                                        if (p != null) {
+                                          cart.updatePrice(item.id, p);
+                                        }
+                                      },
                                       onSubmitted: (val) {
                                         final p = double.tryParse(val);
                                         if (p != null) {

@@ -11,6 +11,7 @@ import 'package:network_info_plus/network_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 import '../../shared/services/cloudflare_service.dart';
+import '../../shared/services/sync_service.dart';
 
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/settings_provider.dart';
@@ -59,6 +60,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
   String _autoBackupFreq = 'Never';
   String _autoBackupLogic = 'At Startup';
   String? _hubIp;
+  bool _isWindowsClient = false;
 
   @override
   void initState() {
@@ -89,6 +91,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     _autoBackupLogic = ['At Startup', 'On Close', 'Periodic'].contains(s.autoBackupLogic) 
         ? s.autoBackupLogic 
         : 'At Startup';
+    _isWindowsClient = s.isWindowsClient;
 
     _loadPrinters();
   }
@@ -132,10 +135,31 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       ..serverPort = int.tryParse(_portCtrl.text) ?? 8080
       ..enableAnimations = _enableAnimations
       ..autoBackupFrequency = _autoBackupFreq
-      ..autoBackupLogic = _autoBackupLogic;
+      ..autoBackupLogic = _autoBackupLogic
+      ..isWindowsClient = _isWindowsClient;
 
+    final wasClient = settingsProv.settings.isWindowsClient;
     settingsProv.save(s);
     LocalServerService.instance.broadcast({'event': 'settings_updated'});
+
+    if (wasClient != _isWindowsClient) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Restart Required'),
+          content: const Text(
+              'Changing between Hub and Terminal mode requires a full application restart to apply network changes.'),
+          actions: [
+            ElevatedButton(
+              onPressed: () => exit(0),
+              child: const Text('Restart Now'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: const Text('Settings saved successfully'),
@@ -631,50 +655,91 @@ class _SettingsWindowsState extends State<SettingsWindows> {
 
   Widget _buildNetworkingSection() {
     final serverRunning = LocalServerService.instance.isRunning;
-    return SettingsSection(
-      title: 'Hub Server Configuration',
-      icon: LucideIcons.server,
+    return Column(
       children: [
-        Row(
+        SettingsSection(
+          title: 'Connection Role',
+          icon: LucideIcons.cpu,
           children: [
-            Container(
-              width: 12, height: 12,
-              decoration: BoxDecoration(
-                color: serverRunning ? AppTheme.success : AppTheme.danger,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(color: (serverRunning ? AppTheme.success : AppTheme.danger).withValues(alpha: 0.3), blurRadius: 8, spreadRadius: 2),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              serverRunning ? 'Sync Server: ACTIVE' : 'Sync Server: STOPPED',
-              style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+            SettingsSwitch(
+              title: 'Act as Terminal (Client Mode)',
+              subtitle: 'Enable this if this PC should connect to a Main Hub PC instead of being the Hub itself.',
+              value: _isWindowsClient,
+              icon: LucideIcons.monitorSpeaker,
+              onChanged: (val) {
+                setState(() => _isWindowsClient = val);
+                if (val) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('App will restart in Client Mode after saving.'),
+                    backgroundColor: AppTheme.warning,
+                  ));
+                }
+              },
             ),
           ],
         ),
         const SizedBox(height: 24),
-        SettingsField(controller: _portCtrl, label: 'Hub Sync Port', icon: LucideIcons.hash, keyboardType: TextInputType.number),
-        const Text(
-          'Android clients must specify this port to connect to this Hub.',
-          style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
-        ),
-        const Divider(height: 48),
-        _buildInfoCard(
-          'Local Network Address',
-          _hubIp ?? 'Finding IP...',
-          LucideIcons.wifi,
-          'Use this IP in the companion app while on the same Wi-Fi.',
-        ),
-        const SizedBox(height: 16),
-        _buildInfoCard(
-          'Cloudflare Tunnel Link',
-          CloudflareService.instance.currentUrl ?? 'No active tunnel',
-          LucideIcons.globe,
-          'Use this URL to connect remotely from anywhere in the world.',
-          isLink: true,
-        ),
+        if (!_isWindowsClient) ...[
+          SettingsSection(
+            title: 'Local Hub Server',
+            icon: LucideIcons.server,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    LucideIcons.activity,
+                    color: serverRunning ? AppTheme.success : AppTheme.danger,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    serverRunning ? 'Sync Server: ACTIVE' : 'Sync Server: STOPPED',
+                    style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              SettingsField(controller: _portCtrl, label: 'Hub Sync Port', icon: LucideIcons.hash, keyboardType: TextInputType.number),
+              const Text(
+                'Android clients must specify this port to connect to this Hub.',
+                style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+              ),
+              const Divider(height: 48),
+              _buildInfoCard(
+                'Local Network Address',
+                _hubIp ?? 'Finding IP...',
+                LucideIcons.wifi,
+                'Use this IP in the companion app while on the same Wi-Fi.',
+              ),
+              const SizedBox(height: 16),
+              _buildInfoCard(
+                'Cloudflare Tunnel Link',
+                CloudflareService.instance.currentUrl ?? 'No active tunnel',
+                LucideIcons.globe,
+                'Use this URL to connect remotely from anywhere in the world.',
+                isLink: true,
+              ),
+            ],
+          ),
+        ] else ...[
+          SettingsSection(
+            title: 'Terminal Status',
+            icon: LucideIcons.link,
+            children: [
+              const Text(
+                'This PC is currently acting as a Terminal Client. It will connect to the master Hub for all data.',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              _buildInfoCard(
+                'Connected Hub IP',
+                context.watch<SyncService>().hubIp ?? 'Not Connected',
+                LucideIcons.server,
+                'The IP address of the main Windows Hub.',
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
