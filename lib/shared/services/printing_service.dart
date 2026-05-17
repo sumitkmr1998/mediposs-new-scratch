@@ -18,8 +18,8 @@ class PrintingService {
   static final PrintingService instance = PrintingService._();
 
   PrintingService._();
-
-  Future<void> printReceipt(BuildContext context, Sale sale) async {
+  
+  Future<Uint8List> _generateReceiptBytes(Sale sale, PdfPageFormat format) async {
     final settings = ObjectBoxService.instance.settings;
     final storeName =
         settings.storeName.isNotEmpty ? settings.storeName : 'MediPoss Store';
@@ -34,24 +34,6 @@ class PrintingService {
     // Rehydrate sale items from JSON
     final List<dynamic> decoded = jsonDecode(sale.itemsJson);
     final items = decoded.map((j) => SaleItem.fromJson(j)).toList();
-
-    // Resolve Page Format
-    PdfPageFormat format;
-    switch (settings.receiptPaperSize) {
-      case 'A6':
-        format = PdfPageFormat.a6;
-        break;
-      case 'Letter':
-        format = PdfPageFormat.letter;
-        break;
-      case 'A4':
-        format = PdfPageFormat.a4;
-        break;
-      case 'Roll80':
-      default:
-        format = PdfPageFormat.roll80;
-        break;
-    }
 
     doc.addPage(
       pw.Page(
@@ -235,10 +217,79 @@ class PrintingService {
       ),
     );
 
+    return doc.save();
+  }
+  
+  Future<Uint8List> _generateTestPrintBytes(PdfPageFormat format) async {
+    final settings = ObjectBoxService.instance.settings;
+    final doc = pw.Document();
+    doc.addPage(pw.Page(
+      pageFormat: format,
+      margin: const pw.EdgeInsets.all(12),
+      build: (pw.Context context) {
+        return pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.center,
+          mainAxisSize: settings.receiptPaperSize == 'Roll80'
+              ? pw.MainAxisSize.min
+              : pw.MainAxisSize.max,
+          children: [
+            pw.Text('TEST PRINT SUCCESSFUL',
+                style:
+                    pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
+            pw.SizedBox(height: 8),
+            pw.Text(
+                'Hardware: ${settings.defaultPrinterName.isNotEmpty ? settings.defaultPrinterName : "None (Preview)"}'),
+            pw.Text('Auto Print: ${settings.autoPrintReceipt ? "ON" : "OFF"}'),
+            pw.Text('Paper Size: ${settings.receiptPaperSize}'),
+            if (settings.gstNumber.isNotEmpty)
+              pw.Text('GST Registered: ${settings.gstNumber}'),
+            pw.SizedBox(height: 24),
+            pw.Text(
+                'If this printed cleanly and the margins look correct, your configuration is perfect.'),
+            if (format == PdfPageFormat.roll80)
+              pw.SizedBox(height: 12)
+            else
+              pw.Spacer(),
+            pw.Divider(borderStyle: pw.BorderStyle.dashed),
+            if (settings.receiptFooterMessage.isNotEmpty)
+              pw.Text(settings.receiptFooterMessage,
+                  textAlign: pw.TextAlign.center),
+            pw.Text('Powered by MediPoss',
+                style:
+                    const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+          ],
+        );
+      },
+    ));
+    return doc.save();
+  }
+
+  Future<void> printReceipt(BuildContext context, Sale sale) async {
+    final settings = ObjectBoxService.instance.settings;
+
+    // Resolve Page Format
+    PdfPageFormat format;
+    switch (settings.receiptPaperSize) {
+      case 'A6':
+        format = PdfPageFormat.a6;
+        break;
+      case 'Letter':
+        format = PdfPageFormat.letter;
+        break;
+      case 'A4':
+        format = PdfPageFormat.a4;
+        break;
+      case 'Roll80':
+      default:
+        format = PdfPageFormat.roll80;
+        break;
+    }
+
     if (settings.autoPrintReceipt && settings.defaultPrinterName.isNotEmpty) {
+      final bytes = await _generateReceiptBytes(sale, format);
       await Printing.directPrintPdf(
         printer: Printer(url: settings.defaultPrinterName),
-        onLayout: (PdfPageFormat f) async => doc.save(),
+        onLayout: (PdfPageFormat f) async => bytes,
         name: 'Receipt_${sale.invoiceNo}',
       );
     } else {
@@ -248,8 +299,9 @@ class PrintingService {
           builder: (ctx) => CallbackShortcuts(
             bindings: {
               const SingleActivator(LogicalKeyboardKey.enter): () async {
+                final bytes = await _generateReceiptBytes(sale, format);
                 await Printing.layoutPdf(
-                  onLayout: (PdfPageFormat f) async => doc.save(),
+                  onLayout: (PdfPageFormat f) async => bytes,
                   name: 'Receipt_${sale.invoiceNo}',
                 );
                 if (ctx.mounted) Navigator.pop(ctx);
@@ -273,11 +325,18 @@ class PrintingService {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
                     child: PdfPreview(
-                      build: (f) async => doc.save(),
+                      build: (f) async => await _generateReceiptBytes(sale, f),
                       initialPageFormat: format,
                       allowSharing: false,
                       canChangeOrientation: false,
-                      canChangePageFormat: false,
+                      canChangePageFormat: true,
+                      pageFormats: const {
+                        'A4': PdfPageFormat.a4,
+                        'A5': PdfPageFormat.a5,
+                        'A6': PdfPageFormat.a6,
+                        'Letter': PdfPageFormat.letter,
+                        'Roll 80mm': PdfPageFormat.roll80,
+                      },
                       canDebug: false,
                       pdfFileName: 'Receipt_${sale.invoiceNo}.pdf',
                     ),
@@ -324,9 +383,8 @@ class PrintingService {
         break;
     }
 
-    final pdfBytes = await InvoiceGenerator.generate(invoice, format);
-
     if (settings.autoPrintReceipt && settings.defaultPrinterName.isNotEmpty) {
+      final pdfBytes = await InvoiceGenerator.generate(invoice, format);
       await Printing.directPrintPdf(
         printer: Printer(url: settings.defaultPrinterName),
         onLayout: (PdfPageFormat f) async => pdfBytes,
@@ -340,7 +398,7 @@ class PrintingService {
             bindings: {
               const SingleActivator(LogicalKeyboardKey.enter): () async {
                 await Printing.layoutPdf(
-                  onLayout: (PdfPageFormat f) async => pdfBytes,
+                  onLayout: (PdfPageFormat f) async => await InvoiceGenerator.generate(invoice, f),
                   name: 'Invoice_${invoice.patientName}_${invoice.formattedDate}',
                 );
                 if (ctx.mounted) Navigator.pop(ctx);
@@ -364,11 +422,18 @@ class PrintingService {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
                     child: PdfPreview(
-                      build: (f) async => pdfBytes,
+                      build: (f) async => await InvoiceGenerator.generate(invoice, f),
                       initialPageFormat: format,
                       allowSharing: true,
                       canChangeOrientation: true,
                       canChangePageFormat: true,
+                      pageFormats: const {
+                        'A4': PdfPageFormat.a4,
+                        'A5': PdfPageFormat.a5,
+                        'A6': PdfPageFormat.a6,
+                        'Letter': PdfPageFormat.letter,
+                        'Roll 80mm': PdfPageFormat.roll80,
+                      },
                       canDebug: false,
                       pdfFileName: 'Invoice_${invoice.patientName}.pdf',
                     ),
@@ -444,7 +509,6 @@ class PrintingService {
 
   Future<void> testPrint(BuildContext context) async {
     final settings = ObjectBoxService.instance.settings;
-    final doc = pw.Document();
 
     PdfPageFormat format;
     switch (settings.receiptPaperSize) {
@@ -463,49 +527,11 @@ class PrintingService {
         break;
     }
 
-    doc.addPage(pw.Page(
-      pageFormat: format,
-      margin: const pw.EdgeInsets.all(12),
-      build: (pw.Context context) {
-        return pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.center,
-          mainAxisSize: settings.receiptPaperSize == 'Roll80'
-              ? pw.MainAxisSize.min
-              : pw.MainAxisSize.max,
-          children: [
-            pw.Text('TEST PRINT SUCCESSFUL',
-                style:
-                    pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
-            pw.SizedBox(height: 8),
-            pw.Text(
-                'Hardware: ${settings.defaultPrinterName.isNotEmpty ? settings.defaultPrinterName : "None (Preview)"}'),
-            pw.Text('Auto Print: ${settings.autoPrintReceipt ? "ON" : "OFF"}'),
-            pw.Text('Paper Size: ${settings.receiptPaperSize}'),
-            if (settings.gstNumber.isNotEmpty)
-              pw.Text('GST Registered: ${settings.gstNumber}'),
-            pw.SizedBox(height: 24),
-            pw.Text(
-                'If this printed cleanly and the margins look correct, your configuration is perfect.'),
-            if (format == PdfPageFormat.roll80)
-              pw.SizedBox(height: 12)
-            else
-              pw.Spacer(),
-            pw.Divider(borderStyle: pw.BorderStyle.dashed),
-            if (settings.receiptFooterMessage.isNotEmpty)
-              pw.Text(settings.receiptFooterMessage,
-                  textAlign: pw.TextAlign.center),
-            pw.Text('Powered by MediPoss',
-                style:
-                    const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
-          ],
-        );
-      },
-    ));
-
     if (settings.autoPrintReceipt && settings.defaultPrinterName.isNotEmpty) {
+      final bytes = await _generateTestPrintBytes(format);
       await Printing.directPrintPdf(
         printer: Printer(url: settings.defaultPrinterName),
-        onLayout: (PdfPageFormat f) async => doc.save(),
+        onLayout: (PdfPageFormat f) async => bytes,
         name: 'Test_Print',
       );
     } else {
@@ -525,11 +551,18 @@ class PrintingService {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: PdfPreview(
-                  build: (f) async => doc.save(),
+                  build: (f) async => await _generateTestPrintBytes(f),
                   initialPageFormat: format,
                   allowSharing: false,
                   canChangeOrientation: false,
-                  canChangePageFormat: false,
+                  canChangePageFormat: true,
+                  pageFormats: const {
+                    'A4': PdfPageFormat.a4,
+                    'A5': PdfPageFormat.a5,
+                    'A6': PdfPageFormat.a6,
+                    'Letter': PdfPageFormat.letter,
+                    'Roll 80mm': PdfPageFormat.roll80,
+                  },
                   canDebug: false,
                   pdfFileName: 'Test_Print.pdf',
                 ),
