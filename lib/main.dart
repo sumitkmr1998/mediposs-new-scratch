@@ -379,11 +379,11 @@ class _MediPossAppState extends State<MediPossApp> with WidgetsBindingObserver {
       debugShowCheckedModeBanner: false,
       home: Consumer2<AuthProvider, SyncService>(
         builder: (ctx, auth, sync, _) {
-          final isMobile = !kIsWeb &&
-              (defaultTargetPlatform == TargetPlatform.android ||
-                  defaultTargetPlatform == TargetPlatform.iOS);
+          final isMobileDevice = !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
+          final isWindowsClient = defaultTargetPlatform == TargetPlatform.windows && ObjectBoxService.instance.settings.isWindowsClient;
+          final isClient = isMobileDevice || isWindowsClient;
 
-          if (isMobile && !sync.isConnected) {
+          if (isClient && !sync.isConnected) {
             return const ConnectionScreen();
           }
           if (!auth.isAuthenticated) {

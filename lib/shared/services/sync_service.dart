@@ -23,8 +23,21 @@ import '../../objectbox.g.dart';
 
 class SyncService extends ChangeNotifier {
   static final SyncService instance = SyncService._();
-  SyncService._();
+  Timer? _reconnectTimer;
+  SyncService._() {
+    _startConnectionWatcher();
+  }
   factory SyncService() => instance;
+
+  void _startConnectionWatcher() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
+      if (!isHub && !_isConnected && !isSyncing) {
+        debugPrint('SyncService: Periodic background auto-connect attempt...');
+        await tryAutoConnect();
+      }
+    });
+  }
 
   String? _hubIp;
   String? _jwtToken;
@@ -38,7 +51,11 @@ class SyncService extends ChangeNotifier {
   bool get isConnected => _isConnected;
   bool get isCloudMode => _isCloudMode;
   bool get isSyncing => _isSyncing;
-  bool get isHub => defaultTargetPlatform == TargetPlatform.windows;
+  bool get isHub {
+    if (defaultTargetPlatform != TargetPlatform.windows) return false;
+    // On Windows, check if the user specifically set this device as a client/terminal
+    return !ObjectBoxService.instance.settings.isWindowsClient;
+  }
   String? get connectedRole => _connectedRole;
   Map<String, dynamic>? get lastUserMap => _lastUserMap;
   String get secret => ObjectBoxService.instance.settings.jwtSecret;
@@ -1622,6 +1639,12 @@ class SyncService extends ChangeNotifier {
     return await _unifiedPush('/api/$entity/push', data,
         entity: entity.toLowerCase(), action: 'create');
   }
+  @override
+  void dispose() {
+    _reconnectTimer?.cancel();
+    super.dispose();
+  }
+
 }
 
 class WebSocketService extends ChangeNotifier {

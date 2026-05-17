@@ -11,7 +11,7 @@ class ConnectionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final settings = ObjectBoxService.instance.settings;
-    if (Platform.isAndroid || (Platform.isWindows && settings.isWindowsClient)) {
+    if (Platform.isAndroid) {
       return const ConnectionAndroid();
     }
     return const ConnectionWindows();

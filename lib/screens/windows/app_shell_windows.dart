@@ -218,7 +218,7 @@ class _AppShellWindowsState extends State<AppShellWindows> {
               selectedIndex: _selectedIndex,
               onDestinationSelected: (i) => setState(() => _selectedIndex = i),
               destinations: dests,
-              isWindowsHub: Platform.isWindows,
+              isWindowsHub: !context.read<SettingsProvider>().settings.isWindowsClient,
               isConnected: wsvc.connected,
               isCollapsed: context.watch<SettingsProvider>().settings.navCollapsed,
               onToggleCollapse: () => context.read<SettingsProvider>().toggleNavCollapse(),
@@ -450,7 +450,11 @@ class _SideNav extends StatelessWidget {
           : InkWell(
               onTap: onConnectTap,
               borderRadius: BorderRadius.circular(8),
-              child: _StatusBadge(label: expanded ? (isConnected ? 'Connected' : 'Connect Hub') : '', color: isConnected ? AppTheme.success : AppTheme.warning, icon: isConnected ? Icons.link : Icons.link_off),
+              child: _StatusBadge(
+                label: expanded ? (isConnected ? 'Terminal: Connected' : 'Terminal: Offline') : '', 
+                color: isConnected ? AppTheme.success : AppTheme.warning, 
+                icon: isConnected ? Icons.link : Icons.link_off
+              ),
             ),
     );
   }

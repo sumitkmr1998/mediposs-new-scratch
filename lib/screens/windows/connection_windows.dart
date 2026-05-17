@@ -303,7 +303,75 @@ class _ConnectionWindowsState extends State<ConnectionWindows> {
                         Text(sync.isSyncing ? 'Pairing...' : 'Pair with Hub'),
                   ),
                 ),
-                if (sync.isConnected) ...[
+                if (_errorMsg != null || _reachable == false) ...[
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppTheme.warning.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.warning.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.cloud_off, color: AppTheme.warning),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Hub is currently Offline.',
+                                style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.warning),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'You can continue in Cloud Mode to view data and make sales via Firebase.',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: () => sync.enterCloudMode(),
+                          icon: const Icon(Icons.cloud_sync),
+                          label: const Text('Enter Cloud Mode'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.warning,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(double.infinity, 40),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (sync.isCloudMode) ...[
+                   const SizedBox(height: 16),
+                   Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.cloud_done, color: AppTheme.primary),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Active in Cloud Mode (Firebase)',
+                            style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => sync.exitCloudMode(),
+                          child: const Text('Exit'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else if (sync.isConnected || _reachable == true) ...[
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -315,9 +383,32 @@ class _ConnectionWindowsState extends State<ConnectionWindows> {
                       children: [
                         const Icon(Icons.check_circle, color: AppTheme.success),
                         const SizedBox(width: 8),
-                        Text('Connected to ${sync.hubIp}',
-                            style: const TextStyle(color: AppTheme.success)),
+                        Expanded(
+                          child: Text(
+                              'Connected to ${sync.hubIp ?? _ipCtrl.text}',
+                              style: const TextStyle(
+                                  color: AppTheme.success,
+                                  fontWeight: FontWeight.bold)),
+                        ),
                       ],
+                    ),
+                  ),
+                ],
+                if (sync.isConnected) ...[
+                   const SizedBox(height: 12),
+                   OutlinedButton.icon(
+                    onPressed: () async {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Starting full data refresh...')));
+                      await sync.forceFullSync();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Full Sync Complete'), backgroundColor: AppTheme.success));
+                      }
+                    },
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('Force Full Sync'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 40),
+                      side: BorderSide(color: AppTheme.primary.withValues(alpha: 0.5)),
                     ),
                   ),
                 ],
