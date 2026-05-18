@@ -1083,7 +1083,7 @@ class _InventoryAlertsSection extends StatelessWidget {
           count: inv.lowStockCount,
           color: AppTheme.warning,
           icon: Icons.warning_amber_rounded,
-          items: inv.medicines.where((m) => m.isLowStock).toList(),
+          items: inv.lowStockMedicines,
           subtitleBuilder: (m) => 'Store: ${m.storeStock} | Main: ${m.mainStock}',
         ),
         const SizedBox(height: 12),

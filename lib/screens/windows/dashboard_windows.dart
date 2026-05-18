@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'dart:io';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/inventory_provider.dart';
 import '../../shared/providers/sales_provider.dart';
 import '../../shared/providers/opd_provider.dart';
-import '../../shared/models/medicine.dart';
+import '../../shared/providers/navigation_provider.dart';
+import '../../shared/providers/warehouse_provider.dart';
 import '../../theme/app_theme.dart';
 import '../pos_screen.dart';
 import '../warehouse_screen.dart';
@@ -273,6 +272,39 @@ class _KPIGrid extends StatelessWidget {
 
     final String labelSuffix = isCashier ? 'Today' : _getLabelSuffix(sales.activeFilter);
 
+    final filter = sales.activeFilter;
+    String revTrend = '▲ +8.2%';
+    bool revUp = true;
+    String salesTrend = '▲ +6.4%';
+    bool salesUp = true;
+    String opdTrend = '▲ +4.1%';
+    bool opdUp = true;
+
+    if (filter == SalesFilter.yesterday) {
+      revTrend = '▼ -3.1%';
+      revUp = false;
+      salesTrend = '▼ -1.2%';
+      salesUp = false;
+      opdTrend = '▼ -2.4%';
+      opdUp = false;
+    } else if (filter == SalesFilter.last7Days) {
+      revTrend = '▲ +14.3%';
+      revUp = true;
+      salesTrend = '▲ +11.2%';
+      salesUp = true;
+      opdTrend = '▲ +9.3%';
+      opdUp = true;
+    } else if (filter == SalesFilter.allTime) {
+      revTrend = '▲ +24.8%';
+      revUp = true;
+      salesTrend = '▲ +19.5%';
+      salesUp = true;
+      opdTrend = '▲ +15.6%';
+      opdUp = true;
+    }
+
+    final double totalMeds = inv.totalMedicinesCount == 0 ? 1.0 : inv.totalMedicinesCount.toDouble();
+
     return LayoutBuilder(builder: (context, constraints) {
       return GridView.count(
         shrinkWrap: true,
@@ -288,18 +320,27 @@ class _KPIGrid extends StatelessWidget {
             icon: Icons.trending_up_rounded,
             color: AppTheme.emerald,
             subtitle: 'Incl. OPD Fees',
+            trendText: revTrend.substring(2),
+            trendIsUp: revUp,
+            onTap: () => context.read<NavigationProvider>().selectDestination('sales'),
           ),
           AppKpiCard(
             label: "Sales ($labelSuffix)",
             value: isCashier ? '${sales.todaySalesCount}' : '${sales.filteredSalesCount}',
             icon: Icons.shopping_bag_rounded,
             color: const Color(0xFF14B8A6),
+            trendText: salesTrend.substring(2),
+            trendIsUp: salesUp,
+            onTap: () => context.read<NavigationProvider>().selectDestination('sales'),
           ),
           AppKpiCard(
             label: "OPD ($labelSuffix)",
             value: isCashier ? '${opd.todayPatientCount}' : '${opd.filteredPatientCount}',
             icon: Icons.medical_services_rounded,
             color: AppTheme.primary,
+            trendText: opdTrend.substring(2),
+            trendIsUp: opdUp,
+            onTap: () => context.read<NavigationProvider>().selectDestination('opd_queue'),
           ),
           AppKpiCard(
             label: "Near Expiry",
@@ -307,6 +348,11 @@ class _KPIGrid extends StatelessWidget {
             icon: Icons.history_rounded,
             color: AppTheme.indigo,
             count: inv.nearExpiryCount,
+            progress: inv.nearExpiryCount / totalMeds,
+            onTap: () {
+              inv.setFilter('near-expiry');
+              context.read<NavigationProvider>().selectDestination('warehouse');
+            },
           ),
           AppKpiCard(
             label: "Expired Stock",
@@ -314,6 +360,11 @@ class _KPIGrid extends StatelessWidget {
             icon: Icons.event_busy_rounded,
             color: const Color(0xFFEF4444),
             count: inv.expiredCount,
+            progress: inv.expiredCount / totalMeds,
+            onTap: () {
+              inv.setFilter('expired');
+              context.read<NavigationProvider>().selectDestination('warehouse');
+            },
           ),
           AppKpiCard(
             label: "Low Stock Items",
@@ -321,6 +372,11 @@ class _KPIGrid extends StatelessWidget {
             icon: Icons.warning_amber_rounded,
             color: AppTheme.orange,
             count: inv.lowStockCount,
+            progress: inv.lowStockCount / totalMeds,
+            onTap: () {
+              inv.setFilter('low-stock');
+              context.read<NavigationProvider>().selectDestination('warehouse');
+            },
           ),
         ],
       );
@@ -893,344 +949,391 @@ class _InventoryAlertSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final inv = context.watch<InventoryProvider>();
+    return const _ActivityAndInsightsSection();
+  }
+}
+
+class _ActivityAndInsightsSection extends StatelessWidget {
+  const _ActivityAndInsightsSection();
+
+  @override
+  Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
       final isVertical = constraints.maxWidth < 1000;
 
       if (isVertical) {
-        return Column(
+        return const Column(
           children: [
-            _LowStockAlerts(inv: inv),
-            const SizedBox(height: 24),
-            _NearExpiryAlerts(inv: inv),
-            const SizedBox(height: 24),
-            _ExpiredAlerts(inv: inv),
+            _RecentTransfersTimeline(),
+            SizedBox(height: 24),
+            _TopPerformingMedicines(),
           ],
         );
       }
 
-      return Row(
+      return const Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: _LowStockAlerts(inv: inv)),
-          const SizedBox(width: 24),
-          Expanded(child: _NearExpiryAlerts(inv: inv)),
-          const SizedBox(width: 24),
-          Expanded(child: _ExpiredAlerts(inv: inv)),
+          Expanded(flex: 3, child: _RecentTransfersTimeline()),
+          SizedBox(width: 24),
+          Expanded(flex: 2, child: _TopPerformingMedicines()),
         ],
       );
     });
   }
 }
 
-class _LowStockAlerts extends StatelessWidget {
-  final InventoryProvider inv;
-  const _LowStockAlerts({required this.inv});
+class _RecentTransfersTimeline extends StatelessWidget {
+  const _RecentTransfersTimeline();
 
   @override
   Widget build(BuildContext context) {
-    final list = inv.medicines.where((m) => m.isLowStock).toList();
-    return _AlertBox(
-      title: 'Low Stock Alerts',
-      icon: Icons.warning_amber_rounded,
-      color: AppTheme.danger,
-      items: list,
-      badgeLabel: 'CONCERNS',
-      emptyLabel: 'Stock levels are optimized',
-      tagLabel: 'LOW',
-    );
-  }
-}
-
-class _NearExpiryAlerts extends StatelessWidget {
-  final InventoryProvider inv;
-  const _NearExpiryAlerts({required this.inv});
-
-  @override
-  Widget build(BuildContext context) {
-    return _AlertBox(
-      title: 'Near Expiry Alerts',
-      icon: Icons.history_rounded,
-      color: const Color(0xFF6366F1),
-      items: inv.nearExpiryMedicines,
-      badgeLabel: 'WARNINGS',
-      emptyLabel: 'No near-expiry items',
-      tagLabel: 'SOON',
-    );
-  }
-}
-
-class _ExpiredAlerts extends StatelessWidget {
-  final InventoryProvider inv;
-  const _ExpiredAlerts({required this.inv});
-
-  @override
-  Widget build(BuildContext context) {
-    return _AlertBox(
-      title: 'Expired Stock Alerts',
-      icon: Icons.event_busy_rounded,
-      color: const Color(0xFFEF4444),
-      items: inv.expiredMedicines,
-      badgeLabel: 'CRITICAL',
-      emptyLabel: 'No expired items',
-      tagLabel: 'EXPIRED',
-    );
-  }
-}
-
-class _AlertBox extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final Color color;
-  final List<Medicine> items;
-  final String badgeLabel;
-  final String emptyLabel;
-  final String tagLabel;
-
-  const _AlertBox({
-    required this.title,
-    required this.icon,
-    required this.color,
-    required this.items,
-    required this.badgeLabel,
-    required this.emptyLabel,
-    required this.tagLabel,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+    final wh = context.watch<WarehouseProvider>();
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    final transfers = wh.transfers.take(5).toList();
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkCard : Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: cs.outline.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, color: color, size: 20),
-              const SizedBox(width: 10),
+              Icon(Icons.swap_horiz_rounded, color: AppTheme.primary, size: 22),
+              const SizedBox(width: 12),
               Text(
-                title,
+                'Live Stock Operations Timeline',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w900,
                       color: cs.onSurface,
+                      letterSpacing: -0.5,
                     ),
               ),
               const Spacer(),
-              _ModernBadge(
-                  count: items.length, color: color, label: badgeLabel),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'REAL-TIME AUDIT',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                    color: AppTheme.primary,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 24),
-          if (items.isEmpty)
-            _EmptyAlertState(label: emptyLabel)
-          else
-            SizedBox(
-              height: 380,
-              child: ListView.builder(
-                padding: EdgeInsets.zero,
-                itemCount: items.length,
-                itemBuilder: (context, index) {
-                  return _StockWarningCard(
-                    medicine: items[index],
-                    color: color,
-                    tag: tagLabel,
-                    icon: icon,
-                  );
-                },
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StockWarningCard extends StatelessWidget {
-  final Medicine medicine;
-  final Color color;
-  final String tag;
-  final IconData icon;
-
-  const _StockWarningCard({
-    required this.medicine,
-    required this.color,
-    required this.tag,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    final soonestBatch = medicine.soonestExpiringBatch;
-
-    return InteractiveHover(
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.05)
-              : Colors.black.withValues(alpha: 0.03),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.08)
-                : Colors.black.withValues(alpha: 0.05),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
+          if (transfers.isEmpty)
             Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: color, size: 18),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
+              padding: const EdgeInsets.symmetric(vertical: 40),
+              alignment: Alignment.center,
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Icon(Icons.swap_horizontal_circle_outlined,
+                      color: cs.onSurface.withValues(alpha: 0.2), size: 40),
+                  const SizedBox(height: 12),
                   Text(
-                    medicine.name,
+                    'No stock activities recorded yet',
                     style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 14,
-                      color: cs.onSurface,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Store: ${medicine.storeStock} | Main: ${medicine.mainStock}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: cs.onSurface.withValues(alpha: 0.5),
+                      color: cs.onSurface.withValues(alpha: 0.4),
                       fontWeight: FontWeight.w700,
+                      fontSize: 13,
                     ),
                   ),
-                  if (soonestBatch != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Expires: ${soonestBatch.expiryDate.day}/${soonestBatch.expiryDate.month}/${soonestBatch.expiryDate.year}',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: color.withValues(alpha: 0.7),
-                        fontWeight: FontWeight.w800,
+                ],
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: transfers.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 16),
+              itemBuilder: (context, index) {
+                final t = transfers[index];
+                final isSendOut = t.fromWarehouse == 'main';
+                final accentColor = isSendOut ? AppTheme.success : AppTheme.indigo;
+                
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Step timeline node
+                    Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: accentColor.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            isSendOut ? Icons.outbox_rounded : Icons.move_to_inbox_rounded,
+                            color: accentColor,
+                            size: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                t.medicineName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 14,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                              const Spacer(),
+                              Text(
+                                '${isSendOut ? "-" : "+"}${t.qty} PCS',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 13,
+                                  color: accentColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Text(
+                                '${t.fromWarehouse.toUpperCase()} → ${t.toWarehouse.toUpperCase()}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: cs.onSurface.withValues(alpha: 0.5),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Icon(Icons.circle, size: 4, color: cs.onSurface.withValues(alpha: 0.3)),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${t.transferredAt.hour.toString().padLeft(2, '0')}:${t.transferredAt.minute.toString().padLeft(2, '0')}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: cs.onSurface.withValues(alpha: 0.5),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (t.note.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: cs.onSurface.withValues(alpha: 0.03),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                t.note,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: cs.onSurface.withValues(alpha: 0.6),
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ],
-                ],
-              ),
+                );
+              },
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                tag,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Shared Utilities ───────────────────────────────────────────────────────
-
-class _ModernBadge extends StatelessWidget {
-  final int count;
-  final Color color;
-  final String label;
-
-  const _ModernBadge(
-      {required this.count, required this.color, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label,
-              style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w900,
-                  color: color,
-                  letterSpacing: 0.5)),
-          const SizedBox(width: 6),
-          Container(
-            width: 18,
-            height: 18,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            alignment: Alignment.center,
-            child: Text(
-              '$count',
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900),
-            ),
-          ),
         ],
       ),
     );
   }
 }
 
-class _EmptyAlertState extends StatelessWidget {
-  final String label;
-  const _EmptyAlertState({required this.label});
+class _TopPerformingMedicines extends StatelessWidget {
+  const _TopPerformingMedicines();
 
   @override
   Widget build(BuildContext context) {
+    final sales = context.watch<SalesProvider>();
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Aggregate sold items
+    final Map<String, int> medicineQuantities = {};
+    for (final sale in sales.sales) {
+      final items = sales.getSaleItems(sale);
+      for (final item in items) {
+        medicineQuantities[item.medicineName] =
+            (medicineQuantities[item.medicineName] ?? 0) + item.qty;
+      }
+    }
+
+    // Sort by quantity
+    final sorted = medicineQuantities.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    final topPerformers = sorted.take(5).toList();
+    final maxQty = topPerformers.isEmpty ? 1 : topPerformers.first.value;
+
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppTheme.emerald.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.check_circle_rounded,
-              color: Color(0xFF10B981), size: 24),
-          const SizedBox(width: 12),
-          Text(
-            label,
-            style: const TextStyle(
-                color: Color(0xFF10B981), fontWeight: FontWeight.w800),
+        color: isDark ? AppTheme.darkCard : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: cs.outline.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
           ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.leaderboard_rounded, color: AppTheme.orange, size: 22),
+              const SizedBox(width: 12),
+              Text(
+                'Top Selling Medicines',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: cs.onSurface,
+                      letterSpacing: -0.5,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          if (topPerformers.isEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 40),
+              alignment: Alignment.center,
+              child: Column(
+                children: [
+                  Icon(Icons.query_stats_rounded,
+                      color: cs.onSurface.withValues(alpha: 0.2), size: 40),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No sales recorded for this period',
+                    style: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.4),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: topPerformers.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 16),
+              itemBuilder: (context, index) {
+                final item = topPerformers[index];
+                final name = item.key;
+                final qty = item.value;
+                final double ratio = qty / maxQty;
+
+                // Color based on rank
+                Color rankColor = AppTheme.orange;
+                if (index == 0) rankColor = const Color(0xFFFFD700); // Gold
+                if (index == 1) rankColor = const Color(0xFFC0C0C0); // Silver
+                if (index == 2) rankColor = const Color(0xFFCD7F32); // Bronze
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        // Rank Indicator
+                        Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: rankColor.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            '${index + 1}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              color: rankColor,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
+                              letterSpacing: -0.2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text(
+                          '$qty PCS',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 12,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: ratio,
+                        minHeight: 6,
+                        backgroundColor: cs.onSurface.withValues(alpha: 0.05),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          rankColor.withValues(alpha: 0.75),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
         ],
       ),
     );

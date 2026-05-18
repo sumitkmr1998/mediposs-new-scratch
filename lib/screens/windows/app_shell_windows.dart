@@ -13,6 +13,7 @@ import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/prescription_provider.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/template_provider.dart';
+import '../../shared/providers/navigation_provider.dart';
 import '../../shared/services/local_server_service.dart';
 import '../../shared/services/sync_service.dart';
 import '../../shared/services/notification_service.dart';
@@ -194,15 +195,17 @@ class _AppShellWindowsState extends State<AppShellWindows> {
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width > 700;
     final wsvc = context.watch<WebSocketService>();
+    final nav = context.watch<NavigationProvider>();
     final dests = _buildDestinations(context);
 
-    if (_selectedIndex >= dests.length) _selectedIndex = 0;
-    final currentDestId = dests[_selectedIndex].id;
+    int activeIndex = dests.indexWhere((d) => d.id == nav.activeDestId);
+    if (activeIndex == -1) activeIndex = 0;
+    final currentDestId = dests[activeIndex].id;
 
     return Scaffold(
       appBar: !isWide
           ? AppBar(
-              title: Text(dests[_selectedIndex].label),
+              title: Text(dests[activeIndex].label),
               actions: [
                 IconButton(
                   icon: const Icon(Icons.logout, color: AppTheme.danger),
@@ -215,8 +218,8 @@ class _AppShellWindowsState extends State<AppShellWindows> {
         children: [
           if (isWide)
             _SideNav(
-              selectedIndex: _selectedIndex,
-              onDestinationSelected: (i) => setState(() => _selectedIndex = i),
+              selectedIndex: activeIndex,
+              onDestinationSelected: (i) => nav.selectDestination(dests[i].id),
               destinations: dests,
               isWindowsHub: !context.read<SettingsProvider>().settings.isWindowsClient,
               isConnected: wsvc.connected,

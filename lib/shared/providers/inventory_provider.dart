@@ -27,13 +27,12 @@ class InventoryProvider extends ChangeNotifier {
   List<Medicine> get medicines => _filtered();
   List<PurchaseRecord> get purchaseHistory =>
       List.unmodifiable(_purchaseHistory);
-  int get lowStockCount {
-    final threshold = ObjectBoxService.instance.settings.lowStockThreshold;
-    return _medicines.where((m) => m.storeStock <= threshold).length;
-  }
+  int get lowStockCount => _medicines.where((m) => m.isLowStock).length;
+  List<Medicine> get lowStockMedicines => _medicines.where((m) => m.isLowStock).toList();
   
   int get expiredCount => expiredMedicines.length;
   int get nearExpiryCount => nearExpiryMedicines.length;
+  int get totalMedicinesCount => _medicines.length;
 
   List<Medicine> get expiredMedicines {
     final now = DateTime.now();

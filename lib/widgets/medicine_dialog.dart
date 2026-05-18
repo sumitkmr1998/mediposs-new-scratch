@@ -137,7 +137,6 @@ class _MedicineDialogState extends State<MedicineDialog> {
         ),
       ),
       actions: [
-        const Spacer(),
         TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel')),

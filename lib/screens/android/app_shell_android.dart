@@ -284,12 +284,12 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
     final navProvider = context.watch<NavigationProvider>();
     final dests = _buildDestinations(context);
 
-    // Safety check just in case permissions shrunk and index is out of bounds
-    if (_selectedIndex >= dests.length) {
-      _selectedIndex = 0;
+    int activeIndex = dests.indexWhere((d) => d.id == navProvider.activeDestId);
+    if (activeIndex == -1) {
+      activeIndex = 0;
     }
 
-    final currentDestId = dests[_selectedIndex].id;
+    final currentDestId = dests[activeIndex].id;
     final sync = context.watch<SyncService>();
 
     return PopScope(
@@ -298,8 +298,8 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
         if (didPop) return;
 
         // 1. If not on Dashboard, go to Dashboard
-        if (_selectedIndex != 0) {
-          setState(() => _selectedIndex = 0);
+        if (activeIndex != 0) {
+          navProvider.selectDestination(dests[0].id);
           return;
         }
 
@@ -328,9 +328,9 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
                 ? Row(
                     children: [
                       _SideNav(
-                        selectedIndex: _selectedIndex,
+                        selectedIndex: activeIndex,
                         onDestinationSelected: (i) =>
-                            setState(() => _selectedIndex = i),
+                            navProvider.selectDestination(dests[i].id),
                         destinations: dests,
                         isWindowsHub: Platform.isWindows,
                         isConnected: wsvc.connected,
@@ -346,9 +346,9 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
                     body: _screenForId(currentDestId),
                     bottomNavigationBar: navProvider.isBottomNavVisible
                         ? _ScrollableNavigationBar(
-                            selectedIndex: _selectedIndex,
+                            selectedIndex: activeIndex,
                             onDestinationSelected: (i) =>
-                                setState(() => _selectedIndex = i),
+                                navProvider.selectDestination(dests[i].id),
                             destinations: dests,
                           )
                         : null,
