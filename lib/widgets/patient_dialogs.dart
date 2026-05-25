@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../shared/models/patient.dart';
 import '../shared/models/doctor.dart';
+import '../shared/models/appointment.dart';
 import '../shared/providers/patient_provider.dart';
 import '../shared/providers/opd_provider.dart';
 import '../shared/services/sync_service.dart';
@@ -187,11 +188,15 @@ class _PatientDialogState extends State<PatientDialog> {
 // ─── Shared Patient Search Dialog ─────────────────────────────────────────────
 class PatientSearchDialog extends StatefulWidget {
   final Function(Patient) onSelected;
+  final Function(Appointment)? onAppointmentSelected;
+  final bool limitToTodayOpd;
   final bool showSkip;
 
   const PatientSearchDialog({
     super.key,
     required this.onSelected,
+    this.onAppointmentSelected,
+    this.limitToTodayOpd = false,
     this.showSkip = true,
   });
 
@@ -219,8 +224,150 @@ class _PatientSearchDialogState extends State<PatientSearchDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final patients = context.watch<PatientProvider>().patients;
     final query = _searchCtrl.text.toLowerCase();
+
+    if (widget.limitToTodayOpd) {
+      final opd = context.watch<OpdProvider>();
+      final todayQueue = opd.todayQueue; // already sorted by tokenNumber
+      final filteredAppts = todayQueue.where((a) {
+        return a.patientName.toLowerCase().contains(query) ||
+            a.patientPhone.contains(query) ||
+            a.tokenNumber.toString().contains(query) ||
+            a.doctorName.toLowerCase().contains(query);
+      }).toList();
+
+      if (_selectedIndex >= filteredAppts.length && filteredAppts.isNotEmpty) {
+        _selectedIndex = 0;
+      }
+
+      return CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.arrowDown): () {
+            if (filteredAppts.isNotEmpty) {
+              setState(() =>
+                  _selectedIndex = (_selectedIndex + 1) % filteredAppts.length);
+            }
+          },
+          const SingleActivator(LogicalKeyboardKey.arrowUp): () {
+            if (filteredAppts.isNotEmpty) {
+              setState(() => _selectedIndex =
+                  (_selectedIndex - 1 + filteredAppts.length) % filteredAppts.length);
+            }
+          },
+          const SingleActivator(LogicalKeyboardKey.enter): () {
+            if (filteredAppts.isNotEmpty) {
+              final selectedAppt = filteredAppts[_selectedIndex];
+              Navigator.pop(context);
+              if (widget.onAppointmentSelected != null) {
+                widget.onAppointmentSelected!(selectedAppt);
+              } else {
+                final patients = context.read<PatientProvider>().patients;
+                final p = patients.where((x) => x.id == selectedAppt.patientId).firstOrNull ??
+                    (Patient(uhid: '', name: selectedAppt.patientName, phone: selectedAppt.patientPhone, gender: 'Male')..id = selectedAppt.patientId);
+                widget.onSelected(p);
+              }
+            }
+          },
+        },
+        child: AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.person_search, color: AppTheme.primary),
+              SizedBox(width: 12),
+              Text('Select Patient from OPD Queue'),
+            ],
+          ),
+          content: Container(
+            width: double.maxFinite,
+            constraints: const BoxConstraints(maxWidth: 450),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: _searchCtrl,
+                  focusNode: _focusNode,
+                  decoration: const InputDecoration(
+                    hintText: 'Search by Name, Phone, Doctor or Token...',
+                    prefixIcon: Icon(Icons.search),
+                  ),
+                  onChanged: (val) => setState(() => _selectedIndex = 0),
+                ),
+                const SizedBox(height: 12),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.4),
+                  child: filteredAppts.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.all(24.0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.person_off_outlined,
+                                  size: 48, color: Colors.grey),
+                              const SizedBox(height: 8),
+                              Text('No matching patient found in today\'s queue.',
+                                  style: TextStyle(color: Colors.grey)),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: filteredAppts.length,
+                          itemBuilder: (ctx, i) {
+                            final a = filteredAppts[i];
+                            final isSelected = i == _selectedIndex;
+                            return Container(
+                              color: isSelected
+                                  ? AppTheme.primary.withOpacity(0.1)
+                                  : null,
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor:
+                                      AppTheme.primary.withOpacity(0.1),
+                                  child: Text('#${a.tokenNumber}',
+                                      style: const TextStyle(
+                                          color: AppTheme.primary,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold)),
+                                ),
+                                title: Text(a.patientName,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold)),
+                                subtitle: Text('Dr. ${a.doctorName} • Status: ${a.status}'),
+                                trailing: Text(a.patientPhone,
+                                    style: const TextStyle(
+                                        fontSize: 10, color: Colors.grey)),
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  if (widget.onAppointmentSelected != null) {
+                                    widget.onAppointmentSelected!(a);
+                                  } else {
+                                    final patients = context.read<PatientProvider>().patients;
+                                    final p = patients.where((x) => x.id == a.patientId).firstOrNull ??
+                                        (Patient(uhid: '', name: a.patientName, phone: a.patientPhone, gender: 'Male')..id = a.patientId);
+                                    widget.onSelected(p);
+                                  }
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            if (widget.showSkip)
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Skip / Walk-in'),
+              ),
+          ],
+        ),
+      );
+    }
+
+    final patients = context.watch<PatientProvider>().patients;
     final filtered = patients.where((p) {
       return p.name.toLowerCase().contains(query) ||
           p.phone.contains(query) ||
@@ -281,15 +428,15 @@ class _PatientSearchDialogState extends State<PatientSearchDialog> {
                 constraints: BoxConstraints(
                     maxHeight: MediaQuery.of(context).size.height * 0.4),
                 child: filtered.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.all(24.0),
+                    ? const Padding(
+                        padding: EdgeInsets.all(24.0),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(Icons.person_off_outlined,
                                 size: 48, color: Colors.grey),
-                            const SizedBox(height: 8),
-                            const Text('No matching patient found.',
+                            SizedBox(height: 8),
+                            Text('No matching patient found.',
                                 style: TextStyle(color: Colors.grey)),
                           ],
                         ),

@@ -1142,6 +1142,7 @@ class SyncService extends ChangeNotifier {
               ..updatedAt = DateTime.tryParse(item['updatedAt'] ?? '') ?? createdAt
               ..synced = true
               ..isReturn = item['isReturn'] ?? false
+              ..isClinicalDispense = item['isClinicalDispense'] ?? false
               ..itemsJson = item['itemsJson'] ?? '[]';
             box.put(existing);
           } else {
@@ -1164,6 +1165,7 @@ class SyncService extends ChangeNotifier {
               updatedAt: DateTime.tryParse(item['updatedAt'] ?? '') ?? createdAt,
               synced: true,
               isReturn: item['isReturn'] ?? false,
+              isClinicalDispense: item['isClinicalDispense'] ?? false,
               itemsJson: item['itemsJson'] ?? '[]',
             ));
           }

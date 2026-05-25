@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/settings_provider.dart';
+import '../../shared/providers/navigation_provider.dart';
 import '../../shared/models/app_user.dart';
 import '../../shared/services/sync_service.dart';
 import '../../shared/services/firebase_sync_service.dart';
@@ -34,6 +35,10 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
   late final TextEditingController _taxCtrl;
   late final TextEditingController _currencyCtrl;
   late final TextEditingController _portCtrl;
+  late final TextEditingController _clinicNameCtrl;
+  late final TextEditingController _clinicAddressCtrl;
+  late final TextEditingController _clinicPhoneCtrl;
+  late final TextEditingController _clinicRegCtrl;
 
   String _selectedTheme = 'system';
   List<Printer> _printers = [];
@@ -58,6 +63,10 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
     _taxCtrl = TextEditingController(text: '${s.taxRate}');
     _currencyCtrl = TextEditingController(text: s.currencySymbol);
     _portCtrl = TextEditingController(text: '${s.serverPort}');
+    _clinicNameCtrl = TextEditingController(text: s.clinicName ?? 'MediPoss Clinic');
+    _clinicAddressCtrl = TextEditingController(text: s.clinicAddress ?? '');
+    _clinicPhoneCtrl = TextEditingController(text: s.clinicPhone ?? '');
+    _clinicRegCtrl = TextEditingController(text: s.clinicRegNo ?? '');
     _selectedTheme = ['system', 'light', 'dark'].contains(s.themeMode)
         ? s.themeMode
         : 'system';
@@ -138,7 +147,11 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
       ..serverPort = int.tryParse(_portCtrl.text) ?? 8080
       ..preferredRefreshRate = _selectedFPS
       ..connectionMode = _connectionMode
-      ..cloudflareUrl = _cloudflareUrl;
+      ..cloudflareUrl = _cloudflareUrl
+      ..clinicName = _clinicNameCtrl.text
+      ..clinicAddress = _clinicAddressCtrl.text
+      ..clinicPhone = _clinicPhoneCtrl.text
+      ..clinicRegNo = _clinicRegCtrl.text;
 
     settingsProv.save(s, syncService: context.read<SyncService>());
 
@@ -281,7 +294,13 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
             floating: true,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded),
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                } else {
+                  context.read<NavigationProvider>().selectDestination('dashboard');
+                }
+              },
             ),
             forceElevated: innerBoxIsScrolled,
             elevation: innerBoxIsScrolled ? 4 : 0,
@@ -304,6 +323,20 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                     Expanded(child: _field(_phoneCtrl, 'Contact Phone')),
                     const SizedBox(width: 16),
                     Expanded(child: _field(_gstCtrl, 'GST Number (Optional)')),
+                  ]),
+                ],
+              ),
+              _buildSection(
+                'Clinic / Doctor Details (for Clinical Dispenses)',
+                children: [
+                  _field(_clinicNameCtrl, 'Clinic / Doctor Name'),
+                  const SizedBox(height: 12),
+                  _field(_clinicAddressCtrl, 'Physical Address'),
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    Expanded(child: _field(_clinicPhoneCtrl, 'Contact Phone')),
+                    const SizedBox(width: 16),
+                    Expanded(child: _field(_clinicRegCtrl, 'Medical Reg No.')),
                   ]),
                 ],
               ),

@@ -12,6 +12,8 @@ import '../../shared/providers/patient_provider.dart';
 import '../../shared/models/medicine.dart';
 import '../../shared/models/patient.dart';
 import '../../shared/models/procedure.dart';
+import '../../shared/providers/opd_provider.dart';
+import '../../shared/models/appointment.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/medicine_dialog.dart';
 import '../../widgets/patient_dialogs.dart';
@@ -204,6 +206,7 @@ class _PosWindowsState extends State<PosWindows> {
   Widget build(BuildContext context) {
     final inv = context.watch<InventoryProvider>();
     final cart = context.watch<CartProvider>();
+    final auth = context.watch<AuthProvider>();
     final isWide = MediaQuery.of(context).size.width > 800;
 
     return CallbackShortcuts(
@@ -248,6 +251,33 @@ class _PosWindowsState extends State<PosWindows> {
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1.2,
                       ),
+                    ),
+                  ),
+                ] else ...[
+                  const SizedBox(width: 24),
+                  SegmentedButton<bool>(
+                    segments: <ButtonSegment<bool>>[
+                      ButtonSegment<bool>(
+                        value: false,
+                        label: const Text('Retail Sale (GST)'),
+                        icon: const Icon(Icons.shopping_bag_outlined),
+                        enabled: auth.canProcessRetailSales,
+                      ),
+                      ButtonSegment<bool>(
+                        value: true,
+                        label: const Text('Clinical Dispense (No Tax)'),
+                        icon: const Icon(Icons.medical_services_outlined),
+                        enabled: auth.canProcessClinicalDispenses,
+                      ),
+                    ],
+                    selected: <bool>{cart.isClinicalDispense},
+                    onSelectionChanged: (Set<bool> newSelection) {
+                      _handleClinicalDispenseToggle(newSelection.first, cart);
+                    },
+                    style: SegmentedButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      selectedBackgroundColor: AppTheme.primary,
+                      selectedForegroundColor: Colors.white,
                     ),
                   ),
                 ],
@@ -458,7 +488,72 @@ class _PosWindowsState extends State<PosWindows> {
     );
   }
 
+  void _handleClinicalDispenseToggle(bool val, CartProvider cart) {
+    if (!val) {
+      cart.setClinicalDispense(false);
+      return;
+    }
+    
+    // Attempting to turn ON Clinical Dispense
+    // Enforce selection of a patient from today's queue
+    final opd = context.read<OpdProvider>();
+    final activeAppts = opd.todayQueue;
+    
+    if (activeAppts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No appointments found in today\'s OPD queue. Clinical Dispense requires a patient in the OPD queue.'),
+        backgroundColor: AppTheme.danger,
+      ));
+      return;
+    }
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Select Appointment for Clinical Dispense'),
+        content: SizedBox(
+          width: 400,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: activeAppts.length,
+            itemBuilder: (c, i) {
+              final a = activeAppts[i];
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: AppTheme.primary.withOpacity(0.1),
+                  child: Text('#${a.tokenNumber}',
+                      style: const TextStyle(
+                          color: AppTheme.primary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold)),
+                ),
+                title: Text(a.patientName),
+                subtitle: Text('Status: ${a.status} • Dr. ${a.doctorName}'),
+                onTap: () {
+                  cart.setPatient(name: a.patientName, phone: a.patientPhone, id: a.patientId);
+                  _patientCtrl.text = a.patientName;
+                  cart.setLinkedAppointment(a.id);
+                  cart.setClinicalDispense(true);
+                  Navigator.pop(ctx);
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _doCheckout(CartProvider cart) async {
+    if (cart.isClinicalDispense && cart.patientId == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('❌ Registered patient is strictly required for Clinical Dispense Mode!'),
+          backgroundColor: AppTheme.danger,
+        ),
+      );
+      return;
+    }
     cart.setPatient(name: _patientCtrl.text.trim(), id: cart.patientId);
     final discount = double.tryParse(_discountCtrl.text) ?? 0;
     cart.setDiscount(discount);
@@ -679,13 +774,20 @@ class _PosWindowsState extends State<PosWindows> {
   }
 
   void _showPatientProactiveSearch() {
+    final cart = context.read<CartProvider>();
     showDialog(
       context: context,
       builder: (ctx) => PatientSearchDialog(
+        limitToTodayOpd: cart.isClinicalDispense,
         onSelected: (p) {
-          final cart = context.read<CartProvider>();
           cart.setPatient(name: p.name, phone: p.phone, id: p.id);
           _patientCtrl.text = p.name;
+          _searchFocus.requestFocus();
+        },
+        onAppointmentSelected: (Appointment appt) {
+          cart.setPatient(name: appt.patientName, phone: appt.patientPhone, id: appt.patientId);
+          _patientCtrl.text = appt.patientName;
+          cart.setLinkedAppointment(appt.id);
           _searchFocus.requestFocus();
         },
       ),
@@ -929,8 +1031,9 @@ class _MedicinesGridState extends State<_MedicinesGrid> {
     final procProv = context.watch<ProcedureProvider>();
     final query = widget.searchCtrl.text.toLowerCase();
 
+    final isClinical = widget.cart.isClinicalDispense;
     final medicines = widget.inv.medicines
-        .where((m) => m.storeStock > 0)
+        .where((m) => isClinical ? m.mainStock > 0 : m.storeStock > 0)
         .where(
           (m) =>
               query.isEmpty ||
@@ -1292,8 +1395,10 @@ class _ProductCard extends StatelessWidget {
     final name = item.name;
     final price = isProcedure ? item.basePrice : item.sellingPrice;
     final icon = isProcedure ? Icons.auto_awesome : Icons.medication;
-    final isLowStock = !isProcedure && item.isLowStock;
     final cart = context.read<CartProvider>();
+    final isLowStock = !isProcedure && 
+        (cart.isClinicalDispense ? item.mainStock <= item.lowStockThreshold : item.isLowStock);
+    final activeBatch = isProcedure ? null : (item as Medicine).getActiveBatch(cart.isClinicalDispense);
 
     return InkWell(
       onTap: onTap,
@@ -1349,13 +1454,13 @@ class _ProductCard extends StatelessWidget {
                 style: TextStyle(color: context.textMutedColor, fontSize: 11),
               ),
               const SizedBox(height: 4),
-              if (!isProcedure && item.activeBatch != null) ...[
+              if (!isProcedure && activeBatch != null) ...[
                 Row(
                   children: [
                     Icon(Icons.layers, size: 10, color: context.textMutedColor),
                     const SizedBox(width: 4),
                     Text(
-                      'Batch: ${item.activeBatch!.batchNo}',
+                      'Batch: ${activeBatch.batchNo}',
                       style: TextStyle(
                         fontSize: 10,
                         color: context.textMutedColor,
@@ -1367,20 +1472,20 @@ class _ProductCard extends StatelessWidget {
                   children: [
                     Icon(Icons.event,
                         size: 10,
-                        color: item.activeBatch!.expiryDate.isBefore(
+                        color: activeBatch.expiryDate.isBefore(
                                 DateTime.now().add(const Duration(days: 90)))
                             ? AppTheme.danger
                             : context.textMutedColor),
                     const SizedBox(width: 4),
                     Text(
-                      'Exp: ${item.activeBatch!.expiryDate.day}/${item.activeBatch!.expiryDate.month}/${item.activeBatch!.expiryDate.year}',
+                      'Exp: ${activeBatch.expiryDate.day}/${activeBatch.expiryDate.month}/${activeBatch.expiryDate.year}',
                       style: TextStyle(
                         fontSize: 10,
-                        color: item.activeBatch!.expiryDate.isBefore(
+                        color: activeBatch.expiryDate.isBefore(
                                 DateTime.now().add(const Duration(days: 90)))
                             ? AppTheme.danger
                             : context.textMutedColor,
-                        fontWeight: item.activeBatch!.expiryDate.isBefore(
+                        fontWeight: activeBatch.expiryDate.isBefore(
                                 DateTime.now().add(const Duration(days: 90)))
                             ? FontWeight.bold
                             : FontWeight.normal,
@@ -1420,11 +1525,11 @@ class _ProductCard extends StatelessWidget {
                         ),
                       ),
                       child: Text(
-                        '${item.storeStock}',
+                        '${cart.isClinicalDispense ? item.mainStock : item.storeStock}',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
-                          color: item.isLowStock
+                          color: isLowStock
                               ? AppTheme.warning
                               : (Theme.of(context).brightness == Brightness.dark
                                   ? AppTheme.primaryLight
@@ -1743,10 +1848,11 @@ class _CartPanel extends StatelessWidget {
                               final newQty = int.tryParse(val);
                               if (newQty != null && newQty > 0) {
                                 int finalQty = newQty;
+                                final maxStock = cart.isClinicalDispense ? item.medicine!.mainStock : item.medicine!.storeStock;
                                 if (!item.isProcedure &&
                                     !cart.isReturnMode &&
-                                    finalQty > item.medicine!.storeStock) {
-                                  finalQty = item.medicine!.storeStock;
+                                    finalQty > maxStock) {
+                                  finalQty = maxStock;
                                   final ctrl = getQtyController(
                                     key,
                                     item.qty,
@@ -1763,10 +1869,11 @@ class _CartPanel extends StatelessWidget {
                             onSubmitted: (val) {
                               int newQty = int.tryParse(val) ?? 1;
                               if (newQty > 0) {
+                                final maxStock = cart.isClinicalDispense ? item.medicine!.mainStock : item.medicine!.storeStock;
                                 if (!item.isProcedure &&
                                     !cart.isReturnMode &&
-                                    newQty > item.medicine!.storeStock) {
-                                  newQty = item.medicine!.storeStock;
+                                    newQty > maxStock) {
+                                  newQty = maxStock;
                                 }
                                 cart.updateQty(item.id, newQty,
                                     isProcedure: item.isProcedure);

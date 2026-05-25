@@ -60,6 +60,11 @@ class AuthProvider extends ChangeNotifier {
   bool get canBulkDiscount =>
       isAdmin || (_currentUser?.canBulkDiscount ?? false);
 
+  bool get canProcessRetailSales =>
+      isAdmin || (_currentUser?.canProcessRetailSales ?? true);
+  bool get canProcessClinicalDispenses =>
+      isAdmin || (_currentUser?.canProcessClinicalDispenses ?? true);
+
   bool login(String pin) {
     final users = ObjectBoxService.instance.userBox.getAll();
     final match = users.cast<AppUser?>().firstWhere(

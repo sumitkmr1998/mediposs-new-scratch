@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:objectbox/objectbox.dart';
 import '../models/medicine.dart';
 import '../models/purchase_record.dart';
+import '../models/restock_request.dart';
 import '../services/objectbox_service.dart';
 import '../services/sync_service.dart';
 import '../services/sync_queue_service.dart';
@@ -14,6 +15,7 @@ class InventoryProvider extends ChangeNotifier {
   final Box<PurchaseRecord> _purchaseBox =
       ObjectBoxService.instance.purchaseBox;
   final Box<MedicineBatch> _batchBox = ObjectBoxService.instance.batchBox;
+  final Box<RestockRequest> _restockBox = ObjectBoxService.instance.restockRequestBox;
 
   List<Medicine> _medicines = [];
   List<PurchaseRecord> _purchaseHistory = [];
@@ -25,6 +27,7 @@ class InventoryProvider extends ChangeNotifier {
   String get filterWarehouse => _filterWarehouse;
 
   List<Medicine> get medicines => _filtered();
+  List<Medicine> get rawMedicines => List.unmodifiable(_medicines);
   List<PurchaseRecord> get purchaseHistory =>
       List.unmodifiable(_purchaseHistory);
   int get lowStockCount => _medicines.where((m) => m.isLowStock).length;
@@ -196,8 +199,9 @@ class InventoryProvider extends ChangeNotifier {
 
   // Called after a sale checkout to deduct storeStock using FIFO (soonest expiry first)
   // Or called after a return to restock (negative qty)
-  void deductStoreStock(int medicineId, int qty) {
+  List<DeductedBatch> deductStoreStock(int medicineId, int qty) {
     final m = _box.get(medicineId);
+    final deducted = <DeductedBatch>[];
     if (m != null) {
       if (qty > 0) {
         // DEDUCTION (Sale) - Use FIFO (soonest expiry first)
@@ -216,7 +220,21 @@ class InventoryProvider extends ChangeNotifier {
             batch.storeStock -= deduction;
             remainingToDeduct -= deduction;
             _batchBox.put(batch);
+
+            deducted.add(DeductedBatch(
+              batchNo: batch.batchNo,
+              expiryDate: batch.expiryDate,
+              qty: deduction,
+            ));
           }
+        }
+
+        if (remainingToDeduct > 0) {
+          deducted.add(DeductedBatch(
+            batchNo: 'N/A',
+            expiryDate: DateTime.now(),
+            qty: remainingToDeduct,
+          ));
         }
       } else if (qty < 0) {
         // RESTOCKING (Return) - Add back to the latest batch (furthest expiry)
@@ -228,9 +246,18 @@ class InventoryProvider extends ChangeNotifier {
           final latestBatch = batches.first;
           latestBatch.storeStock += qToRestore;
           _batchBox.put(latestBatch);
+
+          deducted.add(DeductedBatch(
+            batchNo: latestBatch.batchNo,
+            expiryDate: latestBatch.expiryDate,
+            qty: qty, // negative
+          ));
         } else {
-          // No batches? Create a dummy one or just update aggregate
-          // Aggregrate is updated below anyway
+          deducted.add(DeductedBatch(
+            batchNo: 'N/A',
+            expiryDate: DateTime.now(),
+            qty: qty, // negative
+          ));
         }
       }
 
@@ -246,6 +273,107 @@ class InventoryProvider extends ChangeNotifier {
         }
       }
     }
+    return deducted;
+  }
+
+  // Called after a clinical dispense checkout to deduct mainStock using FIFO (soonest expiry first)
+  // Or called after a return to restock (negative qty)
+  List<DeductedBatch> deductClinicStock(int medicineId, int qty) {
+    final m = _box.get(medicineId);
+    final deducted = <DeductedBatch>[];
+    if (m != null) {
+      if (qty > 0) {
+        // DEDUCTION (Sale) - Use FIFO (soonest expiry first)
+        int remainingToDeduct = qty;
+        final batches = m.batches.toList();
+        batches.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
+
+        for (var batch in batches) {
+          if (remainingToDeduct <= 0) break;
+
+          if (batch.mainStock > 0) {
+            final deduction = remainingToDeduct > batch.mainStock
+                ? batch.mainStock
+                : remainingToDeduct;
+
+            batch.mainStock -= deduction;
+            remainingToDeduct -= deduction;
+            _batchBox.put(batch);
+
+            deducted.add(DeductedBatch(
+              batchNo: batch.batchNo,
+              expiryDate: batch.expiryDate,
+              qty: deduction,
+            ));
+          }
+        }
+
+        if (remainingToDeduct > 0) {
+          deducted.add(DeductedBatch(
+            batchNo: 'N/A',
+            expiryDate: DateTime.now(),
+            qty: remainingToDeduct,
+          ));
+        }
+        
+        m.recalculateStockFromBatches();
+        
+        // Automated Restock Request Logic
+        final threshold = ObjectBoxService.instance.settings.lowStockThreshold;
+        if (m.mainStock < threshold) {
+          // Check if there is already a PENDING request
+          final existingRequests = _restockBox.query(RestockRequest_.medicineId.equals(m.id).and(RestockRequest_.status.equals('PENDING'))).build().find();
+          if (existingRequests.isEmpty) {
+            // Suggest restocking up to some comfortable level above threshold or just a standard batch size
+            // For now, let's request threshold * 2 or something, or just threshold. Let's ask for the threshold quantity.
+            final requestQty = threshold > 0 ? threshold * 2 : 50; 
+            _restockBox.put(RestockRequest(
+              medicineId: m.id,
+              medicineName: m.name,
+              requestedQty: requestQty,
+              requestedAt: DateTime.now(),
+              notes: 'Automated request due to low clinic stock (${m.mainStock} < $threshold)',
+            ));
+          }
+        }
+      } else if (qty < 0) {
+        // RESTOCKING (Return) - Add back to the latest batch (furthest expiry)
+        int qToRestore = qty.abs();
+        final batches = m.batches.toList();
+        if (batches.isNotEmpty) {
+          // Sort furthest expiry first
+          batches.sort((a, b) => b.expiryDate.compareTo(a.expiryDate));
+          final latestBatch = batches.first;
+          latestBatch.mainStock += qToRestore;
+          _batchBox.put(latestBatch);
+
+          deducted.add(DeductedBatch(
+            batchNo: latestBatch.batchNo,
+            expiryDate: latestBatch.expiryDate,
+            qty: qty, // negative
+          ));
+        } else {
+          deducted.add(DeductedBatch(
+            batchNo: 'N/A',
+            expiryDate: DateTime.now(),
+            qty: qty, // negative
+          ));
+        }
+      }
+
+      // Update the main medicine entity's cached stock
+      m.mainStock = (m.mainStock - qty).clamp(0, 999999);
+      m.updatedAt = DateTime.now();
+      _box.put(m);
+      load();
+
+      if (Platform.isWindows) {
+        if (LocalServerService.instance.isRunning) {
+          LocalServerService.instance.broadcast({'event': 'medicines_updated'});
+        }
+      }
+    }
+    return deducted;
   }
 
   // Called after warehouse transfer
@@ -525,4 +653,16 @@ class InventoryProvider extends ChangeNotifier {
             'updatedAt': m.updatedAt.toIso8601String(),
           })
       .toList();
+}
+
+class DeductedBatch {
+  final String batchNo;
+  final DateTime expiryDate;
+  final int qty;
+
+  DeductedBatch({
+    required this.batchNo,
+    required this.expiryDate,
+    required this.qty,
+  });
 }

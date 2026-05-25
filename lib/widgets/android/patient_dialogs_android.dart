@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../shared/models/patient.dart';
 import '../../shared/models/doctor.dart';
+import '../../shared/models/appointment.dart';
 import '../../shared/providers/patient_provider.dart';
 import '../../shared/providers/opd_provider.dart';
 import '../../shared/services/sync_service.dart';
@@ -27,6 +28,8 @@ class AndroidPatientDialogs {
   static Future<void> showSearchSheet(
     BuildContext context, {
     required Function(Patient) onSelected,
+    Function(Appointment)? onAppointmentSelected,
+    bool limitToTodayOpd = false,
     bool showSkip = true,
   }) {
     return showModalBottomSheet<void>(
@@ -39,6 +42,8 @@ class AndroidPatientDialogs {
       ),
       builder: (ctx) => _PatientSearchSheet(
         onSelected: onSelected,
+        onAppointmentSelected: onAppointmentSelected,
+        limitToTodayOpd: limitToTodayOpd,
         showSkip: showSkip,
       ),
     );
@@ -306,9 +311,16 @@ class _PatientRegistrationSheetState extends State<_PatientRegistrationSheet> {
 
 class _PatientSearchSheet extends StatefulWidget {
   final Function(Patient) onSelected;
+  final Function(Appointment)? onAppointmentSelected;
+  final bool limitToTodayOpd;
   final bool showSkip;
 
-  const _PatientSearchSheet({required this.onSelected, this.showSkip = true});
+  const _PatientSearchSheet({
+    required this.onSelected,
+    this.onAppointmentSelected,
+    this.limitToTodayOpd = false,
+    this.showSkip = true,
+  });
 
   @override
   State<_PatientSearchSheet> createState() => _PatientSearchSheetState();
@@ -325,8 +337,184 @@ class _PatientSearchSheetState extends State<_PatientSearchSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final patients = context.watch<PatientProvider>().patients;
     final query = _searchCtrl.text.toLowerCase();
+
+    if (widget.limitToTodayOpd) {
+      final opd = context.watch<OpdProvider>();
+      final todayQueue = opd.todayQueue; // already sorted by tokenNumber
+      final filteredAppts = todayQueue.where((a) {
+        return a.patientName.toLowerCase().contains(query) ||
+            a.patientPhone.contains(query) ||
+            a.tokenNumber.toString().contains(query) ||
+            a.doctorName.toLowerCase().contains(query);
+      }).toList();
+
+      return Container(
+        height: MediaQuery.of(context).size.height * 0.85,
+        padding: const EdgeInsets.only(top: 16),
+        decoration: BoxDecoration(
+          color: context.surfaceColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            // Drag handle
+            Container(
+              width: 48,
+              height: 5,
+              decoration: BoxDecoration(
+                  color: context.borderColor.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(4)),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('SELECT OPD PATIENT',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1,
+                          color: AppTheme.primaryLight)),
+                  if (widget.showSkip)
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text('SKIP / WALK-IN', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: context.textMutedColor)),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: TextField(
+                controller: _searchCtrl,
+                autofocus: true,
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                decoration: InputDecoration(
+                  hintText: 'Search by Name, Phone, Doctor or Token...',
+                  hintStyle: TextStyle(color: context.textMutedColor, fontSize: 14),
+                  prefixIcon: const Icon(Icons.search_rounded,
+                      color: AppTheme.primaryLight, size: 22),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(
+                          color: context.borderColor.withValues(alpha: 0.3))),
+                  enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(
+                          color: context.borderColor.withValues(alpha: 0.3))),
+                  focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide:
+                          const BorderSide(color: AppTheme.primary, width: 2)),
+                  filled: true,
+                  fillColor: context.textMutedColor.withValues(alpha: 0.03),
+                  isDense: true,
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: filteredAppts.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.person_search_rounded,
+                              size: 64, color: context.borderColor.withValues(alpha: 0.2)),
+                          const SizedBox(height: 24),
+                          const Text('NO MATCHING RECORDS',
+                              style: TextStyle(
+                                  color: Colors.grey,
+                                  letterSpacing: 1,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900)),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      itemCount: filteredAppts.length,
+                      itemBuilder: (ctx, i) {
+                        final a = filteredAppts[i];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: context.surfaceColor.withValues(alpha: 0.9),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))
+                            ],
+                            border: Border.all(
+                                color:
+                                    context.borderColor.withValues(alpha: 0.2)),
+                          ),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 6),
+                            leading: Container(
+                              width: 44, height: 44,
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '#${a.tokenNumber}',
+                                  style: const TextStyle(
+                                    color: AppTheme.primary,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            title: Text(
+                              a.patientName,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w900, fontSize: 15),
+                            ),
+                            subtitle: Text(
+                              'Dr. ${a.doctorName} • Status: ${a.status}',
+                              style: TextStyle(
+                                  color: context.textMutedColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                            trailing: Text(
+                              a.patientPhone,
+                              style: TextStyle(
+                                  color: context.textMutedColor,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                            onTap: () {
+                              Navigator.pop(context);
+                              if (widget.onAppointmentSelected != null) {
+                                widget.onAppointmentSelected!(a);
+                              } else {
+                                final patients = context.read<PatientProvider>().patients;
+                                final p = patients.where((x) => x.id == a.patientId).firstOrNull ??
+                                    (Patient(uhid: '', name: a.patientName, phone: a.patientPhone, gender: 'Male')..id = a.patientId);
+                                widget.onSelected(p);
+                              }
+                            },
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final patients = context.watch<PatientProvider>().patients;
     final filtered = patients.where((p) {
       return p.name.toLowerCase().contains(query) ||
           p.phone.contains(query) ||

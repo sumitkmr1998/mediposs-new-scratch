@@ -31,6 +31,10 @@ class Sale {
 
   bool synced;
   bool isReturn;
+  bool isClinicalDispense;
+
+  int linkedAppointmentId; // Link to Appointment (if clinical dispense)
+  int linkedProcedureId;   // Link to Procedure (if clinical dispense)
 
   // Stored as JSON string for ObjectBox compatibility
   String itemsJson;
@@ -54,6 +58,9 @@ class Sale {
     DateTime? updatedAt,
     this.synced = false,
     this.isReturn = false,
+    this.isClinicalDispense = false,
+    this.linkedAppointmentId = 0,
+    this.linkedProcedureId = 0,
     this.itemsJson = '[]',
   })  : createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? createdAt ?? DateTime.now();
@@ -77,6 +84,9 @@ class Sale {
         'updatedAt': updatedAt.toIso8601String(),
         'synced': synced,
         'isReturn': isReturn,
+        'isClinicalDispense': isClinicalDispense,
+        'linkedAppointmentId': linkedAppointmentId,
+        'linkedProcedureId': linkedProcedureId,
         'itemsJson': itemsJson,
       };
 
@@ -99,6 +109,9 @@ class Sale {
         updatedAt: DateHelper.parseDateTime(json['updatedAt']),
         synced: json['synced'] ?? false,
         isReturn: json['isReturn'] ?? false,
+        isClinicalDispense: json['isClinicalDispense'] ?? false,
+        linkedAppointmentId: json['linkedAppointmentId'] ?? 0,
+        linkedProcedureId: json['linkedProcedureId'] ?? 0,
         itemsJson: json['itemsJson'] ?? '[]',
       );
 }
@@ -111,6 +124,8 @@ class SaleItem {
   final int qty;
   final double unitPrice;
   final bool isProcedure;
+  final String batchNo;
+  final String expiryDate;
 
   double get lineTotal => qty * unitPrice;
 
@@ -121,6 +136,8 @@ class SaleItem {
     required this.qty,
     required this.unitPrice,
     this.isProcedure = false,
+    this.batchNo = '',
+    this.expiryDate = '',
   });
 
   Map<String, dynamic> toJson() => {
@@ -131,6 +148,8 @@ class SaleItem {
         'unitPrice': unitPrice,
         'lineTotal': lineTotal,
         'isProcedure': isProcedure,
+        'batchNo': batchNo,
+        'expiryDate': expiryDate,
       };
 
   factory SaleItem.fromJson(Map<String, dynamic> json) => SaleItem(
@@ -140,5 +159,7 @@ class SaleItem {
         qty: json['qty'],
         unitPrice: (json['unitPrice'] as num).toDouble(),
         isProcedure: json['isProcedure'] ?? false,
+        batchNo: json['batchNo'] ?? '',
+        expiryDate: json['expiryDate'] ?? '',
       );
 }

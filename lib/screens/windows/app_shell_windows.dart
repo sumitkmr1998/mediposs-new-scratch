@@ -32,6 +32,7 @@ import '../opd/opd_queue_screen.dart';
 import '../opd/patient_list_screen.dart';
 import '../opd/doctor_list_screen.dart';
 import '../opd/opd_report_screen.dart';
+import 'analysis_hub_screen.dart';
 
 class AppShellWindows extends StatefulWidget {
   const AppShellWindows({super.key});
@@ -148,6 +149,7 @@ class _AppShellWindowsState extends State<AppShellWindows> {
 
     if (auth.canViewDashboard) {
       dests.add(const _Dest(id: 'dashboard', icon: Icons.dashboard_outlined, selectedIcon: Icons.dashboard, label: 'Dashboard'));
+      dests.add(const _Dest(id: 'analysis', icon: Icons.analytics_outlined, selectedIcon: Icons.analytics, label: 'Analysis'));
     }
     if (auth.canAccessPOS) {
       dests.add(const _Dest(id: 'pos', icon: Icons.point_of_sale_outlined, selectedIcon: Icons.point_of_sale, label: 'POS'));
@@ -178,6 +180,7 @@ class _AppShellWindowsState extends State<AppShellWindows> {
   Widget _screenForId(String id) {
     switch (id) {
       case 'dashboard': return const DashboardScreen();
+      case 'analysis': return const AnalysisHubScreen();
       case 'pos': return const PosScreen();
       case 'warehouse': return const WarehouseScreen();
       case 'sales': return const SalesHistoryScreen();

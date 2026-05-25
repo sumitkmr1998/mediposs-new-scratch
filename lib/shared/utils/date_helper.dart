@@ -5,16 +5,16 @@ class DateHelper {
   static DateTime? parseDateTime(dynamic value) {
     if (value == null) return null;
     
-    if (value is DateTime) return value;
+    if (value is DateTime) return value.toLocal();
     
     if (value is String) {
       if (value.isEmpty) return null;
-      return DateTime.tryParse(value);
+      return DateTime.tryParse(value)?.toLocal();
     }
     
     if (value is int) {
       // Milliseconds since epoch
-      return DateTime.fromMillisecondsSinceEpoch(value);
+      return DateTime.fromMillisecondsSinceEpoch(value).toLocal();
     }
 
     // Handle Firestore Timestamp without direct dependency if possible

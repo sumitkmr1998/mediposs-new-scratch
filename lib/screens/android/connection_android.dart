@@ -157,16 +157,16 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
       _reachable = null;
     });
 
+    // Fetch the latest cloudflare tunnel URL first so the UI and fallback are always up-to-date
+    await _fetchCloudflareUrl();
+
     // 1. Try Local Network Discovery (UDP)
     String? ip = await DiscoveryService.discoverHub();
 
     // 2. If local fails, try Cloud Discovery (Firebase)
-    if (ip == null) {
-      final status = await FirebaseSyncService.instance.getHubStatus();
-      if (status != null && status['cloudflareUrl'] != null) {
-        ip = status['cloudflareUrl'];
-        debugPrint('Auto-detected Hub via Cloudflare: $ip');
-      }
+    if (ip == null && _cloudflareUrl.isNotEmpty) {
+      ip = _cloudflareUrl;
+      debugPrint('Auto-detected Hub via Cloudflare: $ip');
     }
 
     if (!mounted) return;

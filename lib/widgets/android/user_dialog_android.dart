@@ -81,6 +81,8 @@ class _UserFormSheetState extends State<_UserFormSheet> {
   bool _canDeleteInventory = false;
   bool _canDeletePatients = false;
   bool _canDeleteAppointments = false;
+  bool _canProcessRetailSales = true;
+  bool _canProcessClinicalDispenses = true;
 
   @override
   void initState() {
@@ -124,6 +126,8 @@ class _UserFormSheetState extends State<_UserFormSheet> {
       _canDeleteInventory = u.canDeleteInventory;
       _canDeletePatients = u.canDeletePatients;
       _canDeleteAppointments = u.canDeleteAppointments;
+      _canProcessRetailSales = u.canProcessRetailSales;
+      _canProcessClinicalDispenses = u.canProcessClinicalDispenses;
     }
   }
 
@@ -157,6 +161,8 @@ class _UserFormSheetState extends State<_UserFormSheet> {
       _canDeleteInventory = tempUser.canDeleteInventory;
       _canDeletePatients = tempUser.canDeletePatients;
       _canDeleteAppointments = tempUser.canDeleteAppointments;
+      _canProcessRetailSales = tempUser.canProcessRetailSales;
+      _canProcessClinicalDispenses = tempUser.canProcessClinicalDispenses;
     });
   }
 
@@ -220,6 +226,8 @@ class _UserFormSheetState extends State<_UserFormSheet> {
     u.canDeleteInventory = _canDeleteInventory;
     u.canDeletePatients = _canDeletePatients;
     u.canDeleteAppointments = _canDeleteAppointments;
+    u.canProcessRetailSales = _canProcessRetailSales;
+    u.canProcessClinicalDispenses = _canProcessClinicalDispenses;
 
     context.read<AuthProvider>().addUser(u, syncService: context.read<SyncService>());
     Navigator.pop(context, true);
@@ -552,6 +560,16 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                                     _canAccessPOS = v;
                                     if (!v) _canDiscountSales = false;
                                   })),
+                          _buildPermToggle(
+                              'Process Retail Sales',
+                              'Allow standard retail checkout (GST)',
+                              _canProcessRetailSales,
+                              (v) => setState(() => _canProcessRetailSales = v)),
+                          _buildPermToggle(
+                              'Process Clinical Dispenses',
+                              'Allow clinical dispensing (internal consumption)',
+                              _canProcessClinicalDispenses,
+                              (v) => setState(() => _canProcessClinicalDispenses = v)),
                           _buildPermToggle(
                               'Apply Discounts',
                               'Can apply manual discounts at checkout',

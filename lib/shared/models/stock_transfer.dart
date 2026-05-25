@@ -12,6 +12,10 @@ class StockTransfer {
   String fromWarehouse; // 'main' or 'store'
   String toWarehouse; // 'main' or 'store'
 
+  String? batchNo;
+  @Property(type: PropertyType.date)
+  DateTime? expiryDate;
+
   @Property(type: PropertyType.date)
   DateTime transferredAt;
 
@@ -25,6 +29,8 @@ class StockTransfer {
     required this.qty,
     required this.fromWarehouse,
     required this.toWarehouse,
+    this.batchNo,
+    this.expiryDate,
     DateTime? transferredAt,
     this.note = '',
     this.transferredBy = '',
@@ -37,6 +43,8 @@ class StockTransfer {
         'qty': qty,
         'fromWarehouse': fromWarehouse,
         'toWarehouse': toWarehouse,
+        'batchNo': batchNo,
+        'expiryDate': expiryDate?.toIso8601String(),
         'transferredAt': transferredAt.toIso8601String(),
         'note': note,
         'transferredBy': transferredBy,
@@ -49,6 +57,8 @@ class StockTransfer {
         qty: json['qty'],
         fromWarehouse: json['fromWarehouse'],
         toWarehouse: json['toWarehouse'],
+        batchNo: json['batchNo'],
+        expiryDate: DateTime.tryParse(json['expiryDate'] ?? ''),
         transferredAt: DateTime.tryParse(json['transferredAt'] ?? ''),
         note: json['note'] ?? '',
         transferredBy: json['transferredBy'] ?? '',

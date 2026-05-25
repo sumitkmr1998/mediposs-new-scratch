@@ -33,6 +33,8 @@ class AppUser {
   bool canDiscountSales;
   bool canOverridePrice;         // AD-HOC Price override at POS
   bool canBulkDiscount;          // Large checkout discounts
+  bool canProcessRetailSales;    // NEW: Antigravvity Retail Mode
+  bool canProcessClinicalDispenses; // NEW: Antigravvity Clinic Mode
 
   // Sales History
   bool canViewSalesHistory;
@@ -71,6 +73,8 @@ class AppUser {
     this.canDiscountSales = false,
     this.canOverridePrice = false,
     this.canBulkDiscount = false,
+    this.canProcessRetailSales = true,
+    this.canProcessClinicalDispenses = true,
     this.canViewSalesHistory = false,
     this.canVoidSales = false,
     this.canProcessReturns = false,
@@ -103,6 +107,8 @@ class AppUser {
         canViewWarehouse = true;
         canTransferStock = true;
         canAccessPOS = true;
+        canProcessRetailSales = true;
+        canProcessClinicalDispenses = true;
         canDiscountSales = true;
         canViewSalesHistory = true;
         canProcessReturns = true;
@@ -118,16 +124,23 @@ class AppUser {
         canViewWarehouse = true;
         canTransferStock = true;
         canAccessPOS = true;
+        canProcessRetailSales = true;
+        canProcessClinicalDispenses = false;
         canAccessOPD = true;
         canViewHistoricalData = false; // "Today Only" for staff
         break;
       case 'cashier':
         canAccessPOS = true;
+        canProcessRetailSales = true;
+        canProcessClinicalDispenses = false;
         canViewInventory = true;
         canAccessOPD = true;
         canViewHistoricalData = false; // "Today Only" for staff
         break;
       case 'doctor':
+        canAccessPOS = true;
+        canProcessRetailSales = false;
+        canProcessClinicalDispenses = true;
         canAccessOPD = true;
         canAccessMedicalRecords = true;
         canViewInventory = true;
@@ -172,6 +185,8 @@ class AppUser {
     canViewWarehouse = val;
     canTransferStock = val;
     canAccessPOS = val;
+    canProcessRetailSales = val;
+    canProcessClinicalDispenses = val;
     canDiscountSales = val;
     canOverridePrice = val;
     canBulkDiscount = val;
@@ -205,6 +220,8 @@ class AppUser {
         'canViewWarehouse': canViewWarehouse,
         'canTransferStock': canTransferStock,
         'canAccessPOS': canAccessPOS,
+        'canProcessRetailSales': canProcessRetailSales,
+        'canProcessClinicalDispenses': canProcessClinicalDispenses,
         'canDiscountSales': canDiscountSales,
         'canOverridePrice': canOverridePrice,
         'canBulkDiscount': canBulkDiscount,
@@ -238,6 +255,8 @@ class AppUser {
         canViewWarehouse: json['canViewWarehouse'] ?? false,
         canTransferStock: json['canTransferStock'] ?? false,
         canAccessPOS: json['canAccessPOS'] ?? true,
+        canProcessRetailSales: json['canProcessRetailSales'] ?? true,
+        canProcessClinicalDispenses: json['canProcessClinicalDispenses'] ?? true,
         canDiscountSales: json['canDiscountSales'] ?? false,
         canOverridePrice: json['canOverridePrice'] ?? false,
         canBulkDiscount: json['canBulkDiscount'] ?? false,
@@ -300,6 +319,12 @@ class AppSettings {
   bool isWindowsClient = false; // If true, this PC acts as a terminal/client
   List<String> dashboardActions = ['new_pos', 'add_patient', 'stock_list', 'reports', 'patients', 'returns', 'settings'];
 
+  // Clinic Details
+  String? clinicName;
+  String? clinicAddress;
+  String? clinicPhone;
+  String? clinicRegNo;
+
   AppSettings({
     this.id = 0,
     this.storeName = 'MediPoss Pharmacy',
@@ -338,6 +363,10 @@ class AppSettings {
     this.deviceId,
     this.isWindowsClient = false,
     this.dashboardActions = const ['new_pos', 'add_patient', 'stock_list', 'reports', 'patients', 'returns', 'settings'],
+    this.clinicName = 'MediPoss Clinic',
+    this.clinicAddress = '',
+    this.clinicPhone = '',
+    this.clinicRegNo = '',
   });
 
   Map<String, dynamic> toJson() => {
@@ -378,6 +407,10 @@ class AppSettings {
         'deviceId': deviceId,
         'isWindowsClient': isWindowsClient,
         'dashboardActions': dashboardActions,
+        'clinicName': clinicName,
+        'clinicAddress': clinicAddress,
+        'clinicPhone': clinicPhone,
+        'clinicRegNo': clinicRegNo,
       };
 
   static AppSettings fromJson(Map<String, dynamic> json) => AppSettings(
@@ -420,5 +453,9 @@ class AppSettings {
         deviceId: json['deviceId'],
         isWindowsClient: json['isWindowsClient'] ?? false,
         dashboardActions: List<String>.from(json['dashboardActions'] ?? const ['new_pos', 'add_patient', 'stock_list', 'reports', 'patients', 'returns', 'settings']),
+        clinicName: json['clinicName'] ?? 'MediPoss Clinic',
+        clinicAddress: json['clinicAddress'] ?? '',
+        clinicPhone: json['clinicPhone'] ?? '',
+        clinicRegNo: json['clinicRegNo'] ?? '',
       );
 }

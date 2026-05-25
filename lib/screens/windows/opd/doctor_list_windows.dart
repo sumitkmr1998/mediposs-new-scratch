@@ -993,7 +993,7 @@ class _DoctorCardState extends State<_DoctorCard> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         transform: _isHovered
-            ? (Matrix4.identity()..translate(0, -4, 0))
+            ? Matrix4.translationValues(0.0, -4.0, 0.0)
             : Matrix4.identity(),
         decoration: BoxDecoration(
           color: context.surfaceColor,

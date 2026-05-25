@@ -48,7 +48,10 @@ class PendingCart {
   final double mixedUpi;
   final double mixedCard;
   final int? linkedPrescriptionId;
+  final int? linkedAppointmentId;
+  final int? linkedProcedureId;
   final bool isReturnMode;
+  final bool isClinicalDispense;
   final DateTime heldAt;
 
   PendingCart({
@@ -62,7 +65,10 @@ class PendingCart {
     required this.mixedUpi,
     required this.mixedCard,
     this.linkedPrescriptionId,
+    this.linkedAppointmentId,
+    this.linkedProcedureId,
     required this.isReturnMode,
+    this.isClinicalDispense = false,
     required this.heldAt,
   });
 
@@ -94,7 +100,12 @@ class CartProvider extends ChangeNotifier {
   double _mixedUpi = 0;
   double _mixedCard = 0;
 
+  bool _isClinicalDispense = false;
+
   int? _linkedPrescriptionId;
+  int? _linkedAppointmentId;
+  int? _linkedProcedureId;
+  
   final List<PendingCart> _pendingCarts = [];
 
   List<CartItem> get items => List.unmodifiable(_items);
@@ -106,6 +117,9 @@ class CartProvider extends ChangeNotifier {
   int get patientId => _patientId;
   String get paymentMethod => _paymentMethod;
   bool get isReturnMode => _isReturnMode;
+  bool get isClinicalDispense => _isClinicalDispense;
+  int? get linkedAppointmentId => _linkedAppointmentId;
+  int? get linkedProcedureId => _linkedProcedureId;
 
   double get mixedCash => _mixedCash;
   double get mixedUpi => _mixedUpi;
@@ -113,7 +127,7 @@ class CartProvider extends ChangeNotifier {
 
   double get subtotal => _items.fold(0.0, (sum, item) => sum + item.lineTotal);
 
-  double get taxRate => ObjectBoxService.instance.settings.taxRate / 100.0;
+  double get taxRate => _isClinicalDispense ? 0.0 : ObjectBoxService.instance.settings.taxRate / 100.0;
 
   double get taxAmount =>
       (subtotal - _discountAmount).clamp(0, double.infinity) * taxRate;
@@ -124,6 +138,11 @@ class CartProvider extends ChangeNotifier {
   double get totalRounded => (total * 10).round() / 10.0;
 
   bool get isEmpty => _items.isEmpty;
+
+  void setClinicalDispense(bool val) {
+    _isClinicalDispense = val;
+    notifyListeners();
+  }
 
   void addItem(Medicine medicine, {int qty = 1}) {
     final idx = _items.indexWhere((i) => i.medicine?.id == medicine.id && !i.isProcedure);
@@ -234,6 +253,16 @@ class CartProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setLinkedAppointment(int? id) {
+    _linkedAppointmentId = id;
+    notifyListeners();
+  }
+
+  void setLinkedProcedure(int? id) {
+    _linkedProcedureId = id;
+    notifyListeners();
+  }
+
   void clearCart() {
     _items.clear();
     _discountAmount = 0;
@@ -245,6 +274,9 @@ class CartProvider extends ChangeNotifier {
     _mixedUpi = 0;
     _mixedCard = 0;
     _linkedPrescriptionId = null;
+    _linkedAppointmentId = null;
+    _linkedProcedureId = null;
+    _isClinicalDispense = false;
     notifyListeners();
   }
 
@@ -267,7 +299,10 @@ class CartProvider extends ChangeNotifier {
       mixedUpi: _mixedUpi,
       mixedCard: _mixedCard,
       linkedPrescriptionId: _linkedPrescriptionId,
+      linkedAppointmentId: _linkedAppointmentId,
+      linkedProcedureId: _linkedProcedureId,
       isReturnMode: _isReturnMode,
+      isClinicalDispense: _isClinicalDispense,
       heldAt: DateTime.now(),
     ));
     clearCart();
@@ -285,7 +320,10 @@ class CartProvider extends ChangeNotifier {
     _mixedUpi = pending.mixedUpi;
     _mixedCard = pending.mixedCard;
     _linkedPrescriptionId = pending.linkedPrescriptionId;
+    _linkedAppointmentId = pending.linkedAppointmentId;
+    _linkedProcedureId = pending.linkedProcedureId;
     _isReturnMode = pending.isReturnMode;
+    _isClinicalDispense = pending.isClinicalDispense;
     _pendingCarts.remove(pending);
     notifyListeners();
   }
@@ -303,34 +341,61 @@ class CartProvider extends ChangeNotifier {
     final db = ObjectBoxService.instance;
     final settings = db.settings;
 
-    // Build invoice number: (RET/INV)-YYYYMMDD-HHMMSS
+    // Build invoice number: (RET/INV/DISP)-YYYYMMDD-HHMMSS
     final now = await TimeService.getRobustTime();
-    final prefix = _isReturnMode ? 'RET' : 'INV';
+    final prefix = _isReturnMode ? 'RET' : (_isClinicalDispense ? 'DISP' : 'INV');
     final dateStr = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
     final timeStr = '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
     final invoiceNo = '$prefix-$dateStr-$timeStr';
 
-    // Build items (returns have negative quantities inherently when we record them in the DB to keep history straight)
-    final saleItems = _items.map(
-      (i) => SaleItem(
-        medicineId: i.medicine?.id ?? 0,
-        procedureId: i.procedure?.id ?? 0,
-        medicineName: i.name,
-        qty: _isReturnMode ? -i.qty : i.qty,
-        unitPrice: i.medicine?.sellingPrice ?? i.customPrice ?? i.procedure?.basePrice ?? 0,
-        isProcedure: i.isProcedure,
-      ),
-    );
+    // Build items and Deduct or Restock stock (storeStock vs mainStock)
+    final saleItems = <SaleItem>[];
 
-    // Deduct or Restock storeStock
     for (final item in _items) {
-      if (item.isProcedure) continue;
-      if (_isReturnMode) {
-        // Restock
-        _inventoryProvider.deductStoreStock(item.medicine!.id, -item.qty);
+      if (item.isProcedure) {
+        saleItems.add(SaleItem(
+          medicineId: 0,
+          procedureId: item.procedure?.id ?? 0,
+          medicineName: item.name,
+          qty: _isReturnMode ? -item.qty : item.qty,
+          unitPrice: item.customPrice ?? item.procedure?.basePrice ?? 0,
+          isProcedure: true,
+          batchNo: '',
+          expiryDate: '',
+        ));
       } else {
-        // Deduct
-        _inventoryProvider.deductStoreStock(item.medicine!.id, item.qty);
+        final qtyToDeduct = _isReturnMode ? -item.qty : item.qty;
+        List<DeductedBatch> deductedBatches;
+        if (_isClinicalDispense) {
+          deductedBatches = _inventoryProvider.deductClinicStock(item.medicine!.id, qtyToDeduct);
+        } else {
+          deductedBatches = _inventoryProvider.deductStoreStock(item.medicine!.id, qtyToDeduct);
+        }
+
+        if (deductedBatches.isEmpty) {
+          saleItems.add(SaleItem(
+            medicineId: item.medicine!.id,
+            medicineName: item.name,
+            qty: qtyToDeduct,
+            unitPrice: item.medicine!.sellingPrice,
+            isProcedure: false,
+            batchNo: 'N/A',
+            expiryDate: '',
+          ));
+        } else {
+          for (final db in deductedBatches) {
+            final expiryStr = '${db.expiryDate.day.toString().padLeft(2, '0')}/${db.expiryDate.month.toString().padLeft(2, '0')}/${db.expiryDate.year}';
+            saleItems.add(SaleItem(
+              medicineId: item.medicine!.id,
+              medicineName: item.name,
+              qty: _isReturnMode ? -db.qty.abs() : db.qty,
+              unitPrice: item.medicine!.sellingPrice,
+              isProcedure: false,
+              batchNo: db.batchNo,
+              expiryDate: expiryStr,
+            ));
+          }
+        }
       }
     }
 
@@ -361,7 +426,7 @@ class CartProvider extends ChangeNotifier {
       patientPhone: _patientPhone,
       subtotal: _isReturnMode ? -subtotal : subtotal,
       discount: _isReturnMode ? -_discountAmount : _discountAmount,
-      taxRate: settings.taxRate,
+      taxRate: _isClinicalDispense ? 0.0 : settings.taxRate,
       taxAmount: _isReturnMode ? -taxAmount : taxAmount,
       total: _isReturnMode ? -totalRounded : totalRounded,
       paymentMethod: _paymentMethod,
@@ -369,6 +434,9 @@ class CartProvider extends ChangeNotifier {
       upiAmount: fUpi,
       cardAmount: fCard,
       isReturn: _isReturnMode,
+      isClinicalDispense: _isClinicalDispense,
+      linkedAppointmentId: _linkedAppointmentId ?? 0,
+      linkedProcedureId: _linkedProcedureId ?? 0,
       itemsJson: jsonEncode(saleItems.map((i) => i.toJson()).toList()),
       createdAt: now,
     );

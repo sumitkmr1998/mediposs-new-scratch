@@ -183,13 +183,9 @@ class _MedicineDialogState extends State<MedicineDialog> {
         });
       },
       fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-        if (controller.text != _nameCtrl.text && _nameCtrl.text.isNotEmpty && controller.text.isEmpty) {
-           controller.text = _nameCtrl.text;
+        if (controller.text.isEmpty && _nameCtrl.text.isNotEmpty) {
+          controller.text = _nameCtrl.text;
         }
-        controller.addListener(() {
-          _nameCtrl.text = controller.text;
-        });
-
         return TextFormField(
           controller: controller,
           focusNode: focusNode,
@@ -198,6 +194,9 @@ class _MedicineDialogState extends State<MedicineDialog> {
             labelText: 'Medicine Name *',
             isDense: true,
           ),
+          onChanged: (val) {
+            _nameCtrl.text = val;
+          },
           validator: (v) => v!.isEmpty ? 'Name required' : null,
         );
       },

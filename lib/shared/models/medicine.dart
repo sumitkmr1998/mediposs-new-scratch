@@ -116,6 +116,17 @@ class Medicine {
     return available.first;
   }
 
+  /// Returns the batch that is expiring soonest and has stock for the active mode
+  MedicineBatch? getActiveBatch(bool isClinicalDispense) {
+    if (batches.isEmpty) return null;
+    final available = batches.where((b) {
+      return isClinicalDispense ? b.mainStock > 0 : b.storeStock > 0;
+    }).toList();
+    if (available.isEmpty) return null;
+    available.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
+    return available.first;
+  }
+
   bool get hasExpiredBatch => batches.any((b) => 
       b.expiryDate.isBefore(DateTime.now()) && (b.mainStock > 0 || b.storeStock > 0));
   bool get hasNearExpiryBatch => batches.any((b) => 

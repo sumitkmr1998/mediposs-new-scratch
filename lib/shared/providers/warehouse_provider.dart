@@ -97,6 +97,8 @@ class WarehouseProvider extends ChangeNotifier {
     required int qty,
     required String from,
     required String to,
+    String? batchNo,
+    DateTime? expiryDate,
     String note = '',
     String transferredBy = '',
     SyncService? syncService,
@@ -114,6 +116,7 @@ class WarehouseProvider extends ChangeNotifier {
       qty: qty,
       from: from,
       to: to,
+      batchNo: batchNo,
       syncService: syncService,
     );
 
@@ -125,6 +128,8 @@ class WarehouseProvider extends ChangeNotifier {
       qty: qty,
       fromWarehouse: from,
       toWarehouse: to,
+      batchNo: batchNo,
+      expiryDate: expiryDate,
       note: note,
       transferredBy: transferredBy,
       transferredAt: now,

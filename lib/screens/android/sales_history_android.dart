@@ -59,10 +59,10 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
               double returns = 0;
               
               if (isCashier) {
-                grossSales = sales.todayRevenue;
-                returns = sales.sales.where((s) => s.isReturn && _isToday(s.createdAt)).fold(0.0, (sum, s) => sum + s.total.abs());
+                grossSales = sales.filteredSales.where((s) => _isToday(s.createdAt) && !s.isReturn).fold(0.0, (sum, s) => sum + s.total);
+                returns = sales.filteredSales.where((s) => s.isReturn && _isToday(s.createdAt)).fold(0.0, (sum, s) => sum + s.total.abs());
               } else {
-                for (final s in sales.sales) {
+                for (final s in sales.filteredSales) {
                   if (s.isReturn)
                     returns += s.total.abs();
                   else
@@ -218,6 +218,54 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
             ),
           ),
 
+          // Transaction Type Filter Bar
+          Container(
+            color: context.surfaceColor,
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Row(
+              children: [
+                Text(
+                  'TYPE: ',
+                  style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: context.textMutedColor,
+                      letterSpacing: 1),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        AppFilterChip(
+                          label: 'All',
+                          isSelected: sales.typeFilter == 'all',
+                          onTap: () => sales.setTypeFilter('all'),
+                          style: AppFilterChipStyle.filled,
+                        ),
+                        const SizedBox(width: 8),
+                        AppFilterChip(
+                          label: 'Retail',
+                          isSelected: sales.typeFilter == 'retail',
+                          onTap: () => sales.setTypeFilter('retail'),
+                          style: AppFilterChipStyle.filled,
+                        ),
+                        const SizedBox(width: 8),
+                        AppFilterChip(
+                          label: 'Dispense',
+                          isSelected: sales.typeFilter == 'dispense',
+                          onTap: () => sales.setTypeFilter('dispense'),
+                          style: AppFilterChipStyle.filled,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           // 3. Verified Stream Header
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
@@ -230,7 +278,7 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
                         color: context.textMutedColor,
                         letterSpacing: 1)),
                 const Spacer(),
-                Text('${sales.sales.length} LOGS',
+                Text('${sales.filteredSales.length} LOGS',
                     style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
@@ -241,16 +289,16 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
 
           // list
           Expanded(
-            child: sales.sales.isEmpty
+            child: sales.filteredSales.isEmpty
                 ? const AppEmptyState(
                     icon: Icons.history_rounded,
                     title: 'No verified logs found',
                   )
                 : ListView.builder(
-                    itemCount: sales.sales.length,
+                    itemCount: sales.filteredSales.length,
                     padding: const EdgeInsets.fromLTRB(12, 0, 12, 32),
                     itemBuilder: (ctx, i) =>
-                        _SaleRow(sale: sales.sales[i], salesProvider: sales),
+                        _SaleRow(sale: sales.filteredSales[i], salesProvider: sales),
                   ),
           ),
         ],
@@ -387,10 +435,11 @@ class _SaleRow extends StatelessWidget {
                                         fontWeight: FontWeight.w700,
                                         fontSize: 13)),
                                 Text(
-                                    '${item.qty} units @ ₹${item.unitPrice.toStringAsFixed(2)}',
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        color: context.textMutedColor)),
+                                     '${item.qty} units @ ₹${item.unitPrice.toStringAsFixed(2)}' +
+                                     ((!item.isProcedure && item.batchNo.isNotEmpty) ? ' | Batch: ${item.batchNo} | Exp: ${item.expiryDate}' : ''),
+                                     style: TextStyle(
+                                         fontSize: 11,
+                                         color: context.textMutedColor)),
                               ],
                             ),
                           ),

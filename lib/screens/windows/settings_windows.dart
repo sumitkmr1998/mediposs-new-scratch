@@ -14,6 +14,7 @@ import '../../shared/services/cloudflare_service.dart';
 import '../../shared/services/sync_service.dart';
 
 import '../../shared/providers/auth_provider.dart';
+import '../../shared/providers/navigation_provider.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/models/app_user.dart';
 import '../../theme/app_theme.dart';
@@ -41,6 +42,10 @@ class _SettingsWindowsState extends State<SettingsWindows> {
   late final TextEditingController _addressCtrl;
   late final TextEditingController _phoneCtrl;
   late final TextEditingController _gstCtrl;
+  late final TextEditingController _clinicNameCtrl;
+  late final TextEditingController _clinicAddressCtrl;
+  late final TextEditingController _clinicPhoneCtrl;
+  late final TextEditingController _clinicRegCtrl;
   late final TextEditingController _footerCtrl;
   late final TextEditingController _taxCtrl;
   late final TextEditingController _currencyCtrl;
@@ -67,12 +72,15 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     super.initState();
     _loadHubIp();
     // ...
-    super.initState();
     final s = context.read<SettingsProvider>().settings;
     _storeNameCtrl = TextEditingController(text: s.storeName);
     _addressCtrl = TextEditingController(text: s.storeAddress);
     _phoneCtrl = TextEditingController(text: s.storePhone);
     _gstCtrl = TextEditingController(text: s.gstNumber);
+    _clinicNameCtrl = TextEditingController(text: s.clinicName ?? 'MediPoss Clinic');
+    _clinicAddressCtrl = TextEditingController(text: s.clinicAddress ?? '');
+    _clinicPhoneCtrl = TextEditingController(text: s.clinicPhone ?? '');
+    _clinicRegCtrl = TextEditingController(text: s.clinicRegNo ?? '');
     _footerCtrl = TextEditingController(text: s.receiptFooterMessage);
     _taxCtrl = TextEditingController(text: '${s.taxRate}');
     _currencyCtrl = TextEditingController(text: s.currencySymbol);
@@ -136,7 +144,11 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       ..enableAnimations = _enableAnimations
       ..autoBackupFrequency = _autoBackupFreq
       ..autoBackupLogic = _autoBackupLogic
-      ..isWindowsClient = _isWindowsClient;
+      ..isWindowsClient = _isWindowsClient
+      ..clinicName = _clinicNameCtrl.text
+      ..clinicAddress = _clinicAddressCtrl.text
+      ..clinicPhone = _clinicPhoneCtrl.text
+      ..clinicRegNo = _clinicRegCtrl.text;
 
     final wasClient = settingsProv.settings.isWindowsClient;
     settingsProv.save(s);
@@ -167,6 +179,25 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       behavior: SnackBarBehavior.floating,
       margin: const EdgeInsets.all(20),
     ));
+  }
+
+  @override
+  void dispose() {
+    _storeNameCtrl.dispose();
+    _addressCtrl.dispose();
+    _phoneCtrl.dispose();
+    _gstCtrl.dispose();
+    _clinicNameCtrl.dispose();
+    _clinicAddressCtrl.dispose();
+    _clinicPhoneCtrl.dispose();
+    _clinicRegCtrl.dispose();
+    _footerCtrl.dispose();
+    _taxCtrl.dispose();
+    _currencyCtrl.dispose();
+    _portCtrl.dispose();
+    _lowStockCtrl.dispose();
+    _nearExpiryCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -285,7 +316,13 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       child: Row(
         children: [
           IconButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              if (Navigator.canPop(context)) {
+                Navigator.pop(context);
+              } else {
+                context.read<NavigationProvider>().selectDestination('dashboard');
+              }
+            },
             icon: const Icon(LucideIcons.arrowLeft, size: 20),
             tooltip: 'Go Back',
           ),
@@ -378,17 +415,38 @@ class _SettingsWindowsState extends State<SettingsWindows> {
   }
 
   Widget _buildStoreSection() {
-    return SettingsSection(
-      title: 'Store Information',
-      icon: LucideIcons.building,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SettingsField(controller: _storeNameCtrl, label: 'Store Name', icon: LucideIcons.building),
-        SettingsField(controller: _addressCtrl, label: 'Store Address', icon: LucideIcons.mapPin),
-        Row(
+        SettingsSection(
+          title: 'Store Information',
+          icon: LucideIcons.building,
           children: [
-            Expanded(child: SettingsField(controller: _phoneCtrl, label: 'Store Phone', icon: LucideIcons.phone)),
-            const SizedBox(width: 16),
-            Expanded(child: SettingsField(controller: _gstCtrl, label: 'GST Number', icon: LucideIcons.fileText)),
+            SettingsField(controller: _storeNameCtrl, label: 'Store Name', icon: LucideIcons.building),
+            SettingsField(controller: _addressCtrl, label: 'Store Address', icon: LucideIcons.mapPin),
+            Row(
+              children: [
+                Expanded(child: SettingsField(controller: _phoneCtrl, label: 'Store Phone', icon: LucideIcons.phone)),
+                const SizedBox(width: 16),
+                Expanded(child: SettingsField(controller: _gstCtrl, label: 'GST Number', icon: LucideIcons.fileText)),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 32),
+        SettingsSection(
+          title: 'Clinic / Doctor Details (for Clinical Dispenses)',
+          icon: LucideIcons.stethoscope,
+          children: [
+            SettingsField(controller: _clinicNameCtrl, label: 'Clinic / Doctor Name', icon: LucideIcons.stethoscope),
+            SettingsField(controller: _clinicAddressCtrl, label: 'Physical Address', icon: LucideIcons.mapPin),
+            Row(
+              children: [
+                Expanded(child: SettingsField(controller: _clinicPhoneCtrl, label: 'Contact Phone', icon: LucideIcons.phone)),
+                const SizedBox(width: 16),
+                Expanded(child: SettingsField(controller: _clinicRegCtrl, label: 'Medical Reg No.', icon: LucideIcons.fileText)),
+              ],
+            ),
           ],
         ),
       ],

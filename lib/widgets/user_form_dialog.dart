@@ -25,6 +25,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
   // Settings & Staff
   bool _canAccessSettings = false;
   bool _canManageUsers = false;
+  bool _canProcessRetailSales = true;
+  bool _canProcessClinicalDispenses = true;
 
   // Dashboard
   bool _canViewDashboard = false;
@@ -108,6 +110,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
       _canDeleteInventory = u.canDeleteInventory;
       _canDeletePatients = u.canDeletePatients;
       _canDeleteAppointments = u.canDeleteAppointments;
+      _canProcessRetailSales = u.canProcessRetailSales;
+      _canProcessClinicalDispenses = u.canProcessClinicalDispenses;
     }
   }
 
@@ -141,6 +145,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
       _canDeleteInventory = tempUser.canDeleteInventory;
       _canDeletePatients = tempUser.canDeletePatients;
       _canDeleteAppointments = tempUser.canDeleteAppointments;
+      _canProcessRetailSales = tempUser.canProcessRetailSales;
+      _canProcessClinicalDispenses = tempUser.canProcessClinicalDispenses;
     });
   }
 
@@ -201,6 +207,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
     u.canDeleteInventory = _canDeleteInventory;
     u.canDeletePatients = _canDeletePatients;
     u.canDeleteAppointments = _canDeleteAppointments;
+    u.canProcessRetailSales = _canProcessRetailSales;
+    u.canProcessClinicalDispenses = _canProcessClinicalDispenses;
  
     context.read<AuthProvider>().addUser(u);
     Navigator.pop(context, true);
@@ -372,6 +380,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
                                 icon: Icons.shopping_basket_outlined,
                                 children: [
                                   _PermTile('Access Terminal', 'Bill customers at POS', _canAccessPOS, (v) => setState(() => _canAccessPOS = v)),
+                                  _PermTile('Process Retail Sales', 'Allow standard retail checkout (GST)', _canProcessRetailSales, (v) => setState(() => _canProcessRetailSales = v)),
+                                  _PermTile('Process Clinical Dispenses', 'Allow clinical dispensing (internal consumption)', _canProcessClinicalDispenses, (v) => setState(() => _canProcessClinicalDispenses = v)),
                                   _PermTile('Manual Discounts', 'Apply custom discounts', _canDiscountSales, (v) => setState(() => _canDiscountSales = v)),
                                   _PermTile('Price Overrides', 'Change item price at checkout', _canOverridePrice, (v) => setState(() => _canOverridePrice = v)),
                                   _PermTile('Bulk Discounts', 'Discount entire bill amount', _canBulkDiscount, (v) => setState(() => _canBulkDiscount = v)),

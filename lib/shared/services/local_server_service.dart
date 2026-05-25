@@ -648,6 +648,7 @@ class LocalServerService {
         createdAt: DateTime.tryParse(body['createdAt'] ?? '') ?? DateTime.now(),
         synced: true,
         isReturn: body['isReturn'] ?? false,
+        isClinicalDispense: body['isClinicalDispense'] ?? false,
         itemsJson: body['itemsJson'] ?? '[]',
       );
 
@@ -687,11 +688,20 @@ class LocalServerService {
             batches.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
             for (var b in batches) {
               if (remaining <= 0) break;
-              if (b.storeStock > 0) {
-                final d = remaining > b.storeStock ? b.storeStock : remaining;
-                b.storeStock -= d;
-                remaining -= d;
-                ObjectBoxService.instance.batchBox.put(b);
+              if (sale.isClinicalDispense) {
+                if (b.mainStock > 0) {
+                  final d = remaining > b.mainStock ? b.mainStock : remaining;
+                  b.mainStock -= d;
+                  remaining -= d;
+                  ObjectBoxService.instance.batchBox.put(b);
+                }
+              } else {
+                if (b.storeStock > 0) {
+                  final d = remaining > b.storeStock ? b.storeStock : remaining;
+                  b.storeStock -= d;
+                  remaining -= d;
+                  ObjectBoxService.instance.batchBox.put(b);
+                }
               }
             }
           } else if (qty < 0) {
@@ -701,12 +711,20 @@ class LocalServerService {
             if (batches.isNotEmpty) {
               batches.sort((a, b) => b.expiryDate.compareTo(a.expiryDate));
               final latest = batches.first;
-              latest.storeStock += toRestore;
+              if (sale.isClinicalDispense) {
+                latest.mainStock += toRestore;
+              } else {
+                latest.storeStock += toRestore;
+              }
               ObjectBoxService.instance.batchBox.put(latest);
             }
           }
 
-          m.storeStock = (m.storeStock - qty).clamp(0, 999999);
+          if (sale.isClinicalDispense) {
+            m.mainStock = (m.mainStock - qty).clamp(0, 999999);
+          } else {
+            m.storeStock = (m.storeStock - qty).clamp(0, 999999);
+          }
           m.updatedAt = DateTime.now();
           ObjectBoxService.instance.medicineBox.put(m);
         }
@@ -1557,9 +1575,27 @@ class LocalServerService {
               .where((x) => x.name == item.medicineName)
               .firstOrNull;
           if (m != null) {
-            // Reversing: if it was a sale (positive qty), we add it back (negative deduction)
-            // if it was a return (negative qty), we deduct it (add negative = subtract)
-            m.storeStock = (m.storeStock + item.qty.toInt()).clamp(0, 999999);
+            final qtyToRestore = item.qty.toInt();
+            // Reversing: if it was a sale (positive qty), we add it back.
+            // If it was a return (negative qty), we deduct it.
+            // Also adjust batch
+            final batches = m.batches.toList();
+            if (batches.isNotEmpty) {
+              batches.sort((a, b) => b.expiryDate.compareTo(a.expiryDate));
+              final latest = batches.first;
+              if (sale.isClinicalDispense) {
+                latest.mainStock = (latest.mainStock + qtyToRestore).clamp(0, 999999);
+              } else {
+                latest.storeStock = (latest.storeStock + qtyToRestore).clamp(0, 999999);
+              }
+              ObjectBoxService.instance.batchBox.put(latest);
+            }
+
+            if (sale.isClinicalDispense) {
+              m.mainStock = (m.mainStock + qtyToRestore).clamp(0, 999999);
+            } else {
+              m.storeStock = (m.storeStock + qtyToRestore).clamp(0, 999999);
+            }
             m.updatedAt = DateTime.now();
             ObjectBoxService.instance.medicineBox.put(m);
           }
@@ -1716,6 +1752,7 @@ class LocalServerService {
           createdAt: DateTime.tryParse(data['createdAt'] ?? '') ?? DateTime.now(),
           synced: true,
           isReturn: data['isReturn'] ?? false,
+          isClinicalDispense: data['isClinicalDispense'] ?? false,
           itemsJson: data['itemsJson'] ?? '[]',
         );
 
@@ -1730,7 +1767,51 @@ class LocalServerService {
             final item = SaleItem.fromJson(jsonItem as Map<String, dynamic>);
             final m = ObjectBoxService.instance.medicineBox.getAll().where((x) => x.name == item.medicineName).firstOrNull;
             if (m != null) {
-              m.storeStock = (m.storeStock - item.qty.toInt()).clamp(0, 999999);
+              final qty = item.qty.toInt();
+              if (qty > 0) {
+                // deduction - FIFO
+                int remaining = qty;
+                final batches = m.batches.toList();
+                batches.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
+                for (var b in batches) {
+                  if (remaining <= 0) break;
+                  if (sale.isClinicalDispense) {
+                    if (b.mainStock > 0) {
+                      final d = remaining > b.mainStock ? b.mainStock : remaining;
+                      b.mainStock -= d;
+                      remaining -= d;
+                      ObjectBoxService.instance.batchBox.put(b);
+                    }
+                  } else {
+                    if (b.storeStock > 0) {
+                      final d = remaining > b.storeStock ? b.storeStock : remaining;
+                      b.storeStock -= d;
+                      remaining -= d;
+                      ObjectBoxService.instance.batchBox.put(b);
+                    }
+                  }
+                }
+              } else if (qty < 0) {
+                // return - restock
+                int toRestore = qty.abs();
+                final batches = m.batches.toList();
+                if (batches.isNotEmpty) {
+                  batches.sort((a, b) => b.expiryDate.compareTo(a.expiryDate));
+                  final latest = batches.first;
+                  if (sale.isClinicalDispense) {
+                    latest.mainStock += toRestore;
+                  } else {
+                    latest.storeStock += toRestore;
+                  }
+                  ObjectBoxService.instance.batchBox.put(latest);
+                }
+              }
+
+              if (sale.isClinicalDispense) {
+                m.mainStock = (m.mainStock - qty).clamp(0, 999999);
+              } else {
+                m.storeStock = (m.storeStock - qty).clamp(0, 999999);
+              }
               m.updatedAt = DateTime.now();
               ObjectBoxService.instance.medicineBox.put(m);
             }
@@ -1976,7 +2057,8 @@ class LocalServerService {
           await FirebaseSyncService.instance.fetchCollection('procedures');
       for (var cp in cloudProcs) {
         final cloudId = cp['cloudId']?.toString();
-        if (cloudId != null && !localProcNames.contains(cloudId)) {
+        final name = cp['name']?.toString();
+        if (cloudId != null && name != null && !localProcNames.contains(name)) {
           await FirebaseSyncService.instance.deleteDocument(
               'procedures', cloudId);
           pruneCount++;

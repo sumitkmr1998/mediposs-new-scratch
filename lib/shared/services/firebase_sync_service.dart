@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/app_user.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -33,6 +34,15 @@ class FirebaseSyncService {
       // Check if Firebase is initialized by accessing the app name
       Firebase.app();
       _instance!._isInitialized = true;
+
+      if (defaultTargetPlatform != TargetPlatform.windows) {
+        debugPrint('FirebaseSyncService: Triggering anonymous sign-in on mobile...');
+        FirebaseAuth.instance.signInAnonymously().then((credential) {
+          debugPrint('FirebaseSyncService: Anonymous sign-in successful: ${credential.user?.uid}');
+        }).catchError((error) {
+          debugPrint('FirebaseSyncService: Anonymous sign-in failed: $error');
+        });
+      }
     } catch (_) {
       debugPrint('FirebaseSyncService: Firebase core not initialized. Some features will be disabled.');
     }
@@ -529,7 +539,7 @@ class FirebaseSyncService {
   Future<Map<String, dynamic>?> getHubStatus() async {
     if (!_isInitialized) return null;
     try {
-      final doc = await _db.collection('settings').doc('hub_status').get().timeout(const Duration(seconds: 5));
+      final doc = await _db.collection('settings').doc('hub_status').get(const GetOptions(source: Source.server)).timeout(const Duration(seconds: 5));
       return doc.data();
     } catch (e) {
       debugPrint('Firebase getHubStatus failed: $e');

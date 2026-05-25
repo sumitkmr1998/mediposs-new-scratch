@@ -61,10 +61,10 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
     // For Cashier, we force the revenue summary to Today's metrics
     // For others, we calculate based on the current list (search or filter)
     if (isCashier) {
-      grossSales = sales.todayRevenue;
-      returns = sales.sales.where((s) => s.isReturn && _isToday(s.createdAt)).fold(0.0, (sum, s) => sum + s.total.abs());
+      grossSales = sales.filteredSales.where((s) => _isToday(s.createdAt) && !s.isReturn).fold(0.0, (sum, s) => sum + s.total);
+      returns = sales.filteredSales.where((s) => s.isReturn && _isToday(s.createdAt)).fold(0.0, (sum, s) => sum + s.total.abs());
     } else {
-      for (final s in sales.sales) {
+      for (final s in sales.filteredSales) {
         if (s.isReturn) {
           returns += s.total.abs();
         } else {
@@ -74,8 +74,8 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
     }
 
     final netTotal = grossSales - returns;
-    final saleCount = isCashier ? sales.todaySalesCount : sales.sales.where((s) => !s.isReturn).length;
-    final returnCount = isCashier ? sales.sales.where((s) => s.isReturn && _isToday(s.createdAt)).length : sales.sales.where((s) => s.isReturn).length;
+    final saleCount = sales.filteredSales.where((s) => !s.isReturn && (isCashier ? _isToday(s.createdAt) : true)).length;
+    final returnCount = sales.filteredSales.where((s) => s.isReturn && (isCashier ? _isToday(s.createdAt) : true)).length;
     final rangeLabel = isCashier ? "Today's" : _getRangeLabel(sales);
 
     return Scaffold(
@@ -210,100 +210,148 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  AppFilterChip(
-                    label: 'Today',
-                    icon: Icons.today_rounded,
-                    isSelected: sales.activeFilter == SalesFilter.today,
-                    onTap: () => sales.setFilter(SalesFilter.today),
-                    style: AppFilterChipStyle.filled,
+          Row(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      AppFilterChip(
+                        label: 'Today',
+                        icon: Icons.today_rounded,
+                        isSelected: sales.activeFilter == SalesFilter.today,
+                        onTap: () => sales.setFilter(SalesFilter.today),
+                        style: AppFilterChipStyle.filled,
+                      ),
+                      if (context.watch<AuthProvider>().currentUser?.canViewHistoricalData ?? true) ...[
+                        const SizedBox(width: 8),
+                        AppFilterChip(
+                          label: 'Yesterday',
+                          icon: Icons.history_rounded,
+                          isSelected: sales.activeFilter == SalesFilter.yesterday,
+                          onTap: () => sales.setFilter(SalesFilter.yesterday),
+                          style: AppFilterChipStyle.filled,
+                        ),
+                        const SizedBox(width: 8),
+                        AppFilterChip(
+                          label: 'Last 7 Days',
+                          icon: Icons.date_range_rounded,
+                          isSelected: sales.activeFilter == SalesFilter.last7Days,
+                          onTap: () => sales.setFilter(SalesFilter.last7Days),
+                          style: AppFilterChipStyle.filled,
+                        ),
+                        const SizedBox(width: 8),
+                        AppFilterChip(
+                          label: 'All Time',
+                          icon: Icons.all_inbox_rounded,
+                          isSelected: sales.activeFilter == SalesFilter.allTime,
+                          onTap: () => sales.setFilter(SalesFilter.allTime),
+                          style: AppFilterChipStyle.filled,
+                        ),
+                        const SizedBox(width: 8),
+                        AppFilterChip(
+                          label: 'Custom',
+                          icon: Icons.calendar_month_rounded,
+                          isSelected: sales.activeFilter == SalesFilter.custom,
+                          onTap: () async {
+                            final range = await showDateRangePicker(
+                              context: context,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime.now(),
+                            );
+                            if (range != null)
+                              sales.setFilter(SalesFilter.custom, range: range);
+                          },
+                          style: AppFilterChipStyle.filled,
+                        ),
+                      ],
+                    ],
                   ),
-                  if (context.watch<AuthProvider>().currentUser?.canViewHistoricalData ?? true) ...[
-                    const SizedBox(width: 8),
-                    AppFilterChip(
-                      label: 'Yesterday',
-                      icon: Icons.history_rounded,
-                      isSelected: sales.activeFilter == SalesFilter.yesterday,
-                      onTap: () => sales.setFilter(SalesFilter.yesterday),
-                      style: AppFilterChipStyle.filled,
-                    ),
-                    const SizedBox(width: 8),
-                    AppFilterChip(
-                      label: 'Last 7 Days',
-                      icon: Icons.date_range_rounded,
-                      isSelected: sales.activeFilter == SalesFilter.last7Days,
-                      onTap: () => sales.setFilter(SalesFilter.last7Days),
-                      style: AppFilterChipStyle.filled,
-                    ),
-                    const SizedBox(width: 8),
-                    AppFilterChip(
-                      label: 'All Time',
-                      icon: Icons.all_inbox_rounded,
-                      isSelected: sales.activeFilter == SalesFilter.allTime,
-                      onTap: () => sales.setFilter(SalesFilter.allTime),
-                      style: AppFilterChipStyle.filled,
-                    ),
-                    const SizedBox(width: 8),
-                    AppFilterChip(
-                      label: 'Custom',
-                      icon: Icons.calendar_month_rounded,
-                      isSelected: sales.activeFilter == SalesFilter.custom,
-                      onTap: () async {
-                        final range = await showDateRangePicker(
-                          context: context,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime.now(),
-                        );
-                        if (range != null)
-                          sales.setFilter(SalesFilter.custom, range: range);
-                      },
-                      style: AppFilterChipStyle.filled,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          SizedBox(
-            width: 260,
-            child: TextField(
-              controller: _searchCtrl,
-              onChanged: (v) {
-                setState(() => _searchQuery = v);
-                sales.search(v);
-              },
-              style: const TextStyle(fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'Search sales...',
-                hintStyle:
-                    TextStyle(fontSize: 13, color: context.textMutedColor),
-                prefixIcon: Icon(Icons.search_rounded,
-                    size: 20, color: context.textMutedColor),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.close_rounded, size: 18),
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          setState(() => _searchQuery = '');
-                          sales.search('');
-                        },
-                      )
-                    : null,
-                isDense: true,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
-            ),
+              const SizedBox(width: 16),
+              SizedBox(
+                width: 260,
+                child: TextField(
+                  controller: _searchCtrl,
+                  onChanged: (v) {
+                    setState(() => _searchQuery = v);
+                    sales.search(v);
+                  },
+                  style: const TextStyle(fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'Search sales...',
+                    hintStyle:
+                        TextStyle(fontSize: 13, color: context.textMutedColor),
+                    prefixIcon: Icon(Icons.search_rounded,
+                        size: 20, color: context.textMutedColor),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              setState(() => _searchQuery = '');
+                              sales.search('');
+                            },
+                          )
+                        : null,
+                    isDense: true,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Divider(height: 1, color: context.borderColor.withValues(alpha: 0.5)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Text(
+                'TRANSACTION TYPE: ',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.0,
+                  color: context.textMutedColor,
+                ),
+              ),
+              const SizedBox(width: 12),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(
+                    value: 'all',
+                    label: Text('All Transactions'),
+                    icon: Icon(Icons.all_inbox_outlined, size: 16),
+                  ),
+                  ButtonSegment(
+                    value: 'retail',
+                    label: Text('Retail Sales (GST)'),
+                    icon: Icon(Icons.shopping_bag_outlined, size: 16),
+                  ),
+                  ButtonSegment(
+                    value: 'dispense',
+                    label: Text('Clinical Dispenses'),
+                    icon: Icon(Icons.medical_services_outlined, size: 16),
+                  ),
+                ],
+                selected: {sales.typeFilter},
+                onSelectionChanged: (set) => sales.setTypeFilter(set.first),
+                style: SegmentedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  selectedBackgroundColor: AppTheme.primary,
+                  selectedForegroundColor: Colors.white,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -642,10 +690,26 @@ class _SaleRow extends StatelessWidget {
                             child: Row(
                               children: [
                                 Expanded(
-                                  child: Text(item.medicineName,
-                                      style: const TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600)),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(item.medicineName,
+                                          style: const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600)),
+                                      if (!item.isProcedure && item.batchNo.isNotEmpty)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 2),
+                                          child: Text(
+                                            'Batch: ${item.batchNo} | Exp: ${item.expiryDate}',
+                                            style: TextStyle(
+                                                fontSize: 11,
+                                                color: context.textMutedColor,
+                                                fontWeight: FontWeight.w500),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                                 ),
                                 SizedBox(
                                   width: 110,

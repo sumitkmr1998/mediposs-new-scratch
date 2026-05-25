@@ -21,13 +21,32 @@ class PrintingService {
   
   Future<Uint8List> _generateReceiptBytes(Sale sale, PdfPageFormat format) async {
     final settings = ObjectBoxService.instance.settings;
-    final storeName =
-        settings.storeName.isNotEmpty ? settings.storeName : 'MediPoss Store';
-    final storeAddress = settings.storeAddress.isNotEmpty
-        ? settings.storeAddress
-        : 'Address not set';
-    final storePhone =
-        settings.storePhone.isNotEmpty ? settings.storePhone : 'Phone not set';
+    
+    // Resolve header details based on whether this is a Clinical Dispense
+    final headerName = sale.isClinicalDispense 
+        ? ((settings.clinicName?.isNotEmpty ?? false) ? settings.clinicName! : 'MediPoss Clinic')
+        : ((settings.storeName?.isNotEmpty ?? false) ? settings.storeName! : 'MediPoss Store');
+        
+    final headerAddress = sale.isClinicalDispense
+        ? ((settings.clinicAddress?.isNotEmpty ?? false) ? settings.clinicAddress! : 'Address not set')
+        : ((settings.storeAddress?.isNotEmpty ?? false) ? settings.storeAddress! : 'Address not set');
+        
+    final headerPhone = sale.isClinicalDispense
+        ? ((settings.clinicPhone?.isNotEmpty ?? false) ? settings.clinicPhone! : 'Phone not set')
+        : ((settings.storePhone?.isNotEmpty ?? false) ? settings.storePhone! : 'Phone not set');
+
+    // Try to resolve related doctor name for display on the receipt
+    String doctorName = '';
+    if (sale.patientId != 0) {
+      final prescription = ObjectBoxService.instance.store.box<Prescription>()
+          .query(Prescription_.patientId.equals(sale.patientId))
+          .order(Prescription_.createdAt, flags: Order.descending)
+          .build()
+          .findFirst();
+      if (prescription != null) {
+        doctorName = prescription.doctorName;
+      }
+    }
 
     final doc = pw.Document();
 
@@ -46,37 +65,50 @@ class PrintingService {
             mainAxisSize: isRoll ? pw.MainAxisSize.min : pw.MainAxisSize.max,
             children: [
               // Store Header
-              pw.Text(storeName,
+              pw.Text(headerName,
                   style: pw.TextStyle(
                       fontWeight: pw.FontWeight.bold, fontSize: 16),
                   textAlign: pw.TextAlign.center),
-              if (storeAddress.isNotEmpty)
+              if (headerAddress.isNotEmpty && headerAddress != 'Address not set')
                 pw.Padding(
                   padding: const pw.EdgeInsets.only(top: 2),
-                  child: pw.Text(storeAddress,
+                  child: pw.Text(headerAddress,
                       style: const pw.TextStyle(fontSize: 10),
                       textAlign: pw.TextAlign.center),
                 ),
-              if (storePhone.isNotEmpty)
+              if (headerPhone.isNotEmpty && headerPhone != 'Phone not set')
                 pw.Padding(
                   padding: const pw.EdgeInsets.only(top: 2),
-                  child: pw.Text('Tel: $storePhone',
+                  child: pw.Text('Tel: $headerPhone',
                       style: const pw.TextStyle(fontSize: 10),
                       textAlign: pw.TextAlign.center),
                 ),
-              if (settings.gstNumber.isNotEmpty)
-                pw.Padding(
-                  padding: const pw.EdgeInsets.only(top: 2),
-                  child: pw.Text('GST: ${settings.gstNumber}',
-                      style: pw.TextStyle(
-                          fontSize: 10, fontWeight: pw.FontWeight.bold),
-                      textAlign: pw.TextAlign.center),
-                ),
+              if (sale.isClinicalDispense) ...[
+                if (settings.clinicRegNo != null && settings.clinicRegNo!.isNotEmpty)
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.only(top: 2),
+                    child: pw.Text('Reg No: ${settings.clinicRegNo}',
+                        style: pw.TextStyle(
+                            fontSize: 10, fontWeight: pw.FontWeight.bold),
+                        textAlign: pw.TextAlign.center),
+                  ),
+              ] else ...[
+                if (settings.gstNumber != null && settings.gstNumber!.isNotEmpty)
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.only(top: 2),
+                    child: pw.Text('GST: ${settings.gstNumber}',
+                        style: pw.TextStyle(
+                            fontSize: 10, fontWeight: pw.FontWeight.bold),
+                        textAlign: pw.TextAlign.center),
+                  ),
+              ],
               pw.SizedBox(height: 8),
 
               // Title: Cash vs Return
               pw.Text(
-                sale.isReturn ? 'RETURN RECEIPT' : 'CASH RECEIPT',
+                sale.isClinicalDispense
+                    ? 'CLINICAL DISPENSE SLIP'
+                    : (sale.isReturn ? 'RETURN RECEIPT' : 'CASH RECEIPT'),
                 style:
                     pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13),
               ),
@@ -102,6 +134,16 @@ class PrintingService {
                     if (sale.patientPhone.isNotEmpty)
                       pw.Text(sale.patientPhone,
                           style: const pw.TextStyle(fontSize: 10)),
+                  ],
+                ),
+              ],
+              if (doctorName.isNotEmpty) ...[
+                pw.SizedBox(height: 2),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('Doctor: Dr. $doctorName',
+                        style: const pw.TextStyle(fontSize: 10)),
                   ],
                 ),
               ],
@@ -141,11 +183,23 @@ class PrintingService {
                       children: [
                         pw.Expanded(
                             flex: 3,
-                            child: pw.Text(
-                                item.isProcedure
-                                    ? '[P] ${item.medicineName}'
-                                    : item.medicineName,
-                                style: const pw.TextStyle(fontSize: 10))),
+                            child: pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.start,
+                              children: [
+                                pw.Text(
+                                    item.isProcedure
+                                        ? '[P] ${item.medicineName}'
+                                        : item.medicineName,
+                                    style: const pw.TextStyle(fontSize: 10)),
+                                if (!item.isProcedure && item.batchNo.isNotEmpty)
+                                  pw.Padding(
+                                    padding: const pw.EdgeInsets.only(top: 1),
+                                    child: pw.Text(
+                                        'Batch: ${item.batchNo} | Exp: ${item.expiryDate}',
+                                        style: pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+                                  ),
+                              ],
+                            )),
                         pw.Expanded(
                             flex: 1,
                             child: pw.Text('${item.qty.abs()}',
@@ -171,7 +225,7 @@ class PrintingService {
               // Totals
               _buildTotalRow('Subtotal', sale.subtotal),
               if (sale.discount > 0) _buildTotalRow('Discount', sale.discount),
-              if (sale.taxAmount > 0) _buildTotalRow('Tax', sale.taxAmount),
+              if (sale.taxAmount > 0 && !sale.isClinicalDispense) _buildTotalRow('Tax', sale.taxAmount),
 
               pw.SizedBox(height: 2),
 
@@ -460,6 +514,8 @@ class PrintingService {
               name: si.isProcedure ? '[P] ${si.medicineName}' : si.medicineName,
               quantity: si.qty.abs(),
               rate: si.unitPrice,
+              batchNo: si.batchNo,
+              expiryDate: si.expiryDate,
             ))
         .toList();
 
@@ -490,18 +546,31 @@ class PrintingService {
       }
     }
 
+    final invoiceClinicName = sale.isClinicalDispense
+        ? ((settings.clinicName?.isNotEmpty ?? false) ? settings.clinicName! : 'MediPoss Clinic')
+        : ((settings.storeName?.isNotEmpty ?? false) ? settings.storeName! : 'MediPoss Store');
+        
+    final invoiceClinicAddress = sale.isClinicalDispense
+        ? ((settings.clinicAddress?.isNotEmpty ?? false) ? settings.clinicAddress! : 'Address not set')
+        : ((settings.storeAddress?.isNotEmpty ?? false) ? settings.storeAddress! : 'Address not set');
+        
+    final regNo = sale.isClinicalDispense
+        ? ((settings.clinicRegNo?.isNotEmpty ?? false) ? settings.clinicRegNo! : 'N/A')
+        : ((settings.gstNumber?.isNotEmpty ?? false) ? settings.gstNumber! : 'N/A');
+
     final invoice = Invoice(
       invoiceNo: sale.invoiceNo,
       patientId: patientUhid,
-      clinicName: settings.storeName.isNotEmpty ? settings.storeName : 'MediPoss Clinic',
-      clinicAddress: settings.storeAddress.isNotEmpty ? settings.storeAddress : 'Address not set',
-      registrationNo: settings.gstNumber.isNotEmpty ? settings.gstNumber : 'N/A',
+      clinicName: invoiceClinicName,
+      clinicAddress: invoiceClinicAddress,
+      registrationNo: regNo,
       doctorName: doctorName,
       patientName: sale.patientName.isNotEmpty ? sale.patientName : 'Walk-in Patient',
       diagnosis: diagnosis.isNotEmpty ? diagnosis : 'General',
       date: sale.createdAt,
       items: invoiceItems,
       totalAmount: sale.total.abs(),
+      isClinicalDispense: sale.isClinicalDispense,
     );
 
     await printInvoice(context, invoice);

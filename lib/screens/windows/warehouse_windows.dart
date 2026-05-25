@@ -1275,17 +1275,37 @@ class _TransferDialog extends StatefulWidget {
 class _TransferDialogState extends State<_TransferDialog> {
   final _qtyCtrl = TextEditingController(text: '1');
   final _noteCtrl = TextEditingController();
+  MedicineBatch? _selectedBatch;
+
+  @override
+  void initState() {
+    super.initState();
+    // Default to the first available batch in the 'from' warehouse if any exist
+    final availableBatches = widget.medicine.batches.where((b) =>
+        widget.from == 'main' ? b.mainStock > 0 : b.storeStock > 0).toList();
+    if (availableBatches.isNotEmpty) {
+      // Sort by soonest expiry
+      availableBatches.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
+      _selectedBatch = availableBatches.first;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final fromLabel = widget.from == 'main' ? 'Main Warehouse' : 'Store Stock';
     final toLabel = widget.to == 'main' ? 'Main Warehouse' : 'Store Stock';
-    final available = widget.from == 'main'
-        ? widget.medicine.mainStock
-        : widget.medicine.storeStock;
+    
+    // Calculate available stock based on selected batch or total
+    final available = _selectedBatch != null
+        ? (widget.from == 'main' ? _selectedBatch!.mainStock : _selectedBatch!.storeStock)
+        : (widget.from == 'main' ? widget.medicine.mainStock : widget.medicine.storeStock);
+        
     final primaryColor = widget.to == 'store'
         ? const Color(0xFF14B8A6)
         : const Color(0xFF6366F1);
+
+    final availableBatches = widget.medicine.batches.where((b) =>
+        widget.from == 'main' ? b.mainStock > 0 : b.storeStock > 0).toList();
 
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1346,6 +1366,30 @@ class _TransferDialogState extends State<_TransferDialog> {
               ),
             ),
             const SizedBox(height: 24),
+            
+            if (availableBatches.isNotEmpty) ...[
+              DropdownButtonFormField<MedicineBatch>(
+                value: _selectedBatch,
+                decoration: InputDecoration(
+                  labelText: 'Select Batch',
+                  prefixIcon: const Icon(Icons.layers),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                items: availableBatches.map((b) {
+                  final qty = widget.from == 'main' ? b.mainStock : b.storeStock;
+                  final date = '${b.expiryDate.day}/${b.expiryDate.month}/${b.expiryDate.year}';
+                  return DropdownMenuItem(
+                    value: b,
+                    child: Text('Batch: ${b.batchNo} (Qty: $qty, Exp: $date)'),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  setState(() => _selectedBatch = val);
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
+            
             Text('Available to transfer: $available ${widget.medicine.unit}',
                 style: TextStyle(
                     color: context.textMutedColor,
@@ -1391,11 +1435,28 @@ class _TransferDialogState extends State<_TransferDialog> {
           onPressed: () async {
             final qty = int.tryParse(_qtyCtrl.text) ?? 0;
             final sync = context.read<SyncService>();
+            
+            // Re-validate against selected batch
+            final maxAvail = _selectedBatch != null 
+              ? (widget.from == 'main' ? _selectedBatch!.mainStock : _selectedBatch!.storeStock)
+              : (widget.from == 'main' ? widget.medicine.mainStock : widget.medicine.storeStock);
+              
+            if (qty > maxAvail) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text('Insufficient stock in selected batch (Available: $maxAvail)'),
+                backgroundColor: AppTheme.danger,
+                behavior: SnackBarBehavior.floating,
+              ));
+              return;
+            }
+
             final err = await widget.wh.transfer(
               medicine: widget.medicine,
               qty: qty,
               from: widget.from,
               to: widget.to,
+              batchNo: _selectedBatch?.batchNo,
+              expiryDate: _selectedBatch?.expiryDate,
               note: _noteCtrl.text,
               syncService: sync,
             );

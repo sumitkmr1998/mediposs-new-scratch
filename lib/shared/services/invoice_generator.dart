@@ -52,14 +52,29 @@ class InvoiceGenerator {
                   ),
                   pw.SizedBox(height: 4),
                   pw.Text(invoice.clinicAddress, style: pw.TextStyle(fontSize: isSmall ? 8 : 10)),
-                  pw.Text('Reg No: ${invoice.registrationNo}', style: pw.TextStyle(fontSize: isSmall ? 8 : 10)),
+                  if (invoice.registrationNo.isNotEmpty && invoice.registrationNo != 'N/A')
+                    pw.Text(
+                      invoice.isClinicalDispense 
+                          ? 'Reg No: ${invoice.registrationNo}' 
+                          : 'GST: ${invoice.registrationNo}', 
+                      style: pw.TextStyle(fontSize: isSmall ? 8 : 10)
+                    ),
                 ],
               ),
             ),
             pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
-                pw.Text('INVOICE', style: pw.TextStyle(fontSize: isSmall ? 18 : 30, fontWeight: pw.FontWeight.bold, color: PdfColors.grey700)),
+                pw.Text(
+                  invoice.isClinicalDispense ? 'CLINICAL DISPENSE' : 'INVOICE',
+                  style: pw.TextStyle(
+                    fontSize: isSmall 
+                        ? (invoice.isClinicalDispense ? 12 : 18) 
+                        : (invoice.isClinicalDispense ? 20 : 30), 
+                    fontWeight: pw.FontWeight.bold, 
+                    color: PdfColors.grey700
+                  )
+                ),
                 pw.Text('No: ${invoice.invoiceNo}', style: pw.TextStyle(fontSize: isSmall ? 9 : 12, fontWeight: pw.FontWeight.bold)),
                 pw.Text('Date: ${invoice.formattedDate}', style: pw.TextStyle(fontSize: isSmall ? 9 : 12)),
               ],
@@ -127,8 +142,11 @@ class InvoiceGenerator {
     final headers = ['Description', 'Qty', 'Rate', 'Amount'];
 
     final data = invoice.items.map((item) {
+      final desc = item.batchNo.isNotEmpty
+          ? '${item.name}\nBatch: ${item.batchNo} | Exp: ${item.expiryDate}'
+          : item.name;
       return [
-        item.name,
+        desc,
         '${item.quantity}',
         item.rate.toStringAsFixed(2),
         item.amount.toStringAsFixed(2),
@@ -200,7 +218,9 @@ class InvoiceGenerator {
                   ),
                   pw.SizedBox(height: 4),
                   pw.Text(
-                    'Medicines dispensed as part of clinical treatment',
+                    invoice.isClinicalDispense
+                        ? 'Medicines dispensed as part of clinical treatment. Internal consumption only.'
+                        : 'Goods once sold are subject to retail store return and exchange policies.',
                     style: pw.TextStyle(fontSize: fs),
                   ),
                 ],

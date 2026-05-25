@@ -517,14 +517,29 @@ class _TransferDialog extends StatefulWidget {
 class _TransferDialogState extends State<_TransferDialog> {
   final _qtyCtrl = TextEditingController(text: '1');
   final _noteCtrl = TextEditingController();
+  MedicineBatch? _selectedBatch;
+
+  @override
+  void initState() {
+    super.initState();
+    final batches = widget.medicine.batches.where((b) {
+      final stock = widget.from == 'main' ? b.mainStock : b.storeStock;
+      return stock > 0;
+    }).toList();
+    if (batches.isNotEmpty) {
+      _selectedBatch = batches.first;
+    } else if (widget.medicine.batches.isNotEmpty) {
+      _selectedBatch = widget.medicine.batches.first;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final toStore = widget.to == 'store';
     final accentColor = toStore ? AppTheme.success : AppTheme.indigo;
-    final available = widget.from == 'main'
-        ? widget.medicine.mainStock
-        : widget.medicine.storeStock;
+    final available = _selectedBatch != null
+        ? (widget.from == 'main' ? _selectedBatch!.mainStock : _selectedBatch!.storeStock)
+        : (widget.from == 'main' ? widget.medicine.mainStock : widget.medicine.storeStock);
 
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -572,6 +587,38 @@ class _TransferDialogState extends State<_TransferDialog> {
                 ],
               ),
             ),
+            if (widget.medicine.batches.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              DropdownButtonFormField<MedicineBatch>(
+                value: _selectedBatch,
+                decoration: InputDecoration(
+                  labelText: 'SELECT BATCH',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                  filled: true,
+                  fillColor: context.borderColor.withValues(alpha: 0.05),
+                ),
+                dropdownColor: context.surfaceColor,
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppTheme.primaryLight),
+                items: widget.medicine.batches.map((b) {
+                  final stock = widget.from == 'main' ? b.mainStock : b.storeStock;
+                  final expiryStr = DateFormat('MM/yy').format(b.expiryDate);
+                  return DropdownMenuItem<MedicineBatch>(
+                    value: b,
+                    child: Text(
+                      'Batch: ${b.batchNo} (Exp: $expiryStr) [Qty: $stock]',
+                      style: TextStyle(
+                        color: context.read<AuthProvider>().currentUser == null ? Colors.black : null,
+                      ),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (b) {
+                  setState(() {
+                    _selectedBatch = b;
+                  });
+                },
+              ),
+            ],
             const SizedBox(height: 20),
             TextField(
               controller: _qtyCtrl,
@@ -612,12 +659,21 @@ class _TransferDialogState extends State<_TransferDialog> {
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           onPressed: () async {
+            if (widget.medicine.batches.isNotEmpty && _selectedBatch == null) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Please select a batch to transfer'),
+                backgroundColor: AppTheme.danger,
+              ));
+              return;
+            }
             final qty = int.tryParse(_qtyCtrl.text) ?? 0;
             final err = await widget.wh.transfer(
               medicine: widget.medicine,
               qty: qty,
               from: widget.from,
               to: widget.to,
+              batchNo: _selectedBatch?.batchNo,
+              expiryDate: _selectedBatch?.expiryDate,
               note: _noteCtrl.text,
               syncService: context.read<SyncService>(),
             );

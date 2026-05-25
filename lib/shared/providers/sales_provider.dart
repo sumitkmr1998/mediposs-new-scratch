@@ -14,19 +14,42 @@ enum SalesFilter { today, yesterday, last7Days, allTime, custom }
 
 class SalesProvider extends ChangeNotifier {
   List<Sale> _sales = [];
+  List<Sale> _rawSales = [];
   List<Sale> get sales => List.unmodifiable(_sales);
+  List<Sale> get rawSales => List.unmodifiable(_rawSales);
 
   static const int pageSize = 30;
   int _loadedCount = 30;
 
+  String _typeFilter = 'all'; // 'all', 'retail', 'dispense'
+  String get typeFilter => _typeFilter;
+
+  void setTypeFilter(String filter) {
+    if (_typeFilter != filter) {
+      _typeFilter = filter;
+      _loadedCount = pageSize;
+      notifyListeners();
+    }
+  }
+
+  List<Sale> get _filteredByTypeList {
+    if (_typeFilter == 'retail') {
+      return _sales.where((s) => !s.isClinicalDispense).toList();
+    } else if (_typeFilter == 'dispense') {
+      return _sales.where((s) => s.isClinicalDispense).toList();
+    }
+    return _sales;
+  }
+
   List<Sale> get displayedSales =>
-      List.unmodifiable(_sales.take(_loadedCount).toList());
-  bool get hasMore => _loadedCount < _sales.length;
-  int get totalCount => _sales.length;
+      List.unmodifiable(_filteredByTypeList.take(_loadedCount).toList());
+  bool get hasMore => _loadedCount < _filteredByTypeList.length;
+  int get totalCount => _filteredByTypeList.length;
+  List<Sale> get filteredSales => List.unmodifiable(_filteredByTypeList);
 
   void loadMore() {
     if (!hasMore) return;
-    _loadedCount = (_loadedCount + pageSize).clamp(0, _sales.length);
+    _loadedCount = (_loadedCount + pageSize).clamp(0, _filteredByTypeList.length);
     notifyListeners();
   }
 
@@ -180,6 +203,10 @@ class SalesProvider extends ChangeNotifier {
   void load() {
     final box = ObjectBoxService.instance.saleBox;
 
+    final rawQuery = box.query().order(Sale_.createdAt, flags: Order.descending).build();
+    _rawSales = rawQuery.find();
+    rawQuery.close();
+
     Query<Sale> query;
     if (_customStart != null && _customEnd != null) {
       query = box
@@ -233,7 +260,11 @@ class SalesProvider extends ChangeNotifier {
       for (final item in items) {
         // Reverses the inventory action identically
         // (Returns natively have negative qty, Sales have positive qty)
-        inv.deductStoreStock(item.medicineId, -item.qty);
+        if (sale.isClinicalDispense) {
+          inv.deductClinicStock(item.medicineId, -item.qty);
+        } else {
+          inv.deductStoreStock(item.medicineId, -item.qty);
+        }
       }
       ObjectBoxService.instance.saleBox.remove(sale.id);
       load();

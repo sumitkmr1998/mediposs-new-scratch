@@ -150,11 +150,16 @@ class _ReturnDialogState extends State<ReturnDialog> {
           medicineName: item.medicineName,
           qty: -q, // Negative for return
           unitPrice: item.unitPrice,
+          batchNo: item.batchNo,
+          expiryDate: item.expiryDate,
         ));
 
         // Restock inventory directly
-        invProvider.deductStoreStock(
-            item.medicineId, -q); // -(-q) = +q restocking
+        if (widget.originalSale.isClinicalDispense) {
+          invProvider.deductClinicStock(item.medicineId, -q);
+        } else {
+          invProvider.deductStoreStock(item.medicineId, -q);
+        }
       }
     }
 
@@ -177,6 +182,7 @@ class _ReturnDialogState extends State<ReturnDialog> {
       total: -_returnTotal,
       paymentMethod: widget.originalSale.paymentMethod,
       isReturn: true, // Mark as return
+      isClinicalDispense: widget.originalSale.isClinicalDispense,
       itemsJson: "[]", // Encode list below
       createdAt: now,
     );

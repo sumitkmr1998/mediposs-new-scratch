@@ -1602,10 +1602,26 @@ class _ExpandableSaleState extends State<_ExpandableSale> {
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(children: [
                           Expanded(
-                              child: Text(item.medicineName,
-                                  style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500))),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(item.medicineName,
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500)),
+                                  if (!item.isProcedure && item.batchNo.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(
+                                        'Batch: ${item.batchNo} | Exp: ${item.expiryDate}',
+                                        style: TextStyle(
+                                            fontSize: 10,
+                                            color: context.textMutedColor,
+                                            fontWeight: FontWeight.w500),
+                                      ),
+                                    ),
+                                ],
+                              )),
                           SizedBox(
                               width: 80,
                               child: Text('${item.qty}',

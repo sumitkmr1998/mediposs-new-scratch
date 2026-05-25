@@ -24,6 +24,7 @@ import 'shared/models/prescription.dart';
 import 'shared/models/prescription_template.dart';
 import 'shared/models/procedure.dart';
 import 'shared/models/purchase_record.dart';
+import 'shared/models/restock_request.dart';
 import 'shared/models/sale.dart';
 import 'shared/models/stock_transfer.dart';
 import 'shared/models/sync_queue_item.dart';
@@ -34,7 +35,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(1, 637942838794498612),
       name: 'AppSettings',
-      lastPropertyId: const obx_int.IdUid(37, 8233132176523200008),
+      lastPropertyId: const obx_int.IdUid(41, 7124474164210204209),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -221,6 +222,26 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(37, 8233132176523200008),
             name: 'dashboardActions',
             type: 30,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(38, 6333405642904245362),
+            name: 'clinicName',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(39, 8794784823333133714),
+            name: 'clinicAddress',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(40, 1923681178841306975),
+            name: 'clinicPhone',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(41, 7124474164210204209),
+            name: 'clinicRegNo',
+            type: 9,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
@@ -228,7 +249,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(2, 1561353773588181738),
       name: 'AppUser',
-      lastPropertyId: const obx_int.IdUid(30, 3106793706457653237),
+      lastPropertyId: const obx_int.IdUid(34, 8023281741824268019),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -379,6 +400,16 @@ final _entities = <obx_int.ModelEntity>[
         obx_int.ModelProperty(
             id: const obx_int.IdUid(30, 3106793706457653237),
             name: 'canDeleteAppointments',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(33, 3230589121933702664),
+            name: 'canProcessRetailSales',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(34, 8023281741824268019),
+            name: 'canProcessClinicalDispenses',
             type: 1,
             flags: 0)
       ],
@@ -909,7 +940,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(11, 2308013346348508445),
       name: 'Sale',
-      lastPropertyId: const obx_int.IdUid(19, 2875700543068414594),
+      lastPropertyId: const obx_int.IdUid(22, 3110113568726371911),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -1006,6 +1037,21 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(19, 2875700543068414594),
             name: 'updatedAt',
             type: 10,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(20, 7768476753648038032),
+            name: 'isClinicalDispense',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(21, 6030897589153968283),
+            name: 'linkedAppointmentId',
+            type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(22, 3110113568726371911),
+            name: 'linkedProcedureId',
+            type: 6,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
@@ -1013,7 +1059,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(12, 7082812279176577223),
       name: 'StockTransfer',
-      lastPropertyId: const obx_int.IdUid(9, 1100797951206036300),
+      lastPropertyId: const obx_int.IdUid(11, 705828271808067587),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -1060,6 +1106,16 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(9, 1100797951206036300),
             name: 'transferredBy',
             type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(10, 9028682503658605346),
+            name: 'batchNo',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(11, 705828271808067587),
+            name: 'expiryDate',
+            type: 10,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
@@ -1281,6 +1337,55 @@ final _entities = <obx_int.ModelEntity>[
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
+      backlinks: <obx_int.ModelBacklink>[]),
+  obx_int.ModelEntity(
+      id: const obx_int.IdUid(17, 2587159035218084561),
+      name: 'RestockRequest',
+      lastPropertyId: const obx_int.IdUid(8, 859449191510356938),
+      flags: 0,
+      properties: <obx_int.ModelProperty>[
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(1, 5092530975499481315),
+            name: 'id',
+            type: 6,
+            flags: 1),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(2, 7250151663545980209),
+            name: 'medicineId',
+            type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(3, 8232173962258536375),
+            name: 'medicineName',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(4, 3771741474233958414),
+            name: 'requestedQty',
+            type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(5, 1241058508368014860),
+            name: 'status',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(6, 8316646241763553100),
+            name: 'requestedAt',
+            type: 10,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(7, 1422819014740673282),
+            name: 'fulfilledAt',
+            type: 10,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(8, 859449191510356938),
+            name: 'notes',
+            type: 9,
+            flags: 0)
+      ],
+      relations: <obx_int.ModelRelation>[],
       backlinks: <obx_int.ModelBacklink>[])
 ];
 
@@ -1319,13 +1424,13 @@ Future<obx.Store> openStore(
 obx_int.ModelDefinition getObjectBoxModel() {
   final model = obx_int.ModelInfo(
       entities: _entities,
-      lastEntityId: const obx_int.IdUid(16, 8472677541860163168),
+      lastEntityId: const obx_int.IdUid(17, 2587159035218084561),
       lastIndexId: const obx_int.IdUid(1, 5015225040438721990),
       lastRelationId: const obx_int.IdUid(1, 2143695166283597161),
       lastSequenceId: const obx_int.IdUid(0, 0),
       retiredEntityUids: const [],
       retiredIndexUids: const [],
-      retiredPropertyUids: const [],
+      retiredPropertyUids: const [8622522192029678101, 5959061355908786580],
       retiredRelationUids: const [],
       modelVersion: 5,
       modelVersionParserMinimum: 5,
@@ -1379,7 +1484,19 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final dashboardActionsOffset = fbb.writeList(object.dashboardActions
               .map(fbb.writeString)
               .toList(growable: false));
-          fbb.startTable(38);
+          final clinicNameOffset = object.clinicName == null
+              ? null
+              : fbb.writeString(object.clinicName!);
+          final clinicAddressOffset = object.clinicAddress == null
+              ? null
+              : fbb.writeString(object.clinicAddress!);
+          final clinicPhoneOffset = object.clinicPhone == null
+              ? null
+              : fbb.writeString(object.clinicPhone!);
+          final clinicRegNoOffset = object.clinicRegNo == null
+              ? null
+              : fbb.writeString(object.clinicRegNo!);
+          fbb.startTable(42);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, storeNameOffset);
           fbb.addOffset(2, storeAddressOffset);
@@ -1417,6 +1534,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addOffset(34, deviceIdOffset);
           fbb.addBool(35, object.isWindowsClient);
           fbb.addOffset(36, dashboardActionsOffset);
+          fbb.addOffset(37, clinicNameOffset);
+          fbb.addOffset(38, clinicAddressOffset);
+          fbb.addOffset(39, clinicPhoneOffset);
+          fbb.addOffset(40, clinicRegNoOffset);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -1512,6 +1633,17 @@ obx_int.ModelDefinition getObjectBoxModel() {
                   fb.StringReader(asciiOptimization: true),
                   lazy: false)
               .vTableGet(buffer, rootOffset, 76, []);
+          final clinicNameParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGetNullable(buffer, rootOffset, 78);
+          final clinicAddressParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGetNullable(buffer, rootOffset, 80);
+          final clinicPhoneParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGetNullable(buffer, rootOffset, 82);
+          final clinicRegNoParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGetNullable(buffer, rootOffset, 84);
           final object = AppSettings(
               id: idParam,
               storeName: storeNameParam,
@@ -1549,7 +1681,11 @@ obx_int.ModelDefinition getObjectBoxModel() {
               lastFirebaseSync: lastFirebaseSyncParam,
               deviceId: deviceIdParam,
               isWindowsClient: isWindowsClientParam,
-              dashboardActions: dashboardActionsParam);
+              dashboardActions: dashboardActionsParam,
+              clinicName: clinicNameParam,
+              clinicAddress: clinicAddressParam,
+              clinicPhone: clinicPhoneParam,
+              clinicRegNo: clinicRegNoParam);
 
           return object;
         }),
@@ -1565,7 +1701,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final nameOffset = fbb.writeString(object.name);
           final roleOffset = fbb.writeString(object.role);
           final pinOffset = fbb.writeString(object.pin);
-          fbb.startTable(31);
+          fbb.startTable(35);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, nameOffset);
           fbb.addOffset(2, roleOffset);
@@ -1596,6 +1732,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addBool(27, object.canDeleteInventory);
           fbb.addBool(28, object.canDeletePatients);
           fbb.addBool(29, object.canDeleteAppointments);
+          fbb.addBool(32, object.canProcessRetailSales);
+          fbb.addBool(33, object.canProcessClinicalDispenses);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -1638,6 +1776,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.BoolReader().vTableGet(buffer, rootOffset, 46, false);
           final canBulkDiscountParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 48, false);
+          final canProcessRetailSalesParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 68, false);
+          final canProcessClinicalDispensesParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 70, false);
           final canViewSalesHistoryParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 32, false);
           final canVoidSalesParam =
@@ -1681,6 +1823,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               canDiscountSales: canDiscountSalesParam,
               canOverridePrice: canOverridePriceParam,
               canBulkDiscount: canBulkDiscountParam,
+              canProcessRetailSales: canProcessRetailSalesParam,
+              canProcessClinicalDispenses: canProcessClinicalDispensesParam,
               canViewSalesHistory: canViewSalesHistoryParam,
               canVoidSales: canVoidSalesParam,
               canProcessReturns: canProcessReturnsParam,
@@ -2285,7 +2429,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final patientPhoneOffset = fbb.writeString(object.patientPhone);
           final paymentMethodOffset = fbb.writeString(object.paymentMethod);
           final itemsJsonOffset = fbb.writeString(object.itemsJson);
-          fbb.startTable(20);
+          fbb.startTable(23);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, invoiceNoOffset);
           fbb.addInt64(2, object.patientId);
@@ -2305,6 +2449,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addBool(16, object.isReturn);
           fbb.addOffset(17, itemsJsonOffset);
           fbb.addInt64(18, object.updatedAt.millisecondsSinceEpoch);
+          fbb.addBool(19, object.isClinicalDispense);
+          fbb.addInt64(20, object.linkedAppointmentId);
+          fbb.addInt64(21, object.linkedProcedureId);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -2350,6 +2497,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.BoolReader().vTableGet(buffer, rootOffset, 34, false);
           final isReturnParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 36, false);
+          final isClinicalDispenseParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 42, false);
+          final linkedAppointmentIdParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 44, 0);
+          final linkedProcedureIdParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 46, 0);
           final itemsJsonParam = const fb.StringReader(asciiOptimization: true)
               .vTableGet(buffer, rootOffset, 38, '');
           final object = Sale(
@@ -2371,6 +2524,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
               updatedAt: updatedAtParam,
               synced: syncedParam,
               isReturn: isReturnParam,
+              isClinicalDispense: isClinicalDispenseParam,
+              linkedAppointmentId: linkedAppointmentIdParam,
+              linkedProcedureId: linkedProcedureIdParam,
               itemsJson: itemsJsonParam);
 
           return object;
@@ -2389,7 +2545,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final toWarehouseOffset = fbb.writeString(object.toWarehouse);
           final noteOffset = fbb.writeString(object.note);
           final transferredByOffset = fbb.writeString(object.transferredBy);
-          fbb.startTable(10);
+          final batchNoOffset =
+              object.batchNo == null ? null : fbb.writeString(object.batchNo!);
+          fbb.startTable(12);
           fbb.addInt64(0, object.id);
           fbb.addInt64(1, object.medicineId);
           fbb.addOffset(2, medicineNameOffset);
@@ -2399,12 +2557,16 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addInt64(6, object.transferredAt.millisecondsSinceEpoch);
           fbb.addOffset(7, noteOffset);
           fbb.addOffset(8, transferredByOffset);
+          fbb.addOffset(9, batchNoOffset);
+          fbb.addInt64(10, object.expiryDate?.millisecondsSinceEpoch);
           fbb.finish(fbb.endTable());
           return object.id;
         },
         objectFromFB: (obx.Store store, ByteData fbData) {
           final buffer = fb.BufferContext(fbData);
           final rootOffset = buffer.derefObject(0);
+          final expiryDateValue =
+              const fb.Int64Reader().vTableGetNullable(buffer, rootOffset, 24);
           final idParam =
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0);
           final medicineIdParam =
@@ -2420,6 +2582,11 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final toWarehouseParam =
               const fb.StringReader(asciiOptimization: true)
                   .vTableGet(buffer, rootOffset, 14, '');
+          final batchNoParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGetNullable(buffer, rootOffset, 22);
+          final expiryDateParam = expiryDateValue == null
+              ? null
+              : DateTime.fromMillisecondsSinceEpoch(expiryDateValue);
           final transferredAtParam = DateTime.fromMillisecondsSinceEpoch(
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 16, 0));
           final noteParam = const fb.StringReader(asciiOptimization: true)
@@ -2434,6 +2601,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               qty: qtyParam,
               fromWarehouse: fromWarehouseParam,
               toWarehouse: toWarehouseParam,
+              batchNo: batchNoParam,
+              expiryDate: expiryDateParam,
               transferredAt: transferredAtParam,
               note: noteParam,
               transferredBy: transferredByParam);
@@ -2684,6 +2853,66 @@ obx_int.ModelDefinition getObjectBoxModel() {
               synced: syncedParam);
 
           return object;
+        }),
+    RestockRequest: obx_int.EntityDefinition<RestockRequest>(
+        model: _entities[16],
+        toOneRelations: (RestockRequest object) => [],
+        toManyRelations: (RestockRequest object) => {},
+        getId: (RestockRequest object) => object.id,
+        setId: (RestockRequest object, int id) {
+          object.id = id;
+        },
+        objectToFB: (RestockRequest object, fb.Builder fbb) {
+          final medicineNameOffset = fbb.writeString(object.medicineName);
+          final statusOffset = fbb.writeString(object.status);
+          final notesOffset =
+              object.notes == null ? null : fbb.writeString(object.notes!);
+          fbb.startTable(9);
+          fbb.addInt64(0, object.id);
+          fbb.addInt64(1, object.medicineId);
+          fbb.addOffset(2, medicineNameOffset);
+          fbb.addInt64(3, object.requestedQty);
+          fbb.addOffset(4, statusOffset);
+          fbb.addInt64(5, object.requestedAt.millisecondsSinceEpoch);
+          fbb.addInt64(6, object.fulfilledAt?.millisecondsSinceEpoch);
+          fbb.addOffset(7, notesOffset);
+          fbb.finish(fbb.endTable());
+          return object.id;
+        },
+        objectFromFB: (obx.Store store, ByteData fbData) {
+          final buffer = fb.BufferContext(fbData);
+          final rootOffset = buffer.derefObject(0);
+          final fulfilledAtValue =
+              const fb.Int64Reader().vTableGetNullable(buffer, rootOffset, 16);
+          final idParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0);
+          final medicineIdParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 6, 0);
+          final medicineNameParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGet(buffer, rootOffset, 8, '');
+          final requestedQtyParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 10, 0);
+          final statusParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 12, '');
+          final requestedAtParam = DateTime.fromMillisecondsSinceEpoch(
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 14, 0));
+          final fulfilledAtParam = fulfilledAtValue == null
+              ? null
+              : DateTime.fromMillisecondsSinceEpoch(fulfilledAtValue);
+          final notesParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGetNullable(buffer, rootOffset, 18);
+          final object = RestockRequest(
+              id: idParam,
+              medicineId: medicineIdParam,
+              medicineName: medicineNameParam,
+              requestedQty: requestedQtyParam,
+              status: statusParam,
+              requestedAt: requestedAtParam,
+              fulfilledAt: fulfilledAtParam,
+              notes: notesParam);
+
+          return object;
         })
   };
 
@@ -2839,6 +3068,22 @@ class AppSettings_ {
   /// See [AppSettings.dashboardActions].
   static final dashboardActions =
       obx.QueryStringVectorProperty<AppSettings>(_entities[0].properties[36]);
+
+  /// See [AppSettings.clinicName].
+  static final clinicName =
+      obx.QueryStringProperty<AppSettings>(_entities[0].properties[37]);
+
+  /// See [AppSettings.clinicAddress].
+  static final clinicAddress =
+      obx.QueryStringProperty<AppSettings>(_entities[0].properties[38]);
+
+  /// See [AppSettings.clinicPhone].
+  static final clinicPhone =
+      obx.QueryStringProperty<AppSettings>(_entities[0].properties[39]);
+
+  /// See [AppSettings.clinicRegNo].
+  static final clinicRegNo =
+      obx.QueryStringProperty<AppSettings>(_entities[0].properties[40]);
 }
 
 /// [AppUser] entity fields to define ObjectBox queries.
@@ -2962,6 +3207,14 @@ class AppUser_ {
   /// See [AppUser.canDeleteAppointments].
   static final canDeleteAppointments =
       obx.QueryBooleanProperty<AppUser>(_entities[1].properties[29]);
+
+  /// See [AppUser.canProcessRetailSales].
+  static final canProcessRetailSales =
+      obx.QueryBooleanProperty<AppUser>(_entities[1].properties[30]);
+
+  /// See [AppUser.canProcessClinicalDispenses].
+  static final canProcessClinicalDispenses =
+      obx.QueryBooleanProperty<AppUser>(_entities[1].properties[31]);
 }
 
 /// [Appointment] entity fields to define ObjectBox queries.
@@ -3424,6 +3677,18 @@ class Sale_ {
   /// See [Sale.updatedAt].
   static final updatedAt =
       obx.QueryDateProperty<Sale>(_entities[10].properties[18]);
+
+  /// See [Sale.isClinicalDispense].
+  static final isClinicalDispense =
+      obx.QueryBooleanProperty<Sale>(_entities[10].properties[19]);
+
+  /// See [Sale.linkedAppointmentId].
+  static final linkedAppointmentId =
+      obx.QueryIntegerProperty<Sale>(_entities[10].properties[20]);
+
+  /// See [Sale.linkedProcedureId].
+  static final linkedProcedureId =
+      obx.QueryIntegerProperty<Sale>(_entities[10].properties[21]);
 }
 
 /// [StockTransfer] entity fields to define ObjectBox queries.
@@ -3463,6 +3728,14 @@ class StockTransfer_ {
   /// See [StockTransfer.transferredBy].
   static final transferredBy =
       obx.QueryStringProperty<StockTransfer>(_entities[11].properties[8]);
+
+  /// See [StockTransfer.batchNo].
+  static final batchNo =
+      obx.QueryStringProperty<StockTransfer>(_entities[11].properties[9]);
+
+  /// See [StockTransfer.expiryDate].
+  static final expiryDate =
+      obx.QueryDateProperty<StockTransfer>(_entities[11].properties[10]);
 }
 
 /// [MedicineBatch] entity fields to define ObjectBox queries.
@@ -3619,4 +3892,39 @@ class ProcedureRecord_ {
   /// See [ProcedureRecord.synced].
   static final synced =
       obx.QueryBooleanProperty<ProcedureRecord>(_entities[15].properties[14]);
+}
+
+/// [RestockRequest] entity fields to define ObjectBox queries.
+class RestockRequest_ {
+  /// See [RestockRequest.id].
+  static final id =
+      obx.QueryIntegerProperty<RestockRequest>(_entities[16].properties[0]);
+
+  /// See [RestockRequest.medicineId].
+  static final medicineId =
+      obx.QueryIntegerProperty<RestockRequest>(_entities[16].properties[1]);
+
+  /// See [RestockRequest.medicineName].
+  static final medicineName =
+      obx.QueryStringProperty<RestockRequest>(_entities[16].properties[2]);
+
+  /// See [RestockRequest.requestedQty].
+  static final requestedQty =
+      obx.QueryIntegerProperty<RestockRequest>(_entities[16].properties[3]);
+
+  /// See [RestockRequest.status].
+  static final status =
+      obx.QueryStringProperty<RestockRequest>(_entities[16].properties[4]);
+
+  /// See [RestockRequest.requestedAt].
+  static final requestedAt =
+      obx.QueryDateProperty<RestockRequest>(_entities[16].properties[5]);
+
+  /// See [RestockRequest.fulfilledAt].
+  static final fulfilledAt =
+      obx.QueryDateProperty<RestockRequest>(_entities[16].properties[6]);
+
+  /// See [RestockRequest.notes].
+  static final notes =
+      obx.QueryStringProperty<RestockRequest>(_entities[16].properties[7]);
 }

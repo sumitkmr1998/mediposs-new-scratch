@@ -14,6 +14,9 @@ import '../../shared/services/sync_service.dart';
 import '../../shared/providers/patient_provider.dart';
 import '../../shared/providers/procedure_provider.dart';
 import '../../shared/models/procedure.dart';
+import '../../shared/providers/auth_provider.dart';
+import '../../shared/providers/opd_provider.dart';
+import '../../shared/models/appointment.dart';
 
 class PosAndroid extends StatefulWidget {
   const PosAndroid({super.key});
@@ -115,7 +118,143 @@ class _PosAndroidState extends State<PosAndroid> {
     });
   }
 
+  void _handleClinicalDispenseToggle(bool val, CartProvider cart) {
+    if (!val) {
+      cart.setClinicalDispense(false);
+      return;
+    }
+
+    final opd = context.read<OpdProvider>();
+    final activeAppts = opd.todayQueue;
+
+    if (activeAppts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No appointments found in today\'s OPD queue. Clinical Dispense requires a patient in today\'s queue.'),
+          backgroundColor: AppTheme.danger,
+        ),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: context.surfaceColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return Container(
+          padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(ctx).padding.bottom + 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 48,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: context.borderColor.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'SELECT APPOINTMENT FOR DISPENSE',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1,
+                  color: AppTheme.primaryLight,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: activeAppts.length,
+                  itemBuilder: (c, i) {
+                    final a = activeAppts[i];
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: context.surfaceColor.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: context.borderColor.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: ListTile(
+                        leading: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Center(
+                            child: Text(
+                              '#${a.tokenNumber}',
+                              style: const TextStyle(
+                                color: AppTheme.primary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          a.patientName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Doctor: Dr. ${a.doctorName} • Status: ${a.status.toUpperCase()}',
+                          style: TextStyle(
+                            color: context.textMutedColor,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        onTap: () {
+                          cart.setPatient(
+                            name: a.patientName,
+                            phone: a.patientPhone,
+                            id: a.patientId,
+                          );
+                          _patientCtrl.text = a.patientName;
+                          cart.setLinkedAppointment(a.id);
+                          cart.setClinicalDispense(true);
+                          Navigator.pop(ctx);
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _doCheckout(CartProvider cart) async {
+    if (cart.isClinicalDispense && cart.patientId == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Clinical Dispense requires a registered patient!'),
+          backgroundColor: AppTheme.danger,
+        ),
+      );
+      return;
+    }
     cart.setPatient(name: _patientCtrl.text.trim(), id: cart.patientId);
     final discount = double.tryParse(_discountCtrl.text) ?? 0;
     cart.setDiscount(discount);
@@ -178,12 +317,19 @@ class _PosAndroidState extends State<PosAndroid> {
   }
 
   void _showPatientProactiveSearch() {
+    final cart = context.read<CartProvider>();
     AndroidPatientDialogs.showSearchSheet(
       context,
+      limitToTodayOpd: cart.isClinicalDispense,
       onSelected: (p) {
-        final cart = context.read<CartProvider>();
         cart.setPatient(name: p.name, phone: p.phone, id: p.id);
         _patientCtrl.text = p.name;
+        _currentSearchFocusNode?.requestFocus();
+      },
+      onAppointmentSelected: (Appointment appt) {
+        cart.setPatient(name: appt.patientName, phone: appt.patientPhone, id: appt.patientId);
+        _patientCtrl.text = appt.patientName;
+        cart.setLinkedAppointment(appt.id);
         _currentSearchFocusNode?.requestFocus();
       },
     );
@@ -269,6 +415,7 @@ class _PosAndroidState extends State<PosAndroid> {
   Widget build(BuildContext context) {
     final inv = context.watch<InventoryProvider>();
     final cart = context.watch<CartProvider>();
+    final auth = context.watch<AuthProvider>();
 
     return Scaffold(
       appBar: AppBar(
@@ -326,6 +473,64 @@ class _PosAndroidState extends State<PosAndroid> {
             ),
             child: Column(
               children: [
+                if (cart.isReturnMode)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: AppTheme.danger.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.danger.withValues(alpha: 0.3)),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.assignment_return_rounded, color: AppTheme.danger, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'RETURN MODE ACTIVE',
+                          style: TextStyle(
+                            color: AppTheme.danger,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 12,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    width: double.infinity,
+                    child: SegmentedButton<bool>(
+                      segments: <ButtonSegment<bool>>[
+                        ButtonSegment<bool>(
+                          value: false,
+                          label: const Text('Retail'),
+                          icon: const Icon(Icons.shopping_bag_outlined, size: 16),
+                          enabled: auth.canProcessRetailSales,
+                        ),
+                        ButtonSegment<bool>(
+                          value: true,
+                          label: const Text('Dispense'),
+                          icon: const Icon(Icons.medical_services_outlined, size: 16),
+                          enabled: auth.canProcessClinicalDispenses,
+                        ),
+                      ],
+                      selected: <bool>{cart.isClinicalDispense},
+                      onSelectionChanged: (Set<bool> newSelection) {
+                        _handleClinicalDispenseToggle(newSelection.first, cart);
+                      },
+                      style: SegmentedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        selectedBackgroundColor: AppTheme.primary,
+                        selectedForegroundColor: Colors.white,
+                        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
                 // Currently Selected Patient
                 if (cart.patientName.isNotEmpty)
                   Container(
@@ -376,8 +581,9 @@ class _PosAndroidState extends State<PosAndroid> {
                   optionsBuilder: (TextEditingValue val) {
                     if (val.text.isEmpty) return const Iterable.empty();
                     final q = val.text.toLowerCase();
+                    final isClinical = cart.isClinicalDispense;
                     final meds = inv.medicines.where((m) =>
-                        m.storeStock > 0 &&
+                        (isClinical ? m.mainStock > 0 : m.storeStock > 0) &&
                         (m.name.toLowerCase().contains(q) ||
                             m.barcode.contains(val.text)));
                     final procs = context
@@ -493,13 +699,19 @@ class _PosAndroidState extends State<PosAndroid> {
                                         style: const TextStyle(
                                             color: AppTheme.primaryLight,
                                             fontWeight: FontWeight.bold)),
-                                    if (!isProc)
-                                      Text('Stock: ${(item as Medicine).storeStock}',
-                                          style: TextStyle(
-                                              fontSize: 11,
-                                              color: (item as Medicine).isLowStock
-                                                  ? AppTheme.warning
-                                                  : context.textMutedColor)),
+                                    if (!isProc) ...[
+                                      Builder(builder: (ctx) {
+                                        final isClinical = cart.isClinicalDispense;
+                                        final stock = isClinical ? (item as Medicine).mainStock : (item as Medicine).storeStock;
+                                        final isLow = isClinical ? stock <= (item as Medicine).lowStockThreshold : (item as Medicine).isLowStock;
+                                        return Text('Stock: $stock',
+                                            style: TextStyle(
+                                                fontSize: 11,
+                                                color: isLow
+                                                    ? AppTheme.warning
+                                                    : context.textMutedColor));
+                                      }),
+                                    ],
                                   ],
                                 ),
                                 onTap: () => onSelected(item),
@@ -559,7 +771,19 @@ class _PosAndroidState extends State<PosAndroid> {
                           onQtyChanged: (val) {
                             final newQty = int.tryParse(val);
                             if (newQty != null && newQty > 0) {
-                              cart.updateQty(item.id, newQty,
+                              int finalQty = newQty;
+                              final maxStock = cart.isClinicalDispense ? item.medicine!.mainStock : item.medicine!.storeStock;
+                              if (!item.isProcedure &&
+                                  !cart.isReturnMode &&
+                                  finalQty > maxStock) {
+                                finalQty = maxStock;
+                                final ctrl = _getQtyController(item.id, item.qty);
+                                ctrl.text = finalQty.toString();
+                                ctrl.selection = TextSelection.collapsed(
+                                  offset: finalQty.toString().length,
+                                );
+                              }
+                              cart.updateQty(item.id, finalQty,
                                   isProcedure: item.isProcedure);
                             }
                           },
@@ -898,6 +1122,7 @@ class _CartItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cart = context.watch<CartProvider>();
     return GestureDetector(
       onLongPress: onLongPress,
       child: Container(
@@ -952,7 +1177,7 @@ class _CartItemTile extends StatelessWidget {
                       _Tag(
                           label: item.isProcedure
                               ? 'PROCEDURE'
-                              : 'BATCH: ${item.medicine!.batches.isNotEmpty ? item.medicine!.batches.first.batchNo : "N/A"}',
+                              : 'BATCH: ${(item.medicine!.getActiveBatch(cart.isClinicalDispense) ?? (item.medicine!.batches.isNotEmpty ? item.medicine!.batches.first : null))?.batchNo ?? "N/A"}',
                           color: AppTheme.accent),
                     ],
                   ),
