@@ -324,6 +324,10 @@ class AppSettings {
   String? clinicAddress;
   String? clinicPhone;
   String? clinicRegNo;
+  bool isCompositionScheme = false;
+
+  bool showBatchExpiryInRetailPrint = true;
+  bool showBatchExpiryInClinicalPrint = true;
 
   AppSettings({
     this.id = 0,
@@ -367,6 +371,9 @@ class AppSettings {
     this.clinicAddress = '',
     this.clinicPhone = '',
     this.clinicRegNo = '',
+    this.isCompositionScheme = false,
+    this.showBatchExpiryInRetailPrint = true,
+    this.showBatchExpiryInClinicalPrint = true,
   });
 
   Map<String, dynamic> toJson() => {
@@ -411,6 +418,9 @@ class AppSettings {
         'clinicAddress': clinicAddress,
         'clinicPhone': clinicPhone,
         'clinicRegNo': clinicRegNo,
+        'isCompositionScheme': isCompositionScheme,
+        'showBatchExpiryInRetailPrint': showBatchExpiryInRetailPrint,
+        'showBatchExpiryInClinicalPrint': showBatchExpiryInClinicalPrint,
       };
 
   static AppSettings fromJson(Map<String, dynamic> json) => AppSettings(
@@ -457,5 +467,8 @@ class AppSettings {
         clinicAddress: json['clinicAddress'] ?? '',
         clinicPhone: json['clinicPhone'] ?? '',
         clinicRegNo: json['clinicRegNo'] ?? '',
+        isCompositionScheme: json['isCompositionScheme'] ?? false,
+        showBatchExpiryInRetailPrint: json['showBatchExpiryInRetailPrint'] ?? true,
+        showBatchExpiryInClinicalPrint: json['showBatchExpiryInClinicalPrint'] ?? true,
       );
 }

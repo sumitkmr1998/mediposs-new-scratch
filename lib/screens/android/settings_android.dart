@@ -50,6 +50,9 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
   String _connectionMode = 'auto';
   String _cloudflareUrl = '';
   bool _isFetchingHubStatus = false;
+  bool _isCompositionScheme = false;
+  bool _showBatchExpiryRetail = true;
+  bool _showBatchExpiryClinical = true;
 
   @override
   void initState() {
@@ -77,6 +80,9 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
     _selectedFPS = s.preferredRefreshRate;
     _connectionMode = s.connectionMode;
     _cloudflareUrl = s.cloudflareUrl;
+    _isCompositionScheme = s.isCompositionScheme;
+    _showBatchExpiryRetail = s.showBatchExpiryInRetailPrint;
+    _showBatchExpiryClinical = s.showBatchExpiryInClinicalPrint;
 
     _loadPrinters();
     _loadDisplayModes();
@@ -138,7 +144,7 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
       ..storePhone = _phoneCtrl.text
       ..gstNumber = _gstCtrl.text
       ..receiptFooterMessage = _footerCtrl.text
-      ..taxRate = double.tryParse(_taxCtrl.text) ?? 0
+      ..taxRate = _isCompositionScheme ? 0.0 : (double.tryParse(_taxCtrl.text) ?? 0)
       ..currencySymbol = _currencyCtrl.text
       ..themeMode = _selectedTheme
       ..defaultPrinterName = _selectedPrinter
@@ -151,7 +157,10 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
       ..clinicName = _clinicNameCtrl.text
       ..clinicAddress = _clinicAddressCtrl.text
       ..clinicPhone = _clinicPhoneCtrl.text
-      ..clinicRegNo = _clinicRegCtrl.text;
+      ..clinicRegNo = _clinicRegCtrl.text
+      ..isCompositionScheme = _isCompositionScheme
+      ..showBatchExpiryInRetailPrint = _showBatchExpiryRetail
+      ..showBatchExpiryInClinicalPrint = _showBatchExpiryClinical;
 
     settingsProv.save(s, syncService: context.read<SyncService>());
 
@@ -324,6 +333,26 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                     const SizedBox(width: 16),
                     Expanded(child: _field(_gstCtrl, 'GST Number (Optional)')),
                   ]),
+                  const SizedBox(height: 12),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: context.borderColor),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: SwitchListTile(
+                      title: const Text('Composition Scheme Store',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text(
+                          'If registered under GST Composition Scheme (tax locked to 0%, Bill of Supply headers, mandatory legal declarations on receipts)',
+                          style: TextStyle(
+                              color: context.textMutedColor, fontSize: 12)),
+                      value: _isCompositionScheme,
+                      activeTrackColor:
+                          AppTheme.primaryLight.withValues(alpha: 0.3),
+                      activeColor: AppTheme.primaryLight,
+                      onChanged: (val) => setState(() => _isCompositionScheme = val),
+                    ),
+                  ),
                 ],
               ),
               _buildSection(
@@ -351,8 +380,13 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                             _field(_currencyCtrl, 'Currency Symbol (e.g. ₹)')),
                     const SizedBox(width: 12),
                     Expanded(
-                        child: _field(_taxCtrl, 'Global Tax Rate (%)',
-                            keyboardType: TextInputType.number)),
+                        child: _field(
+                            _taxCtrl,
+                            _isCompositionScheme
+                                ? 'Global Tax Rate (%) (Locked by Composition)'
+                                : 'Global Tax Rate (%)',
+                            keyboardType: TextInputType.number,
+                            enabled: !_isCompositionScheme)),
                   ]),
                   const SizedBox(height: 24),
                   Text('Hardware Configuration',
@@ -452,6 +486,46 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                       onChanged: _selectedPrinter.isEmpty
                           ? null
                           : (val) => setState(() => _autoPrint = val),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: context.borderColor),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: SwitchListTile(
+                      title: const Text('Show Batch & Expiry (Retail)',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text(
+                          'Show Batch number and Expiry date on retail receipts',
+                          style: TextStyle(
+                              color: context.textMutedColor, fontSize: 12)),
+                      value: _showBatchExpiryRetail,
+                      activeTrackColor:
+                          AppTheme.primaryLight.withValues(alpha: 0.3),
+                      activeColor: AppTheme.primaryLight,
+                      onChanged: (val) => setState(() => _showBatchExpiryRetail = val),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: context.borderColor),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: SwitchListTile(
+                      title: const Text('Show Batch & Expiry (Dispense)',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text(
+                          'Show Batch number and Expiry date on clinical dispense slips',
+                          style: TextStyle(
+                              color: context.textMutedColor, fontSize: 12)),
+                      value: _showBatchExpiryClinical,
+                      activeTrackColor:
+                          AppTheme.primaryLight.withValues(alpha: 0.3),
+                      activeColor: AppTheme.primaryLight,
+                      onChanged: (val) => setState(() => _showBatchExpiryClinical = val),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -948,10 +1022,11 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
   }
 
   Widget _field(TextEditingController ctrl, String label,
-      {TextInputType? keyboardType}) {
+      {TextInputType? keyboardType, bool? enabled}) {
     return TextField(
       controller: ctrl,
       keyboardType: keyboardType,
+      enabled: enabled,
       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
       decoration: InputDecoration(
         labelText: label,

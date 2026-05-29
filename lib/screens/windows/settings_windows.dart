@@ -66,6 +66,9 @@ class _SettingsWindowsState extends State<SettingsWindows> {
   String _autoBackupLogic = 'At Startup';
   String? _hubIp;
   bool _isWindowsClient = false;
+  bool _isCompositionScheme = false;
+  bool _showBatchExpiryRetail = true;
+  bool _showBatchExpiryClinical = true;
 
   @override
   void initState() {
@@ -100,6 +103,9 @@ class _SettingsWindowsState extends State<SettingsWindows> {
         ? s.autoBackupLogic 
         : 'At Startup';
     _isWindowsClient = s.isWindowsClient;
+    _isCompositionScheme = s.isCompositionScheme;
+    _showBatchExpiryRetail = s.showBatchExpiryInRetailPrint;
+    _showBatchExpiryClinical = s.showBatchExpiryInClinicalPrint;
 
     _loadPrinters();
   }
@@ -132,7 +138,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       ..storePhone = _phoneCtrl.text
       ..gstNumber = _gstCtrl.text
       ..receiptFooterMessage = _footerCtrl.text
-      ..taxRate = double.tryParse(_taxCtrl.text) ?? 0
+      ..taxRate = _isCompositionScheme ? 0.0 : (double.tryParse(_taxCtrl.text) ?? 0)
       ..currencySymbol = _currencyCtrl.text
       ..themeMode = _selectedTheme
       ..defaultPrinterName = _selectedPrinter
@@ -148,7 +154,10 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       ..clinicName = _clinicNameCtrl.text
       ..clinicAddress = _clinicAddressCtrl.text
       ..clinicPhone = _clinicPhoneCtrl.text
-      ..clinicRegNo = _clinicRegCtrl.text;
+      ..clinicRegNo = _clinicRegCtrl.text
+      ..isCompositionScheme = _isCompositionScheme
+      ..showBatchExpiryInRetailPrint = _showBatchExpiryRetail
+      ..showBatchExpiryInClinicalPrint = _showBatchExpiryClinical;
 
     final wasClient = settingsProv.settings.isWindowsClient;
     settingsProv.save(s);
@@ -431,6 +440,21 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                 Expanded(child: SettingsField(controller: _gstCtrl, label: 'GST Number', icon: LucideIcons.fileText)),
               ],
             ),
+            const SizedBox(height: 16),
+            SettingsSwitch(
+              title: 'GST Composition Scheme',
+              subtitle: 'Enable if the store is registered under the GST Composition Scheme (tax is not collected from customers).',
+              value: _isCompositionScheme,
+              icon: LucideIcons.percent,
+              onChanged: (val) {
+                setState(() {
+                  _isCompositionScheme = val;
+                  if (val) {
+                    _taxCtrl.text = '0.0';
+                  }
+                });
+              },
+            ),
           ],
         ),
         const SizedBox(height: 32),
@@ -656,7 +680,15 @@ class _SettingsWindowsState extends State<SettingsWindows> {
               children: [
                 Expanded(child: SettingsField(controller: _currencyCtrl, label: 'Currency Symbol', icon: LucideIcons.banknote)),
                 const SizedBox(width: 16),
-                Expanded(child: SettingsField(controller: _taxCtrl, label: 'Tax Rate (%)', icon: LucideIcons.percent, keyboardType: TextInputType.number)),
+                Expanded(
+                  child: SettingsField(
+                    controller: _taxCtrl, 
+                    label: _isCompositionScheme ? 'Tax Rate (%) (Locked by Composition)' : 'Tax Rate (%)', 
+                    icon: LucideIcons.percent, 
+                    keyboardType: TextInputType.number,
+                    enabled: !_isCompositionScheme,
+                  ),
+                ),
               ],
             ),
           ],
@@ -695,6 +727,22 @@ class _SettingsWindowsState extends State<SettingsWindows> {
               value: _autoPrint,
               icon: LucideIcons.zap,
               onChanged: (val) => setState(() => _autoPrint = val),
+            ),
+            const Divider(),
+            SettingsSwitch(
+              title: 'Show Batch & Expiry (Retail)',
+              subtitle: 'Show Batch number and Expiry date on retail receipts',
+              value: _showBatchExpiryRetail,
+              icon: LucideIcons.calendar,
+              onChanged: (val) => setState(() => _showBatchExpiryRetail = val),
+            ),
+            const Divider(),
+            SettingsSwitch(
+              title: 'Show Batch & Expiry (Dispense)',
+              subtitle: 'Show Batch number and Expiry date on clinical dispense slips',
+              value: _showBatchExpiryClinical,
+              icon: LucideIcons.calendar,
+              onChanged: (val) => setState(() => _showBatchExpiryClinical = val),
             ),
             const SizedBox(height: 12),
             SizedBox(
@@ -1049,33 +1097,267 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       if (excel.tables.isEmpty) return;
       var table = excel.tables[excel.tables.keys.first]!;
       
+      if (!context.mounted) return;
       final inv = context.read<InventoryProvider>();
       int added = 0; int updated = 0;
-      
-      for (int i = 1; i < table.maxRows; i++) {
+
+      bool isTally = false;
+      // Scan rows to find "Particulars" to auto-detect Tally exports
+      for (int i = 0; i < table.maxRows; i++) {
         final row = table.row(i);
-        final name = row[1]?.value?.toString() ?? '';
-        if (name.isEmpty) continue;
-        
-        final existing = inv.medicines.where((m) => m.name.toLowerCase() == name.toLowerCase()).firstOrNull;
-        if (existing != null) {
-          inv.updateMedicine(Medicine(
-            id: existing.id, 
-            name: name, 
-            purchasePrice: existing.purchasePrice,
-            sellingPrice: existing.sellingPrice,
-            category: 'Imported', 
-            synced: false
-          ));
-          updated++;
+        for (int j = 0; j < row.length; j++) {
+          final cellValue = row[j]?.value?.toString().trim().toLowerCase() ?? '';
+          if (cellValue == 'particulars') {
+            isTally = true;
+            break;
+          }
+        }
+        if (isTally) break;
+      }
+
+      if (isTally) {
+        for (int i = 0; i < table.maxRows; i++) {
+          final row = table.row(i);
+          if (row.isEmpty) continue;
+          final sNoStr = row[0]?.value?.toString().trim() ?? '';
+          final isSerial = int.tryParse(sNoStr) != null;
+          final nameCell = row[1]?.value?.toString().trim() ?? '';
+
+          if (isSerial && nameCell.isNotEmpty) {
+            final barcode = '';
+            final category = 'General';
+            final unit = 'Pcs';
+
+            final double qtyVal = row.length > 3
+                ? (double.tryParse(row[3]?.value?.toString().trim() ?? '') ?? 0.0)
+                : 0.0;
+            final double rateVal = row.length > 4
+                ? (double.tryParse(row[4]?.value?.toString().trim() ?? '') ?? 0.0)
+                : 0.0;
+
+            final mainStock = qtyVal.round();
+            final storeStock = 0;
+            final purchasePrice = rateVal;
+            final sellingPrice = rateVal;
+
+            final existing = inv.medicines
+                .where((m) => m.name.toLowerCase() == nameCell.toLowerCase())
+                .firstOrNull;
+
+            if (existing != null) {
+              existing
+                ..category = category
+                ..unit = unit
+                ..purchasePrice = purchasePrice > 0 ? purchasePrice : existing.purchasePrice
+                ..sellingPrice = sellingPrice > 0 ? sellingPrice : existing.sellingPrice;
+
+              inv.updateMedicine(existing);
+
+              if (mainStock > 0) {
+                inv.addBatchStock(
+                  {existing.id: mainStock},
+                  storeUpdates: {existing.id: storeStock},
+                  batchNo: 'IMPORT-${DateTime.now().millisecondsSinceEpoch}',
+                  expiryDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                  note: 'Imported from Excel (Tally)',
+                );
+              }
+              updated++;
+            } else {
+              final newMed = Medicine(
+                name: nameCell,
+                barcode: barcode,
+                category: category,
+                unit: unit,
+                purchasePrice: purchasePrice,
+                sellingPrice: sellingPrice,
+                mainStock: 0,
+                storeStock: 0,
+                lowStockThreshold: 10,
+              );
+              inv.addMedicine(newMed);
+
+              if (mainStock > 0) {
+                inv.addBatchStock(
+                  {newMed.id: mainStock},
+                  storeUpdates: {newMed.id: storeStock},
+                  batchNo: 'IMPORT-${DateTime.now().millisecondsSinceEpoch}',
+                  expiryDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                  note: 'Imported from Excel (Tally)',
+                );
+              }
+              added++;
+            }
+          }
+        }
+      } else {
+        int headerRowIndex = -1;
+        Map<String, int> colMap = {};
+
+        // 1. Find the header row
+        for (int i = 0; i < table.maxRows; i++) {
+          final row = table.row(i);
+          for (int j = 0; j < row.length; j++) {
+            final cellValue =
+                row[j]?.value?.toString().trim().toLowerCase() ?? '';
+            if (cellValue == 'medicine name' ||
+                cellValue == 'item name' ||
+                cellValue == 'product name' ||
+                cellValue == 'itemname') {
+              headerRowIndex = i;
+              break;
+            }
+          }
+          if (headerRowIndex != -1) break;
+        }
+
+        if (headerRowIndex == -1) {
+          // If no custom header matches, default to standard column indices as fallback
+          for (int i = 1; i < table.maxRows; i++) {
+            final row = table.row(i);
+            final name = row[1]?.value?.toString() ?? '';
+            if (name.isEmpty) continue;
+            
+            final existing = inv.medicines.where((m) => m.name.toLowerCase() == name.toLowerCase()).firstOrNull;
+            if (existing != null) {
+              inv.updateMedicine(Medicine(
+                id: existing.id, 
+                name: name, 
+                purchasePrice: existing.purchasePrice,
+                sellingPrice: existing.sellingPrice,
+                category: 'Imported', 
+                synced: false
+              ));
+              updated++;
+            } else {
+              inv.addMedicine(Medicine(
+                name: name, 
+                purchasePrice: 0.0,
+                sellingPrice: 0.0,
+                category: 'Imported'
+              ));
+              added++;
+            }
+          }
         } else {
-          inv.addMedicine(Medicine(
-            name: name, 
-            purchasePrice: 0.0,
-            sellingPrice: 0.0,
-            category: 'Imported'
-          ));
-          added++;
+          // Map columns
+          final headerRow = table.row(headerRowIndex);
+          for (int j = 0; j < headerRow.length; j++) {
+            final title =
+                headerRow[j]?.value?.toString().trim().toLowerCase() ?? '';
+            if (title.isNotEmpty) {
+              colMap[title] = j;
+            }
+          }
+
+          // Helper to get index matching a list of possible names
+          int getColIdx(List<String> possibleNames) {
+            for (final name in possibleNames) {
+              if (colMap.containsKey(name)) return colMap[name]!;
+            }
+            return -1;
+          }
+
+          final nameIdx = getColIdx(['medicine name', 'item name', 'product name']);
+          final barcodeIdx = getColIdx(['barcode']);
+          final categoryIdx = getColIdx(['category']);
+          final unitIdx = getColIdx(['unit']);
+          final purchasePriceIdx = getColIdx(['purchase price', 'cost']);
+          final sellingPriceIdx =
+              getColIdx(['selling price', 'selling rate', 'rate', 'price']);
+          final mainStockIdx = getColIdx(['main hub stock', 'main stock']);
+          final storeStockIdx =
+              getColIdx(['store front stock', 'store stock', 'quantity', 'qty']);
+          final lowStockIdx = getColIdx(['low stock threshold', 'threshold']);
+
+          // Process rows
+          for (int i = headerRowIndex + 1; i < table.maxRows; i++) {
+            final row = table.row(i);
+
+            String getCellStr(int idx, String def) =>
+                (idx != -1 && idx < row.length)
+                    ? (row[idx]?.value?.toString().trim() ?? def)
+                    : def;
+            double getCellDbl(int idx, double def) => (idx != -1 &&
+                    idx < row.length)
+                ? (double.tryParse(row[idx]?.value?.toString().trim() ?? '') ?? def)
+                : def;
+            int getCellInt(int idx, int def) => (idx != -1 && idx < row.length)
+                ? (int.tryParse(row[idx]?.value?.toString().trim() ?? '') ?? def)
+                : def;
+
+            final nameCell = getCellStr(nameIdx, '');
+            if (nameCell.isEmpty) continue; // Skip empty rows
+
+            final barcode = getCellStr(barcodeIdx, '');
+            final category = getCellStr(categoryIdx, 'General');
+            final unit = getCellStr(unitIdx, 'Pcs');
+
+            final purchasePrice = getCellDbl(purchasePriceIdx, 0.0);
+            final sellingPrice = getCellDbl(sellingPriceIdx, 0.0);
+
+            final mainStock = getCellInt(mainStockIdx, 0);
+            final storeStock = getCellInt(storeStockIdx, 0);
+            final lowStock = getCellInt(lowStockIdx, 10);
+
+            // Check if medicine exists
+            final existing = inv.medicines
+                .where((m) => m.name.toLowerCase() == nameCell.toLowerCase())
+                .firstOrNull;
+
+            if (existing != null) {
+              // Update existing metadata
+              existing
+                ..barcode = barcode.isNotEmpty ? barcode : existing.barcode
+                ..category = category
+                ..unit = unit
+                ..purchasePrice =
+                    purchasePrice > 0 ? purchasePrice : existing.purchasePrice
+                ..sellingPrice =
+                    sellingPrice > 0 ? sellingPrice : existing.sellingPrice
+                ..lowStockThreshold = lowStock;
+
+              inv.updateMedicine(existing);
+
+              // If stock is provided in Excel, add it as a new batch to avoid total drift
+              if (mainStock > 0 || storeStock > 0) {
+                inv.addBatchStock(
+                  {existing.id: mainStock},
+                  storeUpdates: {existing.id: storeStock},
+                  batchNo: 'IMPORT-${DateTime.now().millisecondsSinceEpoch}',
+                  expiryDate: DateTime.now()
+                      .add(const Duration(days: 365 * 2)), // 2 year default
+                  note: 'Imported from Excel',
+                );
+              }
+              updated++;
+            } else {
+              // Add new
+              final newMed = Medicine(
+                name: nameCell,
+                barcode: barcode,
+                category: category,
+                unit: unit,
+                purchasePrice: purchasePrice,
+                sellingPrice: sellingPrice,
+                mainStock: 0, // Will be updated by batch
+                storeStock: 0,
+                lowStockThreshold: lowStock,
+              );
+              inv.addMedicine(newMed);
+
+              if (mainStock > 0 || storeStock > 0) {
+                inv.addBatchStock(
+                  {newMed.id: mainStock},
+                  storeUpdates: {newMed.id: storeStock},
+                  batchNo: 'IMPORT-${DateTime.now().millisecondsSinceEpoch}',
+                  expiryDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                  note: 'Imported from Excel',
+                );
+              }
+              added++;
+            }
+          }
         }
       }
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Import: $added Added, $updated Updated'), backgroundColor: AppTheme.success));

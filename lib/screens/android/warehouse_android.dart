@@ -62,7 +62,7 @@ class _WarehouseAndroidState extends State<WarehouseAndroid>
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
-            title: const Text('Warehouse Logistics'),
+            title: const Text('Stock Control'),
             pinned: true,
             floating: true,
             forceElevated: innerBoxIsScrolled,
@@ -288,13 +288,13 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
               children: [
                 Expanded(
                     child: _StockIndicator(
-                        label: 'MAIN HUB',
+                        label: 'CLINIC STOCK',
                         value: widget.medicine.mainStock,
                         color: AppTheme.indigo)),
                 const SizedBox(width: 12),
                 Expanded(
                     child: _StockIndicator(
-                        label: 'STORE FRONT',
+                        label: 'STORE STOCK',
                         value: widget.medicine.storeStock,
                         color: AppTheme.success,
                         isLow: widget.medicine.isLowStock)),
@@ -321,8 +321,8 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
                         const SizedBox(width: 8),
                         Expanded(
                             child: _ActionButton(
-                          label: 'BACK TO HUB',
-                          icon: Icons.hub_rounded,
+                          label: 'RETURN TO CLINIC',
+                          icon: Icons.medical_services_rounded,
                           color: AppTheme.indigo,
                           onPressed: () => _showTransferDialog(context,
                               widget.medicine, 'store', 'main', widget.wh),
@@ -551,7 +551,7 @@ class _TransferDialogState extends State<_TransferDialog> {
                 color: accentColor.withValues(alpha: 0.1),
                 shape: BoxShape.circle),
             child: Icon(
-                toStore ? Icons.local_shipping_rounded : Icons.hub_rounded,
+                toStore ? Icons.local_shipping_rounded : Icons.medical_services_rounded,
                 color: accentColor,
                 size: 28),
           ),
@@ -578,11 +578,11 @@ class _TransferDialogState extends State<_TransferDialog> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  _LocLabel(label: widget.from == 'main' ? 'HUB' : 'STORE'),
+                  _LocLabel(label: widget.from == 'main' ? 'CLINIC' : 'STORE'),
                   Icon(Icons.arrow_forward_rounded,
                       size: 18, color: context.textMutedColor),
                   _LocLabel(
-                      label: widget.to == 'main' ? 'HUB' : 'STORE',
+                      label: widget.to == 'main' ? 'CLINIC' : 'STORE',
                       activeColor: accentColor),
                 ],
               ),

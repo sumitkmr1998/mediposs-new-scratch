@@ -167,6 +167,7 @@ class SettingsField extends StatelessWidget {
   final String? hint;
   final IconData? icon;
   final TextInputType? keyboardType;
+  final bool? enabled;
 
   const SettingsField({
     super.key,
@@ -175,6 +176,7 @@ class SettingsField extends StatelessWidget {
     this.hint,
     this.icon,
     this.keyboardType,
+    this.enabled,
   });
 
   @override
@@ -185,6 +187,7 @@ class SettingsField extends StatelessWidget {
         controller: controller,
         style: const TextStyle(fontSize: 14),
         keyboardType: keyboardType,
+        enabled: enabled,
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,

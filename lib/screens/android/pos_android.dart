@@ -130,7 +130,7 @@ class _PosAndroidState extends State<PosAndroid> {
     if (activeAppts.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No appointments found in today\'s OPD queue. Clinical Dispense requires a patient in today\'s queue.'),
+          content: Text('No appointments found in today\'s OPD queue. Clinic Dispense requires a patient in today\'s queue.'),
           backgroundColor: AppTheme.danger,
         ),
       );
@@ -164,7 +164,7 @@ class _PosAndroidState extends State<PosAndroid> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'SELECT APPOINTMENT FOR DISPENSE',
+                'SELECT APPOINTMENT FOR CLINIC DISPENSE',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w900,
@@ -249,7 +249,7 @@ class _PosAndroidState extends State<PosAndroid> {
     if (cart.isClinicalDispense && cart.patientId == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Clinical Dispense requires a registered patient!'),
+          content: Text('Clinic Dispense requires a registered patient!'),
           backgroundColor: AppTheme.danger,
         ),
       );
@@ -508,13 +508,13 @@ class _PosAndroidState extends State<PosAndroid> {
                       segments: <ButtonSegment<bool>>[
                         ButtonSegment<bool>(
                           value: false,
-                          label: const Text('Retail'),
+                          label: const Text('Store Sale'),
                           icon: const Icon(Icons.shopping_bag_outlined, size: 16),
                           enabled: auth.canProcessRetailSales,
                         ),
                         ButtonSegment<bool>(
                           value: true,
-                          label: const Text('Dispense'),
+                          label: const Text('Clinic Dispense'),
                           icon: const Icon(Icons.medical_services_outlined, size: 16),
                           enabled: auth.canProcessClinicalDispenses,
                         ),

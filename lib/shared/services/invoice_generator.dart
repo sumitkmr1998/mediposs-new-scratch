@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../models/invoice.dart';
+import '../services/objectbox_service.dart';
 
 class InvoiceGenerator {
   static Future<Uint8List> generate(Invoice invoice, PdfPageFormat format) async {
@@ -16,8 +17,10 @@ class InvoiceGenerator {
         margin: pw.EdgeInsets.all(m),
         build: (pw.Context context) => [
           _buildHeader(invoice, isSmall),
-          pw.SizedBox(height: isSmall ? 10 : 20),
-          _buildPatientInfo(invoice, isSmall),
+          if (invoice.isClinicalDispense) ...[
+            pw.SizedBox(height: isSmall ? 10 : 20),
+            _buildPatientInfo(invoice, isSmall),
+          ],
           pw.SizedBox(height: isSmall ? 10 : 20),
           _buildInvoiceTable(invoice, isSmall),
           pw.SizedBox(height: isSmall ? 15 : 30),
@@ -32,6 +35,9 @@ class InvoiceGenerator {
   }
 
   static pw.Widget _buildHeader(Invoice invoice, bool isSmall) {
+    final settings = ObjectBoxService.instance.settings;
+    final showCompositionHeader = settings.isCompositionScheme && !invoice.isClinicalDispense;
+
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
@@ -66,7 +72,9 @@ class InvoiceGenerator {
               crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
                 pw.Text(
-                  invoice.isClinicalDispense ? 'CLINICAL DISPENSE' : 'INVOICE',
+                  invoice.isClinicalDispense 
+                      ? 'CLINICAL DISPENSE' 
+                      : (settings.isCompositionScheme ? 'BILL OF SUPPLY' : 'INVOICE'),
                   style: pw.TextStyle(
                     fontSize: isSmall 
                         ? (invoice.isClinicalDispense ? 12 : 18) 
@@ -81,6 +89,16 @@ class InvoiceGenerator {
             ),
           ],
         ),
+        if (showCompositionHeader) ...[
+          pw.SizedBox(height: 4),
+          pw.Align(
+            alignment: pw.Alignment.centerRight,
+            child: pw.Text(
+              'Composition taxable person, not eligible to collect tax on supplies',
+              style: pw.TextStyle(fontSize: isSmall ? 7 : 9, fontStyle: pw.FontStyle.italic, fontWeight: pw.FontWeight.bold, color: PdfColors.red800),
+            ),
+          ),
+        ],
         pw.SizedBox(height: isSmall ? 6 : 10),
         pw.Divider(thickness: 2, color: PdfColors.blue900),
       ],
@@ -141,8 +159,13 @@ class InvoiceGenerator {
   static pw.Widget _buildInvoiceTable(Invoice invoice, bool isSmall) {
     final headers = ['Description', 'Qty', 'Rate', 'Amount'];
 
+    final settings = ObjectBoxService.instance.settings;
+    final showBatchExpiry = invoice.isClinicalDispense
+        ? settings.showBatchExpiryInClinicalPrint
+        : settings.showBatchExpiryInRetailPrint;
+
     final data = invoice.items.map((item) {
-      final desc = item.batchNo.isNotEmpty
+      final desc = (item.batchNo.isNotEmpty && showBatchExpiry)
           ? '${item.name}\nBatch: ${item.batchNo} | Exp: ${item.expiryDate}'
           : item.name;
       return [

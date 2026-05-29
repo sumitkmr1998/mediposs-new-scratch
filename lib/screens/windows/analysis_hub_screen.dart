@@ -120,6 +120,9 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
 
     final marginPercent = netRevenue > 0 ? (netProfit / netRevenue) * 100 : 0.0;
 
+    final settings = ObjectBoxService.instance.settings;
+    final double estimatedCompositionTax = settings.isCompositionScheme ? (netRevenue * 0.01) : 0.0;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -166,6 +169,12 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
               Expanded(
                 child: _buildMetricCard('Returns Logged', '₹${totalReturns.toStringAsFixed(2)}', Icons.keyboard_return_rounded, AppTheme.danger),
               ),
+              if (settings.isCompositionScheme) ...[
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildMetricCard('Est. Composition Tax (1%)', '₹${estimatedCompositionTax.toStringAsFixed(2)}', Icons.account_balance_wallet_rounded, AppTheme.warning),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 32),

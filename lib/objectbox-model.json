@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:637942838794498612",
-      "lastPropertyId": "41:7124474164210204209",
+      "lastPropertyId": "44:6766150465846614819",
       "name": "AppSettings",
       "properties": [
         {
@@ -213,6 +213,21 @@
           "id": "41:7124474164210204209",
           "name": "clinicRegNo",
           "type": 9
+        },
+        {
+          "id": "42:7714092629028709271",
+          "name": "isCompositionScheme",
+          "type": 1
+        },
+        {
+          "id": "43:14377928725043312",
+          "name": "showBatchExpiryInRetailPrint",
+          "type": 1
+        },
+        {
+          "id": "44:6766150465846614819",
+          "name": "showBatchExpiryInClinicalPrint",
+          "type": 1
         }
       ],
       "relations": []

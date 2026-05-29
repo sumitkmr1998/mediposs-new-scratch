@@ -259,13 +259,13 @@ class _PosWindowsState extends State<PosWindows> {
                     segments: <ButtonSegment<bool>>[
                       ButtonSegment<bool>(
                         value: false,
-                        label: const Text('Retail Sale (GST)'),
+                        label: const Text('Store Sale (GST)'),
                         icon: const Icon(Icons.shopping_bag_outlined),
                         enabled: auth.canProcessRetailSales,
                       ),
                       ButtonSegment<bool>(
                         value: true,
-                        label: const Text('Clinical Dispense (No Tax)'),
+                        label: const Text('Clinic Dispense (No Tax)'),
                         icon: const Icon(Icons.medical_services_outlined),
                         enabled: auth.canProcessClinicalDispenses,
                       ),

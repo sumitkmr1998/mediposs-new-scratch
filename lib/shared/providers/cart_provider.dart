@@ -127,7 +127,9 @@ class CartProvider extends ChangeNotifier {
 
   double get subtotal => _items.fold(0.0, (sum, item) => sum + item.lineTotal);
 
-  double get taxRate => _isClinicalDispense ? 0.0 : ObjectBoxService.instance.settings.taxRate / 100.0;
+  double get taxRate => (_isClinicalDispense || ObjectBoxService.instance.settings.isCompositionScheme)
+      ? 0.0
+      : ObjectBoxService.instance.settings.taxRate / 100.0;
 
   double get taxAmount =>
       (subtotal - _discountAmount).clamp(0, double.infinity) * taxRate;
@@ -426,7 +428,7 @@ class CartProvider extends ChangeNotifier {
       patientPhone: _patientPhone,
       subtotal: _isReturnMode ? -subtotal : subtotal,
       discount: _isReturnMode ? -_discountAmount : _discountAmount,
-      taxRate: _isClinicalDispense ? 0.0 : settings.taxRate,
+      taxRate: (_isClinicalDispense || settings.isCompositionScheme) ? 0.0 : settings.taxRate,
       taxAmount: _isReturnMode ? -taxAmount : taxAmount,
       total: _isReturnMode ? -totalRounded : totalRounded,
       paymentMethod: _paymentMethod,

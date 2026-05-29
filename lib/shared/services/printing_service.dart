@@ -108,10 +108,20 @@ class PrintingService {
               pw.Text(
                 sale.isClinicalDispense
                     ? 'CLINICAL DISPENSE SLIP'
-                    : (sale.isReturn ? 'RETURN RECEIPT' : 'CASH RECEIPT'),
+                    : (settings.isCompositionScheme
+                        ? (sale.isReturn ? 'BILL OF SUPPLY (RETURN)' : 'BILL OF SUPPLY')
+                        : (sale.isReturn ? 'RETURN RECEIPT' : 'CASH RECEIPT')),
                 style:
                     pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13),
               ),
+              if (settings.isCompositionScheme && !sale.isClinicalDispense) ...[
+                pw.SizedBox(height: 2),
+                pw.Text(
+                  'Composition taxable person, not eligible to collect tax on supplies',
+                  style: pw.TextStyle(fontSize: 7, fontStyle: pw.FontStyle.italic, fontWeight: pw.FontWeight.bold),
+                  textAlign: pw.TextAlign.center,
+                ),
+              ],
               pw.Divider(borderStyle: pw.BorderStyle.dashed),
 
               // Meta
@@ -191,7 +201,11 @@ class PrintingService {
                                         ? '[P] ${item.medicineName}'
                                         : item.medicineName,
                                     style: const pw.TextStyle(fontSize: 10)),
-                                if (!item.isProcedure && item.batchNo.isNotEmpty)
+                                if (!item.isProcedure &&
+                                    item.batchNo.isNotEmpty &&
+                                    (sale.isClinicalDispense
+                                        ? settings.showBatchExpiryInClinicalPrint
+                                        : settings.showBatchExpiryInRetailPrint))
                                   pw.Padding(
                                     padding: const pw.EdgeInsets.only(top: 1),
                                     child: pw.Text(

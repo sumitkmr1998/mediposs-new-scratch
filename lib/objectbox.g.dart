@@ -35,7 +35,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(1, 637942838794498612),
       name: 'AppSettings',
-      lastPropertyId: const obx_int.IdUid(41, 7124474164210204209),
+      lastPropertyId: const obx_int.IdUid(44, 6766150465846614819),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -242,6 +242,21 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(41, 7124474164210204209),
             name: 'clinicRegNo',
             type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(42, 7714092629028709271),
+            name: 'isCompositionScheme',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(43, 14377928725043312),
+            name: 'showBatchExpiryInRetailPrint',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(44, 6766150465846614819),
+            name: 'showBatchExpiryInClinicalPrint',
+            type: 1,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
@@ -1496,7 +1511,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final clinicRegNoOffset = object.clinicRegNo == null
               ? null
               : fbb.writeString(object.clinicRegNo!);
-          fbb.startTable(42);
+          fbb.startTable(45);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, storeNameOffset);
           fbb.addOffset(2, storeAddressOffset);
@@ -1538,6 +1553,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addOffset(38, clinicAddressOffset);
           fbb.addOffset(39, clinicPhoneOffset);
           fbb.addOffset(40, clinicRegNoOffset);
+          fbb.addBool(41, object.isCompositionScheme);
+          fbb.addBool(42, object.showBatchExpiryInRetailPrint);
+          fbb.addBool(43, object.showBatchExpiryInClinicalPrint);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -1644,6 +1662,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final clinicRegNoParam =
               const fb.StringReader(asciiOptimization: true)
                   .vTableGetNullable(buffer, rootOffset, 84);
+          final isCompositionSchemeParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 86, false);
+          final showBatchExpiryInRetailPrintParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 88, false);
+          final showBatchExpiryInClinicalPrintParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 90, false);
           final object = AppSettings(
               id: idParam,
               storeName: storeNameParam,
@@ -1685,7 +1709,11 @@ obx_int.ModelDefinition getObjectBoxModel() {
               clinicName: clinicNameParam,
               clinicAddress: clinicAddressParam,
               clinicPhone: clinicPhoneParam,
-              clinicRegNo: clinicRegNoParam);
+              clinicRegNo: clinicRegNoParam,
+              isCompositionScheme: isCompositionSchemeParam,
+              showBatchExpiryInRetailPrint: showBatchExpiryInRetailPrintParam,
+              showBatchExpiryInClinicalPrint:
+                  showBatchExpiryInClinicalPrintParam);
 
           return object;
         }),
@@ -3084,6 +3112,18 @@ class AppSettings_ {
   /// See [AppSettings.clinicRegNo].
   static final clinicRegNo =
       obx.QueryStringProperty<AppSettings>(_entities[0].properties[40]);
+
+  /// See [AppSettings.isCompositionScheme].
+  static final isCompositionScheme =
+      obx.QueryBooleanProperty<AppSettings>(_entities[0].properties[41]);
+
+  /// See [AppSettings.showBatchExpiryInRetailPrint].
+  static final showBatchExpiryInRetailPrint =
+      obx.QueryBooleanProperty<AppSettings>(_entities[0].properties[42]);
+
+  /// See [AppSettings.showBatchExpiryInClinicalPrint].
+  static final showBatchExpiryInClinicalPrint =
+      obx.QueryBooleanProperty<AppSettings>(_entities[0].properties[43]);
 }
 
 /// [AppUser] entity fields to define ObjectBox queries.

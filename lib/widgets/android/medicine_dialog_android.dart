@@ -391,7 +391,7 @@ class _BatchItem extends StatelessWidget {
             children: [
               Text('${batch.mainStock + batch.storeStock} PCS', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
               const SizedBox(height: 2),
-              Text('HUB:${batch.mainStock} | POS:${batch.storeStock}', style: TextStyle(fontSize: 10, color: context.textMutedColor, fontWeight: FontWeight.w700)),
+              Text('CLINIC:${batch.mainStock} | STORE:${batch.storeStock}', style: TextStyle(fontSize: 10, color: context.textMutedColor, fontWeight: FontWeight.w700)),
             ],
           ),
           const SizedBox(width: 8),
@@ -488,9 +488,9 @@ class _BatchDialogState extends State<_BatchDialog> {
             const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(child: _field(_hubCtrl, 'HUB QTY', keyboardType: TextInputType.number)),
+                Expanded(child: _field(_hubCtrl, 'CLINIC QTY', keyboardType: TextInputType.number)),
                 const SizedBox(width: 12),
-                Expanded(child: _field(_posCtrl, 'POS QTY', keyboardType: TextInputType.number)),
+                Expanded(child: _field(_posCtrl, 'STORE QTY', keyboardType: TextInputType.number)),
               ],
             ),
           ],

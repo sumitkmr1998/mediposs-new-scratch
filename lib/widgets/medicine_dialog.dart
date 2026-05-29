@@ -98,7 +98,7 @@ class _MedicineDialogState extends State<MedicineDialog> {
                 const SizedBox(height: 12),
                 Row(children: [
                   Expanded(
-                      child: _field(_mainStockCtrl, widget.medicine != null ? 'Main Hub Stock' : 'Add to Main Hub',
+                      child: _field(_mainStockCtrl, widget.medicine != null ? 'Clinic Stock' : 'Add to Clinic',
                           keyboardType: TextInputType.number,
                           readOnly: widget.medicine != null)),
                   const SizedBox(width: 12),

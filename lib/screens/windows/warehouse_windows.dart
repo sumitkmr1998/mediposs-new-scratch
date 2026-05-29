@@ -65,149 +65,241 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
 
       int added = 0;
       int updated = 0;
+      if (!context.mounted) return;
       final inv = context.read<InventoryProvider>();
 
-      int headerRowIndex = -1;
-      Map<String, int> colMap = {};
-
-      // 1. Find the header row
+      bool isTally = false;
+      // Scan rows to find "Particulars" to auto-detect Tally exports
       for (int i = 0; i < table.maxRows; i++) {
         final row = table.row(i);
         for (int j = 0; j < row.length; j++) {
-          final cellValue =
-              row[j]?.value?.toString().trim().toLowerCase() ?? '';
-          if (cellValue == 'medicine name' ||
-              cellValue == 'item name' ||
-              cellValue == 'product name' ||
-              cellValue == 'itemname') {
-            headerRowIndex = i;
+          final cellValue = row[j]?.value?.toString().trim().toLowerCase() ?? '';
+          if (cellValue == 'particulars') {
+            isTally = true;
             break;
           }
         }
-        if (headerRowIndex != -1) break;
+        if (isTally) break;
       }
 
-      if (headerRowIndex == -1) {
-        throw Exception(
-            "Could not find a header row containing 'Medicine Name'.");
-      }
+      if (isTally) {
+        for (int i = 0; i < table.maxRows; i++) {
+          final row = table.row(i);
+          if (row.isEmpty) continue;
+          final sNoStr = row[0]?.value?.toString().trim() ?? '';
+          final isSerial = int.tryParse(sNoStr) != null;
+          final nameCell = row[1]?.value?.toString().trim() ?? '';
 
-      // 2. Map columns
-      final headerRow = table.row(headerRowIndex);
-      for (int j = 0; j < headerRow.length; j++) {
-        final title =
-            headerRow[j]?.value?.toString().trim().toLowerCase() ?? '';
-        if (title.isNotEmpty) {
-          colMap[title] = j;
-        }
-      }
+          if (isSerial && nameCell.isNotEmpty) {
+            final barcode = '';
+            final category = 'General';
+            final unit = 'Pcs';
 
-      // Helper to get index matching a list of possible names
-      int getColIdx(List<String> possibleNames) {
-        for (final name in possibleNames) {
-          if (colMap.containsKey(name)) return colMap[name]!;
-        }
-        return -1;
-      }
+            final double qtyVal = row.length > 3
+                ? (double.tryParse(row[3]?.value?.toString().trim() ?? '') ?? 0.0)
+                : 0.0;
+            final double rateVal = row.length > 4
+                ? (double.tryParse(row[4]?.value?.toString().trim() ?? '') ?? 0.0)
+                : 0.0;
 
-      final nameIdx = getColIdx(['medicine name', 'item name', 'product name']);
-      final barcodeIdx = getColIdx(['barcode']);
-      final categoryIdx = getColIdx(['category']);
-      final unitIdx = getColIdx(['unit']);
-      final purchasePriceIdx = getColIdx(['purchase price', 'cost']);
-      final sellingPriceIdx =
-          getColIdx(['selling price', 'selling rate', 'rate', 'price']);
-      final mainStockIdx = getColIdx(['main hub stock', 'main stock']);
-      final storeStockIdx =
-          getColIdx(['store front stock', 'store stock', 'quantity', 'qty']);
-      final lowStockIdx = getColIdx(['low stock threshold', 'threshold']);
+            final mainStock = qtyVal.round();
+            final storeStock = 0;
+            final purchasePrice = rateVal;
+            final sellingPrice = rateVal;
 
-      // 3. Process rows
-      for (int i = headerRowIndex + 1; i < table.maxRows; i++) {
-        final row = table.row(i);
+            final existing = inv.medicines
+                .where((m) => m.name.toLowerCase() == nameCell.toLowerCase())
+                .firstOrNull;
 
-        String getCellStr(int idx, String def) =>
-            (idx != -1 && idx < row.length)
-                ? (row[idx]?.value?.toString().trim() ?? def)
-                : def;
-        double getCellDbl(int idx, double def) => (idx != -1 &&
-                idx < row.length)
-            ? (double.tryParse(row[idx]?.value?.toString().trim() ?? '') ?? def)
-            : def;
-        int getCellInt(int idx, int def) => (idx != -1 && idx < row.length)
-            ? (int.tryParse(row[idx]?.value?.toString().trim() ?? '') ?? def)
-            : def;
+            if (existing != null) {
+              existing
+                ..category = category
+                ..unit = unit
+                ..purchasePrice = purchasePrice > 0 ? purchasePrice : existing.purchasePrice
+                ..sellingPrice = sellingPrice > 0 ? sellingPrice : existing.sellingPrice;
 
-        final nameCell = getCellStr(nameIdx, '');
-        if (nameCell.isEmpty) continue; // Skip empty rows
+              inv.updateMedicine(existing);
 
-        final barcode = getCellStr(barcodeIdx, '');
-        final category = getCellStr(categoryIdx, 'General');
-        final unit = getCellStr(unitIdx, 'Pcs');
+              if (mainStock > 0) {
+                inv.addBatchStock(
+                  {existing.id: mainStock},
+                  storeUpdates: {existing.id: storeStock},
+                  batchNo: 'IMPORT-${DateTime.now().millisecondsSinceEpoch}',
+                  expiryDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                  note: 'Imported from Excel (Tally)',
+                );
+              }
+              updated++;
+            } else {
+              final newMed = Medicine(
+                name: nameCell,
+                barcode: barcode,
+                category: category,
+                unit: unit,
+                purchasePrice: purchasePrice,
+                sellingPrice: sellingPrice,
+                mainStock: 0,
+                storeStock: 0,
+                lowStockThreshold: 10,
+              );
+              inv.addMedicine(newMed);
 
-        final purchasePrice = getCellDbl(purchasePriceIdx, 0.0);
-        final sellingPrice = getCellDbl(sellingPriceIdx, 0.0);
-
-        final mainStock = getCellInt(mainStockIdx, 0);
-        final storeStock = getCellInt(storeStockIdx, 0);
-        final lowStock = getCellInt(lowStockIdx, 10);
-
-        // Check if medicine exists
-        final existing = inv.medicines
-            .where((m) => m.name.toLowerCase() == nameCell.toLowerCase())
-            .firstOrNull;
-
-        if (existing != null) {
-          // Update existing metadata
-          existing
-            ..barcode = barcode.isNotEmpty ? barcode : existing.barcode
-            ..category = category
-            ..unit = unit
-            ..purchasePrice =
-                purchasePrice > 0 ? purchasePrice : existing.purchasePrice
-            ..sellingPrice =
-                sellingPrice > 0 ? sellingPrice : existing.sellingPrice
-            ..lowStockThreshold = lowStock;
-
-          inv.updateMedicine(existing);
-
-          // If stock is provided in Excel, add it as a new batch to avoid total drift
-          if (mainStock > 0 || storeStock > 0) {
-            inv.addBatchStock(
-              {existing.id: mainStock},
-              storeUpdates: {existing.id: storeStock},
-              batchNo: 'IMPORT-${DateTime.now().millisecondsSinceEpoch}',
-              expiryDate: DateTime.now()
-                  .add(const Duration(days: 365 * 2)), // 2 year default
-              note: 'Imported from Excel',
-            );
+              if (mainStock > 0) {
+                inv.addBatchStock(
+                  {newMed.id: mainStock},
+                  storeUpdates: {newMed.id: storeStock},
+                  batchNo: 'IMPORT-${DateTime.now().millisecondsSinceEpoch}',
+                  expiryDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                  note: 'Imported from Excel (Tally)',
+                );
+              }
+              added++;
+            }
           }
-          updated++;
-        } else {
-          // Add new
-          final newMed = Medicine(
-            name: nameCell,
-            barcode: barcode,
-            category: category,
-            unit: unit,
-            purchasePrice: purchasePrice,
-            sellingPrice: sellingPrice,
-            mainStock: 0, // Will be updated by batch
-            storeStock: 0,
-            lowStockThreshold: lowStock,
-          );
-          inv.addMedicine(newMed);
+        }
+      } else {
+        int headerRowIndex = -1;
+        Map<String, int> colMap = {};
 
-          if (mainStock > 0 || storeStock > 0) {
-            inv.addBatchStock(
-              {newMed.id: mainStock},
-              storeUpdates: {newMed.id: storeStock},
-              batchNo: 'IMPORT-${DateTime.now().millisecondsSinceEpoch}',
-              expiryDate: DateTime.now().add(const Duration(days: 365 * 2)),
-              note: 'Imported from Excel',
-            );
+        // 1. Find the header row
+        for (int i = 0; i < table.maxRows; i++) {
+          final row = table.row(i);
+          for (int j = 0; j < row.length; j++) {
+            final cellValue =
+                row[j]?.value?.toString().trim().toLowerCase() ?? '';
+            if (cellValue == 'medicine name' ||
+                cellValue == 'item name' ||
+                cellValue == 'product name' ||
+                cellValue == 'itemname') {
+              headerRowIndex = i;
+              break;
+            }
           }
-          added++;
+          if (headerRowIndex != -1) break;
+        }
+
+        if (headerRowIndex == -1) {
+          throw Exception(
+              "Could not find a header row containing 'Medicine Name'.");
+        }
+
+        // 2. Map columns
+        final headerRow = table.row(headerRowIndex);
+        for (int j = 0; j < headerRow.length; j++) {
+          final title =
+              headerRow[j]?.value?.toString().trim().toLowerCase() ?? '';
+          if (title.isNotEmpty) {
+            colMap[title] = j;
+          }
+        }
+
+        // Helper to get index matching a list of possible names
+        int getColIdx(List<String> possibleNames) {
+          for (final name in possibleNames) {
+            if (colMap.containsKey(name)) return colMap[name]!;
+          }
+          return -1;
+        }
+
+        final nameIdx = getColIdx(['medicine name', 'item name', 'product name']);
+        final barcodeIdx = getColIdx(['barcode']);
+        final categoryIdx = getColIdx(['category']);
+        final unitIdx = getColIdx(['unit']);
+        final purchasePriceIdx = getColIdx(['purchase price', 'cost']);
+        final sellingPriceIdx =
+            getColIdx(['selling price', 'selling rate', 'rate', 'price']);
+        final mainStockIdx = getColIdx(['main hub stock', 'main stock']);
+        final storeStockIdx =
+            getColIdx(['store front stock', 'store stock', 'quantity', 'qty']);
+        final lowStockIdx = getColIdx(['low stock threshold', 'threshold']);
+
+        // 3. Process rows
+        for (int i = headerRowIndex + 1; i < table.maxRows; i++) {
+          final row = table.row(i);
+
+          String getCellStr(int idx, String def) =>
+              (idx != -1 && idx < row.length)
+                  ? (row[idx]?.value?.toString().trim() ?? def)
+                  : def;
+          double getCellDbl(int idx, double def) => (idx != -1 &&
+                  idx < row.length)
+              ? (double.tryParse(row[idx]?.value?.toString().trim() ?? '') ?? def)
+              : def;
+          int getCellInt(int idx, int def) => (idx != -1 && idx < row.length)
+              ? (int.tryParse(row[idx]?.value?.toString().trim() ?? '') ?? def)
+              : def;
+
+          final nameCell = getCellStr(nameIdx, '');
+          if (nameCell.isEmpty) continue; // Skip empty rows
+
+          final barcode = getCellStr(barcodeIdx, '');
+          final category = getCellStr(categoryIdx, 'General');
+          final unit = getCellStr(unitIdx, 'Pcs');
+
+          final purchasePrice = getCellDbl(purchasePriceIdx, 0.0);
+          final sellingPrice = getCellDbl(sellingPriceIdx, 0.0);
+
+          final mainStock = getCellInt(mainStockIdx, 0);
+          final storeStock = getCellInt(storeStockIdx, 0);
+          final lowStock = getCellInt(lowStockIdx, 10);
+
+          // Check if medicine exists
+          final existing = inv.medicines
+              .where((m) => m.name.toLowerCase() == nameCell.toLowerCase())
+              .firstOrNull;
+
+          if (existing != null) {
+            // Update existing metadata
+            existing
+              ..barcode = barcode.isNotEmpty ? barcode : existing.barcode
+              ..category = category
+              ..unit = unit
+              ..purchasePrice =
+                  purchasePrice > 0 ? purchasePrice : existing.purchasePrice
+              ..sellingPrice =
+                  sellingPrice > 0 ? sellingPrice : existing.sellingPrice
+              ..lowStockThreshold = lowStock;
+
+            inv.updateMedicine(existing);
+
+            // If stock is provided in Excel, add it as a new batch to avoid total drift
+            if (mainStock > 0 || storeStock > 0) {
+              inv.addBatchStock(
+                {existing.id: mainStock},
+                storeUpdates: {existing.id: storeStock},
+                batchNo: 'IMPORT-${DateTime.now().millisecondsSinceEpoch}',
+                expiryDate: DateTime.now()
+                    .add(const Duration(days: 365 * 2)), // 2 year default
+                note: 'Imported from Excel',
+              );
+            }
+            updated++;
+          } else {
+            // Add new
+            final newMed = Medicine(
+              name: nameCell,
+              barcode: barcode,
+              category: category,
+              unit: unit,
+              purchasePrice: purchasePrice,
+              sellingPrice: sellingPrice,
+              mainStock: 0, // Will be updated by batch
+              storeStock: 0,
+              lowStockThreshold: lowStock,
+            );
+            inv.addMedicine(newMed);
+
+            if (mainStock > 0 || storeStock > 0) {
+              inv.addBatchStock(
+                {newMed.id: mainStock},
+                storeUpdates: {newMed.id: storeStock},
+                batchNo: 'IMPORT-${DateTime.now().millisecondsSinceEpoch}',
+                expiryDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                note: 'Imported from Excel',
+              );
+            }
+            added++;
+          }
         }
       }
 
@@ -228,7 +320,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
     return Scaffold(
       backgroundColor: context.bgColor,
       appBar: AppBar(
-        title: const Text('Warehouse Control'),
+        title: const Text('Stock Control'),
         elevation: 0,
         backgroundColor: context.surfaceColor,
         actions: [
@@ -385,7 +477,7 @@ class _StockLevelsTabState extends State<_StockLevelsTab> {
                       items: const {
                         'all': 'All Stock',
                         'low-stock': 'Low Stock Alert',
-                        'main-empty': 'Main Hub Empty',
+                        'main-empty': 'Clinic Empty',
                         'expired': 'Expired',
                         'near-expiry': 'Near Expiry',
                       },
@@ -394,7 +486,7 @@ class _StockLevelsTabState extends State<_StockLevelsTab> {
                   ),
                   const SizedBox(width: 8),
                   IconButton(
-                    tooltip: 'Reconcile Hub Quantity with Batches',
+                    tooltip: 'Reconcile Clinic Quantity with Batches',
                     icon:
                         const Icon(Icons.rebase_edit, color: AppTheme.primary),
                     onPressed: () {
@@ -406,6 +498,17 @@ class _StockLevelsTabState extends State<_StockLevelsTab> {
                       );
                     },
                   ),
+                  if (auth.hasWarehouseWriteAccess) ...[
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: 'Bulk Transfer Clinic Stock to Store',
+                      icon: const Icon(Icons.swap_horiz, color: AppTheme.success),
+                      onPressed: () => showDialog(
+                        context: context,
+                        builder: (ctx) => _BulkTransferDialog(wh: wh),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -535,9 +638,9 @@ class _ModernMedicineCardWindowsState
                 children: [
                   Expanded(
                     child: _MetricBlock(
-                      label: 'Hub',
+                      label: 'Clinic',
                       value: widget.medicine.mainStock,
-                      icon: Icons.warehouse,
+                      icon: Icons.medical_services,
                       color: AppTheme.indigo,
                     ),
                   ),
@@ -612,7 +715,7 @@ class _ModernMedicineCardWindowsState
                           value: 'return',
                           child: Row(children: [
                             Icon(Icons.arrow_back),
-                            Text(' Return to Hub')
+                            Text(' Return to Clinic')
                           ])),
                       if (widget.auth.currentUser?.canDeleteInventory == true)
                         const PopupMenuItem(
@@ -764,7 +867,7 @@ class _BatchDetailsDialog extends StatelessWidget {
                               Expanded(
                                 child: Column(
                                   children: [
-                                    const Text('HUB',
+                                    const Text('CLINIC',
                                         style: TextStyle(
                                             fontSize: 10,
                                             fontWeight: FontWeight.bold)),
@@ -840,7 +943,7 @@ class _BatchDetailsDialog extends StatelessWidget {
                           _showTransfer(context, m, 'store', 'main', wh);
                         },
                         icon: const Icon(Icons.arrow_back, size: 16),
-                        label: const Text('Return to Hub'),
+                        label: const Text('Return to Clinic'),
                       ),
                     ],
                     const Spacer(),
@@ -913,7 +1016,7 @@ class _EditBatchDialogState extends State<_EditBatchDialog> {
                 child: TextField(
                   controller: _hubStockCtrl,
                   decoration: const InputDecoration(
-                      labelText: 'Hub Stock', isDense: true),
+                      labelText: 'Clinic Stock', isDense: true),
                   keyboardType: TextInputType.number,
                 ),
               ),
@@ -1292,8 +1395,8 @@ class _TransferDialogState extends State<_TransferDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final fromLabel = widget.from == 'main' ? 'Main Warehouse' : 'Store Stock';
-    final toLabel = widget.to == 'main' ? 'Main Warehouse' : 'Store Stock';
+    final fromLabel = widget.from == 'main' ? 'Clinic' : 'Store';
+    final toLabel = widget.to == 'main' ? 'Clinic' : 'Store';
     
     // Calculate available stock based on selected batch or total
     final available = _selectedBatch != null
@@ -2059,6 +2162,345 @@ class _EditPurchaseDialogState extends State<_EditPurchaseDialog> {
           child: const Text('Update'),
         ),
       ],
+    );
+  }
+}
+
+class _BulkTransferDialog extends StatefulWidget {
+  final WarehouseProvider wh;
+  const _BulkTransferDialog({required this.wh});
+
+  @override
+  State<_BulkTransferDialog> createState() => _BulkTransferDialogState();
+}
+
+class _BulkTransferDialogState extends State<_BulkTransferDialog> {
+  final Map<int, int> _transferQtys = {}; // medicineId -> qty to transfer
+  final Set<int> _selectedIds = {};
+  String _searchQuery = '';
+  bool _isProcessing = false;
+  String _fromLoc = 'main'; // 'main' or 'store'
+  String _toLoc = 'store'; // 'store' or 'main'
+
+  @override
+  Widget build(BuildContext context) {
+    final inv = context.watch<InventoryProvider>();
+    final syncService = context.read<SyncService>();
+
+    // Get all medicines that have stock in the source location
+    final eligibleMeds = inv.rawMedicines.where((m) {
+      final stock = _fromLoc == 'main' ? m.mainStock : m.storeStock;
+      return stock > 0;
+    }).toList();
+
+    // Filter by search query
+    final filtered = eligibleMeds.where((m) =>
+        m.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+        m.barcode.contains(_searchQuery)).toList();
+
+    return AlertDialog(
+      titlePadding: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppTheme.success.withValues(alpha: 0.1),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.swap_horiz, color: AppTheme.success),
+            const SizedBox(width: 12),
+            Text(_fromLoc == 'main'
+                ? 'Bulk Clinic to Store Transfer'
+                : 'Bulk Store to Clinic Transfer'),
+            const Spacer(),
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      ),
+      content: SizedBox(
+        width: 800,
+        height: 600,
+        child: _isProcessing
+            ? const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Processing bulk transfer, please wait...',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              )
+            : Column(
+                children: [
+                  // Direction selector
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    width: double.infinity,
+                    child: SegmentedButton<String>(
+                      segments: const <ButtonSegment<String>>[
+                        ButtonSegment<String>(
+                          value: 'main_to_store',
+                          label: Text('Clinic Stock → Store Stock'),
+                          icon: Icon(Icons.arrow_forward_rounded),
+                        ),
+                        ButtonSegment<String>(
+                          value: 'store_to_main',
+                          label: Text('Store Stock → Clinic Stock'),
+                          icon: Icon(Icons.arrow_back_rounded),
+                        ),
+                      ],
+                      selected: <String>{'${_fromLoc}_to_${_toLoc}'},
+                      onSelectionChanged: (Set<String> newSelection) {
+                        setState(() {
+                          final val = newSelection.first;
+                          if (val == 'main_to_store') {
+                            _fromLoc = 'main';
+                            _toLoc = 'store';
+                          } else {
+                            _fromLoc = 'store';
+                            _toLoc = 'main';
+                          }
+                          _selectedIds.clear();
+                          _transferQtys.clear();
+                        });
+                      },
+                      style: SegmentedButton.styleFrom(
+                        selectedBackgroundColor: AppTheme.primary,
+                        selectedForegroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                  // Search & Select All row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          decoration: InputDecoration(
+                            prefixIcon: const Icon(Icons.search),
+                            hintText: 'Search eligible medicines...',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onChanged: (v) => setState(() => _searchQuery = v),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.select_all),
+                        label: const Text('Select All'),
+                        onPressed: () {
+                          setState(() {
+                            for (var m in filtered) {
+                              _selectedIds.add(m.id);
+                              _transferQtys[m.id] = _fromLoc == 'main' ? m.mainStock : m.storeStock;
+                            }
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        child: const Text('Deselect All'),
+                        onPressed: () {
+                          setState(() {
+                            _selectedIds.clear();
+                            _transferQtys.clear();
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? Center(
+                            child: Text(
+                              _fromLoc == 'main'
+                                  ? 'No medicines with Clinic stock found.'
+                                  : 'No medicines with Store stock found.',
+                              style: const TextStyle(color: Colors.grey, fontSize: 16),
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: filtered.length,
+                            itemBuilder: (ctx, idx) {
+                              final m = filtered[idx];
+                              final isSelected = _selectedIds.contains(m.id);
+                              final maxQty = _fromLoc == 'main' ? m.mainStock : m.storeStock;
+                              final qty = _transferQtys[m.id] ?? maxQty;
+
+                              return _BulkTransferRow(
+                                key: ValueKey('${m.id}_$_fromLoc'),
+                                medicine: m,
+                                isSelected: isSelected,
+                                fromLoc: _fromLoc,
+                                initialQty: qty,
+                                onSelectedChanged: (val) {
+                                  setState(() {
+                                    if (val == true) {
+                                      _selectedIds.add(m.id);
+                                      _transferQtys[m.id] = maxQty;
+                                    } else {
+                                      _selectedIds.remove(m.id);
+                                      _transferQtys.remove(m.id);
+                                    }
+                                  });
+                                },
+                                onQtyChanged: (val) {
+                                  _transferQtys[m.id] = val;
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+      ),
+      actions: _isProcessing
+          ? null
+          : [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: AppTheme.success),
+                icon: const Icon(Icons.send),
+                label: Text('Transfer Selected (${_selectedIds.length})'),
+                onPressed: _selectedIds.isEmpty
+                    ? null
+                    : () async {
+                        setState(() => _isProcessing = true);
+                        int count = 0;
+                        for (final id in _selectedIds) {
+                          final m = inv.rawMedicines
+                              .where((med) => med.id == id)
+                              .firstOrNull;
+                          final qty = _transferQtys[id] ?? 0;
+                          if (m != null && qty > 0) {
+                            await widget.wh.transfer(
+                              medicine: m,
+                              qty: qty,
+                              from: _fromLoc,
+                              to: _toLoc,
+                              note: 'Bulk Transfer',
+                              syncService: syncService,
+                            );
+                            count++;
+                          }
+                        }
+                        if (mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  'Successfully transferred stock for $count medicines.'),
+                              backgroundColor: AppTheme.success,
+                            ),
+                          );
+                        }
+                      },
+              ),
+            ],
+    );
+  }
+}
+
+class _BulkTransferRow extends StatefulWidget {
+  final Medicine medicine;
+  final bool isSelected;
+  final String fromLoc;
+  final int initialQty;
+  final ValueChanged<bool?> onSelectedChanged;
+  final ValueChanged<int> onQtyChanged;
+
+  const _BulkTransferRow({
+    super.key,
+    required this.medicine,
+    required this.isSelected,
+    required this.fromLoc,
+    required this.initialQty,
+    required this.onSelectedChanged,
+    required this.onQtyChanged,
+  });
+
+  @override
+  State<_BulkTransferRow> createState() => _BulkTransferRowState();
+}
+
+class _BulkTransferRowState extends State<_BulkTransferRow> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: '${widget.initialQty}');
+  }
+
+  @override
+  void didUpdateWidget(covariant _BulkTransferRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialQty != widget.initialQty) {
+      _controller.text = '${widget.initialQty}';
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isClinicSource = widget.fromLoc == 'main';
+    final maxQty = isClinicSource ? widget.medicine.mainStock : widget.medicine.storeStock;
+    final destQty = isClinicSource ? widget.medicine.storeStock : widget.medicine.mainStock;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: widget.isSelected
+              ? AppTheme.success
+              : Colors.grey.withValues(alpha: 0.2),
+        ),
+      ),
+      child: CheckboxListTile(
+        value: widget.isSelected,
+        onChanged: widget.onSelectedChanged,
+        title: Text(widget.medicine.name,
+            style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: isClinicSource
+            ? Text('Clinic Stock: $maxQty | Store Stock: $destQty')
+            : Text('Store Stock: $maxQty | Clinic Stock: $destQty'),
+        secondary: widget.isSelected
+            ? SizedBox(
+                width: 120,
+                child: TextField(
+                  controller: _controller,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Qty to Send',
+                    isDense: true,
+                  ),
+                  onChanged: (val) {
+                    final parsed = int.tryParse(val) ?? 0;
+                    final clamped = parsed.clamp(0, maxQty);
+                    widget.onQtyChanged(clamped);
+                  },
+                ),
+              )
+            : null,
+      ),
     );
   }
 }
