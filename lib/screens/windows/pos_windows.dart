@@ -589,6 +589,7 @@ class _PosWindowsState extends State<PosWindows> {
       _mixCardCtrl.text = '0';
       _discountCtrl.clear();
       _searchCtrl.clear();
+      _patientCtrl.clear();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -861,6 +862,10 @@ class _PosWindowsState extends State<PosWindows> {
     final pProvider = context.read<PrescriptionProvider>();
 
     cart.clearCart();
+    cart.setClinicalDispense(true);
+    if (prescription.appointmentId != 0) {
+      cart.setLinkedAppointment(prescription.appointmentId);
+    }
     cart.setPatient(
       name: prescription.patientName,
       phone: '', // Can be improved if prescription has phone
@@ -1645,8 +1650,7 @@ class _CartPanel extends StatelessWidget {
                       });
                       // If parent ctrl changes (e.g. from prescription loader), sync here
                       if (patientCtrl.text != ctrl.text &&
-                          !node.hasFocus &&
-                          patientCtrl.text.isNotEmpty) {
+                          !node.hasFocus) {
                         ctrl.text = patientCtrl.text;
                       }
 

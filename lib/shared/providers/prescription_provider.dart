@@ -141,7 +141,7 @@ class PrescriptionProvider extends ChangeNotifier {
 
     // Update appointment status to 'pharmacy' to indicate prescription ready
     final appt = ObjectBoxService.instance.appointmentBox.get(appointmentId);
-    if (appt != null && appt.status == kStatusWithDoctor) {
+    if (appt != null && (appt.status == kStatusWithDoctor || appt.status == kStatusWaiting)) {
       appt.status = kStatusPharmacy;
       ObjectBoxService.instance.appointmentBox.put(appt);
       // Notify OpdProvider to refresh its state
@@ -149,14 +149,18 @@ class PrescriptionProvider extends ChangeNotifier {
         context.read<OpdProvider>().loadAll();
       }
 
-      if (Platform.isWindows) {
+      final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+      if (isHub) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
     }
 
-    if (Platform.isWindows) {
+    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+
+    if (isHub) {
       LocalServerService.instance.broadcast({'event': 'sync_received'});
-    } else if (Platform.isAndroid) {
+    } else if (isClient) {
       final patient = ObjectBoxService.instance.patientBox.get(patientId);
       final syncData = prescription.toJson();
       syncData['patientUhid'] = patient?.uhid ?? '';
@@ -265,9 +269,12 @@ class PrescriptionProvider extends ChangeNotifier {
     p.dispensed = true;
     ObjectBoxService.instance.prescriptionBox.put(p);
 
-    if (Platform.isWindows) {
+    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+
+    if (isHub) {
       LocalServerService.instance.broadcast({'event': 'sync_received'});
-    } else if (Platform.isAndroid) {
+    } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'prescription',
         action: 'update',
@@ -289,9 +296,12 @@ class PrescriptionProvider extends ChangeNotifier {
   void deletePrescription(int id, {SyncService? syncService}) {
     ObjectBoxService.instance.prescriptionBox.remove(id);
 
-    if (Platform.isWindows) {
+    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+
+    if (isHub) {
       LocalServerService.instance.broadcast({'event': 'sync_received'});
-    } else if (Platform.isAndroid) {
+    } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'prescription',
         action: 'delete',
