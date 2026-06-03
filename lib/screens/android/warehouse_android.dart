@@ -287,17 +287,69 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
             child: Row(
               children: [
                 Expanded(
-                    child: _StockIndicator(
-                        label: 'CLINIC STOCK',
-                        value: widget.medicine.mainStock,
-                        color: AppTheme.indigo)),
+                  child: Column(
+                    children: [
+                      _StockIndicator(
+                          label: 'CLINIC BULK',
+                          value: widget.medicine.bulkClinicStock,
+                          color: Colors.blueGrey),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: InkWell(
+                          onTap: () => _showTransferDialog(
+                              context, widget.medicine, 'bulkClinic', 'main', widget.wh),
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: AppTheme.indigo.withValues(alpha: 0.1),
+                            ),
+                            child: const Icon(Icons.arrow_downward_rounded,
+                                size: 16, color: AppTheme.indigo),
+                          ),
+                        ),
+                      ),
+                      _StockIndicator(
+                          label: 'CLINIC',
+                          value: widget.medicine.mainStock,
+                          color: AppTheme.indigo),
+                    ],
+                  ),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
-                    child: _StockIndicator(
-                        label: 'STORE STOCK',
-                        value: widget.medicine.storeStock,
-                        color: AppTheme.success,
-                        isLow: widget.medicine.isLowStock)),
+                  child: Column(
+                    children: [
+                      _StockIndicator(
+                          label: 'STORE BULK',
+                          value: widget.medicine.bulkStoreStock,
+                          color: Colors.brown),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: InkWell(
+                          onTap: () => _showTransferDialog(
+                              context, widget.medicine, 'bulkStore', 'store', widget.wh),
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: AppTheme.success.withValues(alpha: 0.1),
+                            ),
+                            child: const Icon(Icons.arrow_downward_rounded,
+                                size: 16, color: AppTheme.success),
+                          ),
+                        ),
+                      ),
+                      _StockIndicator(
+                          label: 'STORE',
+                          value: widget.medicine.storeStock,
+                          color: AppTheme.success,
+                          isLow: widget.medicine.isLowStock),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -308,26 +360,34 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
               child: Column(
                 children: [
                   if (widget.auth.hasWarehouseWriteAccess)
-                    Row(
-                      children: [
-                        Expanded(
-                            child: _ActionButton(
-                          label: 'TO STORE',
-                          icon: Icons.storefront_rounded,
-                          color: AppTheme.success,
-                          onPressed: () => _showTransferDialog(context,
-                              widget.medicine, 'main', 'store', widget.wh),
-                        )),
-                        const SizedBox(width: 8),
-                        Expanded(
-                            child: _ActionButton(
-                          label: 'RETURN TO CLINIC',
-                          icon: Icons.medical_services_rounded,
-                          color: AppTheme.indigo,
-                          onPressed: () => _showTransferDialog(context,
-                              widget.medicine, 'store', 'main', widget.wh),
-                        )),
-                      ],
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.primaryLight.withValues(alpha: 0.1),
+                                foregroundColor: AppTheme.primaryLight,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  side: BorderSide(color: AppTheme.primaryLight.withValues(alpha: 0.2)),
+                                ),
+                              ),
+                              onPressed: () => _showTransferDialog(
+                                  context, widget.medicine, 'bulkClinic', 'main', widget.wh),
+                              icon: const Icon(Icons.swap_horiz, size: 18),
+                              label: const Text('TRANSFER STOCK',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 11,
+                                      letterSpacing: 1)),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   const SizedBox(height: 12),
                   const Align(
@@ -456,48 +516,6 @@ class _StockIndicator extends StatelessWidget {
   }
 }
 
-class _ActionButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onPressed;
-
-  const _ActionButton(
-      {required this.label,
-      required this.icon,
-      required this.color,
-      required this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onPressed,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withValues(alpha: 0.15)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 8),
-            Text(label,
-                style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 10,
-                    letterSpacing: 0.5)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _TransferDialog extends StatefulWidget {
   final Medicine medicine;
   final String from;
@@ -518,28 +536,60 @@ class _TransferDialogState extends State<_TransferDialog> {
   final _qtyCtrl = TextEditingController(text: '1');
   final _noteCtrl = TextEditingController();
   MedicineBatch? _selectedBatch;
+  late String _fromLoc;
+  late String _toLoc;
 
-  @override
-  void initState() {
-    super.initState();
-    final batches = widget.medicine.batches.where((b) {
-      final stock = widget.from == 'main' ? b.mainStock : b.storeStock;
-      return stock > 0;
-    }).toList();
-    if (batches.isNotEmpty) {
-      _selectedBatch = batches.first;
-    } else if (widget.medicine.batches.isNotEmpty) {
-      _selectedBatch = widget.medicine.batches.first;
+  int _getStock(MedicineBatch b, String loc) {
+    if (loc == 'main') return b.mainStock;
+    if (loc == 'store') return b.storeStock;
+    if (loc == 'bulkClinic') return b.bulkClinicStock;
+    if (loc == 'bulkStore') return b.bulkStoreStock;
+    return 0;
+  }
+
+  void _updateSelectedBatch() {
+    final availableBatches = widget.medicine.batches.where((b) =>
+        _getStock(b, _fromLoc) > 0).toList();
+    if (availableBatches.isNotEmpty) {
+      availableBatches.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
+      _selectedBatch = availableBatches.first;
+    } else {
+      _selectedBatch = widget.medicine.batches.isNotEmpty ? widget.medicine.batches.first : null;
     }
   }
 
   @override
+  void initState() {
+    super.initState();
+    _fromLoc = widget.from;
+    _toLoc = widget.to;
+    _updateSelectedBatch();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final toStore = widget.to == 'store';
-    final accentColor = toStore ? AppTheme.success : AppTheme.indigo;
+    final locations = const {
+      'bulkClinic': 'Clinic Bulk',
+      'main': 'Clinic',
+      'bulkStore': 'Store Bulk',
+      'store': 'Store',
+    };
+
     final available = _selectedBatch != null
-        ? (widget.from == 'main' ? _selectedBatch!.mainStock : _selectedBatch!.storeStock)
-        : (widget.from == 'main' ? widget.medicine.mainStock : widget.medicine.storeStock);
+        ? _getStock(_selectedBatch!, _fromLoc)
+        : (_fromLoc == 'main'
+            ? widget.medicine.mainStock
+            : (_fromLoc == 'store'
+                ? widget.medicine.storeStock
+                : (_fromLoc == 'bulkClinic'
+                    ? widget.medicine.bulkClinicStock
+                    : widget.medicine.bulkStoreStock)));
+
+    final toStore = _toLoc == 'store' || _toLoc == 'bulkStore';
+    final accentColor = toStore ? AppTheme.success : AppTheme.indigo;
+
+    final availableBatches = widget.medicine.batches.where((b) =>
+        _getStock(b, _fromLoc) > 0).toList();
 
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -557,8 +607,7 @@ class _TransferDialogState extends State<_TransferDialog> {
           ),
           const SizedBox(height: 16),
           Text('Stock Transfer',
-              style:
-                  const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
           Text(widget.medicine.name,
               style: TextStyle(
                   fontSize: 13,
@@ -570,24 +619,47 @@ class _TransferDialogState extends State<_TransferDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                  color: context.borderColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12)),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _LocLabel(label: widget.from == 'main' ? 'CLINIC' : 'STORE'),
-                  Icon(Icons.arrow_forward_rounded,
-                      size: 18, color: context.textMutedColor),
-                  _LocLabel(
-                      label: widget.to == 'main' ? 'CLINIC' : 'STORE',
-                      activeColor: accentColor),
-                ],
+            DropdownButtonFormField<String>(
+              value: _fromLoc,
+              decoration: InputDecoration(
+                labelText: 'From Location',
+                prefixIcon: const Icon(Icons.warehouse_outlined),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
               ),
+              dropdownColor: context.surfaceColor,
+              items: locations.entries.map((e) {
+                return DropdownMenuItem(value: e.key, child: Text(e.value));
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _fromLoc = val;
+                    _updateSelectedBatch();
+                  });
+                }
+              },
             ),
-            if (widget.medicine.batches.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: _toLoc,
+              decoration: InputDecoration(
+                labelText: 'To Location',
+                prefixIcon: const Icon(Icons.warehouse),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              dropdownColor: context.surfaceColor,
+              items: locations.entries.map((e) {
+                return DropdownMenuItem(value: e.key, child: Text(e.value));
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _toLoc = val;
+                  });
+                }
+              },
+            ),
+            if (availableBatches.isNotEmpty) ...[
               const SizedBox(height: 20),
               DropdownButtonFormField<MedicineBatch>(
                 value: _selectedBatch,
@@ -599,8 +671,8 @@ class _TransferDialogState extends State<_TransferDialog> {
                 ),
                 dropdownColor: context.surfaceColor,
                 style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppTheme.primaryLight),
-                items: widget.medicine.batches.map((b) {
-                  final stock = widget.from == 'main' ? b.mainStock : b.storeStock;
+                items: availableBatches.map((b) {
+                  final stock = _getStock(b, _fromLoc);
                   final expiryStr = DateFormat('MM/yy').format(b.expiryDate);
                   return DropdownMenuItem<MedicineBatch>(
                     value: b,
@@ -659,7 +731,7 @@ class _TransferDialogState extends State<_TransferDialog> {
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           onPressed: () async {
-            if (widget.medicine.batches.isNotEmpty && _selectedBatch == null) {
+            if (availableBatches.isNotEmpty && _selectedBatch == null) {
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                 content: Text('Please select a batch to transfer'),
                 backgroundColor: AppTheme.danger,
@@ -670,8 +742,8 @@ class _TransferDialogState extends State<_TransferDialog> {
             final err = await widget.wh.transfer(
               medicine: widget.medicine,
               qty: qty,
-              from: widget.from,
-              to: widget.to,
+              from: _fromLoc,
+              to: _toLoc,
               batchNo: _selectedBatch?.batchNo,
               expiryDate: _selectedBatch?.expiryDate,
               note: _noteCtrl.text,

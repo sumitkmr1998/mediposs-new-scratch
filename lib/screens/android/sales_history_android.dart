@@ -205,6 +205,8 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
                           context: context,
                           firstDate: DateTime(2020),
                           lastDate: DateTime.now(),
+                          locale: const Locale('en', 'GB'),
+                          initialEntryMode: DatePickerEntryMode.input,
                         );
                         if (range != null) {
                           sales.setFilter(SalesFilter.custom, range: range);

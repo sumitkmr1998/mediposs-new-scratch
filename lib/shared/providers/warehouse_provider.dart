@@ -105,9 +105,22 @@ class WarehouseProvider extends ChangeNotifier {
   }) async {
     if (qty <= 0) return 'Quantity must be greater than 0';
 
-    final available = from == 'main' ? medicine.mainStock : medicine.storeStock;
+    int available = 0;
+    if (from == 'main') available = medicine.mainStock;
+    else if (from == 'store') available = medicine.storeStock;
+    else if (from == 'bulkClinic') available = medicine.bulkClinicStock;
+    else if (from == 'bulkStore') available = medicine.bulkStoreStock;
+
+    String getLocName(String loc) {
+      if (loc == 'main') return 'Clinic';
+      if (loc == 'store') return 'Store';
+      if (loc == 'bulkClinic') return 'Clinic Bulk';
+      if (loc == 'bulkStore') return 'Store Bulk';
+      return loc;
+    }
+
     if (qty > available) {
-      return 'Insufficient stock in ${from == 'main' ? 'Main Warehouse' : 'Store Stock'} (available: $available)';
+      return 'Insufficient stock in ${getLocName(from)} (available: $available)';
     }
 
     // Update medicine stock via InventoryProvider

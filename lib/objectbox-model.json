@@ -234,7 +234,7 @@
     },
     {
       "id": "2:1561353773588181738",
-      "lastPropertyId": "34:8023281741824268019",
+      "lastPropertyId": "35:5759523613226598144",
       "name": "AppUser",
       "properties": [
         {
@@ -397,6 +397,11 @@
           "id": "34:8023281741824268019",
           "name": "canProcessClinicalDispenses",
           "type": 1
+        },
+        {
+          "id": "35:5759523613226598144",
+          "name": "canViewAnalytics",
+          "type": 1
         }
       ],
       "relations": []
@@ -551,7 +556,7 @@
     },
     {
       "id": "5:3743056661326749831",
-      "lastPropertyId": "13:7569632734949045615",
+      "lastPropertyId": "15:4026296001162008986",
       "name": "Medicine",
       "properties": [
         {
@@ -619,6 +624,16 @@
           "id": "13:7569632734949045615",
           "name": "createdAt",
           "type": 10
+        },
+        {
+          "id": "14:7450983764310566445",
+          "name": "bulkClinicStock",
+          "type": 6
+        },
+        {
+          "id": "15:4026296001162008986",
+          "name": "bulkStoreStock",
+          "type": 6
         }
       ],
       "relations": [
@@ -1109,7 +1124,7 @@
     },
     {
       "id": "13:6725712331159432176",
-      "lastPropertyId": "6:3748165661863182735",
+      "lastPropertyId": "8:469942928734120521",
       "name": "MedicineBatch",
       "properties": [
         {
@@ -1145,6 +1160,16 @@
           "flags": 520,
           "indexId": "1:5015225040438721990",
           "relationTarget": "Medicine"
+        },
+        {
+          "id": "7:1075741254761701565",
+          "name": "bulkClinicStock",
+          "type": 6
+        },
+        {
+          "id": "8:469942928734120521",
+          "name": "bulkStoreStock",
+          "type": 6
         }
       ],
       "relations": []

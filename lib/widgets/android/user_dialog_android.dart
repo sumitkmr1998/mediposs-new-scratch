@@ -45,6 +45,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
 
   // Dashboard
   bool _canViewDashboard = false;
+  bool _canViewAnalytics = false;
 
   // Inventory
   bool _canViewInventory = false;
@@ -98,6 +99,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
       _canAccessSettings = u.canAccessSettings;
       _canManageUsers = u.canManageUsers;
       _canViewDashboard = u.canViewDashboard;
+      _canViewAnalytics = u.canViewAnalytics;
 
       _canViewInventory = u.canViewInventory;
       _canEditInventory = u.canEditInventory;
@@ -139,6 +141,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
       _canAccessSettings = tempUser.canAccessSettings;
       _canManageUsers = tempUser.canManageUsers;
       _canViewDashboard = tempUser.canViewDashboard;
+      _canViewAnalytics = tempUser.canViewAnalytics;
       _canViewInventory = tempUser.canViewInventory;
       _canEditInventory = tempUser.canEditInventory;
       _canOverrideStock = tempUser.canOverrideStock;
@@ -198,6 +201,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
     u.canAccessSettings = _canAccessSettings;
     u.canManageUsers = _canManageUsers;
     u.canViewDashboard = _canViewDashboard;
+    u.canViewAnalytics = _canViewAnalytics;
 
     u.canViewInventory = _canViewInventory;
     u.canEditInventory = _canEditInventory;
@@ -487,11 +491,22 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                       _buildFormSection(
                         title: 'Dashboard',
                         children: [
-                          _buildPermToggle(
+                            _buildPermToggle(
                               'View Dashboard',
                               'Can access KPI analytics and high-level charts',
                               _canViewDashboard,
-                              (v) => setState(() => _canViewDashboard = v)),
+                              (v) => setState(() {
+                                    _canViewDashboard = v;
+                                    if (!v) _canViewAnalytics = false;
+                                  })),
+                          _buildPermToggle(
+                              'View Analytics',
+                              'Can access advanced business analytics hub',
+                              _canViewAnalytics,
+                              (v) => setState(() {
+                                    _canViewAnalytics = v;
+                                    if (v) _canViewDashboard = true;
+                                  })),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -504,7 +519,11 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                               _canViewInventory,
                               (v) => setState(() {
                                     _canViewInventory = v;
-                                    if (!v) _canEditInventory = false;
+                                    if (!v) {
+                                      _canEditInventory = false;
+                                      _canDeleteInventory = false;
+                                      _canOverrideStock = false;
+                                    }
                                   })),
                           _buildPermToggle(
                               'Edit Inventory',
@@ -513,17 +532,27 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                               (v) => setState(() {
                                     _canEditInventory = v;
                                     if (v) _canViewInventory = true;
+                                    if (!v) _canDeleteInventory = false;
                                   })),
                           _buildPermToggle(
                               'Override Stock',
                               'Can manually adjust stock counts (Auditing)',
                               _canOverrideStock,
-                              (v) => setState(() => _canOverrideStock = v)),
+                              (v) => setState(() {
+                                    _canOverrideStock = v;
+                                    if (v) _canViewInventory = true;
+                                  })),
                           _buildPermToggle(
                               'Delete Items',
                               'Can permanently remove medicines from system',
                               _canDeleteInventory,
-                              (v) => setState(() => _canDeleteInventory = v)),
+                              (v) => setState(() {
+                                    _canDeleteInventory = v;
+                                    if (v) {
+                                      _canEditInventory = true;
+                                      _canViewInventory = true;
+                                    }
+                                  })),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -558,18 +587,30 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                               _canAccessPOS,
                               (v) => setState(() {
                                     _canAccessPOS = v;
-                                    if (!v) _canDiscountSales = false;
+                                    if (!v) {
+                                      _canProcessRetailSales = false;
+                                      _canProcessClinicalDispenses = false;
+                                      _canDiscountSales = false;
+                                      _canOverridePrice = false;
+                                      _canBulkDiscount = false;
+                                    }
                                   })),
                           _buildPermToggle(
                               'Process Retail Sales',
                               'Allow standard retail checkout (GST)',
                               _canProcessRetailSales,
-                              (v) => setState(() => _canProcessRetailSales = v)),
+                              (v) => setState(() {
+                                    _canProcessRetailSales = v;
+                                    if (v) _canAccessPOS = true;
+                                  })),
                           _buildPermToggle(
                               'Process Clinical Dispenses',
                               'Allow clinical dispensing (internal consumption)',
                               _canProcessClinicalDispenses,
-                              (v) => setState(() => _canProcessClinicalDispenses = v)),
+                              (v) => setState(() {
+                                    _canProcessClinicalDispenses = v;
+                                    if (v) _canAccessPOS = true;
+                                  })),
                           _buildPermToggle(
                               'Apply Discounts',
                               'Can apply manual discounts at checkout',
@@ -582,12 +623,18 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                               'Price Overrides',
                               'Can change item price on the fly in POS',
                               _canOverridePrice,
-                              (v) => setState(() => _canOverridePrice = v)),
+                              (v) => setState(() {
+                                    _canOverridePrice = v;
+                                    if (v) _canAccessPOS = true;
+                                  })),
                           _buildPermToggle(
                               'Bulk Discounts',
                               'Can apply flat discounts to entire bill',
                               _canBulkDiscount,
-                              (v) => setState(() => _canBulkDiscount = v)),
+                              (v) => setState(() {
+                                    _canBulkDiscount = v;
+                                    if (v) _canAccessPOS = true;
+                                  })),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -634,8 +681,11 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                               (v) => setState(() {
                                     _canAccessOPD = v;
                                     if (!v) {
+                                      _canAccessMedicalRecords = false;
                                       _canManageDoctors = false;
                                       _canViewOpdReports = false;
+                                      _canDeletePatients = false;
+                                      _canDeleteAppointments = false;
                                     }
                                   })),
                           _buildPermToggle(
@@ -658,17 +708,26 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                               'Privacy: Medical Records',
                               'Can view clinical history and prescriptions',
                               _canAccessMedicalRecords,
-                              (v) => setState(() => _canAccessMedicalRecords = v)),
+                              (v) => setState(() {
+                                    _canAccessMedicalRecords = v;
+                                    if (v) _canAccessOPD = true;
+                                  })),
                           _buildPermToggle(
                               'Delete Patients',
                               'Can permanently remove patient files',
                               _canDeletePatients,
-                              (v) => setState(() => _canDeletePatients = v)),
+                              (v) => setState(() {
+                                    _canDeletePatients = v;
+                                    if (v) _canAccessOPD = true;
+                                  })),
                           _buildPermToggle(
                               'Cancel Appointments',
                               'Can remove patient visits from queue',
                               _canDeleteAppointments,
-                              (v) => setState(() => _canDeleteAppointments = v)),
+                              (v) => setState(() {
+                                    _canDeleteAppointments = v;
+                                    if (v) _canAccessOPD = true;
+                                  })),
                         ],
                       ),
                       const SizedBox(height: 12),

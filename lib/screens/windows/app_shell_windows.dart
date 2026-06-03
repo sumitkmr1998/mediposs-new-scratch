@@ -149,6 +149,8 @@ class _AppShellWindowsState extends State<AppShellWindows> {
 
     if (auth.canViewDashboard) {
       dests.add(const _Dest(id: 'dashboard', icon: Icons.dashboard_outlined, selectedIcon: Icons.dashboard, label: 'Dashboard'));
+    }
+    if (auth.canViewAnalytics) {
       dests.add(const _Dest(id: 'analysis', icon: Icons.analytics_outlined, selectedIcon: Icons.analytics, label: 'Analysis'));
     }
     if (auth.canAccessPOS) {

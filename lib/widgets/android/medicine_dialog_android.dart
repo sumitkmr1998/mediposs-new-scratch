@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../shared/providers/inventory_provider.dart';
+import '../../shared/providers/auth_provider.dart';
 import '../../shared/models/medicine.dart';
 import '../../shared/services/sync_service.dart';
 import '../../theme/app_theme.dart';
@@ -65,6 +66,8 @@ class _MedicineRegistrationSheetState
             expiryDate: b.expiryDate,
             mainStock: b.mainStock,
             storeStock: b.storeStock,
+            bulkClinicStock: b.bulkClinicStock,
+            bulkStoreStock: b.bulkStoreStock,
           )));
     }
   }
@@ -136,12 +139,18 @@ class _MedicineRegistrationSheetState
     // Recalculate main/store stock from batches
     int totalMain = 0;
     int totalStore = 0;
+    int totalBulkClinic = 0;
+    int totalBulkStore = 0;
     for (var b in _localBatches) {
       totalMain += b.mainStock;
       totalStore += b.storeStock;
+      totalBulkClinic += b.bulkClinicStock;
+      totalBulkStore += b.bulkStoreStock;
     }
     m.mainStock = totalMain;
     m.storeStock = totalStore;
+    m.bulkClinicStock = totalBulkClinic;
+    m.bulkStoreStock = totalBulkStore;
 
     // Sync batches
     m.batches.clear();
@@ -162,6 +171,29 @@ class _MedicineRegistrationSheetState
         content: Text(
             widget.medicine != null ? 'Medicine record synchronized' : 'New medicine record established'),
         backgroundColor: AppTheme.success,
+      ),
+    );
+  }
+
+  void _confirmDeleteMedicine(BuildContext context, Medicine m) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Medicine?'),
+        content: Text('Are you sure you want to permanently delete ${m.name}? This will remove all batch and stock details.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppTheme.danger),
+            onPressed: () {
+              context.read<InventoryProvider>().deleteMedicine(m.id);
+              Navigator.pop(ctx); // Close confirmation
+              Navigator.pop(context); // Close medicine dialog sheet
+            },
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
   }
@@ -290,6 +322,23 @@ class _MedicineRegistrationSheetState
                   child: Text(isEdit ? 'SYNCHRONIZE RECORD' : 'ESTABLISH REGISTRY', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1)),
                 ),
               ),
+              if (isEdit && (context.read<AuthProvider>().currentUser?.role.toLowerCase() == 'admin' ||
+                  context.read<AuthProvider>().currentUser?.canDeleteInventory == true)) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.danger,
+                      side: const BorderSide(color: AppTheme.danger),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    onPressed: () => _confirmDeleteMedicine(context, widget.medicine!),
+                    icon: const Icon(Icons.delete_outline_rounded),
+                    label: const Text('DELETE MEDICINE', style: TextStyle(fontWeight: FontWeight.w900)),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -389,14 +438,17 @@ class _BatchItem extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('${batch.mainStock + batch.storeStock} PCS', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+              Text('${batch.mainStock + batch.storeStock + batch.bulkClinicStock + batch.bulkStoreStock} PCS', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
               const SizedBox(height: 2),
               Text('CLINIC:${batch.mainStock} | STORE:${batch.storeStock}', style: TextStyle(fontSize: 10, color: context.textMutedColor, fontWeight: FontWeight.w700)),
+              Text('C.BULK:${batch.bulkClinicStock} | S.BULK:${batch.bulkStoreStock}', style: TextStyle(fontSize: 9, color: context.textMutedColor, fontWeight: FontWeight.w700)),
             ],
           ),
           const SizedBox(width: 8),
           IconButton(icon: const Icon(Icons.edit_note_rounded, color: AppTheme.primary), onPressed: onEdit, visualDensity: VisualDensity.compact),
-          IconButton(icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.danger), onPressed: onDelete, visualDensity: VisualDensity.compact),
+          if (context.read<AuthProvider>().currentUser?.role.toLowerCase() == 'admin' ||
+              context.read<AuthProvider>().currentUser?.canDeleteInventory == true)
+            IconButton(icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.danger), onPressed: onDelete, visualDensity: VisualDensity.compact),
         ],
       ),
     );
@@ -417,6 +469,8 @@ class _BatchDialogState extends State<_BatchDialog> {
   late final TextEditingController _noCtrl;
   late final TextEditingController _hubCtrl;
   late final TextEditingController _posCtrl;
+  late final TextEditingController _bulkClinicCtrl;
+  late final TextEditingController _bulkStoreCtrl;
   late DateTime _expiry;
 
   @override
@@ -425,6 +479,8 @@ class _BatchDialogState extends State<_BatchDialog> {
     _noCtrl = TextEditingController(text: widget.batch?.batchNo ?? '');
     _hubCtrl = TextEditingController(text: '${widget.batch?.mainStock ?? 0}');
     _posCtrl = TextEditingController(text: '${widget.batch?.storeStock ?? 0}');
+    _bulkClinicCtrl = TextEditingController(text: '${widget.batch?.bulkClinicStock ?? 0}');
+    _bulkStoreCtrl = TextEditingController(text: '${widget.batch?.bulkStoreStock ?? 0}');
     _expiry = widget.batch?.expiryDate ?? DateTime.now().add(const Duration(days: 365));
   }
 
@@ -460,7 +516,14 @@ class _BatchDialogState extends State<_BatchDialog> {
             const SizedBox(height: 16),
             InkWell(
               onTap: () async {
-                final d = await showDatePicker(context: context, initialDate: _expiry, firstDate: DateTime.now().subtract(const Duration(days: 365)), lastDate: DateTime.now().add(const Duration(days: 3650)));
+                final d = await showDatePicker(
+                  context: context,
+                  initialDate: _expiry,
+                  firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                  lastDate: DateTime.now().add(const Duration(days: 3650)),
+                  locale: const Locale('en', 'GB'),
+                  initialEntryMode: DatePickerEntryMode.input,
+                );
                 if (d != null) setState(() => _expiry = d);
               },
               child: Container(
@@ -488,9 +551,17 @@ class _BatchDialogState extends State<_BatchDialog> {
             const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(child: _field(_hubCtrl, 'CLINIC QTY', keyboardType: TextInputType.number)),
+                Expanded(child: _field(_bulkClinicCtrl, 'CLINIC BULK', keyboardType: TextInputType.number)),
                 const SizedBox(width: 12),
-                Expanded(child: _field(_posCtrl, 'STORE QTY', keyboardType: TextInputType.number)),
+                Expanded(child: _field(_bulkStoreCtrl, 'STORE BULK', keyboardType: TextInputType.number)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: _field(_hubCtrl, 'CLINIC DISP', keyboardType: TextInputType.number)),
+                const SizedBox(width: 12),
+                Expanded(child: _field(_posCtrl, 'STORE POS', keyboardType: TextInputType.number)),
               ],
             ),
           ],
@@ -507,6 +578,8 @@ class _BatchDialogState extends State<_BatchDialog> {
               expiryDate: _expiry,
               mainStock: int.tryParse(_hubCtrl.text) ?? 0,
               storeStock: int.tryParse(_posCtrl.text) ?? 0,
+              bulkClinicStock: int.tryParse(_bulkClinicCtrl.text) ?? 0,
+              bulkStoreStock: int.tryParse(_bulkStoreCtrl.text) ?? 0,
             ));
             Navigator.pop(context);
           },

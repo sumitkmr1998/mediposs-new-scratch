@@ -801,6 +801,8 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
                               start: now.subtract(const Duration(days: 30)),
                               end: now,
                             ),
+                            locale: const Locale('en', 'GB'),
+                            initialEntryMode: DatePickerEntryMode.input,
                           );
                           if (picked != null) {
                             setState(() {
@@ -896,9 +898,13 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
                               child: medicine != null
                                   ? Column(
                                       children: [
-                                        _buildStockFieldRow('Store Front Stock', '${medicine.storeStock} ${medicine.unit}', Icons.store),
+                                        _buildStockFieldRow('Store Stock', '${medicine.storeStock} ${medicine.unit}', Icons.storefront),
                                         const Divider(),
-                                        _buildStockFieldRow('Warehouse Stock', '${medicine.mainStock} ${medicine.unit}', Icons.warehouse),
+                                        _buildStockFieldRow('Clinic Stock', '${medicine.mainStock} ${medicine.unit}', Icons.medical_services),
+                                        const Divider(),
+                                        _buildStockFieldRow('Store Bulk Stock', '${medicine.bulkStoreStock} ${medicine.unit}', Icons.warehouse_outlined),
+                                        const Divider(),
+                                        _buildStockFieldRow('Clinic Bulk Stock', '${medicine.bulkClinicStock} ${medicine.unit}', Icons.warehouse),
                                         const Divider(),
                                         _buildStockFieldRow('Purchase Cost', '₹${medicine.purchasePrice.toStringAsFixed(2)}', Icons.shopping_cart),
                                         const Divider(),
@@ -1131,7 +1137,9 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _buildMiniBatchField('Store', '${b.storeStock}'),
-              _buildMiniBatchField('Warehouse', '${b.mainStock}'),
+              _buildMiniBatchField('Clinic', '${b.mainStock}'),
+              _buildMiniBatchField('S.Bulk', '${b.bulkStoreStock}'),
+              _buildMiniBatchField('C.Bulk', '${b.bulkClinicStock}'),
               _buildMiniBatchField('Expiry', DateFormat('dd/MM/yyyy').format(b.expiryDate)),
             ],
           ),

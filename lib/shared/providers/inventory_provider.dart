@@ -403,7 +403,12 @@ class InventoryProvider extends ChangeNotifier {
         for (var batch in batches) {
           if (remaining <= 0) break;
 
-          int available = (from == 'main') ? batch.mainStock : batch.storeStock;
+          int available = 0;
+          if (from == 'main') available = batch.mainStock;
+          else if (from == 'store') available = batch.storeStock;
+          else if (from == 'bulkClinic') available = batch.bulkClinicStock;
+          else if (from == 'bulkStore') available = batch.bulkStoreStock;
+
           if (available > 0) {
             final move = remaining > available ? available : remaining;
             _transferInBatch(batch, move, from, to);
@@ -412,13 +417,23 @@ class InventoryProvider extends ChangeNotifier {
         }
       }
 
-      if (from == 'main' && to == 'store') {
-        m.mainStock = (m.mainStock - qty).clamp(0, 999999);
-        m.storeStock += qty;
-      } else if (from == 'store' && to == 'main') {
-        m.storeStock = (m.storeStock - qty).clamp(0, 999999);
-        m.mainStock += qty;
+      int getStock(String loc) {
+        if (loc == 'main') return m.mainStock;
+        if (loc == 'store') return m.storeStock;
+        if (loc == 'bulkClinic') return m.bulkClinicStock;
+        if (loc == 'bulkStore') return m.bulkStoreStock;
+        return 0;
       }
+      void setStock(String loc, int val) {
+        if (loc == 'main') m.mainStock = val;
+        if (loc == 'store') m.storeStock = val;
+        if (loc == 'bulkClinic') m.bulkClinicStock = val;
+        if (loc == 'bulkStore') m.bulkStoreStock = val;
+      }
+
+      setStock(from, (getStock(from) - qty).clamp(0, 999999));
+      setStock(to, getStock(to) + qty);
+
       m.updatedAt = DateTime.now();
       _box.put(m);
       load();
@@ -436,13 +451,23 @@ class InventoryProvider extends ChangeNotifier {
 
   void _transferInBatch(
       MedicineBatch batch, int qty, String from, String to) {
-    if (from == 'main' && to == 'store') {
-      batch.mainStock = (batch.mainStock - qty).clamp(0, 999999);
-      batch.storeStock += qty;
-    } else if (from == 'store' && to == 'main') {
-      batch.storeStock = (batch.storeStock - qty).clamp(0, 999999);
-      batch.mainStock += qty;
+    int getStock(String loc) {
+      if (loc == 'main') return batch.mainStock;
+      if (loc == 'store') return batch.storeStock;
+      if (loc == 'bulkClinic') return batch.bulkClinicStock;
+      if (loc == 'bulkStore') return batch.bulkStoreStock;
+      return 0;
     }
+    void setStock(String loc, int val) {
+      if (loc == 'main') batch.mainStock = val;
+      if (loc == 'store') batch.storeStock = val;
+      if (loc == 'bulkClinic') batch.bulkClinicStock = val;
+      if (loc == 'bulkStore') batch.bulkStoreStock = val;
+    }
+
+    setStock(from, (getStock(from) - qty).clamp(0, 999999));
+    setStock(to, getStock(to) + qty);
+
     _batchBox.put(batch);
   }
 
@@ -450,13 +475,20 @@ class InventoryProvider extends ChangeNotifier {
   void addBatchStock(
     Map<int, int> mainUpdates, {
     Map<int, int> storeUpdates = const {},
+    Map<int, int> bulkClinicUpdates = const {},
+    Map<int, int> bulkStoreUpdates = const {},
     String batchNo = '',
     DateTime? expiryDate,
     String note = '',
     String supplier = '',
     SyncService? syncService,
   }) {
-    final ids = {...mainUpdates.keys, ...storeUpdates.keys}.toList();
+    final ids = {
+      ...mainUpdates.keys,
+      ...storeUpdates.keys,
+      ...bulkClinicUpdates.keys,
+      ...bulkStoreUpdates.keys
+    }.toList();
     final medicinesToUpdate = _box.getMany(ids);
     final List<Medicine> finalUpdates = [];
     final List<PurchaseRecord> purchaseRecords = [];
@@ -466,7 +498,9 @@ class InventoryProvider extends ChangeNotifier {
       if (m != null) {
         final mainQty = mainUpdates[m.id] ?? 0;
         final storeQty = storeUpdates[m.id] ?? 0;
-        if (mainQty <= 0 && storeQty <= 0) continue;
+        final bulkClinicQty = bulkClinicUpdates[m.id] ?? 0;
+        final bulkStoreQty = bulkStoreUpdates[m.id] ?? 0;
+        if (mainQty <= 0 && storeQty <= 0 && bulkClinicQty <= 0 && bulkStoreQty <= 0) continue;
 
         // Update or create batch
         if (batchNo.isNotEmpty && expiryDate != null) {
@@ -477,18 +511,24 @@ class InventoryProvider extends ChangeNotifier {
               expiryDate: expiryDate,
               mainStock: mainQty,
               storeStock: storeQty,
+              bulkClinicStock: bulkClinicQty,
+              bulkStoreStock: bulkStoreQty,
             );
             batch.medicine.target = m;
             m.batches.add(batch);
           } else {
             batch.mainStock += mainQty;
             batch.storeStock += storeQty;
+            batch.bulkClinicStock += bulkClinicQty;
+            batch.bulkStoreStock += bulkStoreQty;
             _batchBox.put(batch);
           }
         }
 
         m.mainStock += mainQty;
         m.storeStock += storeQty;
+        m.bulkClinicStock += bulkClinicQty;
+        m.bulkStoreStock += bulkStoreQty;
         m.updatedAt = now;
         finalUpdates.add(m);
 
@@ -496,7 +536,7 @@ class InventoryProvider extends ChangeNotifier {
         purchaseRecords.add(PurchaseRecord(
           medicineId: m.id,
           medicineName: m.name,
-          qty: mainQty + storeQty,
+          qty: mainQty + storeQty + bulkClinicQty + bulkStoreQty,
           purchasePrice: m.purchasePrice,
           purchasedAt: now,
           note: note,
@@ -591,6 +631,8 @@ class InventoryProvider extends ChangeNotifier {
     // 1. Revert medicine's aggregate stock
     m.mainStock = (m.mainStock - batch.mainStock).clamp(0, 999999);
     m.storeStock = (m.storeStock - batch.storeStock).clamp(0, 999999);
+    m.bulkClinicStock = (m.bulkClinicStock - batch.bulkClinicStock).clamp(0, 999999);
+    m.bulkStoreStock = (m.bulkStoreStock - batch.bulkStoreStock).clamp(0, 999999);
     m.updatedAt = DateTime.now();
     
     // 2. Remove batch from medicine's ToMany (ObjectBox handles this but we need to put m)
@@ -615,12 +657,16 @@ class InventoryProvider extends ChangeNotifier {
     required DateTime expiryDate,
     required int mainStock,
     required int storeStock,
+    int bulkClinicStock = 0,
+    int bulkStoreStock = 0,
     SyncService? syncService,
   }) {
     batch.batchNo = batchNo;
     batch.expiryDate = expiryDate;
     batch.mainStock = mainStock.clamp(0, 999999);
     batch.storeStock = storeStock.clamp(0, 999999);
+    batch.bulkClinicStock = bulkClinicStock.clamp(0, 999999);
+    batch.bulkStoreStock = bulkStoreStock.clamp(0, 999999);
     
     _batchBox.put(batch);
     
@@ -649,6 +695,8 @@ class InventoryProvider extends ChangeNotifier {
             'sellingPrice': m.sellingPrice,
             'mainStock': m.mainStock,
             'storeStock': m.storeStock,
+            'bulkClinicStock': m.bulkClinicStock,
+            'bulkStoreStock': m.bulkStoreStock,
             'lowStockThreshold': m.lowStockThreshold,
             'updatedAt': m.updatedAt.toIso8601String(),
           })

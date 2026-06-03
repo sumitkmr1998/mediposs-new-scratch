@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../shared/providers/inventory_provider.dart';
+import '../shared/providers/auth_provider.dart';
 import '../shared/models/medicine.dart';
 import '../shared/services/sync_service.dart';
+import '../theme/app_theme.dart';
 
 class MedicineDialog extends StatefulWidget {
   final Medicine? medicine;
@@ -37,6 +39,10 @@ class _MedicineDialogState extends State<MedicineDialog> {
       TextEditingController(text: '0'); // Default to 0 for adding batches
   late final _storeStockCtrl =
       TextEditingController(text: '0');
+  late final _bulkClinicCtrl =
+      TextEditingController(text: '0');
+  late final _bulkStoreCtrl =
+      TextEditingController(text: '0');
   late final _thresholdCtrl = TextEditingController(
       text: '${widget.medicine?.lowStockThreshold ?? 10}');
 
@@ -50,6 +56,8 @@ class _MedicineDialogState extends State<MedicineDialog> {
     if (widget.medicine != null) {
       _mainStockCtrl.text = '${widget.medicine!.mainStock}';
       _storeStockCtrl.text = '${widget.medicine!.storeStock}';
+      _bulkClinicCtrl.text = '${widget.medicine!.bulkClinicStock}';
+      _bulkStoreCtrl.text = '${widget.medicine!.bulkStoreStock}';
     }
   }
 
@@ -98,12 +106,24 @@ class _MedicineDialogState extends State<MedicineDialog> {
                 const SizedBox(height: 12),
                 Row(children: [
                   Expanded(
-                      child: _field(_mainStockCtrl, widget.medicine != null ? 'Clinic Stock' : 'Add to Clinic',
+                      child: _field(_bulkClinicCtrl, widget.medicine != null ? 'Clinic Bulk' : 'Add to Clinic Bulk',
                           keyboardType: TextInputType.number,
                           readOnly: widget.medicine != null)),
                   const SizedBox(width: 12),
                   Expanded(
-                      child: _field(_storeStockCtrl, widget.medicine != null ? 'Store Stock' : 'Add to Store',
+                      child: _field(_bulkStoreCtrl, widget.medicine != null ? 'Store Bulk' : 'Add to Store Bulk',
+                          keyboardType: TextInputType.number,
+                          readOnly: widget.medicine != null)),
+                ]),
+                const SizedBox(height: 12),
+                Row(children: [
+                  Expanded(
+                      child: _field(_mainStockCtrl, widget.medicine != null ? 'Clinic Dispense' : 'Add to Clinic Disp.',
+                          keyboardType: TextInputType.number,
+                          readOnly: widget.medicine != null)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                      child: _field(_storeStockCtrl, widget.medicine != null ? 'Store POS' : 'Add to Store POS',
                           keyboardType: TextInputType.number,
                           readOnly: widget.medicine != null)),
                 ]),
@@ -140,7 +160,19 @@ class _MedicineDialogState extends State<MedicineDialog> {
         TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel')),
-        if (isEdit || _selectedExisting != null) ...[
+        if (isEdit) ...[
+          if (context.read<AuthProvider>().currentUser?.role.toLowerCase() == 'admin' ||
+              context.read<AuthProvider>().currentUser?.canDeleteInventory == true)
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: AppTheme.danger),
+              onPressed: () {
+                final m = widget.medicine ?? _selectedExisting;
+                if (m != null) {
+                  _confirmDeleteMedicine(context, m);
+                }
+              },
+              child: const Text('Delete Medicine'),
+            ),
           TextButton(
             onPressed: _updateMetadata,
             child: const Text('Update Info'),
@@ -155,6 +187,29 @@ class _MedicineDialogState extends State<MedicineDialog> {
             child: const Text('Create & Add'),
           ),
       ],
+    );
+  }
+
+  void _confirmDeleteMedicine(BuildContext context, Medicine m) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Medicine?'),
+        content: Text('Are you sure you want to permanently delete ${m.name}? This will remove all batch and stock details.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+            onPressed: () {
+              context.read<InventoryProvider>().deleteMedicine(m.id);
+              Navigator.pop(ctx); // Close confirmation
+              Navigator.pop(context); // Close medicine dialog
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -248,8 +303,10 @@ class _MedicineDialogState extends State<MedicineDialog> {
 
     final inputMain = int.tryParse(_mainStockCtrl.text) ?? 0;
     final inputStore = int.tryParse(_storeStockCtrl.text) ?? 0;
+    final inputBulkClinic = int.tryParse(_bulkClinicCtrl.text) ?? 0;
+    final inputBulkStore = int.tryParse(_bulkStoreCtrl.text) ?? 0;
 
-    if (inputMain <= 0 && inputStore <= 0) {
+    if (inputMain <= 0 && inputStore <= 0 && inputBulkClinic <= 0 && inputBulkStore <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter quantity for the new batch')),
       );
@@ -273,6 +330,8 @@ class _MedicineDialogState extends State<MedicineDialog> {
       inv.addBatchStock(
         {newM.id: inputMain},
         storeUpdates: {newM.id: inputStore},
+        bulkClinicUpdates: {newM.id: inputBulkClinic},
+        bulkStoreUpdates: {newM.id: inputBulkStore},
         batchNo: _batchNoCtrl.text.isNotEmpty ? _batchNoCtrl.text.trim() : 'B-${DateTime.now().millisecondsSinceEpoch}',
         expiryDate: _expiryDate,
         syncService: sync,
@@ -282,6 +341,8 @@ class _MedicineDialogState extends State<MedicineDialog> {
       inv.addBatchStock(
         {m.id: inputMain},
         storeUpdates: {m.id: inputStore},
+        bulkClinicUpdates: {m.id: inputBulkClinic},
+        bulkStoreUpdates: {m.id: inputBulkStore},
         batchNo: _batchNoCtrl.text.isNotEmpty ? _batchNoCtrl.text.trim() : 'B-${DateTime.now().millisecondsSinceEpoch}',
         expiryDate: _expiryDate,
         syncService: sync,
@@ -300,6 +361,8 @@ class _MedicineDialogState extends State<MedicineDialog> {
       initialDate: _expiryDate,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 3650)),
+      locale: const Locale('en', 'GB'),
+      initialEntryMode: DatePickerEntryMode.input,
     );
     if (picked != null) {
       setState(() => _expiryDate = picked);

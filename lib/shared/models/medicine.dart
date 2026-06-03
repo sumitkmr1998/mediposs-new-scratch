@@ -18,6 +18,8 @@ class Medicine {
   // or we can transition to getters. Let's keep them as cached values or transition.
   int mainStock; // Main Warehouse quantity
   int storeStock; // Store Stock (Shop floor) quantity
+  int bulkClinicStock; // Clinic Bulk Warehouse quantity
+  int bulkStoreStock; // Store Bulk Warehouse quantity
 
   int lowStockThreshold;
 
@@ -41,6 +43,8 @@ class Medicine {
     required this.sellingPrice,
     this.mainStock = 0,
     this.storeStock = 0,
+    this.bulkClinicStock = 0,
+    this.bulkStoreStock = 0,
     this.lowStockThreshold = 10,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -58,6 +62,8 @@ class Medicine {
         'sellingPrice': sellingPrice,
         'mainStock': mainStock,
         'storeStock': storeStock,
+        'bulkClinicStock': bulkClinicStock,
+        'bulkStoreStock': bulkStoreStock,
         'lowStockThreshold': lowStockThreshold,
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
@@ -76,6 +82,8 @@ class Medicine {
       sellingPrice: (json['sellingPrice'] as num).toDouble(),
       mainStock: json['mainStock'] ?? 0,
       storeStock: json['storeStock'] ?? 0,
+      bulkClinicStock: json['bulkClinicStock'] ?? 0,
+      bulkStoreStock: json['bulkStoreStock'] ?? 0,
       lowStockThreshold: json['lowStockThreshold'] ?? 10,
       createdAt: DateHelper.parseDateTime(json['createdAt']),
       updatedAt: DateHelper.parseDateTime(json['updatedAt']),
@@ -94,17 +102,23 @@ class Medicine {
   void recalculateStockFromBatches() {
     int totalMain = 0;
     int totalStore = 0;
+    int totalBulkClinic = 0;
+    int totalBulkStore = 0;
     for (final batch in batches) {
       totalMain += batch.mainStock;
       totalStore += batch.storeStock;
+      totalBulkClinic += batch.bulkClinicStock;
+      totalBulkStore += batch.bulkStoreStock;
     }
     mainStock = totalMain.clamp(0, 999999);
     storeStock = totalStore.clamp(0, 999999);
+    bulkClinicStock = totalBulkClinic.clamp(0, 999999);
+    bulkStoreStock = totalBulkStore.clamp(0, 999999);
     updatedAt = DateTime.now();
   }
 
   bool get isLowStock => storeStock <= lowStockThreshold;
-  int get totalStock => mainStock + storeStock;
+  int get totalStock => mainStock + storeStock + bulkClinicStock + bulkStoreStock;
   double get profitMargin => sellingPrice - purchasePrice;
 
   /// Returns the batch that is expiring soonest and has store stock
@@ -153,6 +167,8 @@ class MedicineBatch {
 
   int mainStock;
   int storeStock;
+  int bulkClinicStock;
+  int bulkStoreStock;
 
   final medicine = ToOne<Medicine>();
 
@@ -162,6 +178,8 @@ class MedicineBatch {
     required this.expiryDate,
     this.mainStock = 0,
     this.storeStock = 0,
+    this.bulkClinicStock = 0,
+    this.bulkStoreStock = 0,
   });
 
   Map<String, dynamic> toJson() => {
@@ -170,6 +188,8 @@ class MedicineBatch {
         'expiryDate': expiryDate.toIso8601String(),
         'mainStock': mainStock,
         'storeStock': storeStock,
+        'bulkClinicStock': bulkClinicStock,
+        'bulkStoreStock': bulkStoreStock,
       };
 
   factory MedicineBatch.fromJson(Map<String, dynamic> json) => MedicineBatch(
@@ -178,5 +198,7 @@ class MedicineBatch {
         expiryDate: DateHelper.parseDateTime(json['expiryDate']) ?? DateTime.now(),
         mainStock: json['mainStock'] ?? 0,
         storeStock: json['storeStock'] ?? 0,
+        bulkClinicStock: json['bulkClinicStock'] ?? 0,
+        bulkStoreStock: json['bulkStoreStock'] ?? 0,
       );
 }

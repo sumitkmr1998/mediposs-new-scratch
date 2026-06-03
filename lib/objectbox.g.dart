@@ -264,7 +264,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(2, 1561353773588181738),
       name: 'AppUser',
-      lastPropertyId: const obx_int.IdUid(34, 8023281741824268019),
+      lastPropertyId: const obx_int.IdUid(35, 5759523613226598144),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -426,6 +426,11 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(34, 8023281741824268019),
             name: 'canProcessClinicalDispenses',
             type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(35, 5759523613226598144),
+            name: 'canViewAnalytics',
+            type: 1,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
@@ -581,7 +586,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(5, 3743056661326749831),
       name: 'Medicine',
-      lastPropertyId: const obx_int.IdUid(13, 7569632734949045615),
+      lastPropertyId: const obx_int.IdUid(15, 4026296001162008986),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -648,6 +653,16 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(13, 7569632734949045615),
             name: 'createdAt',
             type: 10,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(14, 7450983764310566445),
+            name: 'bulkClinicStock',
+            type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(15, 4026296001162008986),
+            name: 'bulkStoreStock',
+            type: 6,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[
@@ -1138,7 +1153,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(13, 6725712331159432176),
       name: 'MedicineBatch',
-      lastPropertyId: const obx_int.IdUid(6, 3748165661863182735),
+      lastPropertyId: const obx_int.IdUid(8, 469942928734120521),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -1172,7 +1187,17 @@ final _entities = <obx_int.ModelEntity>[
             type: 11,
             flags: 520,
             indexId: const obx_int.IdUid(1, 5015225040438721990),
-            relationTarget: 'Medicine')
+            relationTarget: 'Medicine'),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(7, 1075741254761701565),
+            name: 'bulkClinicStock',
+            type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(8, 469942928734120521),
+            name: 'bulkStoreStock',
+            type: 6,
+            flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
       backlinks: <obx_int.ModelBacklink>[]),
@@ -1729,7 +1754,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final nameOffset = fbb.writeString(object.name);
           final roleOffset = fbb.writeString(object.role);
           final pinOffset = fbb.writeString(object.pin);
-          fbb.startTable(35);
+          fbb.startTable(36);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, nameOffset);
           fbb.addOffset(2, roleOffset);
@@ -1762,6 +1787,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addBool(29, object.canDeleteAppointments);
           fbb.addBool(32, object.canProcessRetailSales);
           fbb.addBool(33, object.canProcessClinicalDispenses);
+          fbb.addBool(34, object.canViewAnalytics);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -1784,6 +1810,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.BoolReader().vTableGet(buffer, rootOffset, 16, false);
           final canViewDashboardParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 18, false);
+          final canViewAnalyticsParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 72, false);
           final canViewInventoryParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 20, false);
           final canEditInventoryParam =
@@ -1841,6 +1869,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
               canAccessSettings: canAccessSettingsParam,
               canManageUsers: canManageUsersParam,
               canViewDashboard: canViewDashboardParam,
+              canViewAnalytics: canViewAnalyticsParam,
               canViewInventory: canViewInventoryParam,
               canEditInventory: canEditInventoryParam,
               canOverrideStock: canOverrideStockParam,
@@ -2047,7 +2076,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final barcodeOffset = fbb.writeString(object.barcode);
           final categoryOffset = fbb.writeString(object.category);
           final unitOffset = fbb.writeString(object.unit);
-          fbb.startTable(14);
+          fbb.startTable(16);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, nameOffset);
           fbb.addOffset(2, barcodeOffset);
@@ -2061,6 +2090,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addInt64(10, object.updatedAt.millisecondsSinceEpoch);
           fbb.addBool(11, object.synced);
           fbb.addInt64(12, object.createdAt.millisecondsSinceEpoch);
+          fbb.addInt64(13, object.bulkClinicStock);
+          fbb.addInt64(14, object.bulkStoreStock);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -2085,6 +2116,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 18, 0);
           final storeStockParam =
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 20, 0);
+          final bulkClinicStockParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 30, 0);
+          final bulkStoreStockParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 32, 0);
           final lowStockThresholdParam =
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 22, 0);
           final createdAtParam = DateTime.fromMillisecondsSinceEpoch(
@@ -2103,6 +2138,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               sellingPrice: sellingPriceParam,
               mainStock: mainStockParam,
               storeStock: storeStockParam,
+              bulkClinicStock: bulkClinicStockParam,
+              bulkStoreStock: bulkStoreStockParam,
               lowStockThreshold: lowStockThresholdParam,
               createdAt: createdAtParam,
               updatedAt: updatedAtParam,
@@ -2647,13 +2684,15 @@ obx_int.ModelDefinition getObjectBoxModel() {
         },
         objectToFB: (MedicineBatch object, fb.Builder fbb) {
           final batchNoOffset = fbb.writeString(object.batchNo);
-          fbb.startTable(7);
+          fbb.startTable(9);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, batchNoOffset);
           fbb.addInt64(2, object.expiryDate.millisecondsSinceEpoch);
           fbb.addInt64(3, object.mainStock);
           fbb.addInt64(4, object.storeStock);
           fbb.addInt64(5, object.medicine.targetId);
+          fbb.addInt64(6, object.bulkClinicStock);
+          fbb.addInt64(7, object.bulkStoreStock);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -2670,12 +2709,18 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 10, 0);
           final storeStockParam =
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 12, 0);
+          final bulkClinicStockParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 16, 0);
+          final bulkStoreStockParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 18, 0);
           final object = MedicineBatch(
               id: idParam,
               batchNo: batchNoParam,
               expiryDate: expiryDateParam,
               mainStock: mainStockParam,
-              storeStock: storeStockParam);
+              storeStock: storeStockParam,
+              bulkClinicStock: bulkClinicStockParam,
+              bulkStoreStock: bulkStoreStockParam);
           object.medicine.targetId =
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 14, 0);
           object.medicine.attach(store);
@@ -3255,6 +3300,10 @@ class AppUser_ {
   /// See [AppUser.canProcessClinicalDispenses].
   static final canProcessClinicalDispenses =
       obx.QueryBooleanProperty<AppUser>(_entities[1].properties[31]);
+
+  /// See [AppUser.canViewAnalytics].
+  static final canViewAnalytics =
+      obx.QueryBooleanProperty<AppUser>(_entities[1].properties[32]);
 }
 
 /// [Appointment] entity fields to define ObjectBox queries.
@@ -3420,6 +3469,14 @@ class Medicine_ {
   /// See [Medicine.createdAt].
   static final createdAt =
       obx.QueryDateProperty<Medicine>(_entities[4].properties[12]);
+
+  /// See [Medicine.bulkClinicStock].
+  static final bulkClinicStock =
+      obx.QueryIntegerProperty<Medicine>(_entities[4].properties[13]);
+
+  /// See [Medicine.bulkStoreStock].
+  static final bulkStoreStock =
+      obx.QueryIntegerProperty<Medicine>(_entities[4].properties[14]);
 
   /// see [Medicine.batches]
   static final batches = obx.QueryRelationToMany<Medicine, MedicineBatch>(
@@ -3803,6 +3860,14 @@ class MedicineBatch_ {
   /// See [MedicineBatch.medicine].
   static final medicine = obx.QueryRelationToOne<MedicineBatch, Medicine>(
       _entities[12].properties[5]);
+
+  /// See [MedicineBatch.bulkClinicStock].
+  static final bulkClinicStock =
+      obx.QueryIntegerProperty<MedicineBatch>(_entities[12].properties[6]);
+
+  /// See [MedicineBatch.bulkStoreStock].
+  static final bulkStoreStock =
+      obx.QueryIntegerProperty<MedicineBatch>(_entities[12].properties[7]);
 }
 
 /// [SyncQueueItem] entity fields to define ObjectBox queries.

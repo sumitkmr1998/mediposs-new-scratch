@@ -30,6 +30,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
 
   // Dashboard
   bool _canViewDashboard = false;
+  bool _canViewAnalytics = false;
 
   // Inventory
   bool _canViewInventory = false;
@@ -82,6 +83,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
       _canAccessSettings = u.canAccessSettings;
       _canManageUsers = u.canManageUsers;
       _canViewDashboard = u.canViewDashboard;
+      _canViewAnalytics = u.canViewAnalytics;
 
       _canViewInventory = u.canViewInventory;
       _canEditInventory = u.canEditInventory;
@@ -123,6 +125,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
       _canAccessSettings = tempUser.canAccessSettings;
       _canManageUsers = tempUser.canManageUsers;
       _canViewDashboard = tempUser.canViewDashboard;
+      _canViewAnalytics = tempUser.canViewAnalytics;
       _canViewInventory = tempUser.canViewInventory;
       _canEditInventory = tempUser.canEditInventory;
       _canViewWarehouse = tempUser.canViewWarehouse;
@@ -179,6 +182,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
     u.canAccessSettings = _canAccessSettings;
     u.canManageUsers = _canManageUsers;
     u.canViewDashboard = _canViewDashboard;
+    u.canViewAnalytics = _canViewAnalytics;
 
     u.canViewInventory = _canViewInventory;
     u.canEditInventory = _canEditInventory;
@@ -379,46 +383,139 @@ class _UserFormDialogState extends State<UserFormDialog> {
                                 title: 'POS & Sales',
                                 icon: Icons.shopping_basket_outlined,
                                 children: [
-                                  _PermTile('Access Terminal', 'Bill customers at POS', _canAccessPOS, (v) => setState(() => _canAccessPOS = v)),
-                                  _PermTile('Process Retail Sales', 'Allow standard retail checkout (GST)', _canProcessRetailSales, (v) => setState(() => _canProcessRetailSales = v)),
-                                  _PermTile('Process Clinical Dispenses', 'Allow clinical dispensing (internal consumption)', _canProcessClinicalDispenses, (v) => setState(() => _canProcessClinicalDispenses = v)),
-                                  _PermTile('Manual Discounts', 'Apply custom discounts', _canDiscountSales, (v) => setState(() => _canDiscountSales = v)),
-                                  _PermTile('Price Overrides', 'Change item price at checkout', _canOverridePrice, (v) => setState(() => _canOverridePrice = v)),
-                                  _PermTile('Bulk Discounts', 'Discount entire bill amount', _canBulkDiscount, (v) => setState(() => _canBulkDiscount = v)),
-                                  _PermTile('Void Receipts', 'Delete/Cancel past sales', _canVoidSales, (v) => setState(() => _canVoidSales = v)),
-                                  _PermTile('Process Returns', 'Handle item returns/refunds', _canProcessReturns, (v) => setState(() => _canProcessReturns = v)),
+                                  _PermTile('Access Terminal', 'Bill customers at POS', _canAccessPOS, (v) => setState(() {
+                                    _canAccessPOS = v;
+                                    if (!v) {
+                                      _canProcessRetailSales = false;
+                                      _canProcessClinicalDispenses = false;
+                                      _canDiscountSales = false;
+                                      _canOverridePrice = false;
+                                      _canBulkDiscount = false;
+                                    }
+                                  })),
+                                  _PermTile('Process Retail Sales', 'Allow standard retail checkout (GST)', _canProcessRetailSales, (v) => setState(() {
+                                    _canProcessRetailSales = v;
+                                    if (v) _canAccessPOS = true;
+                                  })),
+                                  _PermTile('Process Clinical Dispenses', 'Allow clinical dispensing (internal consumption)', _canProcessClinicalDispenses, (v) => setState(() {
+                                    _canProcessClinicalDispenses = v;
+                                    if (v) _canAccessPOS = true;
+                                  })),
+                                  _PermTile('Manual Discounts', 'Apply custom discounts', _canDiscountSales, (v) => setState(() {
+                                    _canDiscountSales = v;
+                                    if (v) _canAccessPOS = true;
+                                  })),
+                                  _PermTile('Price Overrides', 'Change item price at checkout', _canOverridePrice, (v) => setState(() {
+                                    _canOverridePrice = v;
+                                    if (v) _canAccessPOS = true;
+                                  })),
+                                  _PermTile('Bulk Discounts', 'Discount entire bill amount', _canBulkDiscount, (v) => setState(() {
+                                    _canBulkDiscount = v;
+                                    if (v) _canAccessPOS = true;
+                                  })),
+                                  _PermTile('Void Receipts', 'Delete/Cancel past sales', _canVoidSales, (v) => setState(() {
+                                    _canVoidSales = v;
+                                    if (v) _canViewSalesHistory = true;
+                                  })),
+                                  _PermTile('Process Returns', 'Handle item returns/refunds', _canProcessReturns, (v) => setState(() {
+                                    _canProcessReturns = v;
+                                    if (v) _canViewSalesHistory = true;
+                                  })),
                                 ],
                               ),
                               _PermGroup(
                                 title: 'Inventory & Warehouse',
                                 icon: Icons.inventory_2_outlined,
                                 children: [
-                                  _PermTile('Manage Stock', 'View and audit stock levels', _canViewInventory, (v) => setState(() => _canViewInventory = v)),
-                                  _PermTile('Modify Items', 'Edit medicine details/pricing', _canEditInventory, (v) => setState(() => _canEditInventory = v)),
-                                  _PermTile('Delete Items', 'Permanently remove medicines', _canDeleteInventory, (v) => setState(() => _canDeleteInventory = v)),
-                                  _PermTile('Stock Corrections', 'Manually override stock counts', _canOverrideStock, (v) => setState(() => _canOverrideStock = v)),
-                                  _PermTile('Warehouse HQ', 'Manage main distribution', _canViewWarehouse, (v) => setState(() => _canViewWarehouse = v)),
-                                  _PermTile('Execute Transfers', 'Move stock between locations', _canTransferStock, (v) => setState(() => _canTransferStock = v)),
+                                  _PermTile('Manage Stock', 'View and audit stock levels', _canViewInventory, (v) => setState(() {
+                                    _canViewInventory = v;
+                                    if (!v) {
+                                      _canEditInventory = false;
+                                      _canDeleteInventory = false;
+                                      _canOverrideStock = false;
+                                    }
+                                  })),
+                                  _PermTile('Modify Items', 'Edit medicine details/pricing', _canEditInventory, (v) => setState(() {
+                                    _canEditInventory = v;
+                                    if (v) _canViewInventory = true;
+                                    if (!v) _canDeleteInventory = false;
+                                  })),
+                                  _PermTile('Delete Items', 'Permanently remove medicines', _canDeleteInventory, (v) => setState(() {
+                                    _canDeleteInventory = v;
+                                    if (v) {
+                                      _canEditInventory = true;
+                                      _canViewInventory = true;
+                                    }
+                                  })),
+                                  _PermTile('Stock Corrections', 'Manually override stock counts', _canOverrideStock, (v) => setState(() {
+                                    _canOverrideStock = v;
+                                    if (v) _canViewInventory = true;
+                                  })),
+                                  _PermTile('Warehouse HQ', 'Manage main distribution', _canViewWarehouse, (v) => setState(() {
+                                    _canViewWarehouse = v;
+                                    if (!v) _canTransferStock = false;
+                                  })),
+                                  _PermTile('Execute Transfers', 'Move stock between locations', _canTransferStock, (v) => setState(() {
+                                    _canTransferStock = v;
+                                    if (v) _canViewWarehouse = true;
+                                  })),
                                 ],
                               ),
                               _PermGroup(
                                 title: 'OPD & Clinical',
                                 icon: Icons.medical_services_outlined,
                                 children: [
-                                  _PermTile('Queue Management', 'Manage patient visits', _canAccessOPD, (v) => setState(() => _canAccessOPD = v)),
-                                  _PermTile('Patient Privacy', 'View prescriptions & history', _canAccessMedicalRecords, (v) => setState(() => _canAccessMedicalRecords = v)),
-                                  _PermTile('Manage Doctors', 'Edit doctor fees & profiles', _canManageDoctors, (v) => setState(() => _canManageDoctors = v)),
-                                  _PermTile('Clinical Reports', 'View OPD revenue & statistics', _canViewOpdReports, (v) => setState(() => _canViewOpdReports = v)),
-                                  _PermTile('Delete Patients', 'Remove patient files', _canDeletePatients, (v) => setState(() => _canDeletePatients = v)),
-                                  _PermTile('Cancel Appointments', 'Remove visits from queue', _canDeleteAppointments, (v) => setState(() => _canDeleteAppointments = v)),
+                                  _PermTile('Queue Management', 'Manage patient visits', _canAccessOPD, (v) => setState(() {
+                                    _canAccessOPD = v;
+                                    if (!v) {
+                                      _canAccessMedicalRecords = false;
+                                      _canManageDoctors = false;
+                                      _canViewOpdReports = false;
+                                      _canDeletePatients = false;
+                                      _canDeleteAppointments = false;
+                                    }
+                                  })),
+                                  _PermTile('Patient Privacy', 'View prescriptions & history', _canAccessMedicalRecords, (v) => setState(() {
+                                    _canAccessMedicalRecords = v;
+                                    if (v) _canAccessOPD = true;
+                                  })),
+                                  _PermTile('Manage Doctors', 'Edit doctor fees & profiles', _canManageDoctors, (v) => setState(() {
+                                    _canManageDoctors = v;
+                                    if (v) _canAccessOPD = true;
+                                  })),
+                                  _PermTile('Clinical Reports', 'View OPD revenue & statistics', _canViewOpdReports, (v) => setState(() {
+                                    _canViewOpdReports = v;
+                                    if (v) _canAccessOPD = true;
+                                  })),
+                                  _PermTile('Delete Patients', 'Remove patient files', _canDeletePatients, (v) => setState(() {
+                                    _canDeletePatients = v;
+                                    if (v) _canAccessOPD = true;
+                                  })),
+                                  _PermTile('Cancel Appointments', 'Remove visits from queue', _canDeleteAppointments, (v) => setState(() {
+                                    _canDeleteAppointments = v;
+                                    if (v) _canAccessOPD = true;
+                                  })),
                                 ],
                               ),
                               _PermGroup(
                                 title: 'History & Admin',
                                 icon: Icons.admin_panel_settings_outlined,
                                 children: [
-                                  _PermTile('View Dashboard', 'Access KPI charts & metrics', _canViewDashboard, (v) => setState(() => _canViewDashboard = v)),
-                                  _PermTile('Sale Auditing', 'View history of past receipts', _canViewSalesHistory, (v) => setState(() => _canViewSalesHistory = v)),
+                                  _PermTile('View Dashboard', 'Access KPI charts & metrics', _canViewDashboard, (v) => setState(() {
+                                    _canViewDashboard = v;
+                                    if (!v) _canViewAnalytics = false;
+                                  })),
+                                  _PermTile('View Analytics', 'Access advanced business analytics hub', _canViewAnalytics, (v) => setState(() {
+                                    _canViewAnalytics = v;
+                                    if (v) _canViewDashboard = true;
+                                  })),
+                                  _PermTile('Sale Auditing', 'View history of past receipts', _canViewSalesHistory, (v) => setState(() {
+                                    _canViewSalesHistory = v;
+                                    if (!v) {
+                                      _canVoidSales = false;
+                                      _canProcessReturns = false;
+                                    }
+                                  })),
                                   _PermTile('Today Only Access', 'Restriction: Hide historical data', !_canViewHistoricalData, (v) => setState(() => _canViewHistoricalData = !v)),
                                   _PermTile('Financial Privacy', 'View purchase/cost prices', _canViewPurchasePrice, (v) => setState(() => _canViewPurchasePrice = v)),
                                   _PermTile('System Configuration', 'Access global settings', _canAccessSettings, (v) => setState(() => _canAccessSettings = v)),

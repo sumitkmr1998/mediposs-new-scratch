@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'shared/services/objectbox_service.dart';
 import 'shared/services/sync_service.dart';
@@ -377,6 +378,16 @@ class _MediPossAppState extends State<MediPossApp> with WidgetsBindingObserver {
       darkTheme: AppTheme.dark,
       themeMode: settingsProvider.themeMode,
       debugShowCheckedModeBanner: false,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('en', 'GB'),
+        Locale('en', 'US'),
+        Locale('en', 'IN'),
+      ],
       home: Consumer2<AuthProvider, SyncService>(
         builder: (ctx, auth, sync, _) {
           final isMobileDevice = !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);

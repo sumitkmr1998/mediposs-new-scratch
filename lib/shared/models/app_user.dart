@@ -17,6 +17,7 @@ class AppUser {
 
   // Dashboard
   bool canViewDashboard;
+  bool canViewAnalytics;
 
   // Inventory
   bool canViewInventory;
@@ -63,6 +64,7 @@ class AppUser {
     this.canAccessSettings = false,
     this.canManageUsers = false,
     this.canViewDashboard = false,
+    this.canViewAnalytics = false,
     this.canViewInventory = false,
     this.canEditInventory = false,
     this.canOverrideStock = false,
@@ -102,6 +104,7 @@ class AppUser {
         break;
       case 'manager':
         canViewDashboard = true;
+        canViewAnalytics = true;
         canViewInventory = true;
         canEditInventory = true;
         canViewWarehouse = true;
@@ -112,11 +115,13 @@ class AppUser {
         canDiscountSales = true;
         canViewSalesHistory = true;
         canProcessReturns = true;
+        canVoidSales = true;
         canAccessOPD = true;
         canViewPurchasePrice = true;
         canOverrideStock = true;
         canBulkDiscount = true;
         canViewHistoricalData = true;
+        canDeleteAppointments = true;
         break;
       case 'pharmacist':
         canViewInventory = true;
@@ -125,7 +130,8 @@ class AppUser {
         canTransferStock = true;
         canAccessPOS = true;
         canProcessRetailSales = true;
-        canProcessClinicalDispenses = false;
+        canProcessClinicalDispenses = true;
+        canProcessReturns = true;
         canAccessOPD = true;
         canViewHistoricalData = false; // "Today Only" for staff
         break;
@@ -135,6 +141,7 @@ class AppUser {
         canProcessClinicalDispenses = false;
         canViewInventory = true;
         canAccessOPD = true;
+        canProcessReturns = true;
         canViewHistoricalData = false; // "Today Only" for staff
         break;
       case 'doctor':
@@ -148,6 +155,7 @@ class AppUser {
         break;
       case 'accountant':
         canViewDashboard = true;
+        canViewAnalytics = true;
         canViewSalesHistory = true;
         canViewOpdReports = true;
         canViewPurchasePrice = true;
@@ -178,6 +186,7 @@ class AppUser {
     canAccessSettings = val;
     canManageUsers = val;
     canViewDashboard = val;
+    canViewAnalytics = val;
     canViewInventory = val;
     canEditInventory = val;
     canOverrideStock = val;
@@ -213,6 +222,7 @@ class AppUser {
         'canAccessSettings': canAccessSettings,
         'canManageUsers': canManageUsers,
         'canViewDashboard': canViewDashboard,
+        'canViewAnalytics': canViewAnalytics,
         'canViewInventory': canViewInventory,
         'canEditInventory': canEditInventory,
         'canOverrideStock': canOverrideStock,
@@ -248,6 +258,7 @@ class AppUser {
         canAccessSettings: json['canAccessSettings'] ?? false,
         canManageUsers: json['canManageUsers'] ?? false,
         canViewDashboard: json['canViewDashboard'] ?? false,
+        canViewAnalytics: json['canViewAnalytics'] ?? false,
         canViewInventory: json['canViewInventory'] ?? false,
         canEditInventory: json['canEditInventory'] ?? false,
         canOverrideStock: json['canOverrideStock'] ?? false,

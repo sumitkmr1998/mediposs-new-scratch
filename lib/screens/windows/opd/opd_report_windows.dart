@@ -252,6 +252,8 @@ class _OpdReportWindowsState extends State<OpdReportWindows> {
                         context: context,
                         firstDate: DateTime(2020),
                         lastDate: DateTime.now(),
+                        locale: const Locale('en', 'GB'),
+                        initialEntryMode: DatePickerEntryMode.input,
                         builder: (ctx, child) {
                           return Theme(
                             data: Theme.of(context).copyWith(
