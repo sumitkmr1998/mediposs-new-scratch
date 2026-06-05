@@ -26,4 +26,26 @@ class PurchaseRecord {
     this.note = '',
     this.supplier = '',
   }) : purchasedAt = purchasedAt ?? DateTime.now();
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'medicineId': medicineId,
+        'medicineName': medicineName,
+        'qty': qty,
+        'purchasePrice': purchasePrice,
+        'purchasedAt': purchasedAt.toIso8601String(),
+        'note': note,
+        'supplier': supplier,
+      };
+
+  factory PurchaseRecord.fromJson(Map<String, dynamic> json) => PurchaseRecord(
+        id: json['id'] ?? 0,
+        medicineId: json['medicineId'],
+        medicineName: json['medicineName'],
+        qty: json['qty'],
+        purchasePrice: (json['purchasePrice'] as num).toDouble(),
+        purchasedAt: DateTime.tryParse(json['purchasedAt'] ?? ''),
+        note: json['note'] ?? '',
+        supplier: json['supplier'] ?? '',
+      );
 }

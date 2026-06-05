@@ -35,7 +35,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(1, 637942838794498612),
       name: 'AppSettings',
-      lastPropertyId: const obx_int.IdUid(44, 6766150465846614819),
+      lastPropertyId: const obx_int.IdUid(45, 149696947389555049),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -257,6 +257,11 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(44, 6766150465846614819),
             name: 'showBatchExpiryInClinicalPrint',
             type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(45, 149696947389555049),
+            name: 'shopId',
+            type: 9,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
@@ -1536,7 +1541,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final clinicRegNoOffset = object.clinicRegNo == null
               ? null
               : fbb.writeString(object.clinicRegNo!);
-          fbb.startTable(45);
+          final shopIdOffset = fbb.writeString(object.shopId);
+          fbb.startTable(46);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, storeNameOffset);
           fbb.addOffset(2, storeAddressOffset);
@@ -1581,6 +1587,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addBool(41, object.isCompositionScheme);
           fbb.addBool(42, object.showBatchExpiryInRetailPrint);
           fbb.addBool(43, object.showBatchExpiryInClinicalPrint);
+          fbb.addOffset(44, shopIdOffset);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -1693,6 +1700,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.BoolReader().vTableGet(buffer, rootOffset, 88, false);
           final showBatchExpiryInClinicalPrintParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 90, false);
+          final shopIdParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 92, '');
           final object = AppSettings(
               id: idParam,
               storeName: storeNameParam,
@@ -1738,7 +1747,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               isCompositionScheme: isCompositionSchemeParam,
               showBatchExpiryInRetailPrint: showBatchExpiryInRetailPrintParam,
               showBatchExpiryInClinicalPrint:
-                  showBatchExpiryInClinicalPrintParam);
+                  showBatchExpiryInClinicalPrintParam,
+              shopId: shopIdParam);
 
           return object;
         }),
@@ -3169,6 +3179,10 @@ class AppSettings_ {
   /// See [AppSettings.showBatchExpiryInClinicalPrint].
   static final showBatchExpiryInClinicalPrint =
       obx.QueryBooleanProperty<AppSettings>(_entities[0].properties[43]);
+
+  /// See [AppSettings.shopId].
+  static final shopId =
+      obx.QueryStringProperty<AppSettings>(_entities[0].properties[44]);
 }
 
 /// [AppUser] entity fields to define ObjectBox queries.

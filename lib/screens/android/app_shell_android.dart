@@ -12,6 +12,7 @@ import '../../shared/services/sync_service.dart';
 import '../../shared/services/discovery_service.dart';
 import '../../shared/services/notification_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/shop_selection_dialog.dart';
 import '../dashboard_screen.dart';
 import '../pos_screen.dart';
 import '../warehouse_screen.dart';
@@ -363,7 +364,7 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
               message: 'The Windows Hub is offline or unreachable. What would you like to do?',
               actions: [
                 ElevatedButton.icon(
-                  onPressed: () => sync.enterCloudMode(),
+                  onPressed: () => showShopSelectionDialog(context),
                   icon: const Icon(Icons.cloud_sync),
                   label: const Text('Enter Cloud Mode (Firebase)'),
                   style: ElevatedButton.styleFrom(

@@ -6,6 +6,7 @@ import '../models/app_user.dart';
 import '../services/objectbox_service.dart';
 import '../services/sync_service.dart';
 import '../services/google_drive_service.dart';
+import '../services/backup_restore_service.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 
 class SettingsProvider extends ChangeNotifier {
@@ -227,13 +228,13 @@ class SettingsProvider extends ChangeNotifier {
     }
   }
  
-  Future<bool> restoreFromCloud(String fileId) async {
+  Future<bool> restoreFromCloud(String fileId, {RestoreConfig? config}) async {
     _isGoogleLoading = true;
     _googleError = null;
     notifyListeners();
  
     try {
-      await _googleDrive.downloadAndRestore(fileId);
+      await _googleDrive.downloadAndRestore(fileId, config: config);
       _isGoogleLoading = false;
       notifyListeners();
       return true;

@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:637942838794498612",
-      "lastPropertyId": "44:6766150465846614819",
+      "lastPropertyId": "45:149696947389555049",
       "name": "AppSettings",
       "properties": [
         {
@@ -228,6 +228,11 @@
           "id": "44:6766150465846614819",
           "name": "showBatchExpiryInClinicalPrint",
           "type": 1
+        },
+        {
+          "id": "45:149696947389555049",
+          "name": "shopId",
+          "type": 9
         }
       ],
       "relations": []

@@ -340,15 +340,15 @@ class _SideNav extends StatelessWidget {
                 Flexible(
                   child: Row(
                     children: [
-                      const Icon(Icons.local_pharmacy, color: AppTheme.primary, size: 28),
+                      Icon(Icons.local_pharmacy, color: Theme.of(context).colorScheme.primary, size: 28),
                       if (expanded) ...[
                         const SizedBox(width: 10),
-                        const Flexible(child: Text('MediPoss', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppTheme.primary))),
+                        Flexible(child: Text('MediPoss', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Theme.of(context).colorScheme.primary))),
                       ],
                     ],
                   ),
                 ),
-                IconButton(onPressed: onToggleCollapse, icon: Icon(isCollapsed ? Icons.menu_open : Icons.menu, color: AppTheme.primary.withValues(alpha: 0.7), size: 20)),
+                IconButton(onPressed: onToggleCollapse, icon: Icon(isCollapsed ? Icons.menu_open : Icons.menu, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7), size: 20)),
               ],
             ),
           ),
@@ -365,13 +365,13 @@ class _SideNav extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(color: selected ? AppTheme.primary.withValues(alpha: 0.15) : Colors.transparent, borderRadius: BorderRadius.circular(10)),
+                    decoration: BoxDecoration(color: selected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15) : Colors.transparent, borderRadius: BorderRadius.circular(10)),
                     child: Row(
                       children: [
-                        Icon(selected ? d.selectedIcon : d.icon, color: selected ? AppTheme.primary : context.textMutedColor, size: 20),
+                        Icon(selected ? d.selectedIcon : d.icon, color: selected ? Theme.of(context).colorScheme.primary : context.textMutedColor, size: 20),
                         if (expanded) ...[
                           const SizedBox(width: 12),
-                          Expanded(child: Text(d.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: selected ? AppTheme.primary : context.textMutedColor, fontWeight: selected ? FontWeight.w700 : FontWeight.w400))),
+                          Expanded(child: Text(d.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: selected ? Theme.of(context).colorScheme.primary : context.textMutedColor, fontWeight: selected ? FontWeight.w700 : FontWeight.w400))),
                         ],
                       ],
                     ),

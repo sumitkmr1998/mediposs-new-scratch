@@ -227,9 +227,6 @@ class _PosWindowsState extends State<PosWindows> {
       child: Focus(
         autofocus: true,
         child: Scaffold(
-          backgroundColor: cart.isReturnMode
-              ? AppTheme.danger.withValues(alpha: 0.05)
-              : null,
           appBar: AppBar(
             title: Row(
               children: [
@@ -240,13 +237,13 @@ class _PosWindowsState extends State<PosWindows> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppTheme.danger,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: const Text(
                       'RETURN MODE ACTIVE',
                       style: TextStyle(
-                        color: AppTheme.danger,
+                        color: Colors.white,
                         fontSize: 14,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1.2,
@@ -259,13 +256,13 @@ class _PosWindowsState extends State<PosWindows> {
                     segments: <ButtonSegment<bool>>[
                       ButtonSegment<bool>(
                         value: false,
-                        label: const Text('Store Sale (GST)'),
+                        label: const Text('Store Sale'),
                         icon: const Icon(Icons.shopping_bag_outlined),
                         enabled: auth.canProcessRetailSales,
                       ),
                       ButtonSegment<bool>(
                         value: true,
-                        label: const Text('Clinic Dispense (No Tax)'),
+                        label: const Text('Clinic Dispense'),
                         icon: const Icon(Icons.medical_services_outlined),
                         enabled: auth.canProcessClinicalDispenses,
                       ),
@@ -276,15 +273,13 @@ class _PosWindowsState extends State<PosWindows> {
                     },
                     style: SegmentedButton.styleFrom(
                       visualDensity: VisualDensity.compact,
-                      selectedBackgroundColor: AppTheme.primary,
+                      selectedBackgroundColor: Theme.of(context).colorScheme.primary,
                       selectedForegroundColor: Colors.white,
                     ),
                   ),
                 ],
               ],
             ),
-            backgroundColor: cart.isReturnMode ? AppTheme.danger : null,
-            foregroundColor: cart.isReturnMode ? Colors.white : null,
             actions: [
               Row(
                 children: [
@@ -292,21 +287,20 @@ class _PosWindowsState extends State<PosWindows> {
                     value: cart.isReturnMode,
                     onChanged: (_) => cart.toggleReturnMode(),
                     activeThumbColor: AppTheme.danger,
-                    activeTrackColor: Colors.white,
                   ),
                 ],
               ),
               const SizedBox(width: 8),
               if (cart.items.isNotEmpty)
                 TextButton.icon(
-                  icon: Icon(
+                  icon: const Icon(
                     Icons.delete_sweep,
-                    color: cart.isReturnMode ? Colors.white : AppTheme.danger,
+                    color: AppTheme.danger,
                   ),
-                  label: Text(
+                  label: const Text(
                     'Clear',
                     style: TextStyle(
-                      color: cart.isReturnMode ? Colors.white : AppTheme.danger,
+                      color: AppTheme.danger,
                     ),
                   ),
                   onPressed: _handleManualClear,
@@ -314,11 +308,8 @@ class _PosWindowsState extends State<PosWindows> {
               const SizedBox(width: 8),
               if (cart.items.isNotEmpty)
                 IconButton(
-                  icon: Icon(
+                  icon: const Icon(
                     Icons.pause_circle_outline,
-                    color: cart.isReturnMode
-                        ? Colors.white
-                        : AppTheme.primaryLight,
                   ),
                   tooltip: 'Hold Cart [F4]',
                   onPressed: _handleHoldCart,
@@ -327,11 +318,8 @@ class _PosWindowsState extends State<PosWindows> {
                 label: Text(cart.pendingCarts.length.toString()),
                 isLabelVisible: cart.pendingCarts.isNotEmpty,
                 child: IconButton(
-                  icon: Icon(
+                  icon: const Icon(
                     Icons.history_outlined,
-                    color: cart.isReturnMode
-                        ? Colors.white
-                        : AppTheme.primaryLight,
                   ),
                   tooltip: 'Pending Carts [F8]',
                   onPressed: _showPendingCartsDialog,
@@ -340,22 +328,50 @@ class _PosWindowsState extends State<PosWindows> {
               const SizedBox(width: 12),
             ],
           ),
-          body: Container(
-            decoration: BoxDecoration(
-              border: cart.isReturnMode
-                  ? Border.all(color: AppTheme.danger, width: 4)
-                  : null,
-            ),
-            child: Column(
+          body: Column(
               children: [
-                if (cart.isReturnMode)
+                if (!cart.isClinicalDispense && !cart.isReturnMode)
                   Container(
                     width: double.infinity,
-                    color: AppTheme.danger,
+                    color: Theme.of(context).colorScheme.primary,
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: const Center(
                       child: Text(
-                        'YOU ARE CURRENTLY IN RETURN / REFUND MODE',
+                        'STORE SALE MODE ACTIVE',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                if (cart.isClinicalDispense && !cart.isReturnMode)
+                  Container(
+                    width: double.infinity,
+                    color: Theme.of(context).colorScheme.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: const Center(
+                      child: Text(
+                        'CLINICAL DISPENSE MODE ACTIVE',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                if (cart.isReturnMode)
+                  Container(
+                    width: double.infinity,
+                    color: Theme.of(context).colorScheme.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: const Center(
+                      child: Text(
+                        'RETURN / REFUND MODE ACTIVE',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -482,7 +498,6 @@ class _PosWindowsState extends State<PosWindows> {
                 ),
               ],
             ),
-          ),
         ),
       ),
     );
@@ -1098,9 +1113,7 @@ class _MedicinesGridState extends State<_MedicinesGrid> {
                 IconButton(
                   icon: Icon(
                     Icons.qr_code_scanner,
-                    color: widget.cart.isReturnMode
-                        ? AppTheme.danger
-                        : AppTheme.primaryLight,
+                    color: Theme.of(context).colorScheme.primary,
                     size: 28,
                   ),
                   tooltip: 'Scan Barcode',
@@ -1113,9 +1126,7 @@ class _MedicinesGridState extends State<_MedicinesGrid> {
                 IconButton(
                   icon: Icon(
                     Icons.person_add_alt_1,
-                    color: widget.cart.isReturnMode
-                        ? AppTheme.danger
-                        : AppTheme.primaryLight,
+                    color: Theme.of(context).colorScheme.primary,
                     size: 28,
                   ),
                   tooltip: 'Add Patient to OPD',
@@ -1125,9 +1136,7 @@ class _MedicinesGridState extends State<_MedicinesGrid> {
                 IconButton(
                   icon: Icon(
                     Icons.auto_awesome_motion,
-                    color: widget.cart.isReturnMode
-                        ? AppTheme.danger
-                        : AppTheme.primaryLight,
+                    color: Theme.of(context).colorScheme.primary,
                     size: 28,
                   ),
                   tooltip: 'Quick Add Procedure',
@@ -1418,9 +1427,7 @@ class _ProductCard extends StatelessWidget {
               ? BorderSide(
                   color: isLowStock
                       ? AppTheme.warning
-                      : (cart.isReturnMode
-                          ? AppTheme.danger
-                          : AppTheme.primary),
+                      : Theme.of(context).colorScheme.primary,
                   width: 2)
               : BorderSide.none,
         ),
@@ -1432,15 +1439,12 @@ class _ProductCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: (cart.isReturnMode ? AppTheme.danger : AppTheme.primary)
-                      .withValues(alpha: 0.12),
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   icon,
-                  color: cart.isReturnMode
-                      ? AppTheme.danger
-                      : AppTheme.primaryLight,
+                  color: Theme.of(context).colorScheme.primary,
                   size: 22,
                 ),
               ),
@@ -1506,9 +1510,7 @@ class _ProductCard extends StatelessWidget {
                   Text(
                     '₹${price.toStringAsFixed(0)}',
                     style: TextStyle(
-                      color: cart.isReturnMode
-                          ? AppTheme.danger
-                          : AppTheme.primaryLight,
+                      color: Theme.of(context).colorScheme.primary,
                       fontWeight: FontWeight.w800,
                       fontSize: 15,
                     ),
@@ -1525,7 +1527,7 @@ class _ProductCard extends StatelessWidget {
                             : context.borderColor,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: AppTheme.primary.withValues(alpha: 0.3),
+                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
                           width: 1,
                         ),
                       ),
@@ -1536,17 +1538,15 @@ class _ProductCard extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                           color: isLowStock
                               ? AppTheme.warning
-                              : (Theme.of(context).brightness == Brightness.dark
-                                  ? AppTheme.primaryLight
-                                  : AppTheme.primary),
+                              : Theme.of(context).colorScheme.primary,
                         ),
                       ),
                     )
                   else
-                    const Icon(
+                    Icon(
                       Icons.add_circle_outline,
                       size: 20,
-                      color: AppTheme.primaryLight,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                 ],
               ),
@@ -1695,8 +1695,9 @@ class _CartPanel extends StatelessWidget {
                 IconButton(
                   icon: Icon(
                     Icons.receipt_long_outlined,
-                    color:
-                        cart.isReturnMode ? AppTheme.danger : AppTheme.primary,
+                    color: cart.isReturnMode
+                        ? AppTheme.danger
+                        : (cart.isClinicalDispense ? AppTheme.indigo : AppTheme.primary),
                   ),
                   tooltip: 'Load Prescription',
                   onPressed: onLoadPrescription,
@@ -1793,7 +1794,9 @@ class _CartPanel extends StatelessWidget {
                                 fontWeight: FontWeight.w700,
                                 color: cart.isReturnMode
                                     ? AppTheme.danger
-                                    : AppTheme.primaryLight,
+                                    : (cart.isClinicalDispense
+                                        ? AppTheme.indigo
+                                        : AppTheme.primaryLight),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -1815,12 +1818,17 @@ class _CartPanel extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: Theme.of(context).brightness ==
                                     Brightness.dark
-                                ? AppTheme.primary.withValues(alpha: 0.15)
-                                : AppTheme.primaryLight.withValues(alpha: 0.1),
+                                ? (cart.isClinicalDispense
+                                    ? AppTheme.indigo.withValues(alpha: 0.15)
+                                    : AppTheme.primary.withValues(alpha: 0.15))
+                                : (cart.isClinicalDispense
+                                    ? AppTheme.indigo.withValues(alpha: 0.1)
+                                    : AppTheme.primaryLight.withValues(alpha: 0.1)),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color:
-                                  AppTheme.primaryLight.withValues(alpha: 0.3),
+                              color: cart.isClinicalDispense
+                                  ? AppTheme.indigo.withValues(alpha: 0.5)
+                                  : AppTheme.primaryLight.withValues(alpha: 0.3),
                               width: 1.5,
                             ),
                           ),
@@ -1838,8 +1846,12 @@ class _CartPanel extends StatelessWidget {
                               fontSize: 16,
                               color: Theme.of(context).brightness ==
                                       Brightness.dark
-                                  ? AppTheme.primaryLight
-                                  : AppTheme.primary,
+                                  ? (cart.isClinicalDispense
+                                      ? AppTheme.indigo
+                                      : AppTheme.primaryLight)
+                                  : (cart.isClinicalDispense
+                                      ? AppTheme.indigo
+                                      : AppTheme.primary),
                             ),
                             decoration: const InputDecoration(
                               isDense: true,
@@ -2058,9 +2070,7 @@ class _CartPanel extends StatelessWidget {
                       style: TextStyle(
                         fontWeight: FontWeight.w900,
                         fontSize: 20,
-                        color: cart.isReturnMode
-                            ? AppTheme.danger
-                            : AppTheme.primaryLight,
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                     ),
                   ],
@@ -2074,17 +2084,16 @@ class _CartPanel extends StatelessWidget {
                     icon: Icon(
                       cart.isReturnMode
                           ? Icons.assignment_return
-                          : Icons.check_circle_outline,
+                          : (cart.isClinicalDispense ? Icons.local_hospital_outlined : Icons.shopping_cart_checkout),
                     ),
                     label: Text(
-                      cart.isReturnMode ? 'PROCESS RETURN' : 'CHECKOUT',
+                      cart.isReturnMode
+                          ? 'REFUND & PROCESS RETURN'
+                          : (cart.isClinicalDispense ? 'DISPENSE CLINICAL MEDICINES' : 'COLLECT PAYMENT & PRINT'),
                     ),
-                    style: cart.isReturnMode
-                        ? ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.danger,
-                            foregroundColor: Colors.white,
-                          )
-                        : null,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
                   ),
                 ),
               ],
@@ -2127,14 +2136,18 @@ class _PayChip extends StatelessWidget {
               color: isSelected
                   ? (context.read<CartProvider>().isReturnMode
                       ? AppTheme.danger
-                      : AppTheme.primary)
+                      : (context.read<CartProvider>().isClinicalDispense
+                          ? AppTheme.indigo
+                          : AppTheme.primary))
                   : context.borderColor,
               borderRadius: BorderRadius.circular(8),
               border: (isFocused && isSelected)
                   ? Border.all(
                       color: context.read<CartProvider>().isReturnMode
                           ? AppTheme.danger
-                          : AppTheme.primaryLight,
+                          : (context.read<CartProvider>().isClinicalDispense
+                              ? AppTheme.indigo
+                              : AppTheme.primaryLight),
                       width: 2)
                   : null,
             ),

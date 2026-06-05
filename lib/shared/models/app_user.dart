@@ -340,6 +340,9 @@ class AppSettings {
   bool showBatchExpiryInRetailPrint = true;
   bool showBatchExpiryInClinicalPrint = true;
 
+  // Multi-Tenant Cloud Sync
+  String shopId;
+
   AppSettings({
     this.id = 0,
     this.storeName = 'MediPoss Pharmacy',
@@ -385,6 +388,7 @@ class AppSettings {
     this.isCompositionScheme = false,
     this.showBatchExpiryInRetailPrint = true,
     this.showBatchExpiryInClinicalPrint = true,
+    this.shopId = '',
   });
 
   Map<String, dynamic> toJson() => {
@@ -432,6 +436,7 @@ class AppSettings {
         'isCompositionScheme': isCompositionScheme,
         'showBatchExpiryInRetailPrint': showBatchExpiryInRetailPrint,
         'showBatchExpiryInClinicalPrint': showBatchExpiryInClinicalPrint,
+        'shopId': shopId,
       };
 
   static AppSettings fromJson(Map<String, dynamic> json) => AppSettings(
@@ -481,5 +486,6 @@ class AppSettings {
         isCompositionScheme: json['isCompositionScheme'] ?? false,
         showBatchExpiryInRetailPrint: json['showBatchExpiryInRetailPrint'] ?? true,
         showBatchExpiryInClinicalPrint: json['showBatchExpiryInClinicalPrint'] ?? true,
+        shopId: json['shopId'] ?? '',
       );
 }

@@ -364,10 +364,17 @@ class LocalServerService {
       
       final updated = AppSettings.fromJson(item);
       updated.id = current.id;
-      // Do not overwrite hub-specific fields if pushed from companion
+      // Do not overwrite hub-specific or device-specific fields if pushed from companion
+      updated.isWindowsClient = current.isWindowsClient;
+      updated.deviceId = current.deviceId;
       updated.hubIp = current.hubIp; 
       updated.serverPort = current.serverPort;
       updated.jwtSecret = current.jwtSecret;
+      updated.autoLoginPin = current.autoLoginPin;
+      updated.autoLoginName = current.autoLoginName;
+      updated.defaultPrinterName = current.defaultPrinterName;
+      updated.autoPrintReceipt = current.autoPrintReceipt;
+      updated.receiptPaperSize = current.receiptPaperSize;
 
       box.put(updated);
       
@@ -2067,6 +2074,74 @@ class LocalServerService {
       for (var p in procs) {
         await FirebaseSyncService.instance.broadcastUpdate(
             'procedures', p.toJson());
+        pushCount++;
+      }
+
+      // --- 6. Mirror Doctors ---
+      final doctors = ObjectBoxService.instance.doctorBox.getAll();
+      final localDoctorNames = doctors.map((d) => d.name).toSet();
+      final cloudDoctors = await FirebaseSyncService.instance.fetchCollection('doctors');
+      for (var cd in cloudDoctors) {
+        final cloudId = cd['cloudId']?.toString();
+        final name = cd['name']?.toString();
+        if (cloudId != null && name != null && !localDoctorNames.contains(name)) {
+          await FirebaseSyncService.instance.deleteDocument('doctors', cloudId);
+          pruneCount++;
+        }
+      }
+      for (var d in doctors) {
+        await FirebaseSyncService.instance.broadcastUpdate('doctors', d.toJson());
+        pushCount++;
+      }
+
+      // --- 7. Mirror Appointments ---
+      final appointments = ObjectBoxService.instance.appointmentBox.getAll();
+      final localAppts = appointments.map((a) => a.id.toString()).toSet();
+      final cloudAppts = await FirebaseSyncService.instance.fetchCollection('appointments');
+      for (var ca in cloudAppts) {
+        final cloudId = ca['cloudId']?.toString();
+        final localId = ca['id']?.toString();
+        if (cloudId != null && localId != null && !localAppts.contains(localId)) {
+          await FirebaseSyncService.instance.deleteDocument('appointments', cloudId);
+          pruneCount++;
+        }
+      }
+      for (var a in appointments) {
+        await FirebaseSyncService.instance.broadcastUpdate('appointments', a.toJson());
+        pushCount++;
+      }
+
+      // --- 8. Mirror Prescriptions ---
+      final prescriptions = ObjectBoxService.instance.prescriptionBox.getAll();
+      final localScripts = prescriptions.map((p) => p.id.toString()).toSet();
+      final cloudScripts = await FirebaseSyncService.instance.fetchCollection('prescriptions');
+      for (var cs in cloudScripts) {
+        final cloudId = cs['cloudId']?.toString();
+        final localId = cs['id']?.toString();
+        if (cloudId != null && localId != null && !localScripts.contains(localId)) {
+          await FirebaseSyncService.instance.deleteDocument('prescriptions', cloudId);
+          pruneCount++;
+        }
+      }
+      for (var p in prescriptions) {
+        await FirebaseSyncService.instance.broadcastUpdate('prescriptions', p.toJson());
+        pushCount++;
+      }
+
+      // --- 9. Mirror Templates ---
+      final templates = ObjectBoxService.instance.templateBox.getAll();
+      final localTemplates = templates.map((t) => t.name).toSet();
+      final cloudTemplates = await FirebaseSyncService.instance.fetchCollection('templates');
+      for (var ct in cloudTemplates) {
+        final cloudId = ct['cloudId']?.toString();
+        final name = ct['name']?.toString();
+        if (cloudId != null && name != null && !localTemplates.contains(name)) {
+          await FirebaseSyncService.instance.deleteDocument('templates', cloudId);
+          pruneCount++;
+        }
+      }
+      for (var t in templates) {
+        await FirebaseSyncService.instance.broadcastUpdate('templates', t.toJson());
         pushCount++;
       }
 

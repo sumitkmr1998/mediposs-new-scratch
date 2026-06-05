@@ -33,4 +33,13 @@ class PatientImage {
         'date': date.toIso8601String(),
         'createdAt': createdAt.toIso8601String(),
       };
+
+  factory PatientImage.fromJson(Map<String, dynamic> json) => PatientImage(
+        id: json['id'] ?? 0,
+        patientId: json['patientId'],
+        imagePath: json['imagePath'],
+        category: json['category'] ?? 'General',
+        date: DateTime.tryParse(json['date'] ?? ''),
+        createdAt: DateTime.tryParse(json['createdAt'] ?? ''),
+      );
 }

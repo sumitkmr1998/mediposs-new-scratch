@@ -5,6 +5,7 @@ import '../../theme/app_theme.dart';
 import '../../shared/services/discovery_service.dart';
 import 'dart:io';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../shared/services/firebase_sync_service.dart';
 import '../../shared/providers/settings_provider.dart';
 
@@ -104,6 +105,29 @@ class _ConnectionWindowsState extends State<ConnectionWindows> {
 
     final error = await sync.connect(_ipCtrl.text.trim());
 
+    if (error == 'RESTART_REQUIRED') {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Restart Required'),
+          content: const Text(
+              'Switching to Terminal Mode requires a full application restart to load the terminal database and apply network changes.'),
+          actions: [
+            ElevatedButton(
+              onPressed: () async {
+                await Future.delayed(const Duration(milliseconds: 1000));
+                exit(0);
+              },
+              child: const Text('Restart Now'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     if (error != null) {
       setState(() => _errorMsg = error);
     } else {
@@ -111,11 +135,74 @@ class _ConnectionWindowsState extends State<ConnectionWindows> {
       await sync.pullUsers();
 
       if (!mounted) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      
+      final settingsProv = context.read<SettingsProvider>();
+      final s = settingsProv.settings;
+      s.isWindowsClient = true;
+      s.hubIp = _ipCtrl.text.trim();
+      settingsProv.save(s);
+
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('✅ Hub Paired!'),
         backgroundColor: AppTheme.success,
       ));
     }
+  }
+
+  Future<void> _switchToHubMode() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Switch to Hub Mode?'),
+        content: const Text(
+          'Are you sure you want to switch this app back to Hub Mode? '
+          'This will configure the app to run as the primary database server and requires a restart.'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Switch & Restart'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isTerminalMode', false);
+
+    if (!mounted) return;
+    final settingsProv = context.read<SettingsProvider>();
+    final s = settingsProv.settings;
+    s.isWindowsClient = false;
+    settingsProv.save(s);
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Restart Required'),
+        content: const Text(
+            'The mode has been changed to Hub Mode. A full restart is required to spin up the local server and load the primary database.'),
+        actions: [
+          ElevatedButton(
+            onPressed: () async {
+              await Future.delayed(const Duration(milliseconds: 1000));
+              exit(0);
+            },
+            child: const Text('Restart Now'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -412,6 +499,12 @@ class _ConnectionWindowsState extends State<ConnectionWindows> {
                     ),
                   ),
                 ],
+                const Divider(height: 32),
+                TextButton.icon(
+                  onPressed: _switchToHubMode,
+                  icon: const Icon(Icons.swap_horizontal_circle, color: AppTheme.danger),
+                  label: const Text('Switch to Hub Mode', style: TextStyle(color: AppTheme.danger)),
+                ),
               ],
             ),
           ),

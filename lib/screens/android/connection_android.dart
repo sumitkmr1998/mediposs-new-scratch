@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../shared/services/sync_service.dart';
+import '../../widgets/shop_selection_dialog.dart';
 import '../../shared/services/global_navigation_service.dart';
 import '../../theme/app_theme.dart';
 import '../../shared/services/discovery_service.dart';
@@ -485,7 +486,7 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
                         ),
                         const SizedBox(height: 16),
                         ElevatedButton.icon(
-                          onPressed: () => sync.enterCloudMode(),
+                          onPressed: () => showShopSelectionDialog(context),
                           icon: const Icon(Icons.cloud_sync),
                           label: const Text('Enter Cloud Mode'),
                           style: ElevatedButton.styleFrom(

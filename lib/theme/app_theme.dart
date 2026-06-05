@@ -230,6 +230,110 @@ class AppTheme {
       dividerColor: lightBorder,
     );
   }
+
+  static ThemeData themeFor({required bool isClinical, required bool isReturn, required Brightness brightness}) {
+    final Color primaryColor = isReturn 
+        ? danger 
+        : (isClinical ? indigo : primary);
+    
+    final Color secondaryColor = isReturn 
+        ? redDark 
+        : (isClinical ? violet : primaryLight);
+
+    final bool isDark = brightness == Brightness.dark;
+    
+    return ThemeData(
+      useMaterial3: true,
+      brightness: brightness,
+      scaffoldBackgroundColor: isDark ? darkBg : lightBg,
+      colorScheme: isDark 
+          ? ColorScheme.dark(
+              primary: primaryColor,
+              secondary: secondaryColor,
+              tertiary: accent,
+              surface: darkSurface,
+              error: danger,
+              onPrimary: Colors.white,
+              onSecondary: Colors.white,
+              onSurface: darkText,
+            )
+          : ColorScheme.light(
+              primary: primaryColor,
+              secondary: secondaryColor,
+              tertiary: accent,
+              surface: lightSurface,
+              error: danger,
+              onPrimary: Colors.white,
+              onSecondary: Colors.white,
+              onSurface: lightText,
+            ),
+      textTheme: GoogleFonts.outfitTextTheme(
+        isDark 
+            ? ThemeData.dark().textTheme.copyWith(
+                  bodySmall: const TextStyle(color: darkTextMuted),
+                )
+            : ThemeData.light().textTheme,
+      ).apply(
+        bodyColor: isDark ? darkText : lightText,
+        displayColor: isDark ? darkText : lightText,
+      ),
+      cardTheme: CardThemeData(
+        color: isDark ? darkCard : lightCard,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: isDark ? darkBorder : lightBorder),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: isDark ? darkSurface : lightSurface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: isDark ? darkBorder : lightBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: isDark ? darkBorder : lightBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: primaryColor, width: 2),
+        ),
+        labelStyle: TextStyle(color: isDark ? darkTextMuted : lightTextMuted),
+        hintStyle: TextStyle(color: isDark ? darkTextMuted : lightTextMuted),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primaryColor,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          textStyle: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+        ),
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: isDark ? darkSurface : lightSurface,
+        foregroundColor: isDark ? darkText : lightText,
+        elevation: 0,
+        centerTitle: false,
+        titleTextStyle: GoogleFonts.outfit(
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          color: isDark ? darkText : lightText,
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: isDark ? darkBorder : lightBorder,
+        selectedColor: primaryColor,
+        labelStyle: TextStyle(color: isDark ? darkText : lightText),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      dividerColor: isDark ? darkBorder : lightBorder,
+      iconTheme: IconThemeData(color: isDark ? darkTextMuted : lightTextMuted),
+    );
+  }
 }
 
 extension ThemeExtension on BuildContext {

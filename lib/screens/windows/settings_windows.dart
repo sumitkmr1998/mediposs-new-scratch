@@ -10,6 +10,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../shared/services/cloudflare_service.dart';
 import '../../shared/services/sync_service.dart';
 
@@ -24,6 +25,8 @@ import 'package:printing/printing.dart';
 import 'package:excel/excel.dart' as excel_pkg;
 import '../../shared/providers/inventory_provider.dart';
 import '../../shared/models/medicine.dart';
+import '../../shared/services/audit_export_service.dart';
+import '../../shared/services/backup_restore_service.dart';
 import '../user_management_screen.dart';
 import '../opd/doctor_list_screen.dart';
 import 'user_management_windows.dart';
@@ -39,6 +42,7 @@ class SettingsWindows extends StatefulWidget {
 
 class _SettingsWindowsState extends State<SettingsWindows> {
   late final TextEditingController _storeNameCtrl;
+  late final TextEditingController _shopIdCtrl;
   late final TextEditingController _addressCtrl;
   late final TextEditingController _phoneCtrl;
   late final TextEditingController _gstCtrl;
@@ -77,6 +81,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     // ...
     final s = context.read<SettingsProvider>().settings;
     _storeNameCtrl = TextEditingController(text: s.storeName);
+    _shopIdCtrl = TextEditingController(text: s.shopId);
     _addressCtrl = TextEditingController(text: s.storeAddress);
     _phoneCtrl = TextEditingController(text: s.storePhone);
     _gstCtrl = TextEditingController(text: s.gstNumber);
@@ -129,11 +134,12 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     }
   }
 
-  void _save() {
+  Future<void> _save() async {
     final settingsProv = context.read<SettingsProvider>();
     final s = settingsProv.settings;
     s
       ..storeName = _storeNameCtrl.text
+      ..shopId = _shopIdCtrl.text
       ..storeAddress = _addressCtrl.text
       ..storePhone = _phoneCtrl.text
       ..gstNumber = _gstCtrl.text
@@ -164,6 +170,9 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     LocalServerService.instance.broadcast({'event': 'settings_updated'});
 
     if (wasClient != _isWindowsClient) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('isTerminalMode', _isWindowsClient);
+      
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -173,7 +182,10 @@ class _SettingsWindowsState extends State<SettingsWindows> {
               'Changing between Hub and Terminal mode requires a full application restart to apply network changes.'),
           actions: [
             ElevatedButton(
-              onPressed: () => exit(0),
+              onPressed: () async {
+                await Future.delayed(const Duration(milliseconds: 1000));
+                exit(0);
+              },
               child: const Text('Restart Now'),
             ),
           ],
@@ -193,6 +205,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
   @override
   void dispose() {
     _storeNameCtrl.dispose();
+    _shopIdCtrl.dispose();
     _addressCtrl.dispose();
     _phoneCtrl.dispose();
     _gstCtrl.dispose();
@@ -579,6 +592,24 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                 ],
               ),
             ],
+          ],
+        ),
+        SettingsSection(
+          title: 'Multi-Tenant Firebase Sync',
+          icon: LucideIcons.database,
+          children: [
+            SettingsField(
+              controller: _shopIdCtrl, 
+              label: 'Shop ID (Leave blank to auto-generate from Store Name)', 
+              icon: LucideIcons.store,
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0),
+              child: Text(
+                'Changing this ID will partition your cloud data into a different folder. Android companion apps must use this exact ID to sync.',
+                style: TextStyle(color: Colors.orange, fontSize: 12),
+              ),
+            ),
           ],
         ),
         SettingsSection(
@@ -1012,6 +1043,43 @@ class _SettingsWindowsState extends State<SettingsWindows> {
             ),
           ],
         ),
+        SettingsSection(
+          title: 'Comprehensive Audits',
+          icon: LucideIcons.clipboardCheck,
+          children: [
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  final file = await AuditExportService.generateAuditReport();
+                  if (file != null && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text('Audit Report Saved: ${p.basename(file.path)}'),
+                      backgroundColor: AppTheme.success,
+                    ));
+                  } else if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Failed to generate Audit Report'),
+                      backgroundColor: AppTheme.danger,
+                    ));
+                  }
+                },
+                icon: const Icon(LucideIcons.fileSpreadsheet),
+                label: const Text('Generate Comprehensive Audit Report (.xlsx)'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.emerald,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Includes stocks, internal transfers, sales, patients, and prescriptions in a readable Excel format.',
+              style: TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -1425,31 +1493,80 @@ class _SettingsWindowsState extends State<SettingsWindows> {
   }
 
   Future<void> _confirmAndRestore(BuildContext context, SettingsProvider settingsProv, String fileId, String fileName) async {
-    final confirm = await showDialog<bool>(
+    bool restInventory = true;
+    bool restSales = true;
+    bool restOpd = true;
+    bool restSettings = true;
+
+    final config = await showDialog<RestoreConfig>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirm Restoration'),
-        content: Text('Are you absolutely sure you want to restore "$fileName"?\n\nThe app will CLOSE automatically after the restoration is complete.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
-            child: const Text('RESTORE & CLOSE'),
-          ),
-        ],
-      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Granular Restore Options'),
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Select which modules to restore from "$fileName".\n\nWARNING: Restored modules will replace existing local data for that module.',
+                      style: const TextStyle(fontSize: 13, color: AppTheme.danger),
+                    ),
+                    const SizedBox(height: 16),
+                    CheckboxListTile(
+                      title: const Text('Inventory & Stock Transfers'),
+                      value: restInventory,
+                      onChanged: (v) => setState(() => restInventory = v!),
+                    ),
+                    CheckboxListTile(
+                      title: const Text('Sales History'),
+                      value: restSales,
+                      onChanged: (v) => setState(() => restSales = v!),
+                    ),
+                    CheckboxListTile(
+                      title: const Text('OPD, Patients & Prescriptions'),
+                      value: restOpd,
+                      onChanged: (v) => setState(() => restOpd = v!),
+                    ),
+                    CheckboxListTile(
+                      title: const Text('Settings & Users'),
+                      value: restSettings,
+                      onChanged: (v) => setState(() => restSettings = v!),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Cancel')),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx, RestoreConfig(
+                      inventory: restInventory,
+                      salesHistory: restSales,
+                      opd: restOpd,
+                      settingsUsers: restSettings,
+                    ));
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+                  child: const Text('RESTORE SELECTED'),
+                ),
+              ],
+            );
+          }
+        );
+      },
     );
 
-    if (confirm == true && mounted) {
-      final success = await settingsProv.restoreFromCloud(fileId);
+    if (config != null && mounted) {
+      final success = await settingsProv.restoreFromCloud(fileId, config: config);
       if (success && mounted) {
         showDialog(
           context: context,
           barrierDismissible: false,
           builder: (ctx) => AlertDialog(
             title: const Text('Restore Complete'),
-            content: const Text('The data has been restored successfully. The application will now close. Please re-open it manually.'),
+            content: const Text('The selected data has been restored successfully. The application will now close. Please re-open it manually.'),
             actions: [
               ElevatedButton(
                 onPressed: () => exit(0),

@@ -371,11 +371,21 @@ class _MediPossAppState extends State<MediPossApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final settingsProvider = context.watch<SettingsProvider>();
+    final cartProvider = context.watch<CartProvider>();
+
     return MaterialApp(
       navigatorKey: GlobalNavigationService.navigatorKey,
       title: 'MediPoss',
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
+      theme: AppTheme.themeFor(
+        isClinical: cartProvider.isClinicalDispense,
+        isReturn: cartProvider.isReturnMode,
+        brightness: Brightness.light,
+      ),
+      darkTheme: AppTheme.themeFor(
+        isClinical: cartProvider.isClinicalDispense,
+        isReturn: cartProvider.isReturnMode,
+        brightness: Brightness.dark,
+      ),
       themeMode: settingsProvider.themeMode,
       debugShowCheckedModeBanner: false,
       localizationsDelegates: const [

@@ -52,7 +52,9 @@ class _LoginWindowsState extends State<LoginWindows> {
       _error = false;
     });
 
-    if (kIsWeb || defaultTargetPlatform == TargetPlatform.windows) {
+    final sync = context.read<SyncService>();
+
+    if (kIsWeb || sync.isHub) {
       // Local Auth (Windows/Web Hub)
       if (auth.loginWithUser(_selectedUser!, _pin)) {
         // Success
@@ -64,9 +66,9 @@ class _LoginWindowsState extends State<LoginWindows> {
       }
       setState(() => _isLoading = false);
     } else {
-      // Companion App Auth (Android)
+      // Companion App / Terminal Auth
       try {
-        final sync = context.read<SyncService>();
+
         final errorMsg = await sync.login(_selectedUser!.name, _pin);
 
         if (errorMsg == null && mounted) {

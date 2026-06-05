@@ -14,6 +14,8 @@ import '../../shared/services/firebase_sync_service.dart';
 import '../../theme/app_theme.dart';
 import '../../shared/services/local_server_service.dart';
 import '../../shared/services/printing_service.dart';
+import '../../shared/services/audit_export_service.dart';
+import '../../shared/services/backup_restore_service.dart';
 import 'package:printing/printing.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
 import '../user_management_screen.dart';
@@ -239,12 +241,9 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
 
   Future<void> _restoreDatabase() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type:
-            FileType.any, // .mdb might not have standard mime types registered
-      );
+      final result = await FilePicker.platform.pickFiles(type: FileType.any);
 
-      if (result == null || result.files.isEmpty) return; // User cancelled
+      if (result == null || result.files.isEmpty) return;
 
       final selectedFile = File(result.files.single.path!);
       if (!selectedFile.path.endsWith('.mdb')) {
@@ -254,7 +253,6 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
       final docDir = await getApplicationDocumentsDirectory();
       final dbFile = File('${docDir.path}/objectbox/data.mdb');
 
-      // Crucial: Copy the selected file OVER the active database file
       await selectedFile.copy(dbFile.path);
 
       if (mounted) {
@@ -262,16 +260,11 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
           context: context,
           barrierDismissible: false,
           builder: (ctx) => AlertDialog(
-            title: const Text('Restore Successful',
-                style: TextStyle(color: AppTheme.success)),
-            content: const Text(
-                'The database has been successfully restored.\n\nThe application must now restart to secure the new data lock. Please close the app and open it again.'),
+            title: const Text('Restore Successful', style: TextStyle(color: AppTheme.success)),
+            content: const Text('The database has been successfully restored.\n\nThe application must now restart to secure the new data lock. Please close the app and open it again.'),
             actions: [
               ElevatedButton(
-                onPressed: () {
-                  // Forcefully close the app so ObjectBox completely unbinds its Store pointers
-                  SystemNavigator.pop();
-                },
+                onPressed: () => SystemNavigator.pop(),
                 child: const Text('Exit App'),
               ),
             ],
@@ -280,11 +273,113 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
       }
     } catch (e) {
       if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ Restore failed: $e'), backgroundColor: AppTheme.danger));
+      }
+    }
+  }
+
+  Future<void> _generateAuditReport() async {
+    try {
+      final file = await AuditExportService.generateAuditReport();
+      if (file != null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('❌ Restore failed: $e'),
+          content: Text('Audit Report Saved: ${file.path.split('/').last}'),
+          backgroundColor: AppTheme.success,
+        ));
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Failed to generate Audit Report'),
           backgroundColor: AppTheme.danger,
         ));
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ Error: $e'), backgroundColor: AppTheme.danger));
+      }
+    }
+  }
+
+  Future<void> _backupJsonGranular() async {
+    try {
+      final file = await BackupRestoreService.exportToJsonBackup();
+      if (file != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('JSON Backup Saved: ${file.path.split('/').last}'),
+          backgroundColor: AppTheme.success,
+        ));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ Error: $e'), backgroundColor: AppTheme.danger));
+    }
+  }
+
+  Future<void> _restoreJsonGranular() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(type: FileType.any);
+      if (result == null || result.files.isEmpty) return;
+
+      final selectedFile = File(result.files.single.path!);
+      if (!selectedFile.path.endsWith('.zip')) {
+        throw Exception('Invalid file! Please select a .zip JSON backup.');
+      }
+
+      bool restInventory = true;
+      bool restSales = true;
+      bool restOpd = true;
+      bool restSettings = true;
+
+      if (!mounted) return;
+      final config = await showDialog<RestoreConfig>(
+        context: context,
+        builder: (ctx) {
+          return StatefulBuilder(
+            builder: (context, setState) {
+              return AlertDialog(
+                title: const Text('Granular Restore Options'),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Select which modules to restore.\nWARNING: Will replace existing data.', style: TextStyle(fontSize: 13, color: AppTheme.danger)),
+                      CheckboxListTile(title: const Text('Inventory'), value: restInventory, onChanged: (v) => setState(() => restInventory = v!)),
+                      CheckboxListTile(title: const Text('Sales'), value: restSales, onChanged: (v) => setState(() => restSales = v!)),
+                      CheckboxListTile(title: const Text('OPD/Patients'), value: restOpd, onChanged: (v) => setState(() => restOpd = v!)),
+                      CheckboxListTile(title: const Text('Settings'), value: restSettings, onChanged: (v) => setState(() => restSettings = v!)),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Cancel')),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, RestoreConfig(inventory: restInventory, salesHistory: restSales, opd: restOpd, settingsUsers: restSettings)),
+                    style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+                    child: const Text('RESTORE'),
+                  ),
+                ],
+              );
+            }
+          );
+        },
+      );
+
+      if (config != null) {
+        await BackupRestoreService.importFromJsonBackup(selectedFile, config);
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Restore Complete'),
+              content: const Text('Data restored successfully. Please restart app.'),
+              actions: [
+                ElevatedButton(onPressed: () => SystemNavigator.pop(), child: const Text('Exit App')),
+              ],
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ Error: $e'), backgroundColor: AppTheme.danger));
     }
   }
 
@@ -824,6 +919,58 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                         ),
                       ),
                     ],
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _backupJsonGranular,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.purple,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            elevation: 0,
+                          ),
+                          icon: const Icon(Icons.data_object_rounded, size: 20),
+                          label: const Text('GRANULAR BACKUP (JSON)', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: 0.5)),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _restoreJsonGranular,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.danger,
+                            side: BorderSide(color: AppTheme.danger.withValues(alpha: 0.5)),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          icon: const Icon(Icons.settings_backup_restore_rounded, size: 20),
+                          label: const Text('GRANULAR RESTORE', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: 0.5)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              _buildSection(
+                'Comprehensive Audits',
+                children: [
+                  Text('Includes stocks, internal transfers, sales, patients, and prescriptions in an Excel file.', style: TextStyle(color: context.textMutedColor, fontSize: 13)),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _generateAuditReport,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.emerald,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.table_view_rounded, size: 20),
+                      label: const Text('GENERATE AUDIT REPORT (.XLSX)'),
+                    ),
                   ),
                 ],
               ),

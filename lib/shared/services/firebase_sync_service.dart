@@ -25,6 +25,17 @@ class FirebaseSyncService {
   String? _idToken;
   DateTime? _tokenExpiry;
 
+  String get _shopId {
+    try {
+      final settings = ObjectBoxService.instance.settings;
+      if (settings.shopId.isNotEmpty) return settings.shopId;
+      final fallback = settings.storeName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_').toLowerCase();
+      return fallback.isNotEmpty ? fallback : 'default_shop';
+    } catch (_) {
+      return 'default_shop';
+    }
+  }
+
   FirebaseSyncService._();
 
   static Future<void> init() async {
@@ -63,7 +74,7 @@ class FirebaseSyncService {
 
     if (!_isInitialized) return;
     try {
-      await _db.collection('settings').doc('hub_status').set({
+      await _db.collection('shops').doc(_shopId).collection('settings').doc('hub_status').set({
         'hubOnline': isOnline,
         'cloudflareUrl': cloudflareUrl,
         'serverPort': port ?? 8080,
@@ -126,7 +137,7 @@ class FirebaseSyncService {
       final token = await _getIdToken();
       final projectId = DefaultFirebaseOptions.windows.projectId;
       final apiKey = DefaultFirebaseOptions.windows.apiKey;
-      final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/settings/hub_status?key=$apiKey');
+      final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops/$_shopId/settings/hub_status?key=$apiKey');
       
       final body = jsonEncode({
         'fields': {
@@ -167,7 +178,7 @@ class FirebaseSyncService {
     if (!_isInitialized) return false;
     try {
       final settings = ObjectBoxService.instance.settings;
-      await _db.collection('sync_queue').add({
+      await _db.collection('shops').doc(_shopId).collection('sync_queue').add({
         'deviceId': settings.deviceId ?? 'unknown',
         'entity': entity,
         'action': action,
@@ -190,7 +201,7 @@ class FirebaseSyncService {
     try {
       final projectId = DefaultFirebaseOptions.windows.projectId;
       final apiKey = DefaultFirebaseOptions.windows.apiKey;
-      final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/sync_queue?key=$apiKey');
+      final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops/$_shopId/sync_queue?key=$apiKey');
       
       final settings = ObjectBoxService.instance.settings;
       final body = jsonEncode({
@@ -281,7 +292,7 @@ class FirebaseSyncService {
     }
 
     if (!_isInitialized) return;
-    _db.collection('sync_queue')
+    _db.collection('shops').doc(_shopId).collection('sync_queue')
         .where('processed', isEqualTo: false)
         .snapshots()
         .listen((snapshot) {
@@ -295,12 +306,11 @@ class FirebaseSyncService {
   }
 
   void _startQueueListenerREST(Function(Map<String, dynamic>) onNewItem) {
-    // Polling every 15 seconds for new deltas
-    Timer.periodic(const Duration(seconds: 15), (timer) async {
+    Future<void> poll() async {
       try {
         final projectId = DefaultFirebaseOptions.windows.projectId;
         final apiKey = DefaultFirebaseOptions.windows.apiKey;
-        final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/sync_queue?key=$apiKey');
+        final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops/$_shopId/sync_queue?key=$apiKey');
         
         final res = await http.get(url);
         if (res.statusCode == 200) {
@@ -329,6 +339,14 @@ class FirebaseSyncService {
       } catch (e) {
         debugPrint('Firebase [REST] Poll Error: $e');
       }
+    }
+
+    // Run poll immediately on startup
+    poll();
+
+    // Polling every 15 seconds for new deltas
+    Timer.periodic(const Duration(seconds: 15), (timer) async {
+      await poll();
     });
   }
 
@@ -338,7 +356,7 @@ class FirebaseSyncService {
       try {
         final projectId = DefaultFirebaseOptions.windows.projectId;
         final apiKey = DefaultFirebaseOptions.windows.apiKey;
-        final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/sync_queue/$docId?key=$apiKey');
+        final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops/$_shopId/sync_queue/$docId?key=$apiKey');
         await http.delete(url);
       } catch (e) {
         debugPrint('Firebase [REST] MarkAsProcessed Error: $e');
@@ -348,7 +366,7 @@ class FirebaseSyncService {
 
     if (!_isInitialized) return;
     // We delete to keep Firebase costs low as per plan
-    await _db.collection('sync_queue').doc(docId).delete();
+    await _db.collection('shops').doc(_shopId).collection('sync_queue').doc(docId).delete();
   }
 
   /// Hub-side: Broadcasts an update to all devices via Firestore.
@@ -371,7 +389,7 @@ class FirebaseSyncService {
       docId = data['name']?.toString() ?? docId;
     }
 
-    await _db.collection(entity).doc(docId).set({
+    await _db.collection('shops').doc(_shopId).collection(entity).doc(docId).set({
       ...data,
       'updatedAt': FieldValue.serverTimestamp(),
       'syncedFrom': 'hub',
@@ -406,7 +424,7 @@ class FirebaseSyncService {
       // Sanitize docId for REST (replace characters that break URLs)
       docId = docId.replaceAll('/', '_').replaceAll('\\', '_').replaceAll(' ', '_');
 
-      final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/$entity/$docId?key=$apiKey');
+      final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops/$_shopId/$entity/$docId?key=$apiKey');
       
       final body = jsonEncode({
         'fields': {
@@ -438,7 +456,7 @@ class FirebaseSyncService {
         final apiKey = DefaultFirebaseOptions.windows.apiKey;
         // Sanitize docId
         final sanitizedId = docId.replaceAll('/', '_').replaceAll('\\', '_').replaceAll(' ', '_');
-        final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/$entity/$sanitizedId?key=$apiKey');
+        final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops/$_shopId/$entity/$sanitizedId?key=$apiKey');
         
         final token = await _getIdToken();
         final res = await http.delete(
@@ -456,7 +474,7 @@ class FirebaseSyncService {
 
     if (!_isInitialized) return;
     try {
-      await _db.collection(entity).doc(docId).delete();
+      await _db.collection('shops').doc(_shopId).collection(entity).doc(docId).delete();
     } catch (e) {
       debugPrint('Firebase deleteDocument error: $e');
     }
@@ -477,12 +495,12 @@ class FirebaseSyncService {
     try {
       debugPrint('Firebase: Fetching collection "$entity" (Cloud Mode)...');
       // Primary: Only items synced from Hub
-      var snapshot = await _db.collection(entity).where('syncedFrom', isEqualTo: 'hub').get();
+      var snapshot = await _db.collection('shops').doc(_shopId).collection(entity).where('syncedFrom', isEqualTo: 'hub').get();
       
       // Fallback: If no hub-synced items found, try fetching entire collection
       if (snapshot.docs.isEmpty) {
         debugPrint('Firebase: No "hub-synced" items found in "$entity", trying full fetch...');
-        snapshot = await _db.collection(entity).get();
+        snapshot = await _db.collection('shops').doc(_shopId).collection(entity).get();
       }
 
       debugPrint('Firebase: Found ${snapshot.docs.length} documents in "$entity".');
@@ -500,7 +518,7 @@ class FirebaseSyncService {
     try {
       final projectId = DefaultFirebaseOptions.windows.projectId;
       final apiKey = DefaultFirebaseOptions.windows.apiKey;
-      final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/$entity?key=$apiKey');
+      final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops/$_shopId/$entity?key=$apiKey');
       
       final res = await http.get(url);
       if (res.statusCode == 200) {
@@ -525,7 +543,7 @@ class FirebaseSyncService {
   /// Companion-side: Listens for global updates from the Hub.
   void startGlobalUpdateListener(String entity, Function(Map<String, dynamic>) onUpdate) {
     if (!_isInitialized) return;
-    _db.collection(entity)
+    _db.collection('shops').doc(_shopId).collection(entity)
         .where('syncedFrom', isEqualTo: 'hub')
         .snapshots()
         .listen((snapshot) {
@@ -539,11 +557,23 @@ class FirebaseSyncService {
   Future<Map<String, dynamic>?> getHubStatus() async {
     if (!_isInitialized) return null;
     try {
-      final doc = await _db.collection('settings').doc('hub_status').get(const GetOptions(source: Source.server)).timeout(const Duration(seconds: 5));
+      final doc = await _db.collection('shops').doc(_shopId).collection('settings').doc('hub_status').get(const GetOptions(source: Source.server)).timeout(const Duration(seconds: 5));
       return doc.data();
     } catch (e) {
       debugPrint('Firebase getHubStatus failed: $e');
       return null;
+    }
+  }
+
+  /// Fetches the list of all available shop IDs in Firestore.
+  Future<List<String>> fetchShopIds() async {
+    if (!_isInitialized) return [];
+    try {
+      final snapshot = await _db.collection('shops').get();
+      return snapshot.docs.map((doc) => doc.id).toList();
+    } catch (e) {
+      debugPrint('Firebase fetchShopIds failed: $e');
+      return [];
     }
   }
 }

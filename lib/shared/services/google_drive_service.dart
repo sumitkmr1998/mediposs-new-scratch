@@ -9,6 +9,7 @@ import 'package:archive/archive_io.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'objectbox_service.dart';
+import 'backup_restore_service.dart';
 
 class GoogleDriveService {
   static const String _clientId = '865649525029-99ppibc69v7b6lf9a2ijojlsrvsmdcaq.apps.googleusercontent.com';
@@ -59,55 +60,7 @@ class GoogleDriveService {
 
   /// Performs a full system backup (Local + Google Drive).
   Future<File?> generateFullBackupZip() async {
-    try {
-      // 1. Determine Source Paths
-      final appDocDir = await getApplicationDocumentsDirectory();
-      final dbDirStr = ObjectBoxService.instance.dbDirectory;
-      
-      final sources = <String, Directory>{
-        'database': Directory(dbDirStr),
-        'patient_photos': Directory(p.join(appDocDir.path, 'patient_photos')),
-        'prescriptions': Directory(p.join(appDocDir.path, 'prescriptions')),
-      };
-
-      // 2. Prepare Temp Staging Area
-      final tempDir = await getTemporaryDirectory();
-      final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
-      final stagingName = 'mediposs_staging_$timestamp';
-      final stagingDir = Directory(p.join(tempDir.path, stagingName));
-      await stagingDir.create(recursive: true);
-
-      bool foundAnything = false;
-      for (final entry in sources.entries) {
-        if (await entry.value.exists()) {
-          final target = Directory(p.join(stagingDir.path, entry.key));
-          await target.create(recursive: true);
-          await _copyDirectory(entry.value, target);
-          foundAnything = true;
-        }
-      }
-
-      if (!foundAnything) {
-        debugPrint('Source data folders not found at $dbDirStr');
-        return null;
-      }
-
-      // 3. Create the master ZIP
-      final zipFileName = 'mediposs_backup_$timestamp.zip';
-      final zipFilePath = p.join(tempDir.path, zipFileName);
-      final encoder = ZipFileEncoder();
-      encoder.create(zipFilePath);
-      encoder.addDirectory(stagingDir);
-      encoder.close();
-
-      // Clean up staging dir
-      await stagingDir.delete(recursive: true);
-
-      return File(zipFilePath);
-    } catch (e) {
-      debugPrint('Error generating backup zip: $e');
-      return null;
-    }
+    return await BackupRestoreService.exportToJsonBackup();
   }
 
   /// Performs a full system backup (Local + Google Drive).
@@ -233,7 +186,7 @@ class GoogleDriveService {
     return list.files ?? [];
   }
  
-  Future<void> downloadAndRestore(String fileId) async {
+  Future<void> downloadAndRestore(String fileId, {RestoreConfig? config}) async {
     if (_client == null) throw Exception('Google Drive not connected');
     final driveApi = drive.DriveApi(_client!);
  
@@ -247,46 +200,12 @@ class GoogleDriveService {
     await response.stream.pipe(sink);
     await sink.close();
  
-    // 2. Prepare Targets
-    final appDocDir = await getApplicationDocumentsDirectory();
-    final dbDirStr = ObjectBoxService.instance.dbDirectory;
- 
-    // 3. Safety: Create Local Backup first (as requested)
+    // 3. Safety: Create Local Backup first
     await ObjectBoxService.instance.createLocalSafetyBackup();
  
-    // 4. Critical: Close Store
-    await ObjectBoxService.instance.close();
- 
-    // 5. Extract and Overwrite
-    final bytes = await zipFile.readAsBytes();
-    final archive = ZipDecoder().decodeBytes(bytes);
- 
-    for (final file in archive) {
-      if (file.isFile) {
-        // The zip structure is: staging_dir/folder_name/actual_files
-        // We need to parse: folder_name/actual_files
-        final parts = p.split(file.name);
-        if (parts.length < 2) continue;
-        
-        final type = parts[parts.length - 2]; // database, patient_photos, etc.
-        final fileName = parts.last;
-        
-        String? targetPath;
-        if (type == 'database') {
-          targetPath = p.join(dbDirStr, fileName);
-        } else if (type == 'patient_photos') {
-          targetPath = p.join(appDocDir.path, 'patient_photos', fileName);
-        } else if (type == 'prescriptions') {
-          targetPath = p.join(appDocDir.path, 'prescriptions', fileName);
-        }
- 
-        if (targetPath != null) {
-          final outFile = File(targetPath);
-          await outFile.create(recursive: true);
-          await outFile.writeAsBytes(file.content as List<int>);
-        }
-      }
-    }
+    // 4. Import Data
+    final restoreConfig = config ?? RestoreConfig(); // default to restoring everything
+    await BackupRestoreService.importFromJsonBackup(zipFile, restoreConfig);
  
     // 6. Cleanup
     if (await zipFile.exists()) await zipFile.delete();

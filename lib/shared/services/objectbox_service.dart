@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/medicine.dart';
 import '../models/stock_transfer.dart';
 import '../models/sale.dart';
@@ -56,7 +57,15 @@ class ObjectBoxService {
     
     // Explicitly set directory for desktop consistency
     final appSupportDir = await getApplicationSupportDirectory();
-    svc._dbDirectory = p.join(appSupportDir.path, 'mediposs_db');
+    final prefs = await SharedPreferences.getInstance();
+    final isTerminalMode = prefs.getBool('isTerminalMode') ?? false;
+
+    if (isTerminalMode) {
+      svc._dbDirectory = p.join(appSupportDir.path, 'mediposs_terminal_db');
+    } else {
+      svc._dbDirectory = p.join(appSupportDir.path, 'mediposs_db');
+    }
+    debugPrint('ObjectBoxService.init: isTerminalMode=$isTerminalMode, dbDirectory=${svc._dbDirectory}');
     
     svc._store = await openStore(directory: svc._dbDirectory);
 
@@ -82,7 +91,13 @@ class ObjectBoxService {
 
     // Seed default settings if empty
     if (svc.settingsBox.isEmpty()) {
-      svc.settingsBox.put(AppSettings());
+      svc.settingsBox.put(AppSettings()..isWindowsClient = isTerminalMode);
+    } else {
+      final existing = svc.settingsBox.getAll().first;
+      if (existing.isWindowsClient != isTerminalMode) {
+        existing.isWindowsClient = isTerminalMode;
+        svc.settingsBox.put(existing);
+      }
     }
 
     if (svc.userBox.isEmpty()) {

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -79,6 +80,28 @@ class SyncService extends ChangeNotifier {
       final ok = await testConnection(address);
       if (ok) {
         _hubIp = address;
+        
+        // On Windows, if we are currently not in terminal mode, we need to transition!
+        if (defaultTargetPlatform == TargetPlatform.windows) {
+          final prefs = await SharedPreferences.getInstance();
+          final isTerminal = prefs.getBool('isTerminalMode') ?? false;
+          if (!isTerminal) {
+            // Persist the status and IP before restarting
+            await prefs.setBool('isTerminalMode', true);
+            final settings = ObjectBoxService.instance.settings;
+            settings.isWindowsClient = true;
+            if (isUrl) {
+              settings.cloudflareUrl = address;
+            } else {
+              settings.hubIp = address;
+            }
+            ObjectBoxService.instance.settingsBox.put(settings);
+            
+            // Return special status to prevent unmounting and show the restart prompt
+            return 'RESTART_REQUIRED';
+          }
+        }
+
         _isConnected = true;
         // Persist the address (IP or URL)
         final settings = ObjectBoxService.instance.settings;
@@ -247,7 +270,13 @@ class SyncService extends ChangeNotifier {
   }
 
   /// Manually switches the app to Cloud Mode to work via Firebase.
-  Future<void> enterCloudMode() async {
+  Future<void> enterCloudMode([String? shopId]) async {
+    if (shopId != null && shopId.isNotEmpty) {
+      final settings = ObjectBoxService.instance.settings;
+      settings.shopId = shopId;
+      ObjectBoxService.instance.settingsBox.put(settings);
+    }
+
     _isCloudMode = true;
     _isConnected = true; // Set connected to true so UI allows usage
     notifyListeners();
@@ -1594,11 +1623,17 @@ class SyncService extends ChangeNotifier {
         
         final updated = AppSettings.fromJson(data);
         updated.id = current.id;
-        // Keep local-only settings
+        // Keep local-only and device-specific settings
+        updated.isWindowsClient = current.isWindowsClient;
+        updated.deviceId = current.deviceId;
         updated.hubIp = current.hubIp;
         updated.autoLoginPin = current.autoLoginPin;
+        updated.autoLoginName = current.autoLoginName;
         updated.serverPort = current.serverPort;
         updated.jwtSecret = current.jwtSecret;
+        updated.defaultPrinterName = current.defaultPrinterName;
+        updated.autoPrintReceipt = current.autoPrintReceipt;
+        updated.receiptPaperSize = current.receiptPaperSize;
 
         box.put(updated);
         notifyListeners();
