@@ -112,6 +112,10 @@ class _AppShellWindowsState extends State<AppShellWindows> {
         final settings = context.read<SettingsProvider>();
         final s = settings.settings;
 
+        if (s.isWindowsClient) {
+          return AppExitResponse.exit;
+        }
+
         // We always want to perform Cloud Sync on exit, even if GDrive backup is off
         _showExitBackupDialog();
         return AppExitResponse.cancel;

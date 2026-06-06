@@ -42,8 +42,10 @@ import 'firebase_options.dart';
 import 'shared/services/background_sync_service.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 
-void main() async {
+void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  final forceTerminal = args.contains('--terminal') || const bool.fromEnvironment('terminal', defaultValue: false);
   
   // 0. On Android, if background service is already running, we MUST stop it 
   // to release the ObjectBox lock before the main isolate can open it.
@@ -63,8 +65,8 @@ void main() async {
 
   // 1. Initialize DB FIRST - Most critical for both UI and background
   try {
-    debugPrint('Main: Initializing ObjectBox...');
-    await ObjectBoxService.init();
+    debugPrint('Main: Initializing ObjectBox (forceTerminal=$forceTerminal)...');
+    await ObjectBoxService.init(forceTerminal: forceTerminal);
     debugPrint('Main: ObjectBox initialized.');
   } catch (e) {
     debugPrint('Main: ObjectBox initialization failed: $e');

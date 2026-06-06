@@ -49,7 +49,7 @@ class ObjectBoxService {
 
   ObjectBoxService._();
 
-  static Future<ObjectBoxService> init() async {
+  static Future<ObjectBoxService> init({bool forceTerminal = false}) async {
     if (_instance != null) return _instance!;
 
 
@@ -58,7 +58,7 @@ class ObjectBoxService {
     // Explicitly set directory for desktop consistency
     final appSupportDir = await getApplicationSupportDirectory();
     final prefs = await SharedPreferences.getInstance();
-    final isTerminalMode = prefs.getBool('isTerminalMode') ?? false;
+    final isTerminalMode = forceTerminal || (prefs.getBool('isTerminalMode') ?? false);
 
     if (isTerminalMode) {
       svc._dbDirectory = p.join(appSupportDir.path, 'mediposs_terminal_db');
