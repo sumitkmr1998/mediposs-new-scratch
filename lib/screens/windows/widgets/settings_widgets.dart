@@ -286,11 +286,12 @@ class SettingsDropdown<T> extends StatelessWidget {
             child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           ),
           SizedBox(
-            width: 180,
+            width: 150,
             child: DropdownButtonFormField<T>(
               value: value,
               items: items,
               onChanged: onChanged,
+              isExpanded: true,
               decoration: const InputDecoration(
                 isDense: true,
                 contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),

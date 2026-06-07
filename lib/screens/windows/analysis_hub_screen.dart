@@ -34,6 +34,37 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
   String _detailPeriod = 'Last 30 Days';
   DateTimeRange? _detailCustomRange;
 
+  String _perfPeriod = 'This Month';
+  DateTimeRange? _perfCustomRange;
+
+  List<Sale> _getFilteredSalesForPerf(List<Sale> sales) {
+    final now = DateTime.now();
+    DateTime start;
+    DateTime end = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
+    if (_perfPeriod == 'Today') {
+      start = DateTime(now.year, now.month, now.day);
+    } else if (_perfPeriod == 'Yesterday') {
+      final yest = now.subtract(const Duration(days: 1));
+      start = DateTime(yest.year, yest.month, yest.day);
+      end = DateTime(yest.year, yest.month, yest.day, 23, 59, 59);
+    } else if (_perfPeriod == 'This Week') {
+      start = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+    } else if (_perfPeriod == 'This Month') {
+      start = DateTime(now.year, now.month, 1);
+    } else if (_perfPeriod == 'Custom Range' && _perfCustomRange != null) {
+      start = _perfCustomRange!.start;
+      end = DateTime(_perfCustomRange!.end.year, _perfCustomRange!.end.month, _perfCustomRange!.end.day, 23, 59, 59);
+    } else {
+      start = DateTime(now.year, now.month, 1);
+    }
+
+    return sales.where((s) {
+      return s.createdAt.isAfter(start.subtract(const Duration(seconds: 1))) &&
+             s.createdAt.isBefore(end.add(const Duration(seconds: 1)));
+    }).toList();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -381,7 +412,8 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
       );
     }
 
-    final performanceList = AnalyticsHelper.getMedicinePerformanceLeaderboard(medicines, sales);
+    final filteredSales = _getFilteredSalesForPerf(sales);
+    final performanceList = AnalyticsHelper.getMedicinePerformanceLeaderboard(medicines, filteredSales);
 
     // Computing procedure performance list
     final procedurePerformanceList = <ProcedurePerformance>[];
@@ -389,7 +421,7 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
       final performanceMap = <int, int>{};
       final revenueMap = <int, double>{};
 
-      for (final sale in sales) {
+      for (final sale in filteredSales) {
         if (sale.isReturn) continue;
         for (final item in AnalyticsHelper.getItems(sale)) {
           if (item.isProcedure) {
@@ -519,6 +551,55 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
               ),
             ],
           ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              const Text('Filter Period: ', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(width: 8),
+              Wrap(
+                spacing: 8,
+                children: ['Today', 'Yesterday', 'This Week', 'This Month', 'Custom Range'].map((p) {
+                  final isSelected = p == _perfPeriod;
+                  return ChoiceChip(
+                    label: Text(p),
+                    selected: isSelected,
+                    onSelected: (selected) async {
+                      if (selected) {
+                        if (p == 'Custom Range') {
+                          final range = await showDateRangePicker(
+                            context: context,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime.now(),
+                            initialDateRange: _perfCustomRange,
+                          );
+                          if (range != null) {
+                            setState(() {
+                              _perfPeriod = p;
+                              _perfCustomRange = range;
+                            });
+                          }
+                        } else {
+                          setState(() {
+                            _perfPeriod = p;
+                            _perfCustomRange = null;
+                          });
+                        }
+                      }
+                    },
+                    selectedColor: AppTheme.primary.withOpacity(0.2),
+                  );
+                }).toList(),
+              ),
+              if (_perfPeriod == 'Custom Range' && _perfCustomRange != null) ...[
+                const SizedBox(width: 12),
+                Text(
+                  '(${DateFormat('dd/MM/yyyy').format(_perfCustomRange!.start)} - ${DateFormat('dd/MM/yyyy').format(_perfCustomRange!.end)})',
+                  style: TextStyle(color: context.textMutedColor, fontSize: 13),
+                ),
+              ],
+            ],
+          ),
+
           const SizedBox(height: 20),
           Expanded(
             child: Card(

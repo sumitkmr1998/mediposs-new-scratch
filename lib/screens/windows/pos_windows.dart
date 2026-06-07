@@ -4,13 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../../shared/providers/inventory_provider.dart';
 import '../../shared/providers/cart_provider.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/prescription_provider.dart';
 import '../../shared/providers/patient_provider.dart';
+import '../../shared/providers/sales_provider.dart';
 import '../../shared/models/medicine.dart';
 import '../../shared/models/patient.dart';
+import '../../shared/models/sale.dart';
 import '../../shared/models/procedure.dart';
 import '../../shared/providers/opd_provider.dart';
 import '../../shared/models/appointment.dart';
@@ -435,6 +438,8 @@ class _PosWindowsState extends State<PosWindows> {
                                     setState(() => _paymentMethod = v),
                                 onLoadPrescription: () =>
                                     _showPrescriptionLoader(context),
+                                onImportPreviousSales: () =>
+                                    _showImportPreviousSalesDialog(context, cart),
                                 onCheckout: () => _doCheckout(cart),
                               ),
                             ),
@@ -490,6 +495,8 @@ class _PosWindowsState extends State<PosWindows> {
                                     setState(() => _paymentMethod = v),
                                 onLoadPrescription: () =>
                                     _showPrescriptionLoader(context),
+                                onImportPreviousSales: () =>
+                                    _showImportPreviousSalesDialog(context, cart),
                                 onCheckout: () => _doCheckout(cart),
                               ),
                             ),
@@ -892,12 +899,10 @@ class _PosWindowsState extends State<PosWindows> {
     int foundCount = 0;
 
     for (final pItem in items) {
-      // Find matching medicine in inventory by ID or exact Name
+      // Find matching medicine in inventory by exact Name (IDs differ between synced client devices)
       final medicine = inv.medicines
           .where(
-            (m) =>
-                m.id == pItem.medicineId ||
-                m.name.toLowerCase() == pItem.medicineName.toLowerCase(),
+            (m) => m.name.toLowerCase() == pItem.medicineName.toLowerCase(),
           )
           .firstOrNull;
 
@@ -929,6 +934,138 @@ class _PosWindowsState extends State<PosWindows> {
 
     // Update the controller in parent state
     _patientCtrl.text = prescription.patientName;
+  }
+
+  void _showImportPreviousSalesDialog(BuildContext context, CartProvider cart) {
+    final salesProv = context.read<SalesProvider>();
+    final patientProv = context.read<PatientProvider>();
+
+    final patient = patientProv.patients.where((p) => p.id == cart.patientId).firstOrNull;
+    if (patient == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selected patient details not found in database.')),
+      );
+      return;
+    }
+
+    final previousSales = salesProv.getSalesForPatient(patient);
+    if (previousSales.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No previous sales found for ${patient.name}.')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.restore_page, color: AppTheme.primary),
+            const SizedBox(width: 8),
+            Text('Import Previous Sale for ${patient.name}'),
+          ],
+        ),
+        content: SizedBox(
+          width: 500,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Select a previous transaction to load items into the cart:',
+                style: TextStyle(color: context.textMutedColor, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: previousSales.length,
+                  itemBuilder: (_, i) {
+                    final sale = previousSales[i];
+                    final dateStr = DateFormat('dd MMM yyyy, hh:mm a').format(sale.createdAt);
+                    final items = salesProv.getSaleItems(sale);
+                    final itemsSummary = items.map((e) => '${e.qty}x ${e.medicineName}').join(', ');
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        title: Text(
+                          '${sale.invoiceNo} • ₹${sale.total.toStringAsFixed(2)}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(dateStr, style: const TextStyle(fontSize: 11)),
+                            const SizedBox(height: 4),
+                            Text(
+                              itemsSummary,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: context.textMutedColor, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _importSaleItemsIntoCart(context, cart, sale, items);
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _importSaleItemsIntoCart(BuildContext context, CartProvider cart, Sale sale, List<SaleItem> saleItems) {
+    final inv = context.read<InventoryProvider>();
+
+    final currentPatientId = cart.patientId;
+    final currentPatientName = cart.patientName;
+    final currentPatientPhone = cart.patientPhone;
+    final currentIsClinicalDispense = cart.isClinicalDispense;
+
+    cart.clearCart();
+    cart.setPatient(id: currentPatientId, name: currentPatientName, phone: currentPatientPhone);
+    cart.setClinicalDispense(currentIsClinicalDispense);
+
+    int loadedCount = 0;
+    for (final sItem in saleItems) {
+      if (sItem.isProcedure) {
+        final procProv = context.read<ProcedureProvider>();
+        final proc = procProv.procedures.where((p) => p.id == sItem.procedureId || p.name.toLowerCase() == sItem.medicineName.toLowerCase()).firstOrNull;
+        if (proc != null) {
+          cart.addProcedure(proc, price: sItem.unitPrice, qty: sItem.qty);
+          loadedCount++;
+        }
+      } else {
+        final medicine = inv.medicines.where((m) => m.id == sItem.medicineId || m.name.toLowerCase() == sItem.medicineName.toLowerCase()).firstOrNull;
+        if (medicine != null) {
+          cart.addItem(medicine, qty: sItem.qty);
+          loadedCount++;
+        }
+      }
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Successfully imported $loadedCount items from previous sale ${sale.invoiceNo}.'),
+        backgroundColor: AppTheme.success,
+      ),
+    );
   }
 
   void _showScannerDialog() {
@@ -1582,6 +1719,7 @@ class _CartPanel extends StatelessWidget {
   final VoidCallback onPaymentMethodConfirm;
   final ValueChanged<String> onPaymentMethodChanged;
   final VoidCallback onLoadPrescription;
+  final VoidCallback onImportPreviousSales;
   final VoidCallback onCheckout;
 
   const _CartPanel({
@@ -1608,6 +1746,7 @@ class _CartPanel extends StatelessWidget {
     required this.onPaymentMethodConfirm,
     required this.onPaymentMethodChanged,
     required this.onLoadPrescription,
+    required this.onImportPreviousSales,
     required this.onCheckout,
   });
 
@@ -1702,6 +1841,19 @@ class _CartPanel extends StatelessWidget {
                   tooltip: 'Load Prescription',
                   onPressed: onLoadPrescription,
                 ),
+                if (cart.patientId != 0) ...[
+                  const SizedBox(width: 4),
+                  IconButton(
+                    icon: Icon(
+                      Icons.restore_page_outlined,
+                      color: cart.isReturnMode
+                          ? AppTheme.danger
+                          : (cart.isClinicalDispense ? AppTheme.indigo : AppTheme.primary),
+                    ),
+                    tooltip: 'Import from Previous Sales',
+                    onPressed: onImportPreviousSales,
+                  ),
+                ],
               ],
             ),
           ),

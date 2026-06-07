@@ -15,7 +15,7 @@ import '../models/prescription.dart';
 
 class AuditExportService {
   /// Generates a comprehensive Excel Audit Report
-  static Future<File?> generateAuditReport() async {
+  static Future<File?> generateAuditReport({String? customPath}) async {
     try {
       final db = ObjectBoxService.instance;
       var excel = Excel.createExcel();
@@ -26,10 +26,12 @@ class AuditExportService {
       }
 
       // 1. Stock / Inventory
-      _exportInventory(excel, db.medicineBox.getAll(), db.batchBox.getAll());
+      final medicines = db.medicineBox.getAll();
+      _exportInventory(excel, medicines, db.batchBox.getAll());
 
       // 2. Internal Transfers
-      _exportTransfers(excel, db.transferBox.getAll());
+      final medMap = {for (var m in medicines) m.id: m.name};
+      _exportTransfers(excel, db.transferBox.getAll(), medMap);
 
       // 3. Sales / Dispense
       _exportSales(excel, db.saleBox.getAll());
@@ -44,7 +46,7 @@ class AuditExportService {
       final tempDir = await getTemporaryDirectory();
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
       final fileName = 'MediPoss_Audit_Report_$timestamp.xlsx';
-      final file = File(p.join(tempDir.path, fileName));
+      final file = File(customPath ?? p.join(tempDir.path, fileName));
       
       final bytes = excel.save();
       if (bytes != null) {
@@ -82,12 +84,13 @@ class AuditExportService {
     }
   }
 
-  static void _exportTransfers(Excel excel, List<StockTransfer> transfers) {
+  static void _exportTransfers(Excel excel, List<StockTransfer> transfers, Map<int, String> medMap) {
     Sheet sheet = excel['Transfers'];
     sheet.appendRow([
       TextCellValue('Transfer ID'),
       TextCellValue('Date'),
       TextCellValue('Medicine ID'),
+      TextCellValue('Medicine Name'),
       TextCellValue('Batch'),
       TextCellValue('Quantity'),
       TextCellValue('Type'),
@@ -95,10 +98,12 @@ class AuditExportService {
     ]);
 
     for (var t in transfers) {
+      final medName = medMap[t.medicineId] ?? 'Unknown Medicine';
       sheet.appendRow([
         IntCellValue(t.id),
         TextCellValue(t.transferredAt.toIso8601String()),
         IntCellValue(t.medicineId),
+        TextCellValue(medName),
         TextCellValue(t.batchNo ?? ''),
         IntCellValue(t.qty),
         TextCellValue('${t.fromWarehouse} to ${t.toWarehouse}'),

@@ -35,8 +35,44 @@ class InvoiceGenerator {
   }
 
   static pw.Widget _buildHeader(Invoice invoice, bool isSmall) {
+    // Auto-optimize clinic name font size based on text length and page width (e.g. A6)
+    final nameLen = invoice.clinicName.length;
+    double nameFontSize = isSmall ? 14.0 : 22.0;
+    if (isSmall) {
+      if (nameLen > 25) {
+        nameFontSize = 9.5;
+      } else if (nameLen > 18) {
+        nameFontSize = 11.0;
+      } else if (nameLen > 12) {
+        nameFontSize = 13.0;
+      }
+    } else {
+      if (nameLen > 25) {
+        nameFontSize = 16.0;
+      } else if (nameLen > 18) {
+        nameFontSize = 18.0;
+      }
+    }
+
     final settings = ObjectBoxService.instance.settings;
-    final showCompositionHeader = settings.isCompositionScheme && !invoice.isClinicalDispense;
+    final typeText = invoice.isClinicalDispense 
+        ? 'CLINICAL DISPENSE' 
+        : (settings.isCompositionScheme ? 'BILL OF SUPPLY' : 'INVOICE');
+    final typeLen = typeText.length;
+    double typeFontSize = isSmall ? 11.0 : 18.0;
+    if (isSmall) {
+      if (typeLen > 15) {
+        typeFontSize = 8.0;
+      } else if (typeLen > 10) {
+        typeFontSize = 9.5;
+      }
+    } else {
+      if (typeLen > 15) {
+        typeFontSize = 14.0;
+      } else if (typeLen > 10) {
+        typeFontSize = 16.0;
+      }
+    }
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -51,7 +87,7 @@ class InvoiceGenerator {
                   pw.Text(
                     invoice.clinicName.toUpperCase(),
                     style: pw.TextStyle(
-                      fontSize: isSmall ? 16 : 24,
+                      fontSize: nameFontSize,
                       fontWeight: pw.FontWeight.bold,
                       color: PdfColors.blue900,
                     ),
@@ -72,13 +108,9 @@ class InvoiceGenerator {
               crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
                 pw.Text(
-                  invoice.isClinicalDispense 
-                      ? 'CLINICAL DISPENSE' 
-                      : (settings.isCompositionScheme ? 'BILL OF SUPPLY' : 'INVOICE'),
+                  typeText,
                   style: pw.TextStyle(
-                    fontSize: isSmall 
-                        ? (invoice.isClinicalDispense ? 12 : 18) 
-                        : (invoice.isClinicalDispense ? 20 : 30), 
+                    fontSize: typeFontSize, 
                     fontWeight: pw.FontWeight.bold, 
                     color: PdfColors.grey700
                   )
@@ -89,16 +121,6 @@ class InvoiceGenerator {
             ),
           ],
         ),
-        if (showCompositionHeader) ...[
-          pw.SizedBox(height: 4),
-          pw.Align(
-            alignment: pw.Alignment.centerRight,
-            child: pw.Text(
-              'Composition taxable person, not eligible to collect tax on supplies',
-              style: pw.TextStyle(fontSize: isSmall ? 7 : 9, fontStyle: pw.FontStyle.italic, fontWeight: pw.FontWeight.bold, color: PdfColors.red800),
-            ),
-          ),
-        ],
         pw.SizedBox(height: isSmall ? 6 : 10),
         pw.Divider(thickness: 2, color: PdfColors.blue900),
       ],
@@ -224,6 +246,9 @@ class InvoiceGenerator {
 
   static pw.Widget _buildFooter(Invoice invoice, bool isSmall) {
     final double fs = isSmall ? 8 : 10;
+    final settings = ObjectBoxService.instance.settings;
+    final showCompositionNotice = settings.isCompositionScheme && !invoice.isClinicalDispense;
+
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
@@ -232,38 +257,39 @@ class InvoiceGenerator {
           crossAxisAlignment: pw.CrossAxisAlignment.end,
           children: [
             pw.Expanded(
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
+              child: pw.SizedBox(),
+            ),
+            if (invoice.isClinicalDispense) ...[
+              pw.SizedBox(width: 8),
+              pw.Column(
                 children: [
-                  pw.Text(
-                    'Disclaimer:',
-                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: fs),
+                  pw.Container(
+                    width: isSmall ? 80 : 150,
+                    decoration: const pw.BoxDecoration(
+                      border: pw.Border(top: pw.BorderSide(color: PdfColors.grey)),
+                    ),
                   ),
                   pw.SizedBox(height: 4),
-                  pw.Text(
-                    invoice.isClinicalDispense
-                        ? 'Medicines dispensed as part of clinical treatment. Internal consumption only.'
-                        : 'Goods once sold are subject to retail store return and exchange policies.',
-                    style: pw.TextStyle(fontSize: fs),
-                  ),
+                  pw.Text("Doctor's Signature", style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: fs)),
                 ],
               ),
-            ),
-            pw.SizedBox(width: 8),
-            pw.Column(
-              children: [
-                pw.Container(
-                  width: isSmall ? 80 : 150,
-                  decoration: const pw.BoxDecoration(
-                    border: pw.Border(top: pw.BorderSide(color: PdfColors.grey)),
-                  ),
-                ),
-                pw.SizedBox(height: 4),
-                pw.Text("Doctor's Signature", style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: fs)),
-              ],
-            ),
+            ],
           ],
         ),
+        if (showCompositionNotice) ...[
+          pw.SizedBox(height: 12),
+          pw.Center(
+            child: pw.Text(
+              'Composition taxable person, not eligible to collect tax on supplies',
+              style: pw.TextStyle(
+                fontSize: isSmall ? 7.5 : 9.5,
+                fontStyle: pw.FontStyle.italic,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.red800,
+              ),
+            ),
+          ),
+        ],
         pw.SizedBox(height: isSmall ? 20 : 40),
         pw.Center(
           child: pw.Text(
