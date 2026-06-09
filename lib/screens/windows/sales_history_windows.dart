@@ -465,7 +465,7 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
         children: [
           const SizedBox(width: 48),
           SizedBox(
-              width: 140,
+              width: 190,
               child: Text('INVOICE ID', style: _headerStyle(context))),
           Expanded(
               flex: 3,
@@ -554,7 +554,7 @@ class _SaleRow extends StatelessWidget {
         title: Row(
           children: [
             SizedBox(
-              width: 140,
+              width: 190,
               child: Text(sale.invoiceNo,
                   style: const TextStyle(
                       fontWeight: FontWeight.w800,

@@ -31,7 +31,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
+    _tabs = TabController(length: 4, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<WarehouseProvider>().loadTransfers();
       context.read<InventoryProvider>().load();
@@ -64,6 +64,50 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
       final table = excel.tables[firstSheet];
       if (table == null) return;
 
+      if (!context.mounted) return;
+
+      final String? mode = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Excel Import Mode'),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'How would you like to handle stock updates?',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 12),
+              Text(
+                '• Overwrite Stock (Clear Previous Batches):\n  Removes all existing batches and resets stock to 0 for the imported medicines before adding the new stock.',
+              ),
+              SizedBox(height: 8),
+              Text(
+                '• Add Stock (Incremental):\n  Keeps existing batches and adds the Excel stock as a new batch.',
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'cancel'),
+              child: const Text('Cancel Import'),
+            ),
+            OutlinedButton(
+              onPressed: () => Navigator.pop(ctx, 'add'),
+              child: const Text('Add Stock'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, 'overwrite'),
+              child: const Text('Overwrite Stock'),
+            ),
+          ],
+        ),
+      );
+
+      if (mode == null || mode == 'cancel') return;
+
       int added = 0;
       int updated = 0;
       if (!context.mounted) return;
@@ -74,7 +118,8 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
       for (int i = 0; i < table.maxRows; i++) {
         final row = table.row(i);
         for (int j = 0; j < row.length; j++) {
-          final cellValue = row[j]?.value?.toString().trim().toLowerCase() ?? '';
+          final cellValue =
+              row[j]?.value?.toString().trim().toLowerCase() ?? '';
           if (cellValue == 'particulars') {
             isTally = true;
             break;
@@ -84,6 +129,30 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
       }
 
       if (isTally) {
+        // Overwrite pre-clear logic for Tally
+        if (mode == 'overwrite') {
+          final List<int> idsToClear = [];
+          for (int i = 0; i < table.maxRows; i++) {
+            final row = table.row(i);
+            if (row.isEmpty) continue;
+            final sNoStr = row[0]?.value?.toString().trim() ?? '';
+            final isSerial = int.tryParse(sNoStr) != null;
+            final nameCell = row[1]?.value?.toString().trim() ?? '';
+
+            if (isSerial && nameCell.isNotEmpty) {
+              final existing = inv.rawMedicines
+                  .where((m) => m.name.toLowerCase() == nameCell.toLowerCase())
+                  .firstOrNull;
+              if (existing != null) {
+                idsToClear.add(existing.id);
+              }
+            }
+          }
+          if (idsToClear.isNotEmpty) {
+            inv.clearBatchesAndResetStock(idsToClear);
+          }
+        }
+
         for (int i = 0; i < table.maxRows; i++) {
           final row = table.row(i);
           if (row.isEmpty) continue;
@@ -97,10 +166,12 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
             final unit = 'Pcs';
 
             final double qtyVal = row.length > 3
-                ? (double.tryParse(row[3]?.value?.toString().trim() ?? '') ?? 0.0)
+                ? (double.tryParse(row[3]?.value?.toString().trim() ?? '') ??
+                    0.0)
                 : 0.0;
             final double rateVal = row.length > 4
-                ? (double.tryParse(row[4]?.value?.toString().trim() ?? '') ?? 0.0)
+                ? (double.tryParse(row[4]?.value?.toString().trim() ?? '') ??
+                    0.0)
                 : 0.0;
 
             final mainStock = qtyVal.round();
@@ -108,7 +179,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
             final purchasePrice = rateVal;
             final sellingPrice = rateVal;
 
-            final existing = inv.medicines
+            final existing = inv.rawMedicines
                 .where((m) => m.name.toLowerCase() == nameCell.toLowerCase())
                 .firstOrNull;
 
@@ -116,8 +187,10 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
               existing
                 ..category = category
                 ..unit = unit
-                ..purchasePrice = purchasePrice > 0 ? purchasePrice : existing.purchasePrice
-                ..sellingPrice = sellingPrice > 0 ? sellingPrice : existing.sellingPrice;
+                ..purchasePrice =
+                    purchasePrice > 0 ? purchasePrice : existing.purchasePrice
+                ..sellingPrice =
+                    sellingPrice > 0 ? sellingPrice : existing.sellingPrice;
 
               inv.updateMedicine(existing);
 
@@ -202,7 +275,8 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
           return -1;
         }
 
-        final nameIdx = getColIdx(['medicine name', 'item name', 'product name']);
+        final nameIdx =
+            getColIdx(['medicine name', 'item name', 'product name']);
         final barcodeIdx = getColIdx(['barcode']);
         final categoryIdx = getColIdx(['category']);
         final unitIdx = getColIdx(['unit']);
@@ -214,6 +288,28 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
             getColIdx(['store front stock', 'store stock', 'quantity', 'qty']);
         final lowStockIdx = getColIdx(['low stock threshold', 'threshold']);
 
+        // Overwrite pre-clear logic for standard Excel
+        if (mode == 'overwrite' && nameIdx != -1) {
+          final List<int> idsToClear = [];
+          for (int i = headerRowIndex + 1; i < table.maxRows; i++) {
+            final row = table.row(i);
+            if (row.length > nameIdx) {
+              final nameCell = row[nameIdx]?.value?.toString().trim() ?? '';
+              if (nameCell.isNotEmpty) {
+                final existing = inv.rawMedicines
+                    .where((m) => m.name.toLowerCase() == nameCell.toLowerCase())
+                    .firstOrNull;
+                if (existing != null) {
+                  idsToClear.add(existing.id);
+                }
+              }
+            }
+          }
+          if (idsToClear.isNotEmpty) {
+            inv.clearBatchesAndResetStock(idsToClear);
+          }
+        }
+
         // 3. Process rows
         for (int i = headerRowIndex + 1; i < table.maxRows; i++) {
           final row = table.row(i);
@@ -224,7 +320,8 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
                   : def;
           double getCellDbl(int idx, double def) => (idx != -1 &&
                   idx < row.length)
-              ? (double.tryParse(row[idx]?.value?.toString().trim() ?? '') ?? def)
+              ? (double.tryParse(row[idx]?.value?.toString().trim() ?? '') ??
+                  def)
               : def;
           int getCellInt(int idx, int def) => (idx != -1 && idx < row.length)
               ? (int.tryParse(row[idx]?.value?.toString().trim() ?? '') ?? def)
@@ -245,7 +342,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
           final lowStock = getCellInt(lowStockIdx, 10);
 
           // Check if medicine exists
-          final existing = inv.medicines
+          final existing = inv.rawMedicines
               .where((m) => m.name.toLowerCase() == nameCell.toLowerCase())
               .firstOrNull;
 
@@ -370,6 +467,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
           indicatorColor: AppTheme.primary,
           tabs: const [
             Tab(icon: Icon(Icons.dashboard_customize), text: 'Overview'),
+            Tab(icon: Icon(Icons.list_alt), text: 'Stock Report'),
             Tab(icon: Icon(Icons.compare_arrows), text: 'Transfers'),
             Tab(icon: Icon(Icons.shopping_bag_outlined), text: 'Purchases'),
           ],
@@ -390,6 +488,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
         controller: _tabs,
         children: const [
           _StockLevelsTab(),
+          _StockReportTab(),
           _TransferHistoryTab(),
           _PurchaseHistoryTab(),
         ],
@@ -503,7 +602,8 @@ class _StockLevelsTabState extends State<_StockLevelsTab> {
                     const SizedBox(width: 8),
                     IconButton(
                       tooltip: 'Bulk Transfer Clinic Stock to Store',
-                      icon: const Icon(Icons.swap_horiz, color: AppTheme.success),
+                      icon:
+                          const Icon(Icons.swap_horiz, color: AppTheme.success),
                       onPressed: () => showDialog(
                         context: context,
                         builder: (ctx) => _BulkTransferDialog(wh: wh),
@@ -652,7 +752,11 @@ class _ModernMedicineCardWindowsState
                             message: 'Transfer Clinic Bulk to Dispensing',
                             child: InkWell(
                               onTap: () => _showTransferDialog(
-                                  context, widget.medicine, 'bulkClinic', 'main', widget.wh),
+                                  context,
+                                  widget.medicine,
+                                  'bulkClinic',
+                                  'main',
+                                  widget.wh),
                               borderRadius: BorderRadius.circular(20),
                               child: Container(
                                 padding: const EdgeInsets.all(4),
@@ -691,13 +795,18 @@ class _ModernMedicineCardWindowsState
                             message: 'Transfer Store Bulk to POS',
                             child: InkWell(
                               onTap: () => _showTransferDialog(
-                                  context, widget.medicine, 'bulkStore', 'store', widget.wh),
+                                  context,
+                                  widget.medicine,
+                                  'bulkStore',
+                                  'store',
+                                  widget.wh),
                               borderRadius: BorderRadius.circular(20),
                               child: Container(
                                 padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: const Color(0xFF14B8A6).withValues(alpha: 0.1),
+                                  color: const Color(0xFF14B8A6)
+                                      .withValues(alpha: 0.1),
                                 ),
                                 child: const Icon(Icons.arrow_downward_rounded,
                                     size: 16, color: Color(0xFF14B8A6)),
@@ -744,8 +853,8 @@ class _ModernMedicineCardWindowsState
                       } else if (val == 'batches') {
                         _showBatchDetails(context, widget.medicine);
                       } else if (val == 'transfer') {
-                        _showTransferDialog(context, widget.medicine, 'bulkClinic',
-                            'main', widget.wh);
+                        _showTransferDialog(context, widget.medicine,
+                            'bulkClinic', 'main', widget.wh);
                       } else if (val == 'delete') {
                         _confirmDelete(context, widget.medicine);
                       }
@@ -989,25 +1098,43 @@ class _BatchDetailsDialog extends StatelessWidget {
                                     );
                                   },
                                 ),
-                                if (context.read<AuthProvider>().currentUser?.role.toLowerCase() == 'admin' ||
-                                    context.read<AuthProvider>().currentUser?.canDeleteInventory == true)
+                                if (context
+                                            .read<AuthProvider>()
+                                            .currentUser
+                                            ?.role
+                                            .toLowerCase() ==
+                                        'admin' ||
+                                    context
+                                            .read<AuthProvider>()
+                                            .currentUser
+                                            ?.canDeleteInventory ==
+                                        true)
                                   IconButton(
-                                    icon: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 20),
+                                    icon: const Icon(Icons.delete_outline,
+                                        color: AppTheme.danger, size: 20),
                                     onPressed: () {
                                       showDialog(
                                         context: context,
                                         builder: (ctx) => AlertDialog(
                                           title: const Text('Delete Batch?'),
-                                          content: Text('Are you sure you want to permanently delete batch ${b.batchNo}? This will subtract its stock from the medicine totals.'),
+                                          content: Text(
+                                              'Are you sure you want to permanently delete batch ${b.batchNo}? This will subtract its stock from the medicine totals.'),
                                           actions: [
                                             TextButton(
-                                                onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                                                onPressed: () =>
+                                                    Navigator.pop(ctx),
+                                                child: const Text('Cancel')),
                                             FilledButton(
-                                              style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+                                              style: FilledButton.styleFrom(
+                                                  backgroundColor:
+                                                      AppTheme.danger),
                                               onPressed: () {
-                                                final inv = context.read<InventoryProvider>();
-                                                final sync = context.read<SyncService>();
-                                                inv.deleteBatch(m, b, syncService: sync);
+                                                final inv = context
+                                                    .read<InventoryProvider>();
+                                                final sync =
+                                                    context.read<SyncService>();
+                                                inv.deleteBatch(m, b,
+                                                    syncService: sync);
                                                 Navigator.pop(ctx);
                                               },
                                               child: const Text('Delete'),
@@ -1079,21 +1206,24 @@ class _EditBatchDialog extends StatefulWidget {
 }
 
 class _EditBatchDialogState extends State<_EditBatchDialog> {
-  late final _batchNoCtrl = TextEditingController(text: widget.batch?.batchNo ?? '');
-  late final _hubStockCtrl =
-      TextEditingController(text: widget.batch != null ? '${widget.batch!.mainStock}' : '0');
-  late final _storeStockCtrl =
-      TextEditingController(text: widget.batch != null ? '${widget.batch!.storeStock}' : '0');
-  late final _bulkClinicCtrl =
-      TextEditingController(text: widget.batch != null ? '${widget.batch!.bulkClinicStock}' : '0');
-  late final _bulkStoreCtrl =
-      TextEditingController(text: widget.batch != null ? '${widget.batch!.bulkStoreStock}' : '0');
-  late DateTime _expiryDate = widget.batch?.expiryDate ?? DateTime.now().add(const Duration(days: 365));
+  late final _batchNoCtrl =
+      TextEditingController(text: widget.batch?.batchNo ?? '');
+  late final _hubStockCtrl = TextEditingController(
+      text: widget.batch != null ? '${widget.batch!.mainStock}' : '0');
+  late final _storeStockCtrl = TextEditingController(
+      text: widget.batch != null ? '${widget.batch!.storeStock}' : '0');
+  late final _bulkClinicCtrl = TextEditingController(
+      text: widget.batch != null ? '${widget.batch!.bulkClinicStock}' : '0');
+  late final _bulkStoreCtrl = TextEditingController(
+      text: widget.batch != null ? '${widget.batch!.bulkStoreStock}' : '0');
+  late DateTime _expiryDate =
+      widget.batch?.expiryDate ?? DateTime.now().add(const Duration(days: 365));
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.batch != null ? 'Edit Batch Details' : 'Add New Batch'),
+      title:
+          Text(widget.batch != null ? 'Edit Batch Details' : 'Add New Batch'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1140,8 +1270,8 @@ class _EditBatchDialogState extends State<_EditBatchDialog> {
               Expanded(
                 child: TextField(
                   controller: _hubStockCtrl,
-                  decoration: const InputDecoration(
-                      labelText: 'Clinic', isDense: true),
+                  decoration:
+                      const InputDecoration(labelText: 'Clinic', isDense: true),
                   keyboardType: TextInputType.number,
                 ),
               ),
@@ -1149,8 +1279,8 @@ class _EditBatchDialogState extends State<_EditBatchDialog> {
               Expanded(
                 child: TextField(
                   controller: _storeStockCtrl,
-                  decoration: const InputDecoration(
-                      labelText: 'Store', isDense: true),
+                  decoration:
+                      const InputDecoration(labelText: 'Store', isDense: true),
                   keyboardType: TextInputType.number,
                 ),
               ),
@@ -1159,8 +1289,11 @@ class _EditBatchDialogState extends State<_EditBatchDialog> {
         ],
       ),
       actions: [
-        if (widget.batch != null && (context.read<AuthProvider>().currentUser?.role.toLowerCase() == 'admin' ||
-            context.read<AuthProvider>().currentUser?.canDeleteInventory == true))
+        if (widget.batch != null &&
+            (context.read<AuthProvider>().currentUser?.role.toLowerCase() ==
+                    'admin' ||
+                context.read<AuthProvider>().currentUser?.canDeleteInventory ==
+                    true))
           TextButton(
             style: TextButton.styleFrom(foregroundColor: AppTheme.danger),
             onPressed: () => _confirmDeleteBatch(context),
@@ -1182,7 +1315,8 @@ class _EditBatchDialogState extends State<_EditBatchDialog> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Batch?'),
-        content: Text('Are you sure you want to permanently delete batch ${widget.batch!.batchNo}? This will subtract its stock from the medicine totals.'),
+        content: Text(
+            'Are you sure you want to permanently delete batch ${widget.batch!.batchNo}? This will subtract its stock from the medicine totals.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
@@ -1191,7 +1325,8 @@ class _EditBatchDialogState extends State<_EditBatchDialog> {
             onPressed: () {
               final inv = context.read<InventoryProvider>();
               final sync = context.read<SyncService>();
-              inv.deleteBatch(widget.medicine, widget.batch!, syncService: sync);
+              inv.deleteBatch(widget.medicine, widget.batch!,
+                  syncService: sync);
               Navigator.pop(ctx); // Close confirmation dialog
               Navigator.pop(context); // Close edit batch dialog
             },
@@ -1581,13 +1716,16 @@ class _TransferDialogState extends State<_TransferDialog> {
   }
 
   void _updateSelectedBatch() {
-    final availableBatches = widget.medicine.batches.where((b) =>
-        _getStock(b, _fromLoc) > 0).toList();
+    final availableBatches = widget.medicine.batches
+        .where((b) => _getStock(b, _fromLoc) > 0)
+        .toList();
     if (availableBatches.isNotEmpty) {
       availableBatches.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
       _selectedBatch = availableBatches.first;
     } else {
-      _selectedBatch = widget.medicine.batches.isNotEmpty ? widget.medicine.batches.first : null;
+      _selectedBatch = widget.medicine.batches.isNotEmpty
+          ? widget.medicine.batches.first
+          : null;
     }
   }
 
@@ -1618,13 +1756,14 @@ class _TransferDialogState extends State<_TransferDialog> {
                 : (_fromLoc == 'bulkClinic'
                     ? widget.medicine.bulkClinicStock
                     : widget.medicine.bulkStoreStock)));
-        
+
     final primaryColor = _toLoc == 'store' || _toLoc == 'bulkStore'
         ? const Color(0xFF14B8A6)
         : const Color(0xFF6366F1);
 
-    final availableBatches = widget.medicine.batches.where((b) =>
-        _getStock(b, _fromLoc) > 0).toList();
+    final availableBatches = widget.medicine.batches
+        .where((b) => _getStock(b, _fromLoc) > 0)
+        .toList();
 
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1646,7 +1785,8 @@ class _TransferDialogState extends State<_TransferDialog> {
               decoration: InputDecoration(
                 labelText: 'From Location',
                 prefixIcon: const Icon(Icons.warehouse_outlined),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               items: locations.entries.map((e) {
                 return DropdownMenuItem(value: e.key, child: Text(e.value));
@@ -1666,7 +1806,8 @@ class _TransferDialogState extends State<_TransferDialog> {
               decoration: InputDecoration(
                 labelText: 'To Location',
                 prefixIcon: const Icon(Icons.warehouse),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               items: locations.entries.map((e) {
                 return DropdownMenuItem(value: e.key, child: Text(e.value));
@@ -1680,18 +1821,19 @@ class _TransferDialogState extends State<_TransferDialog> {
               },
             ),
             const SizedBox(height: 24),
-            
             if (availableBatches.isNotEmpty) ...[
               DropdownButtonFormField<MedicineBatch>(
                 value: _selectedBatch,
                 decoration: InputDecoration(
                   labelText: 'Select Batch',
                   prefixIcon: const Icon(Icons.layers),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
                 items: availableBatches.map((b) {
                   final qty = _getStock(b, _fromLoc);
-                  final date = '${b.expiryDate.day}/${b.expiryDate.month}/${b.expiryDate.year}';
+                  final date =
+                      '${b.expiryDate.day}/${b.expiryDate.month}/${b.expiryDate.year}';
                   return DropdownMenuItem(
                     value: b,
                     child: Text('Batch: ${b.batchNo} (Qty: $qty, Exp: $date)'),
@@ -1703,7 +1845,6 @@ class _TransferDialogState extends State<_TransferDialog> {
               ),
               const SizedBox(height: 16),
             ],
-            
             Text('Available to transfer: $available ${widget.medicine.unit}',
                 style: TextStyle(
                     color: context.textMutedColor,
@@ -1749,21 +1890,22 @@ class _TransferDialogState extends State<_TransferDialog> {
           onPressed: () async {
             final qty = int.tryParse(_qtyCtrl.text) ?? 0;
             final sync = context.read<SyncService>();
-            
+
             // Re-validate against selected batch
-            final maxAvail = _selectedBatch != null 
-              ? _getStock(_selectedBatch!, _fromLoc)
-              : (_fromLoc == 'main'
-                  ? widget.medicine.mainStock
-                  : (_fromLoc == 'store'
-                      ? widget.medicine.storeStock
-                      : (_fromLoc == 'bulkClinic'
-                          ? widget.medicine.bulkClinicStock
-                          : widget.medicine.bulkStoreStock)));
-              
+            final maxAvail = _selectedBatch != null
+                ? _getStock(_selectedBatch!, _fromLoc)
+                : (_fromLoc == 'main'
+                    ? widget.medicine.mainStock
+                    : (_fromLoc == 'store'
+                        ? widget.medicine.storeStock
+                        : (_fromLoc == 'bulkClinic'
+                            ? widget.medicine.bulkClinicStock
+                            : widget.medicine.bulkStoreStock)));
+
             if (qty > maxAvail) {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text('Insufficient stock in selected batch (Available: $maxAvail)'),
+                content: Text(
+                    'Insufficient stock in selected batch (Available: $maxAvail)'),
                 backgroundColor: AppTheme.danger,
                 behavior: SnackBarBehavior.floating,
               ));
@@ -1819,7 +1961,8 @@ class _BulkStockEntryDialogState extends State<_BulkStockEntryDialog> {
   final TextEditingController _batchNoCtrl = TextEditingController();
   DateTime _expiryDate = DateTime.now().add(const Duration(days: 365));
   List<Medicine> _searchResults = [];
-  String _destinationWarehouse = 'bulkClinic'; // Default to Clinic Bulk Warehouse
+  String _destinationWarehouse =
+      'bulkClinic'; // Default to Clinic Bulk Warehouse
 
   void _onSearch(String q, List<Medicine> all) {
     if (q.isEmpty) {
@@ -2047,8 +2190,10 @@ class _BulkStockEntryDialogState extends State<_BulkStockEntryDialog> {
                       ),
                     ),
                     items: const [
-                      DropdownMenuItem(value: 'bulkClinic', child: Text('Clinic Bulk')),
-                      DropdownMenuItem(value: 'bulkStore', child: Text('Store Bulk')),
+                      DropdownMenuItem(
+                          value: 'bulkClinic', child: Text('Clinic Bulk')),
+                      DropdownMenuItem(
+                          value: 'bulkStore', child: Text('Store Bulk')),
                       DropdownMenuItem(value: 'main', child: Text('Clinic')),
                       DropdownMenuItem(value: 'store', child: Text('Store')),
                     ],
@@ -2125,9 +2270,14 @@ class _BulkStockEntryDialogState extends State<_BulkStockEntryDialog> {
               : () {
                   inv.addBatchStock(
                     _destinationWarehouse == 'main' ? _selectedItems : {},
-                    storeUpdates: _destinationWarehouse == 'store' ? _selectedItems : {},
-                    bulkClinicUpdates: _destinationWarehouse == 'bulkClinic' ? _selectedItems : {},
-                    bulkStoreUpdates: _destinationWarehouse == 'bulkStore' ? _selectedItems : {},
+                    storeUpdates:
+                        _destinationWarehouse == 'store' ? _selectedItems : {},
+                    bulkClinicUpdates: _destinationWarehouse == 'bulkClinic'
+                        ? _selectedItems
+                        : {},
+                    bulkStoreUpdates: _destinationWarehouse == 'bulkStore'
+                        ? _selectedItems
+                        : {},
                     note: _noteCtrl.text,
                     supplier: _supplierCtrl.text,
                     batchNo: _batchNoCtrl.text.trim(),
@@ -2453,13 +2603,6 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
   void _selectMedicine(Medicine m) {
     setState(() {
       _selectedIds.add(m.id);
-      final maxQty = _fromLoc == 'bulkClinic'
-          ? m.bulkClinicStock
-          : (_fromLoc == 'main'
-              ? m.mainStock
-              : (_fromLoc == 'bulkStore'
-                  ? m.bulkStoreStock
-                  : m.storeStock));
       _transferQtys[m.id] = 0;
       _searchQuery = '';
       _highlightedIndex = 0;
@@ -2492,11 +2635,14 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
     }).toList();
 
     // Filter by search query
-    final filtered = eligibleMeds.where((m) =>
-        m.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-        m.barcode.contains(_searchQuery)).toList();
+    final filtered = eligibleMeds
+        .where((m) =>
+            m.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+            m.barcode.contains(_searchQuery))
+        .toList();
 
-    final selectedMedicines = inv.rawMedicines.where((m) => _selectedIds.contains(m.id)).toList();
+    final selectedMedicines =
+        inv.rawMedicines.where((m) => _selectedIds.contains(m.id)).toList();
 
     return AlertDialog(
       titlePadding: EdgeInsets.zero,
@@ -2511,7 +2657,8 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
           children: [
             const Icon(Icons.swap_horiz, color: AppTheme.primaryLight),
             const SizedBox(width: 12),
-            const Text('Bulk Stock Transfer', style: TextStyle(fontWeight: FontWeight.w800)),
+            const Text('Bulk Stock Transfer',
+                style: TextStyle(fontWeight: FontWeight.w800)),
             const Spacer(),
             IconButton(
               icon: const Icon(Icons.close),
@@ -2550,17 +2697,24 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
                               decoration: BoxDecoration(
                                 color: Colors.amber.withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: Colors.amber.withValues(alpha: 0.25), width: 1.5),
+                                border: Border.all(
+                                    color: Colors.amber.withValues(alpha: 0.25),
+                                    width: 1.5),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const Row(
                                     children: [
-                                      Icon(Icons.unarchive_outlined, size: 16, color: Colors.orange),
+                                      Icon(Icons.unarchive_outlined,
+                                          size: 16, color: Colors.orange),
                                       SizedBox(width: 6),
                                       Text('FROM (SOURCE LOCATION)',
-                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.orange, letterSpacing: 0.5)),
+                                          style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w800,
+                                              color: Colors.orange,
+                                              letterSpacing: 0.5)),
                                     ],
                                   ),
                                   const SizedBox(height: 8),
@@ -2568,11 +2722,18 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
                                     value: _fromLoc,
                                     decoration: InputDecoration(
                                       isDense: true,
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 8),
+                                      border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(8)),
                                     ),
                                     dropdownColor: context.surfaceColor,
-                                    items: locations.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+                                    items: locations.entries
+                                        .map((e) => DropdownMenuItem(
+                                            value: e.key, child: Text(e.value)))
+                                        .toList(),
                                     onChanged: (val) {
                                       if (val != null) {
                                         setState(() {
@@ -2589,7 +2750,8 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
                           ),
                           const Padding(
                             padding: EdgeInsets.symmetric(horizontal: 12),
-                            child: Icon(Icons.arrow_forward_rounded, size: 24, color: AppTheme.primaryLight),
+                            child: Icon(Icons.arrow_forward_rounded,
+                                size: 24, color: AppTheme.primaryLight),
                           ),
                           // Destination Card (Indigo/Success theme)
                           Expanded(
@@ -2598,17 +2760,25 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
                               decoration: BoxDecoration(
                                 color: AppTheme.success.withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: AppTheme.success.withValues(alpha: 0.25), width: 1.5),
+                                border: Border.all(
+                                    color: AppTheme.success
+                                        .withValues(alpha: 0.25),
+                                    width: 1.5),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const Row(
                                     children: [
-                                      Icon(Icons.archive_outlined, size: 16, color: AppTheme.success),
+                                      Icon(Icons.archive_outlined,
+                                          size: 16, color: AppTheme.success),
                                       SizedBox(width: 6),
                                       Text('TO (DESTINATION LOCATION)',
-                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppTheme.success, letterSpacing: 0.5)),
+                                          style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w800,
+                                              color: AppTheme.success,
+                                              letterSpacing: 0.5)),
                                     ],
                                   ),
                                   const SizedBox(height: 8),
@@ -2616,11 +2786,18 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
                                     value: _toLoc,
                                     decoration: InputDecoration(
                                       isDense: true,
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 8),
+                                      border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(8)),
                                     ),
                                     dropdownColor: context.surfaceColor,
-                                    items: locations.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+                                    items: locations.entries
+                                        .map((e) => DropdownMenuItem(
+                                            value: e.key, child: Text(e.value)))
+                                        .toList(),
                                     onChanged: (val) {
                                       if (val != null) {
                                         setState(() {
@@ -2643,18 +2820,26 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
                             child: Focus(
                               onKeyEvent: (node, event) {
                                 if (event is KeyDownEvent) {
-                                  if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                                  if (event.logicalKey ==
+                                      LogicalKeyboardKey.arrowDown) {
                                     setState(() {
-                                      _highlightedIndex = (_highlightedIndex + 1).clamp(0, filtered.length - 1);
+                                      _highlightedIndex =
+                                          (_highlightedIndex + 1)
+                                              .clamp(0, filtered.length - 1);
                                     });
                                     return KeyEventResult.handled;
-                                  } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                                  } else if (event.logicalKey ==
+                                      LogicalKeyboardKey.arrowUp) {
                                     setState(() {
-                                      _highlightedIndex = (_highlightedIndex - 1).clamp(0, filtered.length - 1);
+                                      _highlightedIndex =
+                                          (_highlightedIndex - 1)
+                                              .clamp(0, filtered.length - 1);
                                     });
                                     return KeyEventResult.handled;
-                                  } else if (event.logicalKey == LogicalKeyboardKey.enter) {
-                                    if (filtered.isNotEmpty && _highlightedIndex < filtered.length) {
+                                  } else if (event.logicalKey ==
+                                      LogicalKeyboardKey.enter) {
+                                    if (filtered.isNotEmpty &&
+                                        _highlightedIndex < filtered.length) {
                                       final m = filtered[_highlightedIndex];
                                       _selectMedicine(m);
                                       return KeyEventResult.handled;
@@ -2668,7 +2853,8 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
                                 autofocus: true,
                                 decoration: InputDecoration(
                                   prefixIcon: const Icon(Icons.search),
-                                  hintText: 'Search & Select medicines (Arrows to navigate, Enter to choose)...',
+                                  hintText:
+                                      'Search & Select medicines (Arrows to navigate, Enter to choose)...',
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
@@ -2688,14 +2874,31 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
                               setState(() {
                                 for (var m in filtered) {
                                   _selectedIds.add(m.id);
-                                  final maxQty = _fromLoc == 'bulkClinic'
-                                      ? m.bulkClinicStock
-                                      : (_fromLoc == 'main'
-                                          ? m.mainStock
-                                          : (_fromLoc == 'bulkStore'
-                                              ? m.bulkStoreStock
-                                              : m.storeStock));
                                   _transferQtys[m.id] = 0;
+                                }
+                              });
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.percent),
+                            label: const Text('50%'),
+                            onPressed: () {
+                              setState(() {
+                                for (var id in _selectedIds) {
+                                  final m = inv.rawMedicines
+                                      .where((med) => med.id == id)
+                                      .firstOrNull;
+                                  if (m != null) {
+                                    final maxQty = _fromLoc == 'bulkClinic'
+                                        ? m.bulkClinicStock
+                                        : (_fromLoc == 'main'
+                                            ? m.mainStock
+                                            : (_fromLoc == 'bulkStore'
+                                                ? m.bulkStoreStock
+                                                : m.storeStock));
+                                    _transferQtys[id] = (maxQty * 0.5).round();
+                                  }
                                 }
                               });
                             },
@@ -2720,12 +2923,16 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.playlist_add_rounded, size: 48, color: context.textMutedColor),
+                                    Icon(Icons.playlist_add_rounded,
+                                        size: 48,
+                                        color: context.textMutedColor),
                                     const SizedBox(height: 12),
                                     Text(
                                       'No items added to transfer list.\nSearch and select medicines above to add them.',
                                       textAlign: TextAlign.center,
-                                      style: TextStyle(color: context.textMutedColor, fontSize: 14),
+                                      style: TextStyle(
+                                          color: context.textMutedColor,
+                                          fontSize: 14),
                                     ),
                                   ],
                                 ),
@@ -2774,13 +2981,15 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
                     Positioned(
                       top: 195, // Positioned right under the search input
                       left: 0,
-                      right: 180, // Adjust alignment to match search field width
+                      right:
+                          180, // Adjust alignment to match search field width
                       child: Container(
                         constraints: const BoxConstraints(maxHeight: 250),
                         decoration: BoxDecoration(
                           color: context.surfaceColor,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: context.borderColor, width: 1.5),
+                          border: Border.all(
+                              color: context.borderColor, width: 1.5),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.15),
@@ -2808,14 +3017,23 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
                                 _selectMedicine(m);
                               },
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                color: isHighlighted ? AppTheme.primaryLight.withValues(alpha: 0.08) : null,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 12),
+                                color: isHighlighted
+                                    ? AppTheme.primaryLight
+                                        .withValues(alpha: 0.08)
+                                    : null,
                                 child: Row(
                                   children: [
                                     Expanded(
-                                      child: Text(m.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                      child: Text(m.name,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold)),
                                     ),
-                                    Text('Stock: $maxQty', style: TextStyle(color: context.textMutedColor, fontSize: 12)),
+                                    Text('Stock: $maxQty',
+                                        style: TextStyle(
+                                            color: context.textMutedColor,
+                                            fontSize: 12)),
                                   ],
                                 ),
                               ),
@@ -2835,7 +3053,8 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
                 child: const Text('Cancel'),
               ),
               FilledButton.icon(
-                style: FilledButton.styleFrom(backgroundColor: AppTheme.success),
+                style:
+                    FilledButton.styleFrom(backgroundColor: AppTheme.success),
                 icon: const Icon(Icons.send),
                 label: Text('Transfer Selected (${_selectedIds.length})'),
                 onPressed: _selectedIds.isEmpty
@@ -2979,18 +3198,21 @@ class _BulkTransferRowState extends State<_BulkTransferRow> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(widget.medicine.name,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 14)),
                   const SizedBox(height: 4),
                   Text(
                     'Available Stock: $maxQty | Dest Stock: $destQty',
-                    style: TextStyle(color: context.textMutedColor, fontSize: 12),
+                    style:
+                        TextStyle(color: context.textMutedColor, fontSize: 12),
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 16),
             if (widget.isSelected) ...[
-              const Text('Qty:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              const Text('Qty:',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
               const SizedBox(width: 8),
               SizedBox(
                 width: 75,
@@ -2998,7 +3220,7 @@ class _BulkTransferRowState extends State<_BulkTransferRow> {
                   onKeyEvent: (node, event) {
                     if (event is KeyDownEvent &&
                         (event.logicalKey == LogicalKeyboardKey.enter ||
-                         event.logicalKey == LogicalKeyboardKey.tab)) {
+                            event.logicalKey == LogicalKeyboardKey.tab)) {
                       widget.onSubmitted();
                       return KeyEventResult.handled;
                     }
@@ -3010,10 +3232,13 @@ class _BulkTransferRowState extends State<_BulkTransferRow> {
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                       isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 6),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6)),
                     ),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13),
                     onTap: () => _controller.selection = TextSelection(
                         baseOffset: 0, extentOffset: _controller.text.length),
                     onChanged: (val) {
@@ -3025,8 +3250,284 @@ class _BulkTransferRowState extends State<_BulkTransferRow> {
                 ),
               ),
               const SizedBox(width: 8),
-              Text('/ $maxQty', style: TextStyle(color: context.textMutedColor, fontSize: 12)),
+              Text('/ $maxQty',
+                  style:
+                      TextStyle(color: context.textMutedColor, fontSize: 12)),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StockReportTab extends StatefulWidget {
+  const _StockReportTab();
+
+  @override
+  State<_StockReportTab> createState() => _StockReportTabState();
+}
+
+class _StockReportTabState extends State<_StockReportTab> {
+  String _search = '';
+  String _sortBy = 'name'; // 'name', 'bulk', 'counter', 'total'
+  bool _sortAscending = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final inv = context.watch<InventoryProvider>();
+    final meds = inv.rawMedicines.where((m) {
+      return m.name.toLowerCase().contains(_search.toLowerCase()) ||
+          m.barcode.contains(_search);
+    }).toList();
+
+    // Sort medicines
+    meds.sort((a, b) {
+      int compare;
+      if (_sortBy == 'bulk') {
+        final bulkA = a.bulkClinicStock + a.bulkStoreStock;
+        final bulkB = b.bulkClinicStock + b.bulkStoreStock;
+        compare = bulkA.compareTo(bulkB);
+      } else if (_sortBy == 'counter') {
+        final counterA = a.mainStock + a.storeStock;
+        final counterB = b.mainStock + b.storeStock;
+        compare = counterA.compareTo(counterB);
+      } else if (_sortBy == 'total') {
+        compare = a.totalStock.compareTo(b.totalStock);
+      } else {
+        compare = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      }
+      return _sortAscending ? compare : -compare;
+    });
+
+    return Column(
+      children: [
+        // Search & Filter Header
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: context.surfaceColor,
+            border: Border(
+                bottom: BorderSide(
+                    color: context.borderColor.withValues(alpha: 0.5))),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  onChanged: (v) => setState(() => _search = v),
+                  decoration: InputDecoration(
+                    hintText: 'Search medicine...',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    filled: true,
+                    fillColor: context.bgColor.withValues(alpha: 0.5),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              DropdownButton<String>(
+                value: _sortBy,
+                underline: const SizedBox(),
+                items: const [
+                  DropdownMenuItem(value: 'name', child: Text('Sort by Name')),
+                  DropdownMenuItem(value: 'bulk', child: Text('Sort by Bulk Stock')),
+                  DropdownMenuItem(value: 'counter', child: Text('Sort by Counter Stock')),
+                  DropdownMenuItem(value: 'total', child: Text('Sort by Total Stock')),
+                ],
+                onChanged: (v) {
+                  if (v != null) {
+                    setState(() {
+                      if (_sortBy == v) {
+                        _sortAscending = !_sortAscending;
+                      } else {
+                        _sortBy = v;
+                        _sortAscending = true;
+                      }
+                    });
+                  }
+                },
+              ),
+              IconButton(
+                icon: Icon(_sortAscending ? Icons.arrow_upward : Icons.arrow_downward),
+                onPressed: () => setState(() => _sortAscending = !_sortAscending),
+              ),
+            ],
+          ),
+        ),
+
+        // List
+        Expanded(
+          child: meds.isEmpty
+              ? const AppEmptyState(
+                  icon: Icons.inventory_2_outlined,
+                  title: 'No medicines found',
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(24),
+                  itemCount: meds.length,
+                  itemBuilder: (ctx, i) {
+                    final m = meds[i];
+                    final bulkTotal = m.bulkClinicStock + m.bulkStoreStock;
+                    final counterTotal = m.mainStock + m.storeStock;
+                    
+                    return _StockReportRow(
+                      medicine: m,
+                      bulkTotal: bulkTotal,
+                      counterTotal: counterTotal,
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StockReportRow extends StatefulWidget {
+  final Medicine medicine;
+  final int bulkTotal;
+  final int counterTotal;
+
+  const _StockReportRow({
+    required this.medicine,
+    required this.bulkTotal,
+    required this.counterTotal,
+  });
+
+  @override
+  State<_StockReportRow> createState() => _StockReportRowState();
+}
+
+class _StockReportRowState extends State<_StockReportRow> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = widget.medicine;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeInOut,
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: _isHovered
+              ? AppTheme.primary.withValues(alpha: 0.04)
+              : context.surfaceColor,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: _isHovered
+                ? AppTheme.primary.withValues(alpha: 0.3)
+                : context.borderColor.withValues(alpha: 0.5),
+            width: _isHovered ? 1.5 : 1,
+          ),
+          boxShadow: _isHovered
+              ? [
+                  BoxShadow(
+                    color: AppTheme.primary.withValues(alpha: 0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  )
+                ]
+              : [],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Icon(Icons.vaccines, color: AppTheme.primary, size: 16),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    m.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  Text(
+                    m.category.isEmpty ? 'General' : m.category,
+                    style: TextStyle(color: context.textMutedColor, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Bulk Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    'BULK STOCK',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      color: context.textMutedColor,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${widget.bulkTotal} ${m.unit}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.indigo,
+                    ),
+                  ),
+                  Text(
+                    'Clinic: ${m.bulkClinicStock} | Store: ${m.bulkStoreStock}',
+                    style: TextStyle(fontSize: 9, color: context.textMutedColor),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Counter Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    'COUNTER STOCK',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      color: context.textMutedColor,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${widget.counterTotal} ${m.unit}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF14B8A6),
+                    ),
+                  ),
+                  Text(
+                    'Clinic: ${m.mainStock} | Store: ${m.storeStock}',
+                    style: TextStyle(fontSize: 9, color: context.textMutedColor),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),

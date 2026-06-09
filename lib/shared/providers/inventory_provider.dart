@@ -15,7 +15,8 @@ class InventoryProvider extends ChangeNotifier {
   final Box<PurchaseRecord> _purchaseBox =
       ObjectBoxService.instance.purchaseBox;
   final Box<MedicineBatch> _batchBox = ObjectBoxService.instance.batchBox;
-  final Box<RestockRequest> _restockBox = ObjectBoxService.instance.restockRequestBox;
+  final Box<RestockRequest> _restockBox =
+      ObjectBoxService.instance.restockRequestBox;
 
   List<Medicine> _medicines = [];
   List<PurchaseRecord> _purchaseHistory = [];
@@ -31,28 +32,33 @@ class InventoryProvider extends ChangeNotifier {
   List<PurchaseRecord> get purchaseHistory =>
       List.unmodifiable(_purchaseHistory);
   int get lowStockCount => _medicines.where((m) => m.isLowStock).length;
-  List<Medicine> get lowStockMedicines => _medicines.where((m) => m.isLowStock).toList();
-  
+  List<Medicine> get lowStockMedicines =>
+      _medicines.where((m) => m.isLowStock).toList();
+
   int get expiredCount => expiredMedicines.length;
   int get nearExpiryCount => nearExpiryMedicines.length;
   int get totalMedicinesCount => _medicines.length;
 
   List<Medicine> get expiredMedicines {
     final now = DateTime.now();
-    return _medicines.where((m) => m.batches.any((b) => 
-      b.expiryDate.isBefore(now) && (b.mainStock > 0 || b.storeStock > 0)
-    )).toList();
+    return _medicines
+        .where((m) => m.batches.any((b) =>
+            b.expiryDate.isBefore(now) &&
+            (b.mainStock > 0 || b.storeStock > 0)))
+        .toList();
   }
 
   List<Medicine> get nearExpiryMedicines {
     final now = DateTime.now();
-    final thresholdDays = ObjectBoxService.instance.settings.nearExpiryThresholdDays;
+    final thresholdDays =
+        ObjectBoxService.instance.settings.nearExpiryThresholdDays;
     final threshold = now.add(Duration(days: thresholdDays));
-    return _medicines.where((m) => m.batches.any((b) => 
-      b.expiryDate.isAfter(now) && 
-      b.expiryDate.isBefore(threshold) && 
-      (b.mainStock > 0 || b.storeStock > 0)
-    )).toList();
+    return _medicines
+        .where((m) => m.batches.any((b) =>
+            b.expiryDate.isAfter(now) &&
+            b.expiryDate.isBefore(threshold) &&
+            (b.mainStock > 0 || b.storeStock > 0)))
+        .toList();
   }
 
   double get totalInventoryValue =>
@@ -83,8 +89,8 @@ class InventoryProvider extends ChangeNotifier {
               m.batches.any((b) =>
                   b.expiryDate.isAfter(DateTime.now()) &&
                   b.expiryDate.isBefore(DateTime.now().add(Duration(
-                      days: ObjectBoxService.instance.settings
-                          .nearExpiryThresholdDays))) &&
+                      days: ObjectBoxService
+                          .instance.settings.nearExpiryThresholdDays))) &&
                   (b.mainStock > 0 || b.storeStock > 0)));
       return matchesQuery && matchesFilter;
     }).toList();
@@ -138,8 +144,11 @@ class InventoryProvider extends ChangeNotifier {
     _box.put(m);
     load();
 
-    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    final isClient = Platform.isAndroid ||
+        (Platform.isWindows &&
+            ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows &&
+        !ObjectBoxService.instance.settings.isWindowsClient;
     if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
@@ -160,8 +169,11 @@ class InventoryProvider extends ChangeNotifier {
     _box.put(m);
     load();
 
-    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    final isClient = Platform.isAndroid ||
+        (Platform.isWindows &&
+            ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows &&
+        !ObjectBoxService.instance.settings.isWindowsClient;
     if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
@@ -184,8 +196,11 @@ class InventoryProvider extends ChangeNotifier {
     _box.remove(id);
     load();
 
-    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    final isClient = Platform.isAndroid ||
+        (Platform.isWindows &&
+            ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows &&
+        !ObjectBoxService.instance.settings.isWindowsClient;
     if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({
@@ -321,24 +336,30 @@ class InventoryProvider extends ChangeNotifier {
             qty: remainingToDeduct,
           ));
         }
-        
+
         m.recalculateStockFromBatches();
-        
+
         // Automated Restock Request Logic
         final threshold = ObjectBoxService.instance.settings.lowStockThreshold;
         if (m.mainStock < threshold) {
           // Check if there is already a PENDING request
-          final existingRequests = _restockBox.query(RestockRequest_.medicineId.equals(m.id).and(RestockRequest_.status.equals('PENDING'))).build().find();
+          final existingRequests = _restockBox
+              .query(RestockRequest_.medicineId
+                  .equals(m.id)
+                  .and(RestockRequest_.status.equals('PENDING')))
+              .build()
+              .find();
           if (existingRequests.isEmpty) {
             // Suggest restocking up to some comfortable level above threshold or just a standard batch size
             // For now, let's request threshold * 2 or something, or just threshold. Let's ask for the threshold quantity.
-            final requestQty = threshold > 0 ? threshold * 2 : 50; 
+            final requestQty = threshold > 0 ? threshold * 2 : 50;
             _restockBox.put(RestockRequest(
               medicineId: m.id,
               medicineName: m.name,
               requestedQty: requestQty,
               requestedAt: DateTime.now(),
-              notes: 'Automated request due to low clinic stock (${m.mainStock} < $threshold)',
+              notes:
+                  'Automated request due to low clinic stock (${m.mainStock} < $threshold)',
             ));
           }
         }
@@ -410,9 +431,12 @@ class InventoryProvider extends ChangeNotifier {
           if (remaining <= 0) break;
 
           int available = 0;
-          if (from == 'main') available = batch.mainStock;
-          else if (from == 'store') available = batch.storeStock;
-          else if (from == 'bulkClinic') available = batch.bulkClinicStock;
+          if (from == 'main')
+            available = batch.mainStock;
+          else if (from == 'store')
+            available = batch.storeStock;
+          else if (from == 'bulkClinic')
+            available = batch.bulkClinicStock;
           else if (from == 'bulkStore') available = batch.bulkStoreStock;
 
           if (available > 0) {
@@ -430,6 +454,7 @@ class InventoryProvider extends ChangeNotifier {
         if (loc == 'bulkStore') return m.bulkStoreStock;
         return 0;
       }
+
       void setStock(String loc, int val) {
         if (loc == 'main') m.mainStock = val;
         if (loc == 'store') m.storeStock = val;
@@ -443,8 +468,11 @@ class InventoryProvider extends ChangeNotifier {
       m.updatedAt = DateTime.now();
       _box.put(m);
       load();
-      final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-      final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+      final isClient = Platform.isAndroid ||
+          (Platform.isWindows &&
+              ObjectBoxService.instance.settings.isWindowsClient);
+      final isHub = Platform.isWindows &&
+          !ObjectBoxService.instance.settings.isWindowsClient;
       if (isHub && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
       } else if (isClient) {
@@ -457,8 +485,7 @@ class InventoryProvider extends ChangeNotifier {
     }
   }
 
-  void _transferInBatch(
-      MedicineBatch batch, int qty, String from, String to) {
+  void _transferInBatch(MedicineBatch batch, int qty, String from, String to) {
     int getStock(String loc) {
       if (loc == 'main') return batch.mainStock;
       if (loc == 'store') return batch.storeStock;
@@ -466,6 +493,7 @@ class InventoryProvider extends ChangeNotifier {
       if (loc == 'bulkStore') return batch.bulkStoreStock;
       return 0;
     }
+
     void setStock(String loc, int val) {
       if (loc == 'main') batch.mainStock = val;
       if (loc == 'store') batch.storeStock = val;
@@ -508,7 +536,10 @@ class InventoryProvider extends ChangeNotifier {
         final storeQty = storeUpdates[m.id] ?? 0;
         final bulkClinicQty = bulkClinicUpdates[m.id] ?? 0;
         final bulkStoreQty = bulkStoreUpdates[m.id] ?? 0;
-        if (mainQty <= 0 && storeQty <= 0 && bulkClinicQty <= 0 && bulkStoreQty <= 0) continue;
+        if (mainQty <= 0 &&
+            storeQty <= 0 &&
+            bulkClinicQty <= 0 &&
+            bulkStoreQty <= 0) continue;
 
         // Update or create batch
         if (batchNo.isNotEmpty && expiryDate != null) {
@@ -551,7 +582,9 @@ class InventoryProvider extends ChangeNotifier {
           supplier: supplier,
         ));
 
-        final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+        final isClient = Platform.isAndroid ||
+            (Platform.isWindows &&
+                ObjectBoxService.instance.settings.isWindowsClient);
         if (isClient) {
           SyncQueueService.instance.addToQueue(
             entity: 'medicine',
@@ -567,7 +600,8 @@ class InventoryProvider extends ChangeNotifier {
       _purchaseBox.putMany(purchaseRecords);
       load();
 
-      final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+      final isHub = Platform.isWindows &&
+          !ObjectBoxService.instance.settings.isWindowsClient;
       if (isHub && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
       }
@@ -585,7 +619,7 @@ class InventoryProvider extends ChangeNotifier {
 
       // Also try to adjust a batch to keep them in sync
       if (m.batches.isNotEmpty) {
-        final latest = m.batches.toList()..sort((a,b) => b.id.compareTo(a.id));
+        final latest = m.batches.toList()..sort((a, b) => b.id.compareTo(a.id));
         final batch = latest.first;
         batch.mainStock += diff;
         _batchBox.put(batch);
@@ -598,8 +632,11 @@ class InventoryProvider extends ChangeNotifier {
       _purchaseBox.put(p);
       load();
 
-      final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-      final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+      final isClient = Platform.isAndroid ||
+          (Platform.isWindows &&
+              ObjectBoxService.instance.settings.isWindowsClient);
+      final isHub = Platform.isWindows &&
+          !ObjectBoxService.instance.settings.isWindowsClient;
       if (isHub && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
       }
@@ -619,7 +656,7 @@ class InventoryProvider extends ChangeNotifier {
 
       // Also adjust batch
       if (m.batches.isNotEmpty) {
-        final latest = m.batches.toList()..sort((a,b) => b.id.compareTo(a.id));
+        final latest = m.batches.toList()..sort((a, b) => b.id.compareTo(a.id));
         final batch = latest.first;
         batch.mainStock = (batch.mainStock + diff).clamp(0, 999999);
         _batchBox.put(batch);
@@ -630,8 +667,11 @@ class InventoryProvider extends ChangeNotifier {
       _purchaseBox.remove(p.id);
       load();
 
-      final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-      final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+      final isClient = Platform.isAndroid ||
+          (Platform.isWindows &&
+              ObjectBoxService.instance.settings.isWindowsClient);
+      final isHub = Platform.isWindows &&
+          !ObjectBoxService.instance.settings.isWindowsClient;
       if (isHub && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
       }
@@ -641,14 +681,60 @@ class InventoryProvider extends ChangeNotifier {
     }
   }
 
-  void deleteBatch(Medicine m, MedicineBatch batch, {SyncService? syncService}) {
+  void clearBatchesAndResetStock(List<int> medicineIds) {
+    final medicines = _box.getMany(medicineIds);
+    final List<Medicine> finalUpdates = [];
+    final List<int> batchIdsToRemove = [];
+
+    for (var m in medicines) {
+      if (m != null) {
+        batchIdsToRemove.addAll(m.batches.map((b) => b.id));
+        m.batches.clear();
+        m.mainStock = 0;
+        m.storeStock = 0;
+        m.bulkClinicStock = 0;
+        m.bulkStoreStock = 0;
+        m.updatedAt = DateTime.now();
+        finalUpdates.add(m);
+      }
+    }
+
+    if (batchIdsToRemove.isNotEmpty) {
+      _batchBox.removeMany(batchIdsToRemove);
+    }
+    if (finalUpdates.isNotEmpty) {
+      _box.putMany(finalUpdates);
+    }
+    load();
+
+    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    if (isHub) {
+      if (LocalServerService.instance.isRunning) {
+        LocalServerService.instance.broadcast({'event': 'medicines_updated'});
+      }
+    } else if (isClient) {
+      for (var m in finalUpdates) {
+        SyncQueueService.instance.addToQueue(
+          entity: 'medicine',
+          action: 'update',
+          data: m.toJson(),
+        );
+      }
+    }
+  }
+
+  void deleteBatch(Medicine m, MedicineBatch batch,
+      {SyncService? syncService}) {
     // 1. Revert medicine's aggregate stock
     m.mainStock = (m.mainStock - batch.mainStock).clamp(0, 999999);
     m.storeStock = (m.storeStock - batch.storeStock).clamp(0, 999999);
-    m.bulkClinicStock = (m.bulkClinicStock - batch.bulkClinicStock).clamp(0, 999999);
-    m.bulkStoreStock = (m.bulkStoreStock - batch.bulkStoreStock).clamp(0, 999999);
+    m.bulkClinicStock =
+        (m.bulkClinicStock - batch.bulkClinicStock).clamp(0, 999999);
+    m.bulkStoreStock =
+        (m.bulkStoreStock - batch.bulkStoreStock).clamp(0, 999999);
     m.updatedAt = DateTime.now();
-    
+
     // 2. Remove batch from medicine's ToMany (ObjectBox handles this but we need to put m)
     m.batches.removeWhere((b) => b.id == batch.id);
     _box.put(m);
@@ -658,8 +744,11 @@ class InventoryProvider extends ChangeNotifier {
 
     load();
 
-    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    final isClient = Platform.isAndroid ||
+        (Platform.isWindows &&
+            ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows &&
+        !ObjectBoxService.instance.settings.isWindowsClient;
     if (isHub && LocalServerService.instance.isRunning) {
       LocalServerService.instance.broadcast({'event': 'medicines_updated'});
     }
@@ -668,7 +757,9 @@ class InventoryProvider extends ChangeNotifier {
     }
   }
 
-  void updateBatchDetail(Medicine m, MedicineBatch batch, {
+  void updateBatchDetail(
+    Medicine m,
+    MedicineBatch batch, {
     required String batchNo,
     required DateTime expiryDate,
     required int mainStock,
@@ -683,17 +774,20 @@ class InventoryProvider extends ChangeNotifier {
     batch.storeStock = storeStock.clamp(0, 999999);
     batch.bulkClinicStock = bulkClinicStock.clamp(0, 999999);
     batch.bulkStoreStock = bulkStoreStock.clamp(0, 999999);
-    
+
     _batchBox.put(batch);
-    
+
     // Core Fix: Recalculate medicine totals now that batch has changed
     m.recalculateStockFromBatches();
     _box.put(m);
-    
+
     load();
 
-    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    final isClient = Platform.isAndroid ||
+        (Platform.isWindows &&
+            ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows &&
+        !ObjectBoxService.instance.settings.isWindowsClient;
     if (isHub && LocalServerService.instance.isRunning) {
       LocalServerService.instance.broadcast({'event': 'medicines_updated'});
     }
