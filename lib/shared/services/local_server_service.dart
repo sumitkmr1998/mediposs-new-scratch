@@ -597,6 +597,7 @@ class LocalServerService {
               'patientId': s.patientId,
               'patientName': s.patientName,
               'patientPhone': s.patientPhone,
+              'patientUhid': s.patientUhid,
               'subtotal': s.subtotal,
               'discount': s.discount,
               'taxRate': s.taxRate,
@@ -610,6 +611,9 @@ class LocalServerService {
               'updatedAt': s.updatedAt.toIso8601String(),
               'synced': s.synced,
               'isReturn': s.isReturn,
+              'isClinicalDispense': s.isClinicalDispense,
+              'linkedAppointmentId': s.linkedAppointmentId,
+              'linkedProcedureId': s.linkedProcedureId,
               'itemsJson': s.itemsJson,
             })
         .toList();
@@ -619,67 +623,63 @@ class LocalServerService {
     );
   }
 
-  Future<Response> _salesPushHandler(Request req) async {
+  void _revertHubInventory(Sale oldSale) {
     try {
-      final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      final list = jsonDecode(oldSale.itemsJson) as List;
+      for (final jsonItem in list) {
+        final item = SaleItem.fromJson(jsonItem as Map<String, dynamic>);
+        if (item.isProcedure) continue;
+        final m = ObjectBoxService.instance.medicineBox
+            .getAll()
+            .where((x) => x.name == item.medicineName)
+            .firstOrNull;
+        if (m != null) {
+          final qty = item.qty.toInt();
+          if (qty > 0) {
+            final batches = m.batches.toList();
+            final batch = batches.where((b) => b.batchNo == item.batchNo).firstOrNull ?? (batches.isNotEmpty ? batches.first : null);
+            if (batch != null) {
+              if (oldSale.isClinicalDispense) {
+                batch.mainStock += qty;
+              } else {
+                batch.storeStock += qty;
+              }
+              ObjectBoxService.instance.batchBox.put(batch);
+            }
+          } else if (qty < 0) {
+            int toDeduct = qty.abs();
+            final batches = m.batches.toList();
+            final batch = batches.where((b) => b.batchNo == item.batchNo).firstOrNull ?? (batches.isNotEmpty ? batches.first : null);
+            if (batch != null) {
+              if (oldSale.isClinicalDispense) {
+                batch.mainStock = (batch.mainStock - toDeduct).clamp(0, 999999);
+              } else {
+                batch.storeStock = (batch.storeStock - toDeduct).clamp(0, 999999);
+              }
+              ObjectBoxService.instance.batchBox.put(batch);
+            }
+          }
 
-      // Resolve correct Hub patient ID (Robust resolution)
-      int hubPatientId = 0;
-      final pName = body['patientName'] as String? ?? '';
-      final pPhone = body['patientPhone'] as String? ?? '';
-
-      if (pName.isNotEmpty) {
-        final patients = ObjectBoxService.instance.patientBox.getAll();
-        final match = patients.where((p) {
-          final nMatch = p.name.trim().toLowerCase() == pName.trim().toLowerCase();
-          final phMatch = pPhone.isNotEmpty && p.phone.trim() == pPhone.trim();
-          return nMatch && (pPhone.isEmpty || phMatch);
-        }).firstOrNull;
-        if (match != null) hubPatientId = match.id;
+          if (oldSale.isClinicalDispense) {
+            m.mainStock = (m.mainStock + qty).clamp(0, 999999);
+          } else {
+            m.storeStock = (m.storeStock + qty).clamp(0, 999999);
+          }
+          m.updatedAt = DateTime.now();
+          ObjectBoxService.instance.medicineBox.put(m);
+        }
       }
+    } catch (e) {
+      debugPrint('Hub inventory revert error: $e');
+    }
+  }
 
-      final sale = Sale(
-        invoiceNo: body['invoiceNo'] ?? '',
-        patientId: hubPatientId > 0 ? hubPatientId : (body['patientId'] ?? 0),
-        patientName: pName,
-        patientPhone: pPhone,
-        subtotal: (body['subtotal'] as num?)?.toDouble() ?? 0.0,
-        discount: (body['discount'] as num?)?.toDouble() ?? 0.0,
-        taxRate: (body['taxRate'] as num?)?.toDouble() ?? 0.0,
-        taxAmount: (body['taxAmount'] as num?)?.toDouble() ?? 0.0,
-        total: (body['total'] as num?)?.toDouble() ?? 0.0,
-        paymentMethod: body['paymentMethod'] ?? 'cash',
-        cashAmount: (body['cashAmount'] as num?)?.toDouble() ?? 0.0,
-        upiAmount: (body['upiAmount'] as num?)?.toDouble() ?? 0.0,
-        cardAmount: (body['cardAmount'] as num?)?.toDouble() ?? 0.0,
-        createdAt: DateTime.tryParse(body['createdAt'] ?? '') ?? DateTime.now(),
-        synced: true,
-        isReturn: body['isReturn'] ?? false,
-        isClinicalDispense: body['isClinicalDispense'] ?? false,
-        itemsJson: body['itemsJson'] ?? '[]',
-      );
-
-      // Deduplication: check if invoiceNo already exists
-      final existing = ObjectBoxService.instance.saleBox
-          .query(Sale_.invoiceNo.equals(sale.invoiceNo))
-          .build()
-          .findFirst();
-
-      if (existing != null) {
-        return Response.ok(
-          jsonEncode({'status': 'success', 'saleId': existing.id, 'note': 'already exists'}),
-          headers: {'content-type': 'application/json'},
-        );
-      }
-
-      // Save sale to Hub DB
-      ObjectBoxService.instance.saleBox.put(sale);
-
-      // Deduct inventory on Hub
+  void _deductHubInventory(Sale sale) {
+    try {
       final list = jsonDecode(sale.itemsJson) as List;
       for (final jsonItem in list) {
         final item = SaleItem.fromJson(jsonItem as Map<String, dynamic>);
-        // Use natural key (medicineName) to find the medicine on the Hub safely
+        if (item.isProcedure) continue;
         final m = ObjectBoxService.instance.medicineBox
             .getAll()
             .where((x) => x.name == item.medicineName)
@@ -689,7 +689,6 @@ class LocalServerService {
           final int qty = item.qty.toInt();
           
           if (qty > 0) {
-            // DEDUCTION (Sale) - FIFO
             int remaining = qty;
             final batches = m.batches.toList();
             batches.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
@@ -712,7 +711,6 @@ class LocalServerService {
               }
             }
           } else if (qty < 0) {
-            // RESTOCKING (Return) - Add to latest batch
             int toRestore = qty.abs();
             final batches = m.batches.toList();
             if (batches.isNotEmpty) {
@@ -736,6 +734,117 @@ class LocalServerService {
           ObjectBoxService.instance.medicineBox.put(m);
         }
       }
+    } catch (e) {
+      debugPrint('Hub inventory deduct error: $e');
+    }
+  }
+
+  Future<Response> _salesPushHandler(Request req) async {
+    try {
+      final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+
+      // Resolve correct Hub patient ID (Robust resolution)
+      int hubPatientId = 0;
+      final pName = body['patientName'] as String? ?? '';
+      final pPhone = body['patientPhone'] as String? ?? '';
+      final pUhid = body['patientUhid'] as String? ?? '';
+
+      // Try by UHID first (Stable key)
+      if (pUhid.isNotEmpty) {
+        final p = ObjectBoxService.instance.patientBox
+            .query(Patient_.uhid.equals(pUhid))
+            .build()
+            .findFirst();
+        if (p != null) hubPatientId = p.id;
+      }
+
+      // Fallback: Try by Name + Phone
+      if (hubPatientId == 0 && pName.isNotEmpty) {
+        final patients = ObjectBoxService.instance.patientBox.getAll();
+        final match = patients.where((p) {
+          final nMatch = p.name.trim().toLowerCase() == pName.trim().toLowerCase();
+          final phMatch = pPhone.isNotEmpty && p.phone.trim() == pPhone.trim();
+          return nMatch && (pPhone.isEmpty || phMatch);
+        }).firstOrNull;
+        if (match != null) hubPatientId = match.id;
+      }
+
+      final sale = Sale(
+        invoiceNo: body['invoiceNo'] ?? '',
+        patientId: hubPatientId > 0 ? hubPatientId : (body['patientId'] ?? 0),
+        patientName: pName,
+        patientPhone: pPhone,
+        patientUhid: pUhid,
+        subtotal: (body['subtotal'] as num?)?.toDouble() ?? 0.0,
+        discount: (body['discount'] as num?)?.toDouble() ?? 0.0,
+        taxRate: (body['taxRate'] as num?)?.toDouble() ?? 0.0,
+        taxAmount: (body['taxAmount'] as num?)?.toDouble() ?? 0.0,
+        total: (body['total'] as num?)?.toDouble() ?? 0.0,
+        paymentMethod: body['paymentMethod'] ?? 'cash',
+        cashAmount: (body['cashAmount'] as num?)?.toDouble() ?? 0.0,
+        upiAmount: (body['upiAmount'] as num?)?.toDouble() ?? 0.0,
+        cardAmount: (body['cardAmount'] as num?)?.toDouble() ?? 0.0,
+        createdAt: DateTime.tryParse(body['createdAt'] ?? '') ?? DateTime.now(),
+        synced: true,
+        isReturn: body['isReturn'] ?? false,
+        isClinicalDispense: body['isClinicalDispense'] ?? false,
+        itemsJson: body['itemsJson'] ?? '[]',
+      );
+
+      // Deduplication: check if invoiceNo already exists with the same millisecond timestamp
+      final existing = ObjectBoxService.instance.saleBox
+          .query(Sale_.invoiceNo.equals(sale.invoiceNo))
+          .build()
+          .find()
+          .where((s) => s.createdAt.millisecondsSinceEpoch == sale.createdAt.millisecondsSinceEpoch)
+          .firstOrNull;
+
+      if (existing != null) {
+        // Revert old inventory deductions on Hub
+        _revertHubInventory(existing);
+
+        // Update properties in-place
+        existing
+          ..patientId = sale.patientId
+          ..patientName = sale.patientName
+          ..patientPhone = sale.patientPhone
+          ..patientUhid = sale.patientUhid
+          ..subtotal = sale.subtotal
+          ..discount = sale.discount
+          ..taxRate = sale.taxRate
+          ..taxAmount = sale.taxAmount
+          ..total = sale.total
+          ..paymentMethod = sale.paymentMethod
+          ..cashAmount = sale.cashAmount
+          ..upiAmount = sale.upiAmount
+          ..cardAmount = sale.cardAmount
+          ..createdAt = sale.createdAt
+          ..updatedAt = DateTime.now()
+          ..isReturn = sale.isReturn
+          ..isClinicalDispense = sale.isClinicalDispense
+          ..itemsJson = sale.itemsJson;
+
+        ObjectBoxService.instance.saleBox.put(existing);
+
+        // Apply new inventory deductions on Hub
+        _deductHubInventory(existing);
+
+        // Tell all clients that a new sync event occurred so they refresh
+        broadcast({'event': 'sync_received'});
+        broadcast({'event': 'medicines_updated'});
+        _incomingDataController.add('sales');
+
+        return Response.ok(
+          jsonEncode({'status': 'success', 'saleId': existing.id, 'note': 'updated'}),
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      // Save sale to Hub DB
+      ObjectBoxService.instance.saleBox.put(sale);
+
+      // Deduct inventory on Hub
+      _deductHubInventory(sale);
 
       // Tell all clients that a new sync event occurred so they refresh
       broadcast({'event': 'sync_received'});
@@ -1769,60 +1878,7 @@ class LocalServerService {
           ObjectBoxService.instance.saleBox.put(sale);
           
           // Deduct Inventory
-          final list = jsonDecode(sale.itemsJson) as List;
-          for (final jsonItem in list) {
-            final item = SaleItem.fromJson(jsonItem as Map<String, dynamic>);
-            final m = ObjectBoxService.instance.medicineBox.getAll().where((x) => x.name == item.medicineName).firstOrNull;
-            if (m != null) {
-              final qty = item.qty.toInt();
-              if (qty > 0) {
-                // deduction - FIFO
-                int remaining = qty;
-                final batches = m.batches.toList();
-                batches.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
-                for (var b in batches) {
-                  if (remaining <= 0) break;
-                  if (sale.isClinicalDispense) {
-                    if (b.mainStock > 0) {
-                      final d = remaining > b.mainStock ? b.mainStock : remaining;
-                      b.mainStock -= d;
-                      remaining -= d;
-                      ObjectBoxService.instance.batchBox.put(b);
-                    }
-                  } else {
-                    if (b.storeStock > 0) {
-                      final d = remaining > b.storeStock ? b.storeStock : remaining;
-                      b.storeStock -= d;
-                      remaining -= d;
-                      ObjectBoxService.instance.batchBox.put(b);
-                    }
-                  }
-                }
-              } else if (qty < 0) {
-                // return - restock
-                int toRestore = qty.abs();
-                final batches = m.batches.toList();
-                if (batches.isNotEmpty) {
-                  batches.sort((a, b) => b.expiryDate.compareTo(a.expiryDate));
-                  final latest = batches.first;
-                  if (sale.isClinicalDispense) {
-                    latest.mainStock += toRestore;
-                  } else {
-                    latest.storeStock += toRestore;
-                  }
-                  ObjectBoxService.instance.batchBox.put(latest);
-                }
-              }
-
-              if (sale.isClinicalDispense) {
-                m.mainStock = (m.mainStock - qty).clamp(0, 999999);
-              } else {
-                m.storeStock = (m.storeStock - qty).clamp(0, 999999);
-              }
-              m.updatedAt = DateTime.now();
-              ObjectBoxService.instance.medicineBox.put(m);
-            }
-          }
+          _deductHubInventory(sale);
           
           broadcast({'event': 'sync_received'});
           broadcast({'event': 'sales_updated'});
@@ -1831,6 +1887,52 @@ class LocalServerService {
           // Mirror back to Cloud so all devices (including the one that sent it) see it confirmed
           await FirebaseSyncService.instance.broadcastUpdate('sales', sale.toJson());
           // Also broadcast updated medicines (stock deducted)
+          final list = jsonDecode(sale.itemsJson) as List;
+          for (final jsonItem in list) {
+            final item = SaleItem.fromJson(jsonItem as Map<String, dynamic>);
+            final m = ObjectBoxService.instance.medicineBox.getAll().where((x) => x.name == item.medicineName).firstOrNull;
+            if (m != null) {
+              await FirebaseSyncService.instance.broadcastUpdate('medicines', m.toJson());
+            }
+          }
+        } else {
+          // Revert old inventory deductions on Hub
+          _revertHubInventory(existing);
+
+          // Update properties in-place
+          existing
+            ..patientId = sale.patientId
+            ..patientName = sale.patientName
+            ..patientPhone = sale.patientPhone
+            ..patientUhid = sale.patientUhid
+            ..subtotal = sale.subtotal
+            ..discount = sale.discount
+            ..taxRate = sale.taxRate
+            ..taxAmount = sale.taxAmount
+            ..total = sale.total
+            ..paymentMethod = sale.paymentMethod
+            ..cashAmount = sale.cashAmount
+            ..upiAmount = sale.upiAmount
+            ..cardAmount = sale.cardAmount
+            ..createdAt = sale.createdAt
+            ..updatedAt = DateTime.now()
+            ..isReturn = sale.isReturn
+            ..isClinicalDispense = sale.isClinicalDispense
+            ..itemsJson = sale.itemsJson;
+
+          ObjectBoxService.instance.saleBox.put(existing);
+
+          // Apply new inventory deductions on Hub
+          _deductHubInventory(existing);
+
+          broadcast({'event': 'sync_received'});
+          broadcast({'event': 'sales_updated'});
+          _incomingDataController.add('sales');
+
+          // Mirror back to Cloud so all devices see it confirmed
+          await FirebaseSyncService.instance.broadcastUpdate('sales', existing.toJson());
+          // Also broadcast updated medicines (stock deducted)
+          final list = jsonDecode(existing.itemsJson) as List;
           for (final jsonItem in list) {
             final item = SaleItem.fromJson(jsonItem as Map<String, dynamic>);
             final m = ObjectBoxService.instance.medicineBox.getAll().where((x) => x.name == item.medicineName).firstOrNull;

@@ -42,6 +42,7 @@ class PendingCart {
   final double discountAmount;
   final String patientName;
   final String patientPhone;
+  final String patientUhid;
   final int patientId;
   final String paymentMethod;
   final double mixedCash;
@@ -59,6 +60,7 @@ class PendingCart {
     required this.discountAmount,
     required this.patientName,
     required this.patientPhone,
+    required this.patientUhid,
     required this.patientId,
     required this.paymentMethod,
     required this.mixedCash,
@@ -92,6 +94,7 @@ class CartProvider extends ChangeNotifier {
   double _discountAmount = 0;
   String _patientName = '';
   String _patientPhone = '';
+  String _patientUhid = '';
   int _patientId = 0;
   String _paymentMethod = 'cash';
   bool _isReturnMode = false;
@@ -108,12 +111,22 @@ class CartProvider extends ChangeNotifier {
   
   final List<PendingCart> _pendingCarts = [];
 
+  // Editing Sale Mode
+  int? _editingSaleId;
+  String? _editingInvoiceNo;
+  DateTime? _editingCreatedAt;
+
+  int? get editingSaleId => _editingSaleId;
+  String? get editingInvoiceNo => _editingInvoiceNo;
+  bool get isEditingSale => _editingSaleId != null;
+
   List<CartItem> get items => List.unmodifiable(_items);
   List<PendingCart> get pendingCarts => List.unmodifiable(_pendingCarts);
   double get discountAmount => _discountAmount;
   String get patientName => _patientName;
   String get patientNameStr => _patientName;
   String get patientPhone => _patientPhone;
+  String get patientUhid => _patientUhid;
   int get patientId => _patientId;
   String get paymentMethod => _paymentMethod;
   bool get isReturnMode => _isReturnMode;
@@ -219,10 +232,11 @@ class CartProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setPatient({String name = '', String phone = '', int id = 0}) {
-    _patientName = name;
-    _patientPhone = phone;
-    _patientId = id;
+  void setPatient({String? name, String? phone, int? id, String? uhid}) {
+    if (name != null) _patientName = name;
+    if (phone != null) _patientPhone = phone;
+    if (id != null) _patientId = id;
+    if (uhid != null) _patientUhid = uhid;
     notifyListeners();
   }
 
@@ -271,6 +285,7 @@ class CartProvider extends ChangeNotifier {
     _patientName = '';
     _patientPhone = '';
     _patientId = 0;
+    _patientUhid = '';
     _paymentMethod = 'cash';
     _mixedCash = 0;
     _mixedUpi = 0;
@@ -279,6 +294,64 @@ class CartProvider extends ChangeNotifier {
     _linkedAppointmentId = null;
     _linkedProcedureId = null;
     _isClinicalDispense = false;
+    _editingSaleId = null;
+    _editingInvoiceNo = null;
+    _editingCreatedAt = null;
+    notifyListeners();
+  }
+
+  void loadSaleForEditing(Sale sale) {
+    clearCart();
+    _editingSaleId = sale.id;
+    _editingInvoiceNo = sale.invoiceNo;
+    _editingCreatedAt = sale.createdAt;
+
+    final db = ObjectBoxService.instance;
+    final saleItems = _salesProvider.getSaleItems(sale);
+    for (final item in saleItems) {
+      if (item.isProcedure) {
+        final proc = db.procedureBox.get(item.procedureId);
+        if (proc != null) {
+          addProcedure(proc, price: item.unitPrice, qty: item.qty.abs());
+        } else {
+          addProcedure(
+            Procedure(name: item.medicineName, basePrice: item.unitPrice)..id = item.procedureId,
+            price: item.unitPrice,
+            qty: item.qty.abs(),
+          );
+        }
+      } else {
+        final med = db.medicineBox.get(item.medicineId);
+        if (med != null) {
+          addItem(med, qty: item.qty.abs());
+        } else {
+          addItem(
+            Medicine(name: item.medicineName, sellingPrice: item.unitPrice, purchasePrice: 0)..id = item.medicineId,
+            qty: item.qty.abs(),
+          );
+        }
+      }
+    }
+
+    _patientName = sale.patientName;
+    _patientPhone = sale.patientPhone;
+    _patientId = sale.patientId;
+    _patientUhid = sale.patientUhid;
+    _paymentMethod = sale.paymentMethod;
+    
+    _discountAmount = sale.isReturn ? -sale.discount : sale.discount;
+    
+    if (_paymentMethod == 'mixed') {
+      _mixedCash = sale.isReturn ? -sale.cashAmount : sale.cashAmount;
+      _mixedUpi = sale.isReturn ? -sale.upiAmount : sale.upiAmount;
+      _mixedCard = sale.isReturn ? -sale.cardAmount : sale.cardAmount;
+    }
+    
+    _isClinicalDispense = sale.isClinicalDispense;
+    _isReturnMode = sale.isReturn;
+    _linkedAppointmentId = sale.linkedAppointmentId != 0 ? sale.linkedAppointmentId : null;
+    _linkedProcedureId = sale.linkedProcedureId != 0 ? sale.linkedProcedureId : null;
+
     notifyListeners();
   }
 
@@ -295,6 +368,7 @@ class CartProvider extends ChangeNotifier {
       discountAmount: _discountAmount,
       patientName: _patientName,
       patientPhone: _patientPhone,
+      patientUhid: _patientUhid,
       patientId: _patientId,
       paymentMethod: _paymentMethod,
       mixedCash: _mixedCash,
@@ -316,6 +390,7 @@ class CartProvider extends ChangeNotifier {
     _discountAmount = pending.discountAmount;
     _patientName = pending.patientName;
     _patientPhone = pending.patientPhone;
+    _patientUhid = pending.patientUhid;
     _patientId = pending.patientId;
     _paymentMethod = pending.paymentMethod;
     _mixedCash = pending.mixedCash;
@@ -342,13 +417,31 @@ class CartProvider extends ChangeNotifier {
 
     final db = ObjectBoxService.instance;
     final settings = db.settings;
+    final isClient = Platform.isAndroid || (Platform.isWindows && settings.isWindowsClient);
+    final isHub = Platform.isWindows && !settings.isWindowsClient;
 
-    // Build invoice number: (RET/INV/DISP)-YYYYMMDD-HHMMSS
+    // If editing a sale, revert the original stock deductions first
+    if (_editingSaleId != null) {
+      final oldSale = db.saleBox.get(_editingSaleId!);
+      if (oldSale != null) {
+        final oldItems = _salesProvider.getSaleItems(oldSale);
+        for (final item in oldItems) {
+          if (oldSale.isClinicalDispense) {
+            _inventoryProvider.deductClinicStock(item.medicineId, -item.qty);
+          } else {
+            _inventoryProvider.deductStoreStock(item.medicineId, -item.qty);
+          }
+        }
+      }
+    }
+
+    // Build invoice number: (RET/INV/DISP)-YYYYMMDD-HHMMSS-MS
     final now = await TimeService.getRobustTime();
     final prefix = _isReturnMode ? 'RET' : (_isClinicalDispense ? 'DISP' : 'INV');
     final dateStr = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
     final timeStr = '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
-    final invoiceNo = '$prefix-$dateStr-$timeStr';
+    final msStr = now.millisecond.toString().padLeft(3, '0');
+    final invoiceNo = '$prefix-$dateStr-$timeStr-$msStr';
 
     // Build items and Deduct or Restock stock (storeStock vs mainStock)
     final saleItems = <SaleItem>[];
@@ -422,10 +515,12 @@ class CartProvider extends ChangeNotifier {
     }
 
     final sale = Sale(
-      invoiceNo: invoiceNo,
+      id: _editingSaleId ?? 0,
+      invoiceNo: _editingInvoiceNo ?? invoiceNo,
       patientId: _patientId,
       patientName: _patientName,
       patientPhone: _patientPhone,
+      patientUhid: _patientUhid,
       subtotal: _isReturnMode ? -subtotal : subtotal,
       discount: _isReturnMode ? -_discountAmount : _discountAmount,
       taxRate: (_isClinicalDispense || settings.isCompositionScheme) ? 0.0 : settings.taxRate,
@@ -440,11 +535,15 @@ class CartProvider extends ChangeNotifier {
       linkedAppointmentId: _linkedAppointmentId ?? 0,
       linkedProcedureId: _linkedProcedureId ?? 0,
       itemsJson: jsonEncode(saleItems.map((i) => i.toJson()).toList()),
-      createdAt: now,
+      createdAt: _editingCreatedAt ?? now,
     );
 
     db.saleBox.put(sale);
     _salesProvider.load();
+
+    _editingSaleId = null;
+    _editingInvoiceNo = null;
+    _editingCreatedAt = null;
 
     // Mark prescription as dispensed if linked
     if (_linkedPrescriptionId != null) {
@@ -470,7 +569,7 @@ class CartProvider extends ChangeNotifier {
     clearCart();
 
     // Broadcast or Push network sync
-    if (Platform.isWindows) {
+    if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
         LocalServerService.instance.broadcast({'event': 'sales_updated'});
@@ -491,7 +590,7 @@ class CartProvider extends ChangeNotifier {
           }
         }
       }
-    } else if (Platform.isAndroid) {
+    } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'sale',
         action: 'create',

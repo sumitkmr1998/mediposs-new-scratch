@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../../shared/providers/sales_provider.dart';
 import '../../shared/providers/inventory_provider.dart';
 import '../../shared/providers/auth_provider.dart';
+import '../../shared/providers/cart_provider.dart';
+import '../../shared/providers/navigation_provider.dart';
 import '../../shared/models/sale.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/return_dialog.dart';
@@ -525,6 +527,7 @@ class _SaleRow extends StatelessWidget {
     final dt = sale.createdAt;
     final canVoidSales = context.watch<AuthProvider>().canVoidSales;
     final canProcessReturns = context.watch<AuthProvider>().canProcessReturns;
+    final canEditSales = context.watch<AuthProvider>().canEditSales;
     final inv = context.read<InventoryProvider>();
 
     return Theme(
@@ -821,6 +824,26 @@ class _SaleRow extends StatelessWidget {
                             context: context,
                             builder: (_) => ReturnDialog(originalSale: sale),
                           ),
+                        ),
+                      ],
+                      if (canEditSales) ...[
+                        const SizedBox(height: 12),
+                        _ActionButton(
+                          icon: Icons.edit_rounded,
+                          label: 'Edit Sale',
+                          color: AppTheme.primary,
+                          isFullWidth: true,
+                          onTap: () {
+                            context.read<CartProvider>().loadSaleForEditing(sale);
+                            context.read<NavigationProvider>().selectDestination('pos');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Loaded Sale ${sale.invoiceNo} for editing.'),
+                                backgroundColor: AppTheme.success,
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          },
                         ),
                       ],
                       if (canVoidSales) ...[

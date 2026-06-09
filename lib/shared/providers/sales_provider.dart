@@ -226,6 +226,13 @@ class SalesProvider extends ChangeNotifier {
     _sales = query.find();
     _loadedCount = pageSize;
     query.close();
+    
+    // Debug log to compare sales details between Hub and Client
+    final details = _sales.map((s) => '${s.invoiceNo}:total=${s.total}:isReturn=${s.isReturn}:isDispense=${s.isClinicalDispense}').toList();
+    final rawDetails = _rawSales.map((s) => '${s.invoiceNo}:total=${s.total}:isReturn=${s.isReturn}:createdAt=${s.createdAt.toIso8601String()}').toList();
+    debugPrint('SalesProvider: Loaded ${_sales.length} today sales. Details: $details');
+    debugPrint('SalesProvider: Total raw sales count: ${_rawSales.length}. Raw details: $rawDetails');
+    
     notifyListeners();
   }
 
@@ -269,10 +276,13 @@ class SalesProvider extends ChangeNotifier {
       ObjectBoxService.instance.saleBox.remove(sale.id);
       load();
 
-      if (Platform.isWindows && LocalServerService.instance.isRunning) {
+      final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+      final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+
+      if (isHub && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
-      } else if (Platform.isAndroid) {
+      } else if (isClient) {
         SyncQueueService.instance.addToQueue(
           entity: 'sale',
           action: 'delete',
@@ -298,23 +308,35 @@ class SalesProvider extends ChangeNotifier {
   List<Sale> getSalesForPatient(Patient patient) {
     if (patient.id == 0 && patient.name.isEmpty) return [];
 
-    // Robust matching:
-    // 1. Same patientId (local consistency)
-    // 2. OR same Name + Phone (for synced data with ID mismatches)
-    // BUT we must also ensure that if patientId matches, it's not a false positive (different name)
+    // Robust matching using local ID, UHID, Phone, and Name:
+    // Any strong matching signal is accepted:
+    // 1. Same local patientId AND name matches (to verify local consistency)
+    // 2. OR same UHID (when both have non-empty UHID)
+    // 3. OR same Phone number (when both have non-empty Phone)
+    // 4. OR same Name, provided that there is no conflict on UHID or Phone
     
     final allSales = ObjectBoxService.instance.saleBox.getAll();
     return allSales.where((s) {
-      final idMatch = s.patientId == patient.id;
       final nameMatch = s.patientName.trim().toLowerCase() == patient.name.trim().toLowerCase();
-      final phoneMatch = patient.phone.isNotEmpty && s.patientPhone.trim() == patient.phone.trim();
+      if (!nameMatch) return false; // Name must always match to prevent collision
+
+      final idMatch = s.patientId == patient.id;
+      if (idMatch) return true; // Name and Local ID matches
       
-      // If ID matches, we still check name to avoid collisions on Hub from different devices
-      if (idMatch && nameMatch) return true;
+      final hasUhid = patient.uhid.isNotEmpty && s.patientUhid.isNotEmpty;
+      final uhidMatch = hasUhid && s.patientUhid.trim().toLowerCase() == patient.uhid.trim().toLowerCase();
+      if (uhidMatch) return true; // UHID matches
       
-      // If ID doesn't match (or patient is new), fallback to Name + Phone
-      if (nameMatch && (patient.phone.isEmpty || phoneMatch)) return true;
-      
+      final hasPhone = patient.phone.isNotEmpty && s.patientPhone.isNotEmpty;
+      final phoneMatch = hasPhone && s.patientPhone.trim() == patient.phone.trim();
+      if (phoneMatch) return true; // Phone matches
+
+      // If we don't have matching IDs, UHIDs, or Phones:
+      // We allow matching by Name only IF there are no conflicting UHIDs or Phones.
+      final uhidConflict = hasUhid && !uhidMatch;
+      final phoneConflict = hasPhone && !phoneMatch;
+      if (!uhidConflict && !phoneConflict) return true;
+
       return false;
     }).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));

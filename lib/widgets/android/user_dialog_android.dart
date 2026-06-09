@@ -66,6 +66,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
   bool _canViewSalesHistory = false;
   bool _canVoidSales = false;
   bool _canProcessReturns = false;
+  bool _canEditSales = false;
 
   // OPD
   bool _canAccessOPD = true;
@@ -116,6 +117,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
       _canViewSalesHistory = u.canViewSalesHistory;
       _canVoidSales = u.canVoidSales;
       _canProcessReturns = u.canProcessReturns;
+      _canEditSales = u.canEditSales;
 
       _canAccessOPD = u.canAccessOPD;
       _canManageDoctors = u.canManageDoctors;
@@ -154,6 +156,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
       _canViewSalesHistory = tempUser.canViewSalesHistory;
       _canVoidSales = tempUser.canVoidSales;
       _canProcessReturns = tempUser.canProcessReturns;
+      _canEditSales = tempUser.canEditSales;
       _canAccessOPD = tempUser.canAccessOPD;
       _canManageDoctors = tempUser.canManageDoctors;
       _canViewOpdReports = tempUser.canViewOpdReports;
@@ -218,6 +221,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
     u.canViewSalesHistory = _canViewSalesHistory;
     u.canVoidSales = _canVoidSales;
     u.canProcessReturns = _canProcessReturns;
+    u.canEditSales = _canEditSales;
 
     u.canAccessOPD = _canAccessOPD;
     u.canManageDoctors = _canManageDoctors;
@@ -633,6 +637,14 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                               _canBulkDiscount,
                               (v) => setState(() {
                                     _canBulkDiscount = v;
+                                    if (v) _canAccessPOS = true;
+                                  })),
+                          _buildPermToggle(
+                              'Edit Sales',
+                              'Can edit completed invoices/receipts',
+                              _canEditSales,
+                              (v) => setState(() {
+                                    _canEditSales = v;
                                     if (v) _canAccessPOS = true;
                                   })),
                         ],

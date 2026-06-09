@@ -323,7 +323,8 @@ class _MediPossAppState extends State<MediPossApp> with WidgetsBindingObserver {
 
   @override
   Future<AppExitResponse> didRequestAppExit() async {
-    if (defaultTargetPlatform == TargetPlatform.windows && !_isExiting) {
+    final isWindowsClient = defaultTargetPlatform == TargetPlatform.windows && ObjectBoxService.instance.settings.isWindowsClient;
+    if (defaultTargetPlatform == TargetPlatform.windows && !isWindowsClient && !_isExiting) {
       _isExiting = true;
       
       // Show "Syncing" dialog using GlobalNavigationService

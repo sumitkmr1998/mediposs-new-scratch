@@ -975,7 +975,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(11, 2308013346348508445),
       name: 'Sale',
-      lastPropertyId: const obx_int.IdUid(22, 3110113568726371911),
+      lastPropertyId: const obx_int.IdUid(23, 6175242095605562542),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -1087,6 +1087,11 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(22, 3110113568726371911),
             name: 'linkedProcedureId',
             type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(23, 6175242095605562542),
+            name: 'patientUhid',
+            type: 9,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
@@ -2504,7 +2509,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final patientPhoneOffset = fbb.writeString(object.patientPhone);
           final paymentMethodOffset = fbb.writeString(object.paymentMethod);
           final itemsJsonOffset = fbb.writeString(object.itemsJson);
-          fbb.startTable(23);
+          final patientUhidOffset = fbb.writeString(object.patientUhid);
+          fbb.startTable(24);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, invoiceNoOffset);
           fbb.addInt64(2, object.patientId);
@@ -2527,6 +2533,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addBool(19, object.isClinicalDispense);
           fbb.addInt64(20, object.linkedAppointmentId);
           fbb.addInt64(21, object.linkedProcedureId);
+          fbb.addOffset(22, patientUhidOffset);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -2545,6 +2552,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final patientPhoneParam =
               const fb.StringReader(asciiOptimization: true)
                   .vTableGet(buffer, rootOffset, 12, '');
+          final patientUhidParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGet(buffer, rootOffset, 48, '');
           final subtotalParam =
               const fb.Float64Reader().vTableGet(buffer, rootOffset, 14, 0);
           final discountParam =
@@ -2586,6 +2596,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
               patientId: patientIdParam,
               patientName: patientNameParam,
               patientPhone: patientPhoneParam,
+              patientUhid: patientUhidParam,
               subtotal: subtotalParam,
               discount: discountParam,
               taxRate: taxRateParam,
@@ -3800,6 +3811,10 @@ class Sale_ {
   /// See [Sale.linkedProcedureId].
   static final linkedProcedureId =
       obx.QueryIntegerProperty<Sale>(_entities[10].properties[21]);
+
+  /// See [Sale.patientUhid].
+  static final patientUhid =
+      obx.QueryStringProperty<Sale>(_entities[10].properties[22]);
 }
 
 /// [StockTransfer] entity fields to define ObjectBox queries.

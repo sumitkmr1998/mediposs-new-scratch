@@ -208,13 +208,15 @@ class OpdProvider extends ChangeNotifier {
     loadAll();
 
     // Broadcast or Push network sync
-    if (Platform.isWindows) {
+    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
         LocalServerService.instance
             .broadcast({'event': 'appointments_updated'});
       }
-    } else if (Platform.isAndroid) {
+    } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'appointment',
         action: 'create',
@@ -241,11 +243,13 @@ class OpdProvider extends ChangeNotifier {
     loadAll();
 
     // Broadcast sync
-    if (Platform.isWindows) {
+    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
-    } else if (Platform.isAndroid) {
+    } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'appointment',
         action: 'update',
@@ -261,11 +265,13 @@ class OpdProvider extends ChangeNotifier {
     ObjectBoxService.instance.appointmentBox.put(appt);
     loadAll();
 
-    if (Platform.isWindows) {
+    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
-    } else if (Platform.isAndroid) {
+    } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'appointment',
         action: 'update',
@@ -292,11 +298,13 @@ class OpdProvider extends ChangeNotifier {
     loadAll();
 
     // Broadcast sync
-    if (Platform.isWindows) {
+    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
-    } else if (Platform.isAndroid) {
+    } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'appointment',
         action: 'update',
@@ -311,11 +319,13 @@ class OpdProvider extends ChangeNotifier {
     loadAll();
 
     // Broadcast sync
-    if (Platform.isWindows) {
+    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
-    } else if (Platform.isAndroid) {
+    } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'doctor',
         action: 'create',
@@ -329,11 +339,13 @@ class OpdProvider extends ChangeNotifier {
     loadAll();
 
     // Broadcast sync
-    if (Platform.isWindows) {
+    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
-    } else if (Platform.isAndroid) {
+    } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'doctor',
         action: 'delete',

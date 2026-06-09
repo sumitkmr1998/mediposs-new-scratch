@@ -41,6 +41,7 @@ class AppUser {
   bool canViewSalesHistory;
   bool canVoidSales;
   bool canProcessReturns;
+  bool canEditSales;
 
   // OPD
   bool canAccessOPD;
@@ -80,6 +81,7 @@ class AppUser {
     this.canViewSalesHistory = false,
     this.canVoidSales = false,
     this.canProcessReturns = false,
+    this.canEditSales = false,
     this.canAccessOPD = true,
     this.canManageDoctors = false,
     this.canViewOpdReports = false,
@@ -116,6 +118,7 @@ class AppUser {
         canViewSalesHistory = true;
         canProcessReturns = true;
         canVoidSales = true;
+        canEditSales = true;
         canAccessOPD = true;
         canViewPurchasePrice = true;
         canOverrideStock = true;
@@ -202,6 +205,7 @@ class AppUser {
     canViewSalesHistory = val;
     canVoidSales = val;
     canProcessReturns = val;
+    canEditSales = val;
     canAccessOPD = val;
     canManageDoctors = val;
     canViewOpdReports = val;
@@ -238,6 +242,7 @@ class AppUser {
         'canViewSalesHistory': canViewSalesHistory,
         'canVoidSales': canVoidSales,
         'canProcessReturns': canProcessReturns,
+        'canEditSales': canEditSales,
         'canAccessOPD': canAccessOPD,
         'canManageDoctors': canManageDoctors,
         'canViewOpdReports': canViewOpdReports,
@@ -274,6 +279,7 @@ class AppUser {
         canViewSalesHistory: json['canViewSalesHistory'] ?? false,
         canVoidSales: json['canVoidSales'] ?? false,
         canProcessReturns: json['canProcessReturns'] ?? false,
+        canEditSales: json['canEditSales'] ?? false,
         canAccessOPD: json['canAccessOPD'] ?? true,
         canManageDoctors: json['canManageDoctors'] ?? false,
         canViewOpdReports: json['canViewOpdReports'] ?? false,

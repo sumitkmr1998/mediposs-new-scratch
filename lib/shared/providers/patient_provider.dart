@@ -57,11 +57,13 @@ class PatientProvider extends ChangeNotifier {
     load();
 
     // Broadcast or Push network sync
-    if (Platform.isWindows) {
+    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
-    } else if (Platform.isAndroid) {
+    } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'patient',
         action: 'create',
@@ -88,11 +90,13 @@ class PatientProvider extends ChangeNotifier {
     load();
 
     // Broadcast sync
-    if (Platform.isWindows) {
+    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'patient_deleted', 'uhid': uhid});
       }
-    } else if (Platform.isAndroid) {
+    } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'patient',
         action: 'delete',
@@ -177,11 +181,13 @@ class PatientProvider extends ChangeNotifier {
 
         ObjectBoxService.instance.patientImageBox.put(pImage);
 
-        if (Platform.isWindows) {
+        final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+        final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+        if (isHub) {
           if (LocalServerService.instance.isRunning) {
             LocalServerService.instance.broadcast({'event': 'sync_received'});
           }
-        } else if (Platform.isAndroid) {
+        } else if (isClient) {
           SyncQueueService.instance.addToQueue(
             entity: 'photo',
             action: 'create',
@@ -218,9 +224,11 @@ class PatientProvider extends ChangeNotifier {
       ObjectBoxService.instance.patientImageBox.remove(pImage.id);
       notifyListeners();
 
-      if (Platform.isWindows && LocalServerService.instance.isRunning) {
+      final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+      final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+      if (isHub && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
-      } else if (Platform.isAndroid && uhid.isNotEmpty) {
+      } else if (isClient && uhid.isNotEmpty) {
         SyncQueueService.instance.addToQueue(
           entity: 'photo',
           action: 'delete',

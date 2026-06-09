@@ -143,7 +143,7 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
     final profitData = AnalyticsHelper.aggregateDailyProfit(filteredSales, medicines);
 
     double totalRevenue = filteredSales.where((s) => !s.isReturn).fold(0.0, (sum, s) => sum + s.total);
-    double totalReturns = filteredSales.where((s) => s.isReturn).fold(0.0, (sum, s) => sum + s.total);
+    double totalReturns = filteredSales.where((s) => s.isReturn).fold(0.0, (sum, s) => sum + s.total.abs());
     double netRevenue = totalRevenue - totalReturns;
     
     double netProfit = 0.0;
@@ -797,7 +797,7 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
     for (final sale in filteredSales) {
       final items = AnalyticsHelper.getItems(sale);
       for (final item in items) {
-        final isMatch = (medicine != null && !item.isProcedure && item.medicineId == medicine.id) ||
+        final isMatch = (medicine != null && !item.isProcedure && item.medicineName.toLowerCase().trim() == medicine.name.toLowerCase().trim()) ||
                         (procedure != null && item.isProcedure && item.procedureId == procedure.id);
         if (isMatch) {
           totalSold += item.qty;
@@ -1530,24 +1530,32 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
   Widget _buildClinicReconciliationTab(List<Sale> sales, List<Medicine> medicines) {
     final allTransfers = ObjectBoxService.instance.transferBox.getAll();
 
-    // Map of medicineId -> totalTransferred (to main)
+    final medMap = {for (var m in medicines) m.name.toLowerCase().trim(): m.id};
+
+    // Map of local medicineId -> totalTransferred (to main)
     final transferMap = <int, int>{};
     for (final transfer in allTransfers) {
-      if (transfer.toWarehouse == 'main') {
-        transferMap[transfer.medicineId] = (transferMap[transfer.medicineId] ?? 0) + transfer.qty;
-      }
-      if (transfer.fromWarehouse == 'main') {
-        transferMap[transfer.medicineId] = (transferMap[transfer.medicineId] ?? 0) - transfer.qty;
+      final localId = medMap[transfer.medicineName.toLowerCase().trim()];
+      if (localId != null) {
+        if (transfer.toWarehouse == 'main') {
+          transferMap[localId] = (transferMap[localId] ?? 0) + transfer.qty;
+        }
+        if (transfer.fromWarehouse == 'main') {
+          transferMap[localId] = (transferMap[localId] ?? 0) - transfer.qty;
+        }
       }
     }
 
-    // Map of medicineId -> totalConsumed (clinical dispenses)
+    // Map of local medicineId -> totalConsumed (clinical dispenses)
     final consumeMap = <int, int>{};
     for (final sale in sales) {
       if (sale.isClinicalDispense) {
         for (final item in AnalyticsHelper.getItems(sale)) {
           if (!item.isProcedure) {
-            consumeMap[item.medicineId] = (consumeMap[item.medicineId] ?? 0) + item.qty;
+            final localId = medMap[item.medicineName.toLowerCase().trim()];
+            if (localId != null) {
+              consumeMap[localId] = (consumeMap[localId] ?? 0) + item.qty;
+            }
           }
         }
       }

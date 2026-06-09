@@ -32,8 +32,19 @@ class SyncService extends ChangeNotifier {
 
   void _startConnectionWatcher() {
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
-      if (!isHub && !_isConnected && !isSyncing) {
+    _reconnectTimer = Timer.periodic(const Duration(seconds: 20), (timer) async {
+      if (isHub) return;
+
+      if (_isConnected) {
+        if (_hubIp != null) {
+          final isReachable = await testConnection(_hubIp!);
+          if (!isReachable) {
+            debugPrint('SyncService: Hub became unreachable! Setting _isConnected to false.');
+            _isConnected = false;
+            notifyListeners();
+          }
+        }
+      } else if (!isSyncing) {
         debugPrint('SyncService: Periodic background auto-connect attempt...');
         await tryAutoConnect();
       }
@@ -110,6 +121,7 @@ class SyncService extends ChangeNotifier {
         } else {
           settings.hubIp = address;
         }
+        settings.lastGlobalSync = null; // Reset sync marker to trigger fresh pull on login!
         ObjectBoxService.instance.settingsBox.put(settings);
 
         notifyListeners();
@@ -500,10 +512,19 @@ class SyncService extends ChangeNotifier {
       sinceStr = null;
       debugPrint('SyncService: Performing FULL sync (all data).');
     } else if (settings.lastGlobalSync == null) {
-      // NEW DEVICE SEED: Only fetch the last 180 days to keep initial payload light
-      final seedDate = DateTime.now().subtract(const Duration(days: 180));
-      sinceStr = seedDate.toIso8601String();
-      debugPrint('SyncService: Initial sync detected. Seeding from $sinceStr');
+      if (!isHub) {
+        debugPrint('SyncService: Initial client sync. Wiping local database for a fresh start...');
+        ObjectBoxService.instance.patientBox.removeAll();
+        ObjectBoxService.instance.medicineBox.removeAll();
+        ObjectBoxService.instance.saleBox.removeAll();
+        ObjectBoxService.instance.prescriptionBox.removeAll();
+        ObjectBoxService.instance.appointmentBox.removeAll();
+        ObjectBoxService.instance.doctorBox.removeAll();
+        ObjectBoxService.instance.transferBox.removeAll();
+        ObjectBoxService.instance.templateBox.removeAll();
+      }
+      sinceStr = null; // Pull all data freshly instead of just the last 180 days!
+      debugPrint('SyncService: Initial sync detected. Pulling all data freshly.');
     } else {
       // Add a 1-minute safety buffer for clock drift
       final bufferedDate = DateTime.fromMillisecondsSinceEpoch(settings.lastGlobalSync!)
@@ -1150,14 +1171,44 @@ class SyncService extends ChangeNotifier {
           final createdAt =
               DateTime.tryParse(item['createdAt'] ?? '') ?? DateTime.now();
 
-          final existing =
-              allLocal.where((s) => s.invoiceNo == invoiceNo).firstOrNull;
+          final existing = allLocal
+              .where((s) =>
+                  s.invoiceNo == invoiceNo &&
+                  s.createdAt.millisecondsSinceEpoch == createdAt.millisecondsSinceEpoch)
+              .firstOrNull;
+
+          // Resolve local patient ID using UHID or fallback to Name/Phone
+          int localPatientId = 0;
+          final uhid = item['patientUhid'] as String? ?? '';
+          if (uhid.isNotEmpty) {
+            final p = ObjectBoxService.instance.patientBox
+                .query(Patient_.uhid.equals(uhid))
+                .build()
+                .findFirst();
+            if (p != null) localPatientId = p.id;
+          }
+          if (localPatientId == 0) {
+            final pName = item['patientName'] as String? ?? '';
+            final pPhone = item['patientPhone'] as String? ?? '';
+            if (pName.isNotEmpty) {
+              final match = ObjectBoxService.instance.patientBox
+                  .getAll()
+                  .where((p) {
+                    final nMatch = p.name.trim().toLowerCase() == pName.trim().toLowerCase();
+                    final phMatch = pPhone.isNotEmpty && p.phone.trim() == pPhone.trim();
+                    return nMatch && (pPhone.isEmpty || phMatch);
+                  }).firstOrNull;
+              if (match != null) localPatientId = match.id;
+            }
+          }
+
           if (existing != null) {
             existing
               ..invoiceNo = invoiceNo
-              ..patientId = item['patientId'] ?? 0
+              ..patientId = localPatientId > 0 ? localPatientId : (item['patientId'] ?? 0)
               ..patientName = item['patientName'] ?? ''
               ..patientPhone = item['patientPhone'] ?? ''
+              ..patientUhid = uhid
               ..subtotal = (item['subtotal'] as num?)?.toDouble() ?? 0
               ..discount = (item['discount'] as num?)?.toDouble() ?? 0
               ..taxRate = (item['taxRate'] as num?)?.toDouble() ?? 0
@@ -1172,15 +1223,18 @@ class SyncService extends ChangeNotifier {
               ..synced = true
               ..isReturn = item['isReturn'] ?? false
               ..isClinicalDispense = item['isClinicalDispense'] ?? false
+              ..linkedAppointmentId = item['linkedAppointmentId'] ?? 0
+              ..linkedProcedureId = item['linkedProcedureId'] ?? 0
               ..itemsJson = item['itemsJson'] ?? '[]';
             box.put(existing);
           } else {
             box.put(Sale(
               id: 0, // Auto-assign — never force Hub IDs
               invoiceNo: invoiceNo,
-              patientId: item['patientId'] ?? 0,
+              patientId: localPatientId > 0 ? localPatientId : (item['patientId'] ?? 0),
               patientName: item['patientName'] ?? '',
               patientPhone: item['patientPhone'] ?? '',
+              patientUhid: uhid,
               subtotal: (item['subtotal'] as num?)?.toDouble() ?? 0,
               discount: (item['discount'] as num?)?.toDouble() ?? 0,
               taxRate: (item['taxRate'] as num?)?.toDouble() ?? 0,
@@ -1195,6 +1249,8 @@ class SyncService extends ChangeNotifier {
               synced: true,
               isReturn: item['isReturn'] ?? false,
               isClinicalDispense: item['isClinicalDispense'] ?? false,
+              linkedAppointmentId: item['linkedAppointmentId'] ?? 0,
+              linkedProcedureId: item['linkedProcedureId'] ?? 0,
               itemsJson: item['itemsJson'] ?? '[]',
             ));
           }
@@ -1699,11 +1755,35 @@ class WebSocketService extends ChangeNotifier {
       StreamController.broadcast();
   Stream<Map<String, dynamic>> get eventStream => _eventController.stream;
 
+  Timer? _heartbeatTimer;
+
   void connect(String ip, String secret) {
     _lastIp = ip;
     _intentionalDisconnect = false;
     _reconnectAttempts = 0;
     _doConnect(ip, secret);
+    _startHeartbeat(secret);
+  }
+
+  void _startHeartbeat(String secret) {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 20), (timer) async {
+      if (_intentionalDisconnect || _lastIp == null) {
+        timer.cancel();
+        return;
+      }
+      
+      final reachable = await SyncService.instance.testConnection(_lastIp!);
+      if (!reachable) {
+        if (_connected) {
+          debugPrint('WebSocketService: Heartbeat failed! Force disconnecting WebSocket.');
+          _connected = false;
+          _channel?.sink.close();
+          notifyListeners();
+          _scheduleReconnect();
+        }
+      }
+    });
   }
 
   void _doConnect(String ip, String secret) {
@@ -1841,6 +1921,7 @@ class WebSocketService extends ChangeNotifier {
 
   void disconnect() {
     _intentionalDisconnect = true;
+    _heartbeatTimer?.cancel();
     _channel?.sink.close();
     _connected = false;
     _lastIp = null;
@@ -1850,6 +1931,7 @@ class WebSocketService extends ChangeNotifier {
   @override
   void dispose() {
     _intentionalDisconnect = true;
+    _heartbeatTimer?.cancel();
     _eventController.close();
     super.dispose();
   }

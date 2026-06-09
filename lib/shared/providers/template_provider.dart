@@ -47,11 +47,13 @@ class TemplateProvider extends ChangeNotifier {
     load();
 
     // Sync
-    if (Platform.isWindows) {
+    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
-    } else if (Platform.isAndroid) {
+    } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'template',
         action: 'create',
@@ -69,9 +71,11 @@ class TemplateProvider extends ChangeNotifier {
       ObjectBoxService.instance.templateBox.remove(id);
       load();
 
-      if (Platform.isWindows && LocalServerService.instance.isRunning) {
+      final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+      final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+      if (isHub && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
-      } else if (Platform.isAndroid) {
+      } else if (isClient) {
         SyncQueueService.instance.addToQueue(
           entity: 'template',
           action: 'delete',

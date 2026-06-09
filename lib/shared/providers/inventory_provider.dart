@@ -138,11 +138,13 @@ class InventoryProvider extends ChangeNotifier {
     _box.put(m);
     load();
 
-    if (Platform.isWindows) {
+    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
       }
-    } else if (Platform.isAndroid) {
+    } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'medicine',
         action: 'create',
@@ -158,11 +160,13 @@ class InventoryProvider extends ChangeNotifier {
     _box.put(m);
     load();
 
-    if (Platform.isWindows) {
+    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
       }
-    } else if (Platform.isAndroid) {
+    } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'medicine',
         action: 'update',
@@ -180,7 +184,9 @@ class InventoryProvider extends ChangeNotifier {
     _box.remove(id);
     load();
 
-    if (Platform.isWindows) {
+    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({
           'event': 'medicine_deleted',
@@ -188,7 +194,7 @@ class InventoryProvider extends ChangeNotifier {
           'name': name,
         });
       }
-    } else if (Platform.isAndroid) {
+    } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'medicine',
         action: 'delete',
@@ -437,9 +443,11 @@ class InventoryProvider extends ChangeNotifier {
       m.updatedAt = DateTime.now();
       _box.put(m);
       load();
-      if (Platform.isWindows && LocalServerService.instance.isRunning) {
+      final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+      final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+      if (isHub && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
-      } else if (Platform.isAndroid) {
+      } else if (isClient) {
         SyncQueueService.instance.addToQueue(
           entity: 'medicine',
           action: 'update',
@@ -543,7 +551,8 @@ class InventoryProvider extends ChangeNotifier {
           supplier: supplier,
         ));
 
-        if (Platform.isAndroid) {
+        final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+        if (isClient) {
           SyncQueueService.instance.addToQueue(
             entity: 'medicine',
             action: 'update',
@@ -558,7 +567,8 @@ class InventoryProvider extends ChangeNotifier {
       _purchaseBox.putMany(purchaseRecords);
       load();
 
-      if (Platform.isWindows && LocalServerService.instance.isRunning) {
+      final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+      if (isHub && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
       }
     }
@@ -588,10 +598,12 @@ class InventoryProvider extends ChangeNotifier {
       _purchaseBox.put(p);
       load();
 
-      if (Platform.isWindows && LocalServerService.instance.isRunning) {
+      final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+      final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+      if (isHub && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
       }
-      if (Platform.isAndroid && syncService != null) {
+      if (isClient && syncService != null) {
         syncService.pushMedicine(m);
       }
     }
@@ -618,10 +630,12 @@ class InventoryProvider extends ChangeNotifier {
       _purchaseBox.remove(p.id);
       load();
 
-      if (Platform.isWindows && LocalServerService.instance.isRunning) {
+      final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+      final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+      if (isHub && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
       }
-      if (Platform.isAndroid && syncService != null) {
+      if (isClient && syncService != null) {
         syncService.pushMedicine(m);
       }
     }
@@ -644,10 +658,12 @@ class InventoryProvider extends ChangeNotifier {
 
     load();
 
-    if (Platform.isWindows && LocalServerService.instance.isRunning) {
+    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    if (isHub && LocalServerService.instance.isRunning) {
       LocalServerService.instance.broadcast({'event': 'medicines_updated'});
     }
-    if (Platform.isAndroid && syncService != null) {
+    if (isClient && syncService != null) {
       syncService.pushMedicine(m);
     }
   }
@@ -676,10 +692,12 @@ class InventoryProvider extends ChangeNotifier {
     
     load();
 
-    if (Platform.isWindows && LocalServerService.instance.isRunning) {
+    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    if (isHub && LocalServerService.instance.isRunning) {
       LocalServerService.instance.broadcast({'event': 'medicines_updated'});
     }
-    if (Platform.isAndroid && syncService != null) {
+    if (isClient && syncService != null) {
       syncService.pushMedicine(m);
     }
   }

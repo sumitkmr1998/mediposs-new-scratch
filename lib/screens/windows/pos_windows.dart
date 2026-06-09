@@ -333,6 +333,52 @@ class _PosWindowsState extends State<PosWindows> {
           ),
           body: Column(
               children: [
+                if (cart.isEditingSale)
+                  Container(
+                    width: double.infinity,
+                    color: AppTheme.warning,
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.edit_document, color: Colors.white, size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              'EDITING SALE: ${cart.editingInvoiceNo} — CHANGES WILL OVERWRITE THE ORIGINAL RECORD',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.0,
+                              ),
+                            ),
+                          ],
+                        ),
+                        TextButton.icon(
+                          onPressed: () {
+                            cart.clearCart();
+                            _syncControllersWithCart();
+                          },
+                          icon: const Icon(Icons.cancel_outlined, color: Colors.white, size: 18),
+                          label: const Text(
+                            'CANCEL EDIT',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          style: TextButton.styleFrom(
+                            backgroundColor: Colors.white.withValues(alpha: 0.15),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 if (!cart.isClinicalDispense && !cart.isReturnMode)
                   Container(
                     width: double.infinity,
@@ -552,7 +598,8 @@ class _PosWindowsState extends State<PosWindows> {
                 title: Text(a.patientName),
                 subtitle: Text('Status: ${a.status} • Dr. ${a.doctorName}'),
                 onTap: () {
-                  cart.setPatient(name: a.patientName, phone: a.patientPhone, id: a.patientId);
+                  final patient = context.read<PatientProvider>().getById(a.patientId);
+                  cart.setPatient(name: a.patientName, phone: a.patientPhone, id: a.patientId, uhid: patient?.uhid);
                   _patientCtrl.text = a.patientName;
                   cart.setLinkedAppointment(a.id);
                   cart.setClinicalDispense(true);
@@ -567,16 +614,24 @@ class _PosWindowsState extends State<PosWindows> {
   }
 
   Future<void> _doCheckout(CartProvider cart) async {
-    if (cart.isClinicalDispense && cart.patientId == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('❌ Registered patient is strictly required for Clinical Dispense Mode!'),
-          backgroundColor: AppTheme.danger,
-        ),
-      );
-      return;
+    final pName = _patientCtrl.text.trim();
+    if (cart.isClinicalDispense) {
+      if (cart.patientId == 0 || pName.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ Registered patient is strictly required for Clinical Dispense Mode!'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+        return;
+      }
     }
-    cart.setPatient(name: _patientCtrl.text.trim(), id: cart.patientId);
+    
+    if (pName.isEmpty) {
+      cart.setPatient(name: '', phone: '', id: 0, uhid: '');
+    } else {
+      cart.setPatient(name: pName, id: cart.patientId, phone: cart.patientPhone, uhid: cart.patientUhid);
+    }
     final discount = double.tryParse(_discountCtrl.text) ?? 0;
     cart.setDiscount(discount);
     cart.setPaymentMethod(_paymentMethod);
@@ -666,7 +721,7 @@ class _PosWindowsState extends State<PosWindows> {
     if (cart.items.isEmpty) return;
 
     // Sync current UI values to provider before holding
-    cart.setPatient(name: _patientCtrl.text.trim(), id: cart.patientId);
+    cart.setPatient(name: _patientCtrl.text.trim(), id: cart.patientId, phone: cart.patientPhone, uhid: cart.patientUhid);
     cart.setDiscount(double.tryParse(_discountCtrl.text) ?? 0);
     cart.setPaymentMethod(_paymentMethod);
     if (_paymentMethod == 'mixed') {
@@ -803,12 +858,13 @@ class _PosWindowsState extends State<PosWindows> {
       builder: (ctx) => PatientSearchDialog(
         limitToTodayOpd: cart.isClinicalDispense,
         onSelected: (p) {
-          cart.setPatient(name: p.name, phone: p.phone, id: p.id);
+          cart.setPatient(name: p.name, phone: p.phone, id: p.id, uhid: p.uhid);
           _patientCtrl.text = p.name;
           _searchFocus.requestFocus();
         },
         onAppointmentSelected: (Appointment appt) {
-          cart.setPatient(name: appt.patientName, phone: appt.patientPhone, id: appt.patientId);
+          final patient = context.read<PatientProvider>().getById(appt.patientId);
+          cart.setPatient(name: appt.patientName, phone: appt.patientPhone, id: appt.patientId, uhid: patient?.uhid);
           _patientCtrl.text = appt.patientName;
           cart.setLinkedAppointment(appt.id);
           _searchFocus.requestFocus();
@@ -888,10 +944,13 @@ class _PosWindowsState extends State<PosWindows> {
     if (prescription.appointmentId != 0) {
       cart.setLinkedAppointment(prescription.appointmentId);
     }
+    final patientProv = context.read<PatientProvider>();
+    final patient = patientProv.getById(prescription.patientId);
     cart.setPatient(
       name: prescription.patientName,
-      phone: '', // Can be improved if prescription has phone
+      phone: patient?.phone ?? '',
       id: prescription.patientId,
+      uhid: patient?.uhid ?? '',
     );
     cart.setLinkedPrescription(prescription.id);
 
@@ -1036,10 +1095,11 @@ class _PosWindowsState extends State<PosWindows> {
     final currentPatientId = cart.patientId;
     final currentPatientName = cart.patientName;
     final currentPatientPhone = cart.patientPhone;
+    final currentPatientUhid = cart.patientUhid;
     final currentIsClinicalDispense = cart.isClinicalDispense;
 
     cart.clearCart();
-    cart.setPatient(id: currentPatientId, name: currentPatientName, phone: currentPatientPhone);
+    cart.setPatient(id: currentPatientId, name: currentPatientName, phone: currentPatientPhone, uhid: currentPatientUhid);
     cart.setClinicalDispense(currentIsClinicalDispense);
 
     int loadedCount = 0;
@@ -1776,7 +1836,7 @@ class _CartPanel extends StatelessWidget {
                       });
                     },
                     onSelected: (p) {
-                      cart.setPatient(name: p.name, phone: p.phone, id: p.id);
+                      cart.setPatient(name: p.name, phone: p.phone, id: p.id, uhid: p.uhid);
                       patientCtrl.text = p.name;
                     },
                     fieldViewBuilder: (ctx, ctrl, node, onFieldSubmitted) {
@@ -2239,9 +2299,11 @@ class _CartPanel extends StatelessWidget {
                           : (cart.isClinicalDispense ? Icons.local_hospital_outlined : Icons.shopping_cart_checkout),
                     ),
                     label: Text(
-                      cart.isReturnMode
-                          ? 'REFUND & PROCESS RETURN'
-                          : (cart.isClinicalDispense ? 'DISPENSE CLINICAL MEDICINES' : 'COLLECT PAYMENT & PRINT'),
+                      cart.isEditingSale
+                          ? 'UPDATE SALE'
+                          : (cart.isReturnMode
+                              ? 'REFUND & PROCESS RETURN'
+                              : (cart.isClinicalDispense ? 'DISPENSE CLINICAL MEDICINES' : 'COLLECT PAYMENT & PRINT')),
                     ),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),

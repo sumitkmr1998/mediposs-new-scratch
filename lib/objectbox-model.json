@@ -946,7 +946,7 @@
     },
     {
       "id": "11:2308013346348508445",
-      "lastPropertyId": "22:3110113568726371911",
+      "lastPropertyId": "23:6175242095605562542",
       "name": "Sale",
       "properties": [
         {
@@ -1059,6 +1059,11 @@
           "id": "22:3110113568726371911",
           "name": "linkedProcedureId",
           "type": 6
+        },
+        {
+          "id": "23:6175242095605562542",
+          "name": "patientUhid",
+          "type": 9
         }
       ],
       "relations": []

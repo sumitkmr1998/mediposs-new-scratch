@@ -10,6 +10,7 @@ class Sale {
   int patientId; // Link to Patient entity
   String patientName;
   String patientPhone;
+  String patientUhid;
 
   double subtotal;
   double discount;
@@ -45,6 +46,7 @@ class Sale {
     this.patientId = 0,
     this.patientName = '',
     this.patientPhone = '',
+    this.patientUhid = '',
     required this.subtotal,
     this.discount = 0,
     this.taxRate = 0,
@@ -71,6 +73,7 @@ class Sale {
         'patientId': patientId,
         'patientName': patientName,
         'patientPhone': patientPhone,
+        'patientUhid': patientUhid,
         'subtotal': subtotal,
         'discount': discount,
         'taxRate': taxRate,
@@ -96,6 +99,7 @@ class Sale {
         patientId: json['patientId'] ?? 0,
         patientName: json['patientName'] ?? '',
         patientPhone: json['patientPhone'] ?? '',
+        patientUhid: json['patientUhid'] ?? '',
         subtotal: (json['subtotal'] as num).toDouble(),
         discount: (json['discount'] as num?)?.toDouble() ?? 0,
         taxRate: (json['taxRate'] as num?)?.toDouble() ?? 0,

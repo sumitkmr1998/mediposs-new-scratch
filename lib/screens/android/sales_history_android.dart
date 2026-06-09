@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../../shared/providers/sales_provider.dart';
 import '../../shared/providers/inventory_provider.dart';
 import '../../shared/providers/auth_provider.dart';
+import '../../shared/providers/cart_provider.dart';
+import '../../shared/providers/navigation_provider.dart';
 import '../../shared/models/sale.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/return_dialog.dart';
@@ -325,6 +327,7 @@ class _SaleRow extends StatelessWidget {
     final dt = sale.createdAt;
     final canVoidSales = context.watch<AuthProvider>().canVoidSales;
     final canProcessReturns = context.watch<AuthProvider>().canProcessReturns;
+    final canEditSales = context.watch<AuthProvider>().canEditSales;
     final inv = context.read<InventoryProvider>();
 
     return Container(
@@ -509,6 +512,31 @@ class _SaleRow extends StatelessWidget {
                           ),
                         ),
                       ),
+                    if (canEditSales) ...[
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            context.read<CartProvider>().loadSaleForEditing(sale);
+                            context.read<NavigationProvider>().selectDestination('pos');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Loaded Sale ${sale.invoiceNo} for editing.'),
+                                backgroundColor: AppTheme.primaryLight,
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.edit_rounded, size: 18),
+                          label: const Text('EDIT'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.primaryLight,
+                            side: const BorderSide(color: AppTheme.primaryLight),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+                    ],
                     if (canVoidSales) ...[
                       const SizedBox(width: 8),
                       IconButton(

@@ -54,6 +54,15 @@ class _PosAndroidState extends State<PosAndroid> {
   @override
   void initState() {
     super.initState();
+    final cart = context.read<CartProvider>();
+    if (cart.isEditingSale) {
+      _patientCtrl.text = cart.patientName;
+      _discountCtrl.text = cart.discountAmount > 0 ? cart.discountAmount.toStringAsFixed(0) : '';
+      _paymentMethod = cart.paymentMethod;
+      _mixCashCtrl.text = cart.mixedCash.toStringAsFixed(0);
+      _mixUpiCtrl.text = cart.mixedUpi.toStringAsFixed(0);
+      _mixCardCtrl.text = cart.mixedCard.toStringAsFixed(0);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _currentSearchFocusNode?.requestFocus();
@@ -110,6 +119,23 @@ class _PosAndroidState extends State<PosAndroid> {
       }
     }
     return _qtyControllers[medicineId]!;
+  }
+
+  void _syncControllersWithCart() {
+    final cart = context.read<CartProvider>();
+    _patientCtrl.text = cart.patientName;
+    _discountCtrl.text =
+        cart.discountAmount > 0 ? cart.discountAmount.toStringAsFixed(0) : '';
+
+    setState(() {
+      _paymentMethod = cart.paymentMethod;
+      _mixCashCtrl.text = cart.mixedCash.toStringAsFixed(0);
+      _mixUpiCtrl.text = cart.mixedUpi.toStringAsFixed(0);
+      _mixCardCtrl.text = cart.mixedCard.toStringAsFixed(0);
+    });
+
+    _searchCtrl.clear();
+    _currentSearchFocusNode?.requestFocus();
   }
 
   void _onMedicineAddedToCart(int medicineId) {
@@ -223,10 +249,12 @@ class _PosAndroidState extends State<PosAndroid> {
                           ),
                         ),
                         onTap: () {
+                          final patient = context.read<PatientProvider>().getById(a.patientId);
                           cart.setPatient(
                             name: a.patientName,
                             phone: a.patientPhone,
                             id: a.patientId,
+                            uhid: patient?.uhid,
                           );
                           _patientCtrl.text = a.patientName;
                           cart.setLinkedAppointment(a.id);
@@ -246,16 +274,24 @@ class _PosAndroidState extends State<PosAndroid> {
   }
 
   Future<void> _doCheckout(CartProvider cart) async {
-    if (cart.isClinicalDispense && cart.patientId == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Clinic Dispense requires a registered patient!'),
-          backgroundColor: AppTheme.danger,
-        ),
-      );
-      return;
+    final pName = _patientCtrl.text.trim();
+    if (cart.isClinicalDispense) {
+      if (cart.patientId == 0 || pName.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ Clinic Dispense requires a registered patient!'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+        return;
+      }
     }
-    cart.setPatient(name: _patientCtrl.text.trim(), id: cart.patientId);
+    
+    if (pName.isEmpty) {
+      cart.setPatient(name: '', phone: '', id: 0, uhid: '');
+    } else {
+      cart.setPatient(name: pName, id: cart.patientId, phone: cart.patientPhone, uhid: cart.patientUhid);
+    }
     final discount = double.tryParse(_discountCtrl.text) ?? 0;
     cart.setDiscount(discount);
     cart.setPaymentMethod(_paymentMethod);
@@ -322,12 +358,13 @@ class _PosAndroidState extends State<PosAndroid> {
       context,
       limitToTodayOpd: cart.isClinicalDispense,
       onSelected: (p) {
-        cart.setPatient(name: p.name, phone: p.phone, id: p.id);
+        cart.setPatient(name: p.name, phone: p.phone, id: p.id, uhid: p.uhid);
         _patientCtrl.text = p.name;
         _currentSearchFocusNode?.requestFocus();
       },
       onAppointmentSelected: (Appointment appt) {
-        cart.setPatient(name: appt.patientName, phone: appt.patientPhone, id: appt.patientId);
+        final patient = context.read<PatientProvider>().getById(appt.patientId);
+        cart.setPatient(name: appt.patientName, phone: appt.patientPhone, id: appt.patientId, uhid: patient?.uhid);
         _patientCtrl.text = appt.patientName;
         cart.setLinkedAppointment(appt.id);
         _currentSearchFocusNode?.requestFocus();
@@ -456,6 +493,56 @@ class _PosAndroidState extends State<PosAndroid> {
       ),
       body: Column(
         children: [
+          if (cart.isEditingSale)
+            Container(
+              width: double.infinity,
+              color: AppTheme.warning,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        const Icon(Icons.edit_document, color: Colors.white, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'EDITING SALE: ${cart.editingInvoiceNo}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.0,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () {
+                      cart.clearCart();
+                      _syncControllersWithCart();
+                    },
+                    icon: const Icon(Icons.cancel_outlined, color: Colors.white, size: 18),
+                    label: const Text(
+                      'CANCEL',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                        fontSize: 12,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           // 1. Pinned Search Section
           Container(
             padding: const EdgeInsets.all(12),
@@ -567,7 +654,7 @@ class _PosAndroidState extends State<PosAndroid> {
                         ),
                         InkWell(
                           onTap: () {
-                            cart.setPatient(name: '', phone: '', id: 0);
+                            cart.setPatient(name: '', phone: '', id: 0, uhid: '');
                             _patientCtrl.clear();
                           },
                           child: const Icon(Icons.close_rounded,
@@ -897,9 +984,11 @@ class _PosAndroidState extends State<PosAndroid> {
                                   child: Container(
                                     alignment: Alignment.center,
                                     child: Text(
-                                      cart.isReturnMode
-                                          ? 'PROCESS RETURN'
-                                          : 'COMPLETE CHECKOUT',
+                                      cart.isEditingSale
+                                          ? 'UPDATE SALE'
+                                          : (cart.isReturnMode
+                                              ? 'PROCESS RETURN'
+                                              : 'COMPLETE CHECKOUT'),
                                       style: const TextStyle(
                                           fontWeight: FontWeight.w800,
                                           fontSize: 16,
