@@ -13,6 +13,12 @@ import '../../shared/providers/patient_provider.dart';
 import '../../shared/providers/procedure_provider.dart';
 import '../../shared/utils/analytics_helper.dart';
 import '../../theme/app_theme.dart';
+import 'package:excel/excel.dart' as excel_pkg;
+import '../../shared/models/schedule_h1_record.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:io';
 
 class AnalysisHubScreen extends StatefulWidget {
   const AnalysisHubScreen({super.key});
@@ -36,6 +42,10 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
 
   String _perfPeriod = 'This Month';
   DateTimeRange? _perfCustomRange;
+
+  String _h1SearchQuery = '';
+  String _h1Period = 'This Month';
+  DateTimeRange? _h1CustomRange;
 
   List<Sale> _getFilteredSalesForPerf(List<Sale> sales) {
     final now = DateTime.now();
@@ -68,7 +78,7 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 7, vsync: this);
   }
 
   @override
@@ -106,6 +116,7 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
             Tab(icon: Icon(Icons.warning_amber_rounded), text: 'Reorder & Dead Stock'),
             Tab(icon: Icon(Icons.people_rounded), text: 'Patient Analytics'),
             Tab(icon: Icon(Icons.compare_arrows_rounded), text: 'Clinic Reconciliation'),
+            Tab(icon: Icon(Icons.receipt_long_rounded), text: 'Schedule H1 Register'),
           ],
         ),
       ),
@@ -118,6 +129,7 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
           _buildReorderAndDeadStockTab(allSales, allMedicines),
           _buildPatientAnalyticsTab(allSales, allPatients),
           _buildClinicReconciliationTab(allSales, allMedicines),
+          _buildScheduleH1RegisterTab(),
         ],
       ),
     );
@@ -1751,6 +1763,294 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
         ],
       ),
     );
+  }
+
+  Widget _buildScheduleH1RegisterTab() {
+    final h1Box = ObjectBoxService.instance.store.box<ScheduleH1Record>();
+    
+    final now = DateTime.now();
+    DateTime start;
+    DateTime end = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
+    if (_h1Period == 'Today') {
+      start = DateTime(now.year, now.month, now.day);
+    } else if (_h1Period == 'Yesterday') {
+      final yest = now.subtract(const Duration(days: 1));
+      start = DateTime(yest.year, yest.month, yest.day);
+      end = DateTime(yest.year, yest.month, yest.day, 23, 59, 59);
+    } else if (_h1Period == 'This Week') {
+      start = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+    } else if (_h1Period == 'This Month') {
+      start = DateTime(now.year, now.month, 1);
+    } else if (_h1Period == 'Custom Range' && _h1CustomRange != null) {
+      start = _h1CustomRange!.start;
+      end = DateTime(_h1CustomRange!.end.year, _h1CustomRange!.end.month, _h1CustomRange!.end.day, 23, 59, 59);
+    } else {
+      start = DateTime(now.year, now.month, 1);
+    }
+
+    final allRecords = h1Box.getAll();
+    allRecords.sort((a, b) => b.saleDate.compareTo(a.saleDate));
+
+    final filteredRecords = allRecords.where((r) {
+      final matchesDate = r.saleDate.isAfter(start.subtract(const Duration(seconds: 1))) &&
+          r.saleDate.isBefore(end.add(const Duration(seconds: 1)));
+      if (!matchesDate) return false;
+
+      if (_h1SearchQuery.isEmpty) return true;
+      final query = _h1SearchQuery.toLowerCase();
+      return r.medicineName.toLowerCase().contains(query) ||
+          r.patientName.toLowerCase().contains(query) ||
+          r.doctorName.toLowerCase().contains(query) ||
+          r.invoiceNo.toLowerCase().contains(query);
+    }).toList();
+
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                'Schedule H1 Register',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const Spacer(),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.file_download_outlined),
+                label: const Text('Export Register to Excel'),
+                onPressed: filteredRecords.isEmpty
+                    ? null
+                    : () => _exportH1ToExcel(filteredRecords),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  decoration: const InputDecoration(
+                    hintText: 'Search by medicine, patient, doctor, or invoice...',
+                    prefixIcon: Icon(Icons.search_rounded),
+                    isDense: true,
+                  ),
+                  onChanged: (val) {
+                    setState(() {
+                      _h1SearchQuery = val;
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: 16),
+              Wrap(
+                spacing: 8,
+                children: ['Today', 'Yesterday', 'This Week', 'This Month', 'Custom Range'].map((p) {
+                  final isSelected = p == _h1Period;
+                  return ChoiceChip(
+                    label: Text(p),
+                    selected: isSelected,
+                    onSelected: (selected) async {
+                      if (selected) {
+                        if (p == 'Custom Range') {
+                          final range = await showDateRangePicker(
+                            context: context,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime.now(),
+                            initialDateRange: _h1CustomRange,
+                          );
+                          if (range != null) {
+                            setState(() {
+                              _h1Period = p;
+                              _h1CustomRange = range;
+                            });
+                          }
+                        } else {
+                          setState(() {
+                            _h1Period = p;
+                            _h1CustomRange = null;
+                          });
+                        }
+                      }
+                    },
+                    selectedColor: AppTheme.primary.withOpacity(0.2),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Expanded(
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        children: [
+                          Expanded(flex: 2, child: Text('Date & Invoice', style: TextStyle(fontWeight: FontWeight.bold))),
+                          Expanded(flex: 3, child: Text('Drug Name & Batch', style: TextStyle(fontWeight: FontWeight.bold))),
+                          Expanded(flex: 1, child: Text('Qty', style: TextStyle(fontWeight: FontWeight.bold))),
+                          Expanded(flex: 3, child: Text('Patient Name & Address', style: TextStyle(fontWeight: FontWeight.bold))),
+                          Expanded(flex: 3, child: Text('Doctor Name & Address (Reg No)', style: TextStyle(fontWeight: FontWeight.bold))),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: filteredRecords.isEmpty
+                          ? const Center(child: Text('No compliance logs found for the selected period.'))
+                          : ListView.separated(
+                              itemCount: filteredRecords.length,
+                              separatorBuilder: (_, __) => const Divider(),
+                              itemBuilder: (context, index) {
+                                final r = filteredRecords[index];
+                                final dateStr = DateFormat('dd/MM/yyyy hh:mm a').format(r.saleDate);
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        flex: 2,
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(dateStr, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                            Text(r.invoiceNo, style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                                          ],
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 3,
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(r.medicineName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                            Text('Batch: ${r.batchNo}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                                          ],
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 1,
+                                        child: Text('${r.quantity}'),
+                                      ),
+                                      Expanded(
+                                        flex: 3,
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(r.patientName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                            Text(r.patientAddress, style: const TextStyle(fontSize: 11)),
+                                            if (r.patientPhone.isNotEmpty)
+                                              Text('Ph: ${r.patientPhone}', style: const TextStyle(color: Colors.grey, fontSize: 10)),
+                                          ],
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 3,
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text('Dr. ${r.doctorName}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                            Text(r.doctorAddress, style: const TextStyle(fontSize: 11)),
+                                            if (r.doctorRegistrationNo.isNotEmpty)
+                                              Text('Reg: ${r.doctorRegistrationNo}', style: const TextStyle(color: Colors.grey, fontSize: 10)),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _exportH1ToExcel(List<ScheduleH1Record> records) async {
+    try {
+      final excel = excel_pkg.Excel.createExcel();
+      final sheet = excel['Schedule H1 Register'];
+      excel.delete('Sheet1');
+
+      sheet.appendRow([
+        excel_pkg.TextCellValue('Date & Time'),
+        excel_pkg.TextCellValue('Invoice No'),
+        excel_pkg.TextCellValue('Drug Name'),
+        excel_pkg.TextCellValue('Batch No'),
+        excel_pkg.TextCellValue('Quantity'),
+        excel_pkg.TextCellValue('Patient Name'),
+        excel_pkg.TextCellValue('Patient Address'),
+        excel_pkg.TextCellValue('Patient Phone'),
+        excel_pkg.TextCellValue('Doctor Name'),
+        excel_pkg.TextCellValue('Doctor Address'),
+        excel_pkg.TextCellValue('Doctor Reg No'),
+      ]);
+
+      for (final r in records) {
+        sheet.appendRow([
+          excel_pkg.TextCellValue(DateFormat('dd/MM/yyyy HH:mm').format(r.saleDate)),
+          excel_pkg.TextCellValue(r.invoiceNo),
+          excel_pkg.TextCellValue(r.medicineName),
+          excel_pkg.TextCellValue(r.batchNo),
+          excel_pkg.IntCellValue(r.quantity),
+          excel_pkg.TextCellValue(r.patientName),
+          excel_pkg.TextCellValue(r.patientAddress),
+          excel_pkg.TextCellValue(r.patientPhone),
+          excel_pkg.TextCellValue(r.doctorName),
+          excel_pkg.TextCellValue(r.doctorAddress),
+          excel_pkg.TextCellValue(r.doctorRegistrationNo),
+        ]);
+      }
+
+      final dir = await getApplicationDocumentsDirectory();
+      final dateStr = DateFormat('yyyyMMdd-HHmmss').format(DateTime.now());
+      final file = File(p.join(dir.path, 'Schedule_H1_Register_$dateStr.xlsx'));
+      final bytes = excel.encode();
+      if (bytes != null) {
+        await file.writeAsBytes(bytes);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Register exported successfully to: ${file.path}'),
+              backgroundColor: AppTheme.success,
+              action: SnackBarAction(
+                label: 'Open Folder',
+                textColor: Colors.white,
+                onPressed: () {
+                  final uri = Uri.directory(dir.path);
+                  launchUrl(uri);
+                },
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to export register: $e'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+      }
+    }
   }
 }
 

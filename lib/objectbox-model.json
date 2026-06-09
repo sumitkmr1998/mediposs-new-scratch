@@ -239,7 +239,7 @@
     },
     {
       "id": "2:1561353773588181738",
-      "lastPropertyId": "35:5759523613226598144",
+      "lastPropertyId": "36:6641229640248136363",
       "name": "AppUser",
       "properties": [
         {
@@ -407,6 +407,11 @@
           "id": "35:5759523613226598144",
           "name": "canViewAnalytics",
           "type": 1
+        },
+        {
+          "id": "36:6641229640248136363",
+          "name": "canEditSales",
+          "type": 1
         }
       ],
       "relations": []
@@ -512,7 +517,7 @@
     },
     {
       "id": "4:676837588087970264",
-      "lastPropertyId": "8:1314911606399271183",
+      "lastPropertyId": "10:7589926079501224910",
       "name": "Doctor",
       "properties": [
         {
@@ -555,13 +560,23 @@
           "id": "8:1314911606399271183",
           "name": "createdAt",
           "type": 10
+        },
+        {
+          "id": "9:8940406746704699027",
+          "name": "registrationNo",
+          "type": 9
+        },
+        {
+          "id": "10:7589926079501224910",
+          "name": "address",
+          "type": 9
         }
       ],
       "relations": []
     },
     {
       "id": "5:3743056661326749831",
-      "lastPropertyId": "15:4026296001162008986",
+      "lastPropertyId": "16:8917642589792895213",
       "name": "Medicine",
       "properties": [
         {
@@ -639,6 +654,11 @@
           "id": "15:4026296001162008986",
           "name": "bulkStoreStock",
           "type": 6
+        },
+        {
+          "id": "16:8917642589792895213",
+          "name": "isScheduleH1",
+          "type": 1
         }
       ],
       "relations": [
@@ -1409,9 +1429,83 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "18:3038784044084059491",
+      "lastPropertyId": "13:4607015833205112242",
+      "name": "ScheduleH1Record",
+      "properties": [
+        {
+          "id": "1:4352983416847903418",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:3606666213700315119",
+          "name": "saleDate",
+          "type": 10
+        },
+        {
+          "id": "3:2380690333488111913",
+          "name": "medicineName",
+          "type": 9
+        },
+        {
+          "id": "4:4212998325899987071",
+          "name": "batchNo",
+          "type": 9
+        },
+        {
+          "id": "5:2621706819332918038",
+          "name": "quantity",
+          "type": 6
+        },
+        {
+          "id": "6:6236209951933552254",
+          "name": "patientName",
+          "type": 9
+        },
+        {
+          "id": "7:6254798098841166680",
+          "name": "patientAddress",
+          "type": 9
+        },
+        {
+          "id": "8:6386878238089123516",
+          "name": "patientPhone",
+          "type": 9
+        },
+        {
+          "id": "9:4907569938008095596",
+          "name": "doctorName",
+          "type": 9
+        },
+        {
+          "id": "10:117854194082082220",
+          "name": "doctorAddress",
+          "type": 9
+        },
+        {
+          "id": "11:6016469120002377366",
+          "name": "doctorRegistrationNo",
+          "type": 9
+        },
+        {
+          "id": "12:1384031926355479396",
+          "name": "linkedSaleId",
+          "type": 6
+        },
+        {
+          "id": "13:4607015833205112242",
+          "name": "invoiceNo",
+          "type": 9
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "17:2587159035218084561",
+  "lastEntityId": "18:3038784044084059491",
   "lastIndexId": "1:5015225040438721990",
   "lastRelationId": "1:2143695166283597161",
   "lastSequenceId": "0:0",

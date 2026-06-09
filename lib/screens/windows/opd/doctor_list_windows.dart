@@ -1153,6 +1153,8 @@ class _DoctorDialogState extends State<_DoctorDialog> {
   final _qualCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _feeCtrl = TextEditingController();
+  final _regCtrl = TextEditingController();
+  final _addrCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -1163,6 +1165,8 @@ class _DoctorDialogState extends State<_DoctorDialog> {
       _qualCtrl.text = widget.doctor!.qualifications;
       _phoneCtrl.text = widget.doctor!.phone;
       _feeCtrl.text = widget.doctor!.consultationFee.toStringAsFixed(0);
+      _regCtrl.text = widget.doctor!.registrationNo;
+      _addrCtrl.text = widget.doctor!.address;
     }
   }
 
@@ -1173,6 +1177,8 @@ class _DoctorDialogState extends State<_DoctorDialog> {
     _qualCtrl.dispose();
     _phoneCtrl.dispose();
     _feeCtrl.dispose();
+    _regCtrl.dispose();
+    _addrCtrl.dispose();
     super.dispose();
   }
 
@@ -1279,12 +1285,36 @@ class _DoctorDialogState extends State<_DoctorDialog> {
               ],
             ),
             const SizedBox(height: 16),
-            _ModernTextField(
-              controller: _qualCtrl,
-              label: 'Qualifications',
-              prefix: Icons.school_outlined,
-              hint: 'MBBS, MD...',
-            ),
+             Row(
+               children: [
+                 Expanded(
+                   flex: 3,
+                   child: _ModernTextField(
+                     controller: _qualCtrl,
+                     label: 'Qualifications',
+                     prefix: Icons.school_outlined,
+                     hint: 'MBBS, MD...',
+                   ),
+                 ),
+                 const SizedBox(width: 12),
+                 Expanded(
+                   flex: 2,
+                   child: _ModernTextField(
+                     controller: _regCtrl,
+                     label: 'Registration No.',
+                     prefix: Icons.badge_outlined,
+                     hint: 'Reg No...',
+                   ),
+                 ),
+               ],
+             ),
+             const SizedBox(height: 16),
+             _ModernTextField(
+               controller: _addrCtrl,
+               label: 'Doctor Address',
+               prefix: Icons.map_outlined,
+               hint: 'Clinic or Physical Address...',
+             ),
             const SizedBox(height: 28),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -1335,6 +1365,8 @@ class _DoctorDialogState extends State<_DoctorDialog> {
     doctor.qualifications = _qualCtrl.text.trim();
     doctor.consultationFee = double.tryParse(_feeCtrl.text) ?? 0;
     doctor.phone = _phoneCtrl.text.trim();
+    doctor.registrationNo = _regCtrl.text.trim();
+    doctor.address = _addrCtrl.text.trim();
 
     final syncService = context.read<SyncService>();
     context.read<OpdProvider>().saveDoctor(doctor, syncService: syncService);

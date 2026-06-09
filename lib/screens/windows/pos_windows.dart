@@ -14,6 +14,10 @@ import '../../shared/providers/sales_provider.dart';
 import '../../shared/models/medicine.dart';
 import '../../shared/models/patient.dart';
 import '../../shared/models/sale.dart';
+import '../../shared/models/schedule_h1_record.dart';
+import '../../shared/models/doctor.dart';
+import '../../shared/services/objectbox_service.dart';
+import '../../objectbox.g.dart';
 import '../../shared/models/procedure.dart';
 import '../../shared/providers/opd_provider.dart';
 import '../../shared/models/appointment.dart';
@@ -599,7 +603,13 @@ class _PosWindowsState extends State<PosWindows> {
                 subtitle: Text('Status: ${a.status} • Dr. ${a.doctorName}'),
                 onTap: () {
                   final patient = context.read<PatientProvider>().getById(a.patientId);
-                  cart.setPatient(name: a.patientName, phone: a.patientPhone, id: a.patientId, uhid: patient?.uhid);
+                  cart.setPatient(
+                    name: a.patientName,
+                    phone: a.patientPhone,
+                    id: a.patientId,
+                    uhid: patient?.uhid,
+                    address: patient?.address,
+                  );
                   _patientCtrl.text = a.patientName;
                   cart.setLinkedAppointment(a.id);
                   cart.setClinicalDispense(true);
@@ -609,6 +619,104 @@ class _PosWindowsState extends State<PosWindows> {
             },
           ),
         ),
+      ),
+    );
+  }
+
+  Future<Map<String, String>?> _showH1DetailsDialog(BuildContext context, CartProvider cart) async {
+    final patientProvider = context.read<PatientProvider>();
+    final patient = cart.patientId != 0 ? patientProvider.getById(cart.patientId) : null;
+    
+    final patientAddrCtrl = TextEditingController(text: cart.patientAddress.isNotEmpty ? cart.patientAddress : (patient?.address ?? ''));
+    final docNameCtrl = TextEditingController(text: cart.doctorName);
+    final docAddrCtrl = TextEditingController(text: cart.doctorAddress);
+    final docRegCtrl = TextEditingController(text: cart.doctorRegistrationNo);
+    final formKey = GlobalKey<FormState>();
+
+    return showDialog<Map<String, String>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: AppTheme.danger),
+            const SizedBox(width: 8),
+            const Text('Schedule H1 Compliance Details'),
+          ],
+        ),
+        content: SizedBox(
+          width: 450,
+          child: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'This transaction contains Schedule H1 drugs. According to medical compliance rules, patient address and prescribing doctor details are mandatory.',
+                    style: TextStyle(fontSize: 13, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: patientAddrCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Patient Address *',
+                      isDense: true,
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Patient address is required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: docNameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Prescribing Doctor Name *',
+                      isDense: true,
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Doctor name is required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: docAddrCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Doctor Address *',
+                      isDense: true,
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Doctor address is required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: docRegCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Doctor Registration Number (Optional)',
+                      isDense: true,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, null),
+            child: const Text('Cancel Checkout'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger, foregroundColor: Colors.white),
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(ctx, {
+                  'patientAddress': patientAddrCtrl.text.trim(),
+                  'doctorName': docNameCtrl.text.trim(),
+                  'doctorAddress': docAddrCtrl.text.trim(),
+                  'doctorRegistrationNo': docRegCtrl.text.trim(),
+                });
+              }
+            },
+            child: const Text('Save & Proceed'),
+          ),
+        ],
       ),
     );
   }
@@ -625,6 +733,20 @@ class _PosWindowsState extends State<PosWindows> {
         );
         return;
       }
+    }
+
+    if (cart.hasScheduleH1Items && !cart.isReturnMode) {
+      final h1Details = await _showH1DetailsDialog(context, cart);
+      if (h1Details == null) {
+        // User cancelled
+        return;
+      }
+      cart.setH1PrescriptionDetails(
+        doctorName: h1Details['doctorName']!,
+        doctorAddress: h1Details['doctorAddress']!,
+        doctorRegistrationNo: h1Details['doctorRegistrationNo']!,
+        patientAddress: h1Details['patientAddress']!,
+      );
     }
     
     if (pName.isEmpty) {
@@ -945,14 +1067,63 @@ class _PosWindowsState extends State<PosWindows> {
       cart.setLinkedAppointment(prescription.appointmentId);
     }
     final patientProv = context.read<PatientProvider>();
-    final patient = patientProv.getById(prescription.patientId);
+    var patientPhone = '';
+    if (prescription.appointmentId != 0) {
+      final apptBox = ObjectBoxService.instance.store.box<Appointment>();
+      final appt = apptBox.get(prescription.appointmentId);
+      if (appt != null) {
+        patientPhone = appt.patientPhone;
+      }
+    }
+
+    Patient? patient;
+    if (prescription.patientId != 0) {
+      final p = patientProv.getById(prescription.patientId);
+      if (p != null && p.name.trim().toLowerCase() == prescription.patientName.trim().toLowerCase()) {
+        patient = p;
+      }
+    }
+    if (patient == null && (prescription.patientName.isNotEmpty || patientPhone.isNotEmpty)) {
+      patient = patientProv.getByInfo(prescription.patientName, patientPhone);
+    }
+    if (patient == null && prescription.patientName.isNotEmpty) {
+      final cleanName = prescription.patientName.trim().toLowerCase();
+      patient = patientProv.patients
+          .where((p) => p.name.trim().toLowerCase() == cleanName)
+          .firstOrNull;
+    }
+
     cart.setPatient(
       name: prescription.patientName,
-      phone: patient?.phone ?? '',
-      id: prescription.patientId,
+      phone: patient?.phone ?? patientPhone,
+      id: patient?.id ?? 0,
       uhid: patient?.uhid ?? '',
+      address: patient?.address ?? '',
     );
     cart.setLinkedPrescription(prescription.id);
+
+    final docBox = ObjectBoxService.instance.store.box<Doctor>();
+    var doctorObj = docBox.get(prescription.doctorId);
+    if (doctorObj == null && prescription.doctorName.isNotEmpty) {
+      doctorObj = docBox.query(Doctor_.name.equals(prescription.doctorName, caseSensitive: false)).build().findFirst();
+    }
+    
+    final settings = ObjectBoxService.instance.settings;
+    String doctorAddress = '';
+    if (doctorObj != null && doctorObj.address.trim().isNotEmpty) {
+      doctorAddress = doctorObj.address.trim();
+    } else if (settings.clinicAddress != null && settings.clinicAddress!.trim().isNotEmpty) {
+      doctorAddress = settings.clinicAddress!.trim();
+    } else if (settings.storeAddress != null && settings.storeAddress!.trim().isNotEmpty) {
+      doctorAddress = settings.storeAddress!.trim();
+    }
+
+    cart.setH1PrescriptionDetails(
+      doctorName: prescription.doctorName,
+      doctorAddress: doctorAddress,
+      doctorRegistrationNo: doctorObj?.registrationNo ?? '',
+      patientAddress: patient?.address ?? '',
+    );
 
     final items = pProvider.getItems(prescription);
     int foundCount = 0;
@@ -1836,7 +2007,7 @@ class _CartPanel extends StatelessWidget {
                       });
                     },
                     onSelected: (p) {
-                      cart.setPatient(name: p.name, phone: p.phone, id: p.id, uhid: p.uhid);
+                      cart.setPatient(name: p.name, phone: p.phone, id: p.id, uhid: p.uhid, address: p.address);
                       patientCtrl.text = p.name;
                     },
                     fieldViewBuilder: (ctx, ctrl, node, onFieldSubmitted) {
@@ -1848,8 +2019,7 @@ class _CartPanel extends StatelessWidget {
                         }
                       });
                       // If parent ctrl changes (e.g. from prescription loader), sync here
-                      if (patientCtrl.text != ctrl.text &&
-                          !node.hasFocus) {
+                      if (patientCtrl.text != ctrl.text) {
                         ctrl.text = patientCtrl.text;
                       }
 
@@ -1949,12 +2119,38 @@ class _CartPanel extends StatelessWidget {
                           item.isProcedure ? 'p_${item.id}' : 'm_${item.id}';
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(vertical: 4),
-                        title: Text(
-                          item.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
+                        title: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                item.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (item.medicine?.isScheduleH1 == true) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.danger.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: AppTheme.danger, width: 0.8),
+                                ),
+                                child: const Text(
+                                  'H1',
+                                  style: TextStyle(
+                                    color: AppTheme.danger,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ]
+                          ],
                         ),
                         subtitle: item.isProcedure
                             ? Row(

@@ -676,6 +676,7 @@ class SyncService extends ChangeNotifier {
               ..mainStock = item['mainStock'] ?? 0
               ..storeStock = item['storeStock'] ?? 0
               ..lowStockThreshold = item['lowStockThreshold'] ?? 10
+              ..isScheduleH1 = item['isScheduleH1'] ?? false
               ..updatedAt = updatedAt;
 
             // Update Batches
@@ -715,6 +716,7 @@ class SyncService extends ChangeNotifier {
               mainStock: item['mainStock'] ?? 0,
               storeStock: item['storeStock'] ?? 0,
               lowStockThreshold: item['lowStockThreshold'] ?? 10,
+              isScheduleH1: item['isScheduleH1'] ?? false,
               updatedAt: updatedAt,
             );
             if (item['batches'] != null) {

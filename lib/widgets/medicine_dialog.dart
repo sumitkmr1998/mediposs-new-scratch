@@ -49,6 +49,7 @@ class _MedicineDialogState extends State<MedicineDialog> {
   Medicine? _selectedExisting;
   late final _batchNoCtrl = TextEditingController();
   late DateTime _expiryDate = DateTime.now().add(const Duration(days: 365));
+  bool _isScheduleH1 = false;
 
   @override
   void initState() {
@@ -58,6 +59,7 @@ class _MedicineDialogState extends State<MedicineDialog> {
       _storeStockCtrl.text = '${widget.medicine!.storeStock}';
       _bulkClinicCtrl.text = '${widget.medicine!.bulkClinicStock}';
       _bulkStoreCtrl.text = '${widget.medicine!.bulkStoreStock}';
+      _isScheduleH1 = widget.medicine!.isScheduleH1;
     }
   }
 
@@ -127,6 +129,19 @@ class _MedicineDialogState extends State<MedicineDialog> {
                           keyboardType: TextInputType.number,
                           readOnly: widget.medicine != null)),
                 ]),
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  title: const Text('Schedule H1 Drug (Requires prescription & special logs)'),
+                  value: _isScheduleH1,
+                  activeColor: AppTheme.danger,
+                  onChanged: (val) {
+                    setState(() {
+                      _isScheduleH1 = val ?? false;
+                    });
+                  },
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                ),
                 const SizedBox(height: 12),
                 const Divider(),
                 const SizedBox(height: 8),
@@ -234,6 +249,7 @@ class _MedicineDialogState extends State<MedicineDialog> {
           _purchaseCtrl.text = selection.purchasePrice.toString();
           _sellCtrl.text = selection.sellingPrice.toString();
           _thresholdCtrl.text = selection.lowStockThreshold.toString();
+          _isScheduleH1 = selection.isScheduleH1;
           // Quantities stay 0 for new batch entry unless editing established medicine
         });
       },
@@ -286,6 +302,7 @@ class _MedicineDialogState extends State<MedicineDialog> {
       ..unit = _unitCtrl.text.trim()
       ..purchasePrice = double.tryParse(_purchaseCtrl.text) ?? 0
       ..sellingPrice = double.tryParse(_sellCtrl.text) ?? 0
+      ..isScheduleH1 = _isScheduleH1
       // We no longer update mainStock/storeStock here to prevent desync with batches
       ..lowStockThreshold = int.tryParse(_thresholdCtrl.text) ?? 10;
 
@@ -324,6 +341,7 @@ class _MedicineDialogState extends State<MedicineDialog> {
         purchasePrice: double.tryParse(_purchaseCtrl.text) ?? 0,
         sellingPrice: double.tryParse(_sellCtrl.text) ?? 0,
         lowStockThreshold: int.tryParse(_thresholdCtrl.text) ?? 10,
+        isScheduleH1: _isScheduleH1,
       );
       inv.addMedicine(newM, syncService: sync);
       

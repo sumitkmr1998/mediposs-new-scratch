@@ -43,6 +43,7 @@ class _MedicineRegistrationSheetState
 
   // Temporary list for editing batches
   final List<MedicineBatch> _localBatches = [];
+  bool _isScheduleH1 = false;
 
   @override
   void initState() {
@@ -58,6 +59,7 @@ class _MedicineRegistrationSheetState
         TextEditingController(text: '${widget.medicine?.sellingPrice ?? ''}');
     _thresholdCtrl = TextEditingController(
         text: '${widget.medicine?.lowStockThreshold ?? 10}');
+    _isScheduleH1 = widget.medicine?.isScheduleH1 ?? false;
 
     if (widget.medicine != null) {
       _localBatches.addAll(widget.medicine!.batches.map((b) => MedicineBatch(
@@ -134,6 +136,7 @@ class _MedicineRegistrationSheetState
       ..unit = _unitCtrl.text.trim()
       ..purchasePrice = double.tryParse(_purchaseCtrl.text) ?? 0
       ..sellingPrice = double.tryParse(_sellCtrl.text) ?? 0
+      ..isScheduleH1 = _isScheduleH1
       ..lowStockThreshold = int.tryParse(_thresholdCtrl.text) ?? 10;
 
     // Recalculate main/store stock from batches
@@ -257,6 +260,20 @@ class _MedicineRegistrationSheetState
                               const SizedBox(width: 8),
                               Expanded(child: _field(_thresholdCtrl, 'LOW STOCK ALERT', keyboardType: TextInputType.number, prefixIcon: Icons.warning_amber_rounded)),
                             ],
+                          ),
+                          const SizedBox(height: 12),
+                          CheckboxListTile(
+                            title: const Text('SCHEDULE H1 DRUG', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1.2, color: AppTheme.danger)),
+                            subtitle: const Text('Prescription & special reporting compliance mandatory', style: TextStyle(fontSize: 10)),
+                            value: _isScheduleH1,
+                            activeColor: AppTheme.danger,
+                            onChanged: (val) {
+                              setState(() {
+                                _isScheduleH1 = val ?? false;
+                              });
+                            },
+                            controlAffinity: ListTileControlAffinity.leading,
+                            contentPadding: EdgeInsets.zero,
                           ),
                         ],
                       ),

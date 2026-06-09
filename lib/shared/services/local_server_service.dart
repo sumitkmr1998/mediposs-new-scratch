@@ -405,6 +405,7 @@ class LocalServerService {
               'mainStock': m.mainStock,
               'storeStock': m.storeStock,
               'lowStockThreshold': m.lowStockThreshold,
+              'isScheduleH1': m.isScheduleH1,
               'createdAt': m.createdAt.toIso8601String(),
               'updatedAt': m.updatedAt.toIso8601String(),
               'batches': m.batches
@@ -451,7 +452,8 @@ class LocalServerService {
             ..barcode = item['barcode']
             ..sellingPrice = (item['sellingPrice'] as num).toDouble()
             ..mainStock = item['mainStock']
-            ..storeStock = item['storeStock'];
+            ..storeStock = item['storeStock']
+            ..isScheduleH1 = item['isScheduleH1'] ?? false;
 
           // Sync batches
           if (item['batches'] != null) {
@@ -480,6 +482,7 @@ class LocalServerService {
           sellingPrice: (item['sellingPrice'] as num).toDouble(),
           mainStock: item['mainStock'] ?? 0,
           storeStock: item['storeStock'] ?? 0,
+          isScheduleH1: item['isScheduleH1'] ?? false,
           updatedAt: DateTime.tryParse(item['updatedAt'] ?? ''),
         );
         if (item['batches'] != null) {
@@ -530,6 +533,7 @@ class LocalServerService {
           ..mainStock = item['mainStock'] ?? 0
           ..storeStock = item['storeStock'] ?? 0
           ..lowStockThreshold = item['lowStockThreshold'] ?? 5
+          ..isScheduleH1 = item['isScheduleH1'] ?? false
           ..updatedAt = DateTime.now();
 
         if (item['batches'] != null) {
@@ -556,6 +560,7 @@ class LocalServerService {
           mainStock: item['mainStock'] ?? 0,
           storeStock: item['storeStock'] ?? 0,
           lowStockThreshold: item['lowStockThreshold'] ?? 5,
+          isScheduleH1: item['isScheduleH1'] ?? false,
         );
         if (item['batches'] != null) {
           for (var bItem in item['batches']) {

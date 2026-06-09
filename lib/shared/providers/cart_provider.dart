@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../models/medicine.dart';
 import '../models/sale.dart';
 import '../models/appointment.dart';
+import '../models/schedule_h1_record.dart';
 import '../services/objectbox_service.dart';
 import '../services/time_service.dart';
 import 'inventory_provider.dart';
@@ -109,6 +110,19 @@ class CartProvider extends ChangeNotifier {
   int? _linkedAppointmentId;
   int? _linkedProcedureId;
   
+  // H1 Compliance Info
+  String _doctorName = '';
+  String _doctorAddress = '';
+  String _doctorRegistrationNo = '';
+  String _patientAddress = '';
+
+  String get doctorName => _doctorName;
+  String get doctorAddress => _doctorAddress;
+  String get doctorRegistrationNo => _doctorRegistrationNo;
+  String get patientAddress => _patientAddress;
+
+  bool get hasScheduleH1Items => _items.any((i) => i.medicine?.isScheduleH1 == true);
+
   final List<PendingCart> _pendingCarts = [];
 
   // Editing Sale Mode
@@ -232,11 +246,20 @@ class CartProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setPatient({String? name, String? phone, int? id, String? uhid}) {
+  void setPatient({String? name, String? phone, int? id, String? uhid, String? address}) {
     if (name != null) _patientName = name;
     if (phone != null) _patientPhone = phone;
     if (id != null) _patientId = id;
     if (uhid != null) _patientUhid = uhid;
+    if (address != null) _patientAddress = address;
+    notifyListeners();
+  }
+
+  void setH1PrescriptionDetails({required String doctorName, required String doctorAddress, required String doctorRegistrationNo, required String patientAddress}) {
+    _doctorName = doctorName;
+    _doctorAddress = doctorAddress;
+    _doctorRegistrationNo = doctorRegistrationNo;
+    _patientAddress = patientAddress;
     notifyListeners();
   }
 
@@ -297,6 +320,10 @@ class CartProvider extends ChangeNotifier {
     _editingSaleId = null;
     _editingInvoiceNo = null;
     _editingCreatedAt = null;
+    _doctorName = '';
+    _doctorAddress = '';
+    _doctorRegistrationNo = '';
+    _patientAddress = '';
     notifyListeners();
   }
 
@@ -539,6 +566,32 @@ class CartProvider extends ChangeNotifier {
     );
 
     db.saleBox.put(sale);
+
+    // Save Schedule H1 records if applicable
+    if (hasScheduleH1Items) {
+      for (final item in saleItems) {
+        if (item.isProcedure) continue;
+        final med = db.medicineBox.get(item.medicineId);
+        if (med != null && med.isScheduleH1) {
+          final h1Record = ScheduleH1Record(
+            saleDate: sale.createdAt,
+            medicineName: item.medicineName,
+            batchNo: item.batchNo,
+            quantity: item.qty,
+            patientName: sale.patientName,
+            patientAddress: _patientAddress,
+            patientPhone: sale.patientPhone,
+            doctorName: _doctorName,
+            doctorAddress: _doctorAddress,
+            doctorRegistrationNo: _doctorRegistrationNo,
+            linkedSaleId: sale.id,
+            invoiceNo: sale.invoiceNo,
+          );
+          db.store.box<ScheduleH1Record>().put(h1Record);
+        }
+      }
+    }
+
     _salesProvider.load();
 
     _editingSaleId = null;

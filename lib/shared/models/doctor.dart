@@ -11,6 +11,8 @@ class Doctor {
   double consultationFee;
   String qualifications; // e.g. MBBS, MD
   String phone;
+  String registrationNo;
+  String address;
   bool isActive;
 
   @Property(type: PropertyType.date)
@@ -23,6 +25,8 @@ class Doctor {
     this.consultationFee = 0,
     this.qualifications = '',
     this.phone = '',
+    this.registrationNo = '',
+    this.address = '',
     this.isActive = true,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
@@ -34,6 +38,8 @@ class Doctor {
         'consultationFee': consultationFee,
         'qualifications': qualifications,
         'phone': phone,
+        'registrationNo': registrationNo,
+        'address': address,
         'isActive': isActive,
         'createdAt': createdAt.toIso8601String(),
       };
@@ -45,6 +51,8 @@ class Doctor {
         consultationFee: (json['consultationFee'] as num?)?.toDouble() ?? 0,
         qualifications: json['qualifications'] ?? '',
         phone: json['phone'] ?? '',
+        registrationNo: json['registrationNo'] ?? '',
+        address: json['address'] ?? '',
         isActive: json['isActive'] ?? true,
         createdAt: DateHelper.parseDateTime(json['createdAt']),
       );

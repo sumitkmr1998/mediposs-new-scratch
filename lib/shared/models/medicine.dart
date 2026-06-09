@@ -22,6 +22,7 @@ class Medicine {
   int bulkStoreStock; // Store Bulk Warehouse quantity
 
   int lowStockThreshold;
+  bool isScheduleH1;
 
   @Property(type: PropertyType.date)
   DateTime createdAt;
@@ -46,6 +47,7 @@ class Medicine {
     this.bulkClinicStock = 0,
     this.bulkStoreStock = 0,
     this.lowStockThreshold = 10,
+    this.isScheduleH1 = false,
     DateTime? createdAt,
     DateTime? updatedAt,
     this.synced = false,
@@ -65,6 +67,7 @@ class Medicine {
         'bulkClinicStock': bulkClinicStock,
         'bulkStoreStock': bulkStoreStock,
         'lowStockThreshold': lowStockThreshold,
+        'isScheduleH1': isScheduleH1,
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
         'synced': synced,
@@ -85,6 +88,7 @@ class Medicine {
       bulkClinicStock: json['bulkClinicStock'] ?? 0,
       bulkStoreStock: json['bulkStoreStock'] ?? 0,
       lowStockThreshold: json['lowStockThreshold'] ?? 10,
+      isScheduleH1: json['isScheduleH1'] ?? false,
       createdAt: DateHelper.parseDateTime(json['createdAt']),
       updatedAt: DateHelper.parseDateTime(json['updatedAt']),
       synced: json['synced'] ?? false,
