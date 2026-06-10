@@ -752,6 +752,7 @@ class _TransferDialogState extends State<_TransferDialog> {
               expiryDate: _selectedBatch?.expiryDate,
               note: _noteCtrl.text,
               syncService: context.read<SyncService>(),
+              actor: context.read<AuthProvider>().currentUser,
             );
             if (!context.mounted) return;
             if (err == null)

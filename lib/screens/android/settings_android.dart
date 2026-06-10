@@ -55,6 +55,7 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
   bool _isCompositionScheme = false;
   bool _showBatchExpiryRetail = true;
   bool _showBatchExpiryClinical = true;
+  int _auditRetentionDays = 90;
 
   @override
   void initState() {
@@ -85,6 +86,7 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
     _isCompositionScheme = s.isCompositionScheme;
     _showBatchExpiryRetail = s.showBatchExpiryInRetailPrint;
     _showBatchExpiryClinical = s.showBatchExpiryInClinicalPrint;
+    _auditRetentionDays = s.auditRetentionDays;
 
     _loadPrinters();
     _loadDisplayModes();
@@ -162,7 +164,8 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
       ..clinicRegNo = _clinicRegCtrl.text
       ..isCompositionScheme = _isCompositionScheme
       ..showBatchExpiryInRetailPrint = _showBatchExpiryRetail
-      ..showBatchExpiryInClinicalPrint = _showBatchExpiryClinical;
+      ..showBatchExpiryInClinicalPrint = _showBatchExpiryClinical
+      ..auditRetentionDays = _auditRetentionDays;
 
     settingsProv.save(s, syncService: context.read<SyncService>());
 
@@ -971,6 +974,39 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                       icon: const Icon(Icons.table_view_rounded, size: 20),
                       label: const Text('GENERATE AUDIT REPORT (.XLSX)'),
                     ),
+                  ),
+                ],
+              ),
+              _buildSection(
+                'System Audit Logs Policy',
+                children: [
+                  Row(
+                    children: [
+                      Text('Keep Audit Logs For',
+                          style: TextStyle(
+                              color: context.textMutedColor,
+                              fontWeight: FontWeight.w600)),
+                      const Spacer(),
+                      DropdownButton<int>(
+                        value: _auditRetentionDays,
+                        dropdownColor: context.surfaceColor,
+                        underline: const SizedBox(),
+                        items: const [
+                          DropdownMenuItem(value: 0, child: Text('Keep Forever')),
+                          DropdownMenuItem(value: 30, child: Text('30 Days')),
+                          DropdownMenuItem(value: 90, child: Text('90 Days')),
+                          DropdownMenuItem(value: 180, child: Text('180 Days')),
+                          DropdownMenuItem(value: 365, child: Text('1 Year')),
+                          DropdownMenuItem(value: 730, child: Text('2 Years')),
+                          DropdownMenuItem(value: 1095, child: Text('3 Years')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _auditRetentionDays = val);
+                          }
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),

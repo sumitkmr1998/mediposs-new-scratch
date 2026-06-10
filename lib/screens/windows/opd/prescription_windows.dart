@@ -10,6 +10,7 @@ import '../../../shared/providers/prescription_provider.dart';
 import '../../../shared/providers/inventory_provider.dart';
 import '../../../shared/providers/template_provider.dart';
 import '../../../shared/providers/patient_provider.dart';
+import '../../../shared/providers/auth_provider.dart';
 import '../../../shared/services/sync_service.dart';
 import '../../../theme/app_theme.dart';
 import '../../../shared/providers/procedure_provider.dart';
@@ -884,6 +885,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
             vitals: vitals,
             syncService: syncService,
             context: context,
+            actor: context.read<AuthProvider>().currentUser,
           );
 
       _sessionDrafts.remove(widget.appointment.id);

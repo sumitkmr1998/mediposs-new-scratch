@@ -335,16 +335,18 @@ class AppSettings {
   String? autoBackupTime; // e.g., "22:00"
   bool navCollapsed;
   int? lastGlobalSync;
+  int auditRetentionDays; // Number of days to keep logs (0 = keep forever)
 
   // New Cloud Sync Settings
   String connectionMode; // "auto", "local", "cloudflare", "firebase"
   String cloudflareUrl; // "https://xxx.trycloudflare.com"
   int? lastCloudflareSync; // timestamp
   bool firebaseEnabled; // true
+  bool googleDriveSyncEnabled; // true
   int? lastFirebaseSync; // timestamp
   String? deviceId; // UUID for this device
   bool isWindowsClient = false; // If true, this PC acts as a terminal/client
-  List<String> dashboardActions = ['new_pos', 'add_patient', 'stock_list', 'reports', 'patients', 'returns', 'settings'];
+  List<String> dashboardActions = const ['new_pos', 'add_patient', 'stock_list', 'reports', 'patients', 'returns', 'settings'];
 
   // Clinic Details
   String? clinicName;
@@ -384,11 +386,13 @@ class AppSettings {
     this.autoBackupFrequency = 'Never',
     this.autoBackupLogic = 'At Startup',
     this.googleDriveLinked = false,
+    this.googleDriveSyncEnabled = true,
     this.googleAuthData,
     this.lastBackupMillis,
     this.autoBackupTime = '22:00',
     this.navCollapsed = false,
     this.lastGlobalSync,
+    this.auditRetentionDays = 90,
     this.connectionMode = 'auto',
     this.cloudflareUrl = '',
     this.lastCloudflareSync,
@@ -432,11 +436,13 @@ class AppSettings {
         'autoBackupFrequency': autoBackupFrequency,
         'autoBackupLogic': autoBackupLogic,
         'googleDriveLinked': googleDriveLinked,
+        'googleDriveSyncEnabled': googleDriveSyncEnabled,
         'googleAuthData': googleAuthData,
         'lastBackupMillis': lastBackupMillis,
         'autoBackupTime': autoBackupTime,
         'navCollapsed': navCollapsed,
         'lastGlobalSync': lastGlobalSync,
+        'auditRetentionDays': auditRetentionDays,
         'connectionMode': connectionMode,
         'cloudflareUrl': cloudflareUrl,
         'lastCloudflareSync': lastCloudflareSync,
@@ -482,11 +488,13 @@ class AppSettings {
         autoBackupFrequency: json['autoBackupFrequency'] ?? 'Never',
         autoBackupLogic: json['autoBackupLogic'] ?? 'At Startup',
         googleDriveLinked: json['googleDriveLinked'] ?? false,
+        googleDriveSyncEnabled: json['googleDriveSyncEnabled'] ?? true,
         googleAuthData: json['googleAuthData'],
         lastBackupMillis: json['lastBackupMillis'],
         autoBackupTime: json['autoBackupTime'] ?? '22:00',
         navCollapsed: json['navCollapsed'] ?? false,
         lastGlobalSync: json['lastGlobalSync'],
+        auditRetentionDays: json['auditRetentionDays'] ?? 90,
         connectionMode: json['connectionMode'] ?? 'auto',
         cloudflareUrl: json['cloudflareUrl'] ?? '',
         lastCloudflareSync: json['lastCloudflareSync'],

@@ -10,6 +10,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 import 'package:path_provider/path_provider.dart';
 import '../services/objectbox_service.dart';
+import '../services/audit_service.dart';
 import '../models/medicine.dart';
 import '../models/app_user.dart';
 import '../models/sale.dart';
@@ -21,6 +22,7 @@ import '../models/prescription.dart';
 import '../models/doctor.dart';
 import '../models/stock_transfer.dart';
 import '../models/procedure.dart';
+import '../models/audit_log.dart';
 import 'package:objectbox/objectbox.dart';
 import '../../objectbox.g.dart';
 import 'package:flutter/foundation.dart';
@@ -92,6 +94,7 @@ class LocalServerService {
     router.post('/api/procedures/push', _withAuth(_proceduresPushHandler));
     router.post('/api/procedures/delete', _withAuth(_proceduresDeleteHandler));
     router.post('/api/sync', _withAuth(_syncHandler));
+    router.post('/api/audit/push', _withAuth(_auditPushHandler));
 
     // Deletion Endpoints
     router.post('/api/sales/delete', _withAuth(_salesDeleteHandler));
@@ -115,9 +118,15 @@ class LocalServerService {
     _migrateSyncMetadata();
 
     // Initial broadcast to Cloud for companion app fallback
-    broadcastAllToCloud();
+    if (ObjectBoxService.instance.settings.firebaseEnabled) {
+      broadcastAllToCloud();
+    }
     // Periodic refresh every 10 minutes to keep Cloud collections fresh
-    Timer.periodic(const Duration(minutes: 10), (_) => broadcastAllToCloud());
+    Timer.periodic(const Duration(minutes: 10), (_) {
+      if (ObjectBoxService.instance.settings.firebaseEnabled) {
+        broadcastAllToCloud();
+      }
+    });
   }
 
   Future<void> stop() async {
@@ -209,6 +218,24 @@ class LocalServerService {
 
     final jwt = JWT({'userId': user.id, 'role': user.role, 'name': user.name});
     final token = jwt.sign(SecretKey(_jwtSecret));
+
+    // Log terminal login on the Hub
+    final connInfo = req.context['shelf.io.connection_info'] as HttpConnectionInfo?;
+    final ipAddress = connInfo?.remoteAddress.address ?? 'Unknown';
+    AuditService.instance.log(
+      action: 'LOGIN',
+      entityType: 'User',
+      entityId: user.id.toString(),
+      description: 'User ${user.name} logged in successfully via Android Terminal ($ipAddress)',
+      details: {
+        'userId': user.id,
+        'role': user.role,
+        'username': user.name,
+        'source': 'Android Terminal',
+        'ipAddress': ipAddress,
+      },
+      actor: user,
+    );
 
     return Response.ok(
       jsonEncode({
@@ -1847,6 +1874,10 @@ class LocalServerService {
   /// Processes data changes pushed from companion apps via Firebase Fallback (Tier 3).
   /// This ensures that even if the Hub is not directly reachable, it eventually catches up.
   Future<void> handleExternalDelta(Map<String, dynamic> delta) async {
+    if (!ObjectBoxService.instance.settings.firebaseEnabled) {
+      debugPrint('Hub: Firebase Sync is disabled. Skipping external delta.');
+      return;
+    }
     final entity = delta['entity'];
     final action = delta['action'];
     final data = delta['data'] as Map<String, dynamic>;
@@ -2093,6 +2124,10 @@ class LocalServerService {
   /// Hub-side: Broadcasts all critical data to Firebase for companion apps' offline consumption.
   /// Now performs "Mirroring" - deletes items from Cloud that no longer exist locally.
   Future<void> broadcastAllToCloud() async {
+    if (!ObjectBoxService.instance.settings.firebaseEnabled) {
+      debugPrint('Hub: Firebase Sync is disabled. Skipping broadcastAllToCloud.');
+      return;
+    }
     debugPrint('Hub: Starting full Cloud Mirror Sync...');
     int pushCount = 0;
     int pruneCount = 0;
@@ -2255,6 +2290,26 @@ class LocalServerService {
       debugPrint('Hub: Mirror Sync Complete. Pushed: $pushCount, Pruned: $pruneCount');
     } catch (e) {
       debugPrint('Hub: Mirror Sync error: $e');
+    }
+  }
+
+  Future<Response> _auditPushHandler(Request req) async {
+    try {
+      final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      final log = AuditLog.fromJson(body);
+      
+      ObjectBoxService.instance.store.box<AuditLog>().put(log);
+      
+      broadcast({'event': 'audit_logs_updated'});
+      _incomingDataController.add('audit_logs');
+      
+      return Response.ok(jsonEncode({'success': true}));
+    } catch (e) {
+      debugPrint('Hub: Error receiving audit log push - $e');
+      return Response.internalServerError(
+        body: jsonEncode({'error': e.toString()}),
+        headers: {'content-type': 'application/json'},
+      );
     }
   }
 }

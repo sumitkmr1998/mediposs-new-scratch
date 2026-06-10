@@ -8,6 +8,7 @@ import '../models/patient.dart';
 import '../models/appointment.dart';
 import '../models/doctor.dart';
 import '../models/prescription.dart';
+import '../models/audit_log.dart';
 import '../models/stock_transfer.dart';
 import '../models/medicine.dart';
 import '../models/prescription_template.dart';
@@ -55,24 +56,33 @@ class SyncQueueService extends ChangeNotifier {
 
     try {
       final box = ObjectBoxService.instance.syncQueueBox;
-      final items = box.query(SyncQueueItem_.processed.equals(false))
-          .order(SyncQueueItem_.timestamp)
-          .build()
-          .find();
       
-      if (items.isEmpty) return;
+      while (true) {
+        final items = box.query(SyncQueueItem_.processed.equals(false))
+            .order(SyncQueueItem_.timestamp)
+            .build()
+            .find();
+        
+        if (items.isEmpty) break;
 
-      debugPrint('SyncQueueService: Processing ${items.length} items...');
-      
-      for (final item in items) {
-        final ok = await _pushItem(item);
-        if (ok) {
-          item.processed = true;
-          box.put(item);
-          debugPrint('SyncQueueService: Successfully synced ${item.entity} (${item.action})');
-        } else {
-          debugPrint('SyncQueueService: Failed to sync ${item.entity}. Pausing queue.');
-          break; // Stop on first failure to maintain order
+        debugPrint('SyncQueueService: Processing ${items.length} items...');
+        bool hasFailed = false;
+        
+        for (final item in items) {
+          final ok = await _pushItem(item);
+          if (ok) {
+            item.processed = true;
+            box.put(item);
+            debugPrint('SyncQueueService: Successfully synced ${item.entity} (${item.action})');
+          } else {
+            debugPrint('SyncQueueService: Failed to sync ${item.entity}. Pausing queue.');
+            hasFailed = true;
+            break; // Stop on first failure to maintain order
+          }
+        }
+        
+        if (hasFailed) {
+          break; // Stop outer loop if an item failed
         }
       }
     } catch (e) {
@@ -118,6 +128,8 @@ class SyncQueueService extends ChangeNotifier {
           return await syncService.pushPrescription(Prescription.fromJson(data));
         case 'transfer':
           return await syncService.pushTransfer(StockTransfer.fromJson(data));
+        case 'audit_log':
+          return await syncService.pushAuditLog(AuditLog.fromJson(data));
         case 'template':
           if (item.action == 'delete') return await syncService.pushTemplateDelete(data['name']);
           return await syncService.pushTemplate(PrescriptionTemplate.fromJson(data));

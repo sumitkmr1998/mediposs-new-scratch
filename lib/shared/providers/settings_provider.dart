@@ -81,6 +81,11 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   Future<bool> performManualBackup() async {
+    if (!_settings.googleDriveSyncEnabled) {
+      _googleError = 'Google Drive Sync is disabled';
+      notifyListeners();
+      return false;
+    }
     if (!isGoogleConnected) {
       _googleError = 'Google Drive not connected';
       notifyListeners();
@@ -141,6 +146,10 @@ class SettingsProvider extends ChangeNotifier {
 
   /// Triggers auto-backup based on the specified logic ('At Startup', 'On Close', 'Periodic')
   Future<void> checkAndPerformAutoBackup(String trigger) async {
+    if (!_settings.googleDriveSyncEnabled) {
+      debugPrint('Auto-Backup: skipped because googleDriveSyncEnabled is false.');
+      return;
+    }
     if (_settings.autoBackupFrequency == 'Never') return;
     if (_settings.autoBackupLogic != trigger) return;
 

@@ -6,10 +6,12 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p_path;
 import '../models/prescription.dart';
 import '../models/appointment.dart';
+import '../models/app_user.dart';
 import '../services/objectbox_service.dart';
 import '../services/local_server_service.dart';
 import '../services/sync_service.dart';
 import '../services/sync_queue_service.dart';
+import '../services/audit_service.dart';
 import '../models/patient_image.dart';
 import '../models/patient.dart';
 import 'patient_provider.dart';
@@ -52,6 +54,7 @@ class PrescriptionProvider extends ChangeNotifier {
     Vitals? vitals,
     SyncService? syncService,
     BuildContext? context,
+    AppUser? actor,
   }) async {
     final appDocDir = await getApplicationDocumentsDirectory();
     final photoDir =
@@ -89,6 +92,7 @@ class PrescriptionProvider extends ChangeNotifier {
     final existing = _prescriptions
         .where((p) => p.appointmentId == appointmentId)
         .firstOrNull;
+    final isNew = existing == null;
     final prescription = existing ??
         Prescription(
           appointmentId: appointmentId,
@@ -109,6 +113,26 @@ class PrescriptionProvider extends ChangeNotifier {
     prescription.updatedAt = DateTime.now();
 
     ObjectBoxService.instance.prescriptionBox.put(prescription);
+
+    // Log prescription save/update
+    AuditService.instance.log(
+      action: isNew ? 'CREATE' : 'UPDATE',
+      entityType: 'Prescription',
+      entityId: prescription.id.toString(),
+      description: isNew
+          ? 'Created Prescription for patient ${prescription.patientName} (Doctor: ${prescription.doctorName})'
+          : 'Updated Prescription for patient ${prescription.patientName} (Doctor: ${prescription.doctorName})',
+      details: {
+        'prescriptionId': prescription.id,
+        'appointmentId': prescription.appointmentId,
+        'patientId': prescription.patientId,
+        'patientName': prescription.patientName,
+        'doctorName': prescription.doctorName,
+        'diagnosis': prescription.diagnosis,
+        'itemsCount': items.length,
+      },
+      actor: actor,
+    );
 
     // Also add to patient gallery so they are visible in Patient Details
     for (var imagePath in savedImagePaths) {
@@ -263,11 +287,21 @@ class PrescriptionProvider extends ChangeNotifier {
     return originalPath; // Fallback to original
   }
 
-  void markDispensed(int prescriptionId, {SyncService? syncService}) {
+  void markDispensed(int prescriptionId, {SyncService? syncService, AppUser? actor}) {
     final p = ObjectBoxService.instance.prescriptionBox.get(prescriptionId);
     if (p == null) return;
     p.dispensed = true;
     ObjectBoxService.instance.prescriptionBox.put(p);
+
+    // Log dispensing
+    AuditService.instance.log(
+      action: 'UPDATE',
+      entityType: 'Prescription',
+      entityId: p.id.toString(),
+      description: 'Prescription for patient ${p.patientName} marked as dispensed',
+      details: {'prescriptionId': p.id, 'patientName': p.patientName, 'dispensed': true},
+      actor: actor,
+    );
 
     final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
     final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
@@ -286,15 +320,28 @@ class PrescriptionProvider extends ChangeNotifier {
   }
 
   void markDispensedByAppointment(int appointmentId,
-      {SyncService? syncService}) {
+      {SyncService? syncService, AppUser? actor}) {
     final p = getPrescriptionForAppointment(appointmentId);
     if (p != null) {
-      markDispensed(p.id, syncService: syncService);
+      markDispensed(p.id, syncService: syncService, actor: actor);
     }
   }
 
-  void deletePrescription(int id, {SyncService? syncService}) {
+  void deletePrescription(int id, {SyncService? syncService, AppUser? actor}) {
+    final p = ObjectBoxService.instance.prescriptionBox.get(id);
+    if (p == null) return;
+    final patientName = p.patientName;
     ObjectBoxService.instance.prescriptionBox.remove(id);
+
+    // Log deletion
+    AuditService.instance.log(
+      action: 'DELETE',
+      entityType: 'Prescription',
+      entityId: id.toString(),
+      description: 'Deleted prescription for patient $patientName',
+      details: {'prescriptionId': id, 'patientName': patientName},
+      actor: actor,
+    );
 
     final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
     final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;

@@ -315,7 +315,8 @@ class _PosAndroidState extends State<PosAndroid> {
       cart.setMixedAmounts(cash, upi, card);
     }
 
-    final sale = await cart.checkout(context.read<SyncService>());
+    final currentUser = context.read<AuthProvider>().currentUser;
+    final sale = await cart.checkout(context.read<SyncService>(), currentUser);
     if (!context.mounted) return;
 
     if (sale != null) {

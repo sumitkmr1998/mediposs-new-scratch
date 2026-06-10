@@ -16,6 +16,7 @@ import 'package:objectbox_flutter_libs/objectbox_flutter_libs.dart';
 
 import 'shared/models/app_user.dart';
 import 'shared/models/appointment.dart';
+import 'shared/models/audit_log.dart';
 import 'shared/models/doctor.dart';
 import 'shared/models/medicine.dart';
 import 'shared/models/patient.dart';
@@ -36,7 +37,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(1, 637942838794498612),
       name: 'AppSettings',
-      lastPropertyId: const obx_int.IdUid(45, 149696947389555049),
+      lastPropertyId: const obx_int.IdUid(47, 3858216092315493269),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -263,6 +264,16 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(45, 149696947389555049),
             name: 'shopId',
             type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(46, 1185836173923524138),
+            name: 'googleDriveSyncEnabled',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(47, 3858216092315493269),
+            name: 'auditRetentionDays',
+            type: 6,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
@@ -1531,6 +1542,65 @@ final _entities = <obx_int.ModelEntity>[
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
+      backlinks: <obx_int.ModelBacklink>[]),
+  obx_int.ModelEntity(
+      id: const obx_int.IdUid(19, 1422203774714998139),
+      name: 'AuditLog',
+      lastPropertyId: const obx_int.IdUid(10, 6803351703132686928),
+      flags: 0,
+      properties: <obx_int.ModelProperty>[
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(1, 2823178230798302354),
+            name: 'id',
+            type: 6,
+            flags: 1),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(2, 622980788854502584),
+            name: 'action',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(3, 3955358354206465811),
+            name: 'entityType',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(4, 3825439085088806570),
+            name: 'entityId',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(5, 5875530335555752576),
+            name: 'description',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(6, 7444545438227509316),
+            name: 'detailsJson',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(7, 7828916666001732454),
+            name: 'performedBy',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(8, 7139812999515354444),
+            name: 'timestamp',
+            type: 10,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(9, 7253643048583158079),
+            name: 'deviceId',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(10, 6803351703132686928),
+            name: 'isSynced',
+            type: 1,
+            flags: 0)
+      ],
+      relations: <obx_int.ModelRelation>[],
       backlinks: <obx_int.ModelBacklink>[])
 ];
 
@@ -1569,7 +1639,7 @@ Future<obx.Store> openStore(
 obx_int.ModelDefinition getObjectBoxModel() {
   final model = obx_int.ModelInfo(
       entities: _entities,
-      lastEntityId: const obx_int.IdUid(18, 3038784044084059491),
+      lastEntityId: const obx_int.IdUid(19, 1422203774714998139),
       lastIndexId: const obx_int.IdUid(1, 5015225040438721990),
       lastRelationId: const obx_int.IdUid(1, 2143695166283597161),
       lastSequenceId: const obx_int.IdUid(0, 0),
@@ -1642,7 +1712,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
               ? null
               : fbb.writeString(object.clinicRegNo!);
           final shopIdOffset = fbb.writeString(object.shopId);
-          fbb.startTable(46);
+          fbb.startTable(48);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, storeNameOffset);
           fbb.addOffset(2, storeAddressOffset);
@@ -1688,6 +1758,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addBool(42, object.showBatchExpiryInRetailPrint);
           fbb.addBool(43, object.showBatchExpiryInClinicalPrint);
           fbb.addOffset(44, shopIdOffset);
+          fbb.addBool(45, object.googleDriveSyncEnabled);
+          fbb.addInt64(46, object.auditRetentionDays);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -1751,6 +1823,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
                   .vTableGet(buffer, rootOffset, 46, '');
           final googleDriveLinkedParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 48, false);
+          final googleDriveSyncEnabledParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 94, false);
           final googleAuthDataParam =
               const fb.StringReader(asciiOptimization: true)
                   .vTableGetNullable(buffer, rootOffset, 50);
@@ -1763,6 +1837,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.BoolReader().vTableGet(buffer, rootOffset, 56, false);
           final lastGlobalSyncParam =
               const fb.Int64Reader().vTableGetNullable(buffer, rootOffset, 60);
+          final auditRetentionDaysParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 96, 0);
           final connectionModeParam =
               const fb.StringReader(asciiOptimization: true)
                   .vTableGet(buffer, rootOffset, 62, '');
@@ -1827,11 +1903,13 @@ obx_int.ModelDefinition getObjectBoxModel() {
               autoBackupFrequency: autoBackupFrequencyParam,
               autoBackupLogic: autoBackupLogicParam,
               googleDriveLinked: googleDriveLinkedParam,
+              googleDriveSyncEnabled: googleDriveSyncEnabledParam,
               googleAuthData: googleAuthDataParam,
               lastBackupMillis: lastBackupMillisParam,
               autoBackupTime: autoBackupTimeParam,
               navCollapsed: navCollapsedParam,
               lastGlobalSync: lastGlobalSyncParam,
+              auditRetentionDays: auditRetentionDaysParam,
               connectionMode: connectionModeParam,
               cloudflareUrl: cloudflareUrlParam,
               lastCloudflareSync: lastCloudflareSyncParam,
@@ -3209,6 +3287,76 @@ obx_int.ModelDefinition getObjectBoxModel() {
               invoiceNo: invoiceNoParam);
 
           return object;
+        }),
+    AuditLog: obx_int.EntityDefinition<AuditLog>(
+        model: _entities[18],
+        toOneRelations: (AuditLog object) => [],
+        toManyRelations: (AuditLog object) => {},
+        getId: (AuditLog object) => object.id,
+        setId: (AuditLog object, int id) {
+          object.id = id;
+        },
+        objectToFB: (AuditLog object, fb.Builder fbb) {
+          final actionOffset = fbb.writeString(object.action);
+          final entityTypeOffset = fbb.writeString(object.entityType);
+          final entityIdOffset = fbb.writeString(object.entityId);
+          final descriptionOffset = fbb.writeString(object.description);
+          final detailsJsonOffset = fbb.writeString(object.detailsJson);
+          final performedByOffset = fbb.writeString(object.performedBy);
+          final deviceIdOffset = fbb.writeString(object.deviceId);
+          fbb.startTable(11);
+          fbb.addInt64(0, object.id);
+          fbb.addOffset(1, actionOffset);
+          fbb.addOffset(2, entityTypeOffset);
+          fbb.addOffset(3, entityIdOffset);
+          fbb.addOffset(4, descriptionOffset);
+          fbb.addOffset(5, detailsJsonOffset);
+          fbb.addOffset(6, performedByOffset);
+          fbb.addInt64(7, object.timestamp.millisecondsSinceEpoch);
+          fbb.addOffset(8, deviceIdOffset);
+          fbb.addBool(9, object.isSynced);
+          fbb.finish(fbb.endTable());
+          return object.id;
+        },
+        objectFromFB: (obx.Store store, ByteData fbData) {
+          final buffer = fb.BufferContext(fbData);
+          final rootOffset = buffer.derefObject(0);
+          final idParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0);
+          final actionParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 6, '');
+          final entityTypeParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 8, '');
+          final entityIdParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 10, '');
+          final descriptionParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGet(buffer, rootOffset, 12, '');
+          final detailsJsonParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGet(buffer, rootOffset, 14, '');
+          final performedByParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGet(buffer, rootOffset, 16, '');
+          final timestampParam = DateTime.fromMillisecondsSinceEpoch(
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 18, 0));
+          final deviceIdParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 20, '');
+          final isSyncedParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 22, false);
+          final object = AuditLog(
+              id: idParam,
+              action: actionParam,
+              entityType: entityTypeParam,
+              entityId: entityIdParam,
+              description: descriptionParam,
+              detailsJson: detailsJsonParam,
+              performedBy: performedByParam,
+              timestamp: timestampParam,
+              deviceId: deviceIdParam,
+              isSynced: isSyncedParam);
+
+          return object;
         })
   };
 
@@ -3396,6 +3544,14 @@ class AppSettings_ {
   /// See [AppSettings.shopId].
   static final shopId =
       obx.QueryStringProperty<AppSettings>(_entities[0].properties[44]);
+
+  /// See [AppSettings.googleDriveSyncEnabled].
+  static final googleDriveSyncEnabled =
+      obx.QueryBooleanProperty<AppSettings>(_entities[0].properties[45]);
+
+  /// See [AppSettings.auditRetentionDays].
+  static final auditRetentionDays =
+      obx.QueryIntegerProperty<AppSettings>(_entities[0].properties[46]);
 }
 
 /// [AppUser] entity fields to define ObjectBox queries.
@@ -4334,4 +4490,47 @@ class ScheduleH1Record_ {
   /// See [ScheduleH1Record.invoiceNo].
   static final invoiceNo =
       obx.QueryStringProperty<ScheduleH1Record>(_entities[17].properties[12]);
+}
+
+/// [AuditLog] entity fields to define ObjectBox queries.
+class AuditLog_ {
+  /// See [AuditLog.id].
+  static final id =
+      obx.QueryIntegerProperty<AuditLog>(_entities[18].properties[0]);
+
+  /// See [AuditLog.action].
+  static final action =
+      obx.QueryStringProperty<AuditLog>(_entities[18].properties[1]);
+
+  /// See [AuditLog.entityType].
+  static final entityType =
+      obx.QueryStringProperty<AuditLog>(_entities[18].properties[2]);
+
+  /// See [AuditLog.entityId].
+  static final entityId =
+      obx.QueryStringProperty<AuditLog>(_entities[18].properties[3]);
+
+  /// See [AuditLog.description].
+  static final description =
+      obx.QueryStringProperty<AuditLog>(_entities[18].properties[4]);
+
+  /// See [AuditLog.detailsJson].
+  static final detailsJson =
+      obx.QueryStringProperty<AuditLog>(_entities[18].properties[5]);
+
+  /// See [AuditLog.performedBy].
+  static final performedBy =
+      obx.QueryStringProperty<AuditLog>(_entities[18].properties[6]);
+
+  /// See [AuditLog.timestamp].
+  static final timestamp =
+      obx.QueryDateProperty<AuditLog>(_entities[18].properties[7]);
+
+  /// See [AuditLog.deviceId].
+  static final deviceId =
+      obx.QueryStringProperty<AuditLog>(_entities[18].properties[8]);
+
+  /// See [AuditLog.isSynced].
+  static final isSynced =
+      obx.QueryBooleanProperty<AuditLog>(_entities[18].properties[9]);
 }

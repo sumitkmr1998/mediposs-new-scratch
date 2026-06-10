@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../models/app_user.dart';
 import '../services/objectbox_service.dart';
 import '../services/sync_service.dart';
+import '../services/audit_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   AppUser? _currentUser;
@@ -79,6 +80,14 @@ class AuthProvider extends ChangeNotifier {
     if (match != null) {
       _currentUser = match;
       _isAuthenticated = true;
+      AuditService.instance.log(
+        action: 'LOGIN',
+        entityType: 'User',
+        entityId: match.id.toString(),
+        description: 'User ${match.name} logged in successfully',
+        details: {'userId': match.id, 'role': match.role, 'username': match.name},
+        actor: match,
+      );
       notifyListeners();
       return true;
     }
@@ -91,6 +100,14 @@ class AuthProvider extends ChangeNotifier {
     if (user.pin == pin && user.isActive) {
       _currentUser = user;
       _isAuthenticated = true;
+      AuditService.instance.log(
+        action: 'LOGIN',
+        entityType: 'User',
+        entityId: user.id.toString(),
+        description: 'User ${user.name} logged in successfully',
+        details: {'userId': user.id, 'role': user.role, 'username': user.name},
+        actor: user,
+      );
       notifyListeners();
       return true;
     }
@@ -105,26 +122,67 @@ class AuthProvider extends ChangeNotifier {
   }
 
   void logout() {
+    final oldUser = _currentUser;
     _currentUser = null;
     _isAuthenticated = false;
+    if (oldUser != null) {
+      AuditService.instance.log(
+        action: 'LOGOUT',
+        entityType: 'User',
+        entityId: oldUser.id.toString(),
+        description: 'User ${oldUser.name} logged out',
+        details: {'userId': oldUser.id, 'username': oldUser.name},
+        actor: oldUser,
+      );
+    }
     notifyListeners();
   }
 
   List<AppUser> getAllUsers() => ObjectBoxService.instance.userBox.getAll();
 
-  void addUser(AppUser user, {SyncService? syncService}) {
+  void addUser(AppUser user, {SyncService? syncService, AppUser? actor}) {
+    final isNew = user.id == 0;
     ObjectBoxService.instance.userBox.put(user);
+
+    // Log user creation/update
+    AuditService.instance.log(
+      action: isNew ? 'CREATE' : 'UPDATE',
+      entityType: 'User',
+      entityId: user.id.toString(),
+      description: isNew
+          ? 'Created staff member: ${user.name} (Role: ${user.role})'
+          : 'Updated staff member details: ${user.name} (Role: ${user.role})',
+      details: {
+        'targetUserId': user.id,
+        'targetUsername': user.name,
+        'targetRole': user.role,
+        'isActive': user.isActive,
+      },
+      actor: actor,
+    );
+
     if (syncService != null && syncService.isConnected) {
       syncService.pushUser(user);
     }
     notifyListeners();
   }
 
-  void updatePin(int userId, String newPin, {SyncService? syncService}) {
+  void updatePin(int userId, String newPin, {SyncService? syncService, AppUser? actor}) {
     final user = ObjectBoxService.instance.userBox.get(userId);
     if (user != null) {
       user.pin = newPin;
       ObjectBoxService.instance.userBox.put(user);
+
+      // Log PIN update
+      AuditService.instance.log(
+        action: 'SECURITY',
+        entityType: 'User',
+        entityId: user.id.toString(),
+        description: 'Updated PIN for staff member: ${user.name}',
+        details: {'targetUserId': user.id, 'targetUsername': user.name},
+        actor: actor,
+      );
+
       if (syncService != null && syncService.isConnected) {
         syncService.pushUser(user);
       }

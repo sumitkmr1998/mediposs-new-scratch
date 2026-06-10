@@ -163,10 +163,11 @@ class _MedicineRegistrationSheetState
     }
 
     final sync = context.read<SyncService>();
+    final actor = context.read<AuthProvider>().currentUser;
     if (widget.medicine != null) {
-      inv.updateMedicine(m, syncService: sync);
+      inv.updateMedicine(m, syncService: sync, actor: actor);
     } else {
-      inv.addMedicine(m, syncService: sync);
+      inv.addMedicine(m, syncService: sync, actor: actor);
     }
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(

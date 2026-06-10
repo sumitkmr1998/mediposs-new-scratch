@@ -6,6 +6,7 @@ import '../shared/models/doctor.dart';
 import '../shared/models/appointment.dart';
 import '../shared/providers/patient_provider.dart';
 import '../shared/providers/opd_provider.dart';
+import '../shared/providers/auth_provider.dart';
 import '../shared/services/sync_service.dart';
 import '../theme/app_theme.dart';
 
@@ -167,7 +168,7 @@ class _PatientDialogState extends State<PatientDialog> {
               p.age = int.tryParse(_ageCtrl.text) ?? 0;
               p.address = _addressCtrl.text.trim();
               final sync = context.read<SyncService>();
-              final saved = provider.savePatient(p, sync);
+              final saved = provider.savePatient(p, sync, context.read<AuthProvider>().currentUser);
               Navigator.pop(context, saved);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -634,6 +635,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
                     consultationFee: resolvedDoctor.consultationFee,
                     paymentMethod: _paymentMethod,
                     syncService: context.read<SyncService>(),
+                    actor: context.read<AuthProvider>().currentUser,
                   );
                   if (!mounted) return;
                   Navigator.pop(context);

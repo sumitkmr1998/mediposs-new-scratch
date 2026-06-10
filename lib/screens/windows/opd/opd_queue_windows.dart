@@ -271,8 +271,9 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                             }
                           },
                           onCancel: () {
+                            final currentUser = context.read<AuthProvider>().currentUser;
                             context.read<OpdProvider>().cancelAppointment(
-                                appt.id, context.read<SyncService>());
+                                appt.id, context.read<SyncService>(), currentUser);
                           },
                         )),
                 ],

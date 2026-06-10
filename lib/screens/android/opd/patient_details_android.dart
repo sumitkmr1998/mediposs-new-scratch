@@ -698,7 +698,7 @@ class _PrescriptionDetailDialog extends StatelessWidget {
             onPressed: () {
               context
                   .read<PrescriptionProvider>()
-                  .deletePrescription(prescription.id);
+                  .deletePrescription(prescription.id, actor: context.read<AuthProvider>().currentUser);
               Navigator.pop(ctx);
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(

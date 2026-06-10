@@ -926,7 +926,7 @@ class _SaleRow extends StatelessWidget {
               foregroundColor: Colors.white,
             ),
             onPressed: () {
-              salesProvider.deleteSale(sale, inv);
+              salesProvider.deleteSale(sale, inv, actor: context.read<AuthProvider>().currentUser);
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(

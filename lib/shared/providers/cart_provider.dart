@@ -4,8 +4,10 @@ import '../models/medicine.dart';
 import '../models/sale.dart';
 import '../models/appointment.dart';
 import '../models/schedule_h1_record.dart';
+import '../models/app_user.dart';
 import '../services/objectbox_service.dart';
 import '../services/time_service.dart';
+import '../services/audit_service.dart';
 import 'inventory_provider.dart';
 import 'sales_provider.dart';
 import 'prescription_provider.dart';
@@ -439,7 +441,7 @@ class CartProvider extends ChangeNotifier {
 
   /// Completes checkout: saves sale, deducts storeStock, clears cart.
   /// Returns the created Sale on success.
-  Future<Sale?> checkout([SyncService? syncService]) async {
+  Future<Sale?> checkout([SyncService? syncService, AppUser? actor]) async {
     if (_items.isEmpty) return null;
 
     final db = ObjectBoxService.instance;
@@ -448,9 +450,11 @@ class CartProvider extends ChangeNotifier {
     final isHub = Platform.isWindows && !settings.isWindowsClient;
 
     // If editing a sale, revert the original stock deductions first
+    Map<String, dynamic> oldSaleJson = {};
     if (_editingSaleId != null) {
       final oldSale = db.saleBox.get(_editingSaleId!);
       if (oldSale != null) {
+        oldSaleJson = oldSale.toJson();
         final oldItems = _salesProvider.getSaleItems(oldSale);
         for (final item in oldItems) {
           if (oldSale.isClinicalDispense) {
@@ -566,6 +570,38 @@ class CartProvider extends ChangeNotifier {
     );
 
     db.saleBox.put(sale);
+
+    // Log the transaction
+    if (_editingSaleId != null) {
+      AuditService.instance.log(
+        action: 'UPDATE',
+        entityType: 'Sale',
+        entityId: sale.invoiceNo,
+        description: 'Edited Sale: invoice ${sale.invoiceNo}, net amount ₹${sale.total}',
+        details: {
+          'before': oldSaleJson,
+          'after': sale.toJson(),
+        },
+        actor: actor,
+      );
+    } else {
+      AuditService.instance.log(
+        action: sale.isReturn ? 'VOID' : 'CREATE',
+        entityType: 'Sale',
+        entityId: sale.invoiceNo,
+        description: sale.isReturn
+            ? 'Processed Return/Refund: invoice ${sale.invoiceNo}, amount ₹${sale.total}'
+            : 'Created POS Sale: invoice ${sale.invoiceNo}, net amount ₹${sale.total}',
+        details: {
+          'invoiceNo': sale.invoiceNo,
+          'total': sale.total,
+          'isReturn': sale.isReturn,
+          'isClinicalDispense': sale.isClinicalDispense,
+          'patientName': sale.patientName,
+        },
+        actor: actor,
+      );
+    }
 
     // Save Schedule H1 records if applicable
     if (hasScheduleH1Items) {

@@ -15,6 +15,7 @@ import '../models/purchase_record.dart';
 import '../models/restock_request.dart';
 import '../models/sync_queue_item.dart';
 import '../models/procedure.dart';
+import '../models/audit_log.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import '../../objectbox.g.dart';
@@ -36,6 +37,7 @@ class ObjectBoxService {
   late final Box<MedicineBatch> batchBox;
   late final Box<RestockRequest> restockRequestBox;
   late final Box<SyncQueueItem> syncQueueBox;
+  late final Box<AuditLog> auditLogBox;
 
   // OPD Boxes
   late final Box<Patient> patientBox;
@@ -78,6 +80,7 @@ class ObjectBoxService {
     svc.batchBox = svc._store.box<MedicineBatch>();
     svc.restockRequestBox = svc._store.box<RestockRequest>();
     svc.syncQueueBox = svc._store.box<SyncQueueItem>();
+    svc.auditLogBox = svc._store.box<AuditLog>();
 
     // OPD boxes
     svc.patientBox = svc._store.box<Patient>();

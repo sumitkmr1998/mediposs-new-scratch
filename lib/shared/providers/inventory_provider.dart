@@ -3,9 +3,11 @@ import 'package:objectbox/objectbox.dart';
 import '../models/medicine.dart';
 import '../models/purchase_record.dart';
 import '../models/restock_request.dart';
+import '../models/app_user.dart';
 import '../services/objectbox_service.dart';
 import '../services/sync_service.dart';
 import '../services/sync_queue_service.dart';
+import '../services/audit_service.dart';
 import 'dart:io';
 import '../services/local_server_service.dart';
 import '../../objectbox.g.dart';
@@ -138,11 +140,22 @@ class InventoryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addMedicine(Medicine m, {SyncService? syncService}) {
+  void addMedicine(Medicine m, {SyncService? syncService, AppUser? actor}) {
     m.name = m.name.trim();
     m.barcode = m.barcode.trim();
     m.updatedAt = DateTime.now();
     _box.put(m);
+
+    // Log medicine creation
+    AuditService.instance.log(
+      action: 'CREATE',
+      entityType: 'Medicine',
+      entityId: m.id.toString(),
+      description: 'Added new medicine: ${m.name} (Barcode: ${m.barcode})',
+      details: m.toJson(),
+      actor: actor,
+    );
+
     load();
 
     final isClient = Platform.isAndroid ||
@@ -163,11 +176,29 @@ class InventoryProvider extends ChangeNotifier {
     }
   }
 
-  void updateMedicine(Medicine m, {SyncService? syncService}) {
+  void updateMedicine(Medicine m, {SyncService? syncService, AppUser? actor}) {
     m.name = m.name.trim();
     m.barcode = m.barcode.trim();
     m.updatedAt = DateTime.now();
+
+    final oldMed = _box.get(m.id);
+    final oldJson = oldMed != null ? oldMed.toJson() : <String, dynamic>{};
+
     _box.put(m);
+
+    // Log medicine update
+    AuditService.instance.log(
+      action: 'UPDATE',
+      entityType: 'Medicine',
+      entityId: m.id.toString(),
+      description: 'Updated medicine details: ${m.name} (Barcode: ${m.barcode})',
+      details: {
+        'before': oldJson,
+        'after': m.toJson(),
+      },
+      actor: actor,
+    );
+
     load();
 
     final isClient = Platform.isAndroid ||
@@ -188,13 +219,24 @@ class InventoryProvider extends ChangeNotifier {
     }
   }
 
-  void deleteMedicine(int id, {SyncService? syncService}) {
+  void deleteMedicine(int id, {SyncService? syncService, AppUser? actor}) {
     final m = _box.get(id);
     if (m == null) return;
     final barcode = m.barcode;
     final name = m.name;
 
     _box.remove(id);
+
+    // Log medicine deletion
+    AuditService.instance.log(
+      action: 'DELETE',
+      entityType: 'Medicine',
+      entityId: id.toString(),
+      description: 'Deleted medicine: $name (Barcode: $barcode)',
+      details: {'id': id, 'name': name, 'barcode': barcode},
+      actor: actor,
+    );
+
     load();
 
     final isClient = Platform.isAndroid ||
@@ -412,6 +454,7 @@ class InventoryProvider extends ChangeNotifier {
     required String to,
     String? batchNo, // Optional: specify a batch
     SyncService? syncService,
+    AppUser? actor,
   }) {
     final m = _box.get(medicineId);
     if (m != null) {
@@ -468,6 +511,24 @@ class InventoryProvider extends ChangeNotifier {
 
       m.updatedAt = DateTime.now();
       _box.put(m);
+
+      // Log stock transfer
+      AuditService.instance.log(
+        action: 'UPDATE',
+        entityType: 'StockTransfer',
+        entityId: m.id.toString(),
+        description: 'Transferred $qty units of ${m.name} from $from to $to',
+        details: {
+          'medicineId': m.id,
+          'medicineName': m.name,
+          'qty': qty,
+          'from': from,
+          'to': to,
+          'batchNo': batchNo,
+        },
+        actor: actor,
+      );
+
       load();
       final isClient = Platform.isAndroid ||
           (Platform.isWindows &&
@@ -519,6 +580,7 @@ class InventoryProvider extends ChangeNotifier {
     String note = '',
     String supplier = '',
     SyncService? syncService,
+    AppUser? actor,
   }) {
     final ids = {
       ...mainUpdates.keys,
@@ -599,6 +661,27 @@ class InventoryProvider extends ChangeNotifier {
     if (finalUpdates.isNotEmpty) {
       _box.putMany(finalUpdates);
       _purchaseBox.putMany(purchaseRecords);
+
+      // Log manual stock updates / batch additions
+      for (final record in purchaseRecords) {
+        AuditService.instance.log(
+          action: 'UPDATE',
+          entityType: 'Medicine',
+          entityId: record.medicineId.toString(),
+          description: 'Added stock for ${record.medicineName}: +${record.qty} units (Batch: $batchNo)',
+          details: {
+            'medicineId': record.medicineId,
+            'medicineName': record.medicineName,
+            'addedQty': record.qty,
+            'batchNo': batchNo,
+            'expiryDate': expiryDate?.toIso8601String(),
+            'supplier': supplier,
+            'note': note,
+          },
+          actor: actor,
+        );
+      }
+
       load();
 
       final isHub = Platform.isWindows &&
@@ -726,7 +809,7 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   void deleteBatch(Medicine m, MedicineBatch batch,
-      {SyncService? syncService}) {
+      {SyncService? syncService, AppUser? actor}) {
     // 1. Revert medicine's aggregate stock
     m.mainStock = (m.mainStock - batch.mainStock).clamp(0, 999999);
     m.storeStock = (m.storeStock - batch.storeStock).clamp(0, 999999);
@@ -742,6 +825,22 @@ class InventoryProvider extends ChangeNotifier {
 
     // 3. Delete the batch entity itself
     _batchBox.remove(batch.id);
+
+    // Log batch deletion
+    AuditService.instance.log(
+      action: 'DELETE',
+      entityType: 'MedicineBatch',
+      entityId: batch.id.toString(),
+      description: 'Deleted batch ${batch.batchNo} of ${m.name}',
+      details: {
+        'medicineId': m.id,
+        'medicineName': m.name,
+        'batchNo': batch.batchNo,
+        'revertedMainStock': batch.mainStock,
+        'revertedStoreStock': batch.storeStock,
+      },
+      actor: actor,
+    );
 
     load();
 
@@ -768,7 +867,12 @@ class InventoryProvider extends ChangeNotifier {
     int bulkClinicStock = 0,
     int bulkStoreStock = 0,
     SyncService? syncService,
+    AppUser? actor,
   }) {
+    final oldBatchNo = batch.batchNo;
+    final oldMainStock = batch.mainStock;
+    final oldStoreStock = batch.storeStock;
+
     batch.batchNo = batchNo;
     batch.expiryDate = expiryDate;
     batch.mainStock = mainStock.clamp(0, 999999);
@@ -781,6 +885,25 @@ class InventoryProvider extends ChangeNotifier {
     // Core Fix: Recalculate medicine totals now that batch has changed
     m.recalculateStockFromBatches();
     _box.put(m);
+
+    // Log batch details modification
+    AuditService.instance.log(
+      action: 'UPDATE',
+      entityType: 'MedicineBatch',
+      entityId: batch.id.toString(),
+      description: 'Modified batch details for ${m.name} (Batch: $oldBatchNo)',
+      details: {
+        'medicineId': m.id,
+        'medicineName': m.name,
+        'oldBatchNo': oldBatchNo,
+        'newBatchNo': batchNo,
+        'oldMainStock': oldMainStock,
+        'newMainStock': mainStock,
+        'oldStoreStock': oldStoreStock,
+        'newStoreStock': storeStock,
+      },
+      actor: actor,
+    );
 
     load();
 

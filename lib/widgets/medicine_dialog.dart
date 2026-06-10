@@ -306,7 +306,7 @@ class _MedicineDialogState extends State<MedicineDialog> {
       // We no longer update mainStock/storeStock here to prevent desync with batches
       ..lowStockThreshold = int.tryParse(_thresholdCtrl.text) ?? 10;
 
-    inv.updateMedicine(m, syncService: sync);
+    inv.updateMedicine(m, syncService: sync, actor: context.read<AuthProvider>().currentUser);
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Medicine details updated')),
@@ -331,6 +331,7 @@ class _MedicineDialogState extends State<MedicineDialog> {
     }
 
     final m = _selectedExisting ?? widget.medicine;
+    final actor = context.read<AuthProvider>().currentUser;
     if (m == null) {
       // New medicine creation flow
       final newM = Medicine(
@@ -343,7 +344,7 @@ class _MedicineDialogState extends State<MedicineDialog> {
         lowStockThreshold: int.tryParse(_thresholdCtrl.text) ?? 10,
         isScheduleH1: _isScheduleH1,
       );
-      inv.addMedicine(newM, syncService: sync);
+      inv.addMedicine(newM, syncService: sync, actor: actor);
       
       inv.addBatchStock(
         {newM.id: inputMain},
@@ -353,6 +354,7 @@ class _MedicineDialogState extends State<MedicineDialog> {
         batchNo: _batchNoCtrl.text.isNotEmpty ? _batchNoCtrl.text.trim() : 'B-${DateTime.now().millisecondsSinceEpoch}',
         expiryDate: _expiryDate,
         syncService: sync,
+        actor: actor,
       );
     } else {
       // Existing medicine: add batch only
@@ -364,6 +366,7 @@ class _MedicineDialogState extends State<MedicineDialog> {
         batchNo: _batchNoCtrl.text.isNotEmpty ? _batchNoCtrl.text.trim() : 'B-${DateTime.now().millisecondsSinceEpoch}',
         expiryDate: _expiryDate,
         syncService: sync,
+        actor: actor,
       );
     }
 

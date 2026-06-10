@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import '../models/appointment.dart';
 import '../models/patient.dart';
 import '../models/doctor.dart';
+import '../models/app_user.dart';
 import '../services/objectbox_service.dart';
 import '../services/time_service.dart';
 import '../services/local_server_service.dart';
 import '../services/sync_service.dart';
 import '../services/sync_queue_service.dart';
+import '../services/audit_service.dart';
 import 'dart:io';
 
 enum OpdFilter { today, yesterday, last7Days, allTime, custom }
@@ -190,6 +192,7 @@ class OpdProvider extends ChangeNotifier {
     DateTime? scheduledAt,
     bool isWalkIn = true,
     SyncService? syncService,
+    AppUser? actor,
   }) async {
     final robustNow = await TimeService.getRobustTime();
     final appt = Appointment(
@@ -205,6 +208,25 @@ class OpdProvider extends ChangeNotifier {
       isWalkIn: isWalkIn,
     );
     ObjectBoxService.instance.appointmentBox.put(appt);
+
+    // Log appointment creation
+    AuditService.instance.log(
+      action: 'CREATE',
+      entityType: 'Appointment',
+      entityId: appt.id.toString(),
+      description: 'Created Appointment for patient ${appt.patientName} with doctor ${appt.doctorName} (Token: #${appt.tokenNumber})',
+      details: {
+        'appointmentId': appt.id,
+        'patientName': appt.patientName,
+        'doctorName': appt.doctorName,
+        'tokenNumber': appt.tokenNumber,
+        'consultationFee': appt.consultationFee,
+        'paymentMethod': appt.paymentMethod,
+        'isWalkIn': appt.isWalkIn,
+      },
+      actor: actor,
+    );
+
     loadAll();
 
     // Broadcast or Push network sync
@@ -258,11 +280,27 @@ class OpdProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> cancelAppointment(int appointmentId, [SyncService? syncService]) async {
+  Future<void> cancelAppointment(int appointmentId, [SyncService? syncService, AppUser? actor]) async {
     final appt = ObjectBoxService.instance.appointmentBox.get(appointmentId);
     if (appt == null) return;
     appt.status = kStatusCancelled;
     ObjectBoxService.instance.appointmentBox.put(appt);
+
+    // Log appointment cancellation
+    AuditService.instance.log(
+      action: 'CANCEL',
+      entityType: 'Appointment',
+      entityId: appt.id.toString(),
+      description: 'Cancelled Appointment for patient ${appt.patientName} with token #${appt.tokenNumber}',
+      details: {
+        'appointmentId': appt.id,
+        'patientName': appt.patientName,
+        'doctorName': appt.doctorName,
+        'tokenNumber': appt.tokenNumber,
+      },
+      actor: actor,
+    );
+
     loadAll();
 
     final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);

@@ -4,11 +4,13 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/patient.dart';
 import '../models/patient_image.dart';
+import '../models/app_user.dart';
 import '../services/objectbox_service.dart';
 import '../../objectbox.g.dart';
 import '../services/local_server_service.dart';
 import '../services/sync_service.dart';
 import '../services/sync_queue_service.dart';
+import '../services/audit_service.dart';
 
 class PatientProvider extends ChangeNotifier {
   List<Patient> _patients = [];
@@ -49,11 +51,34 @@ class PatientProvider extends ChangeNotifier {
     return 'OPD-$dateStr-${count.toString().padLeft(3, '0')}-$random';
   }
 
-  Patient savePatient(Patient p, [SyncService? syncService]) {
-    if (p.id == 0) {
+  Patient savePatient(Patient p, [SyncService? syncService, AppUser? actor]) {
+    final isNew = p.id == 0;
+    if (isNew) {
       p.uhid = generateUhid();
     }
+
+    final oldPatient = isNew ? null : ObjectBoxService.instance.patientBox.get(p.id);
+    final oldJson = oldPatient != null ? oldPatient.toJson() : <String, dynamic>{};
+
     ObjectBoxService.instance.patientBox.put(p);
+
+    // Log patient save/update
+    AuditService.instance.log(
+      action: isNew ? 'CREATE' : 'UPDATE',
+      entityType: 'Patient',
+      entityId: p.uhid,
+      description: isNew 
+          ? 'Registered new patient: ${p.name} (UHID: ${p.uhid})' 
+          : 'Updated patient details: ${p.name} (UHID: ${p.uhid})',
+      details: isNew
+          ? p.toJson()
+          : {
+              'before': oldJson,
+              'after': p.toJson(),
+            },
+      actor: actor,
+    );
+
     load();
 
     // Broadcast or Push network sync
@@ -74,10 +99,11 @@ class PatientProvider extends ChangeNotifier {
     return p;
   }
 
-  void deletePatient(int id, {SyncService? syncService}) {
+  void deletePatient(int id, {SyncService? syncService, AppUser? actor}) {
     final patient = ObjectBoxService.instance.patientBox.get(id);
     if (patient == null) return;
     final uhid = patient.uhid;
+    final name = patient.name;
 
     // Clean up images first
     final photos = getPatientPhotos(id);
@@ -87,6 +113,17 @@ class PatientProvider extends ChangeNotifier {
 
     // Then delete the patient record
     ObjectBoxService.instance.patientBox.remove(id);
+
+    // Log patient deletion
+    AuditService.instance.log(
+      action: 'DELETE',
+      entityType: 'Patient',
+      entityId: uhid,
+      description: 'Deleted patient record: $name (UHID: $uhid)',
+      details: {'uhid': uhid, 'name': name, 'id': id},
+      actor: actor,
+    );
+
     load();
 
     // Broadcast sync

@@ -3,10 +3,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/sale.dart';
 import '../models/patient.dart';
+import '../models/app_user.dart';
 import '../services/objectbox_service.dart';
 import '../services/local_server_service.dart';
 import '../services/sync_service.dart';
 import '../services/sync_queue_service.dart';
+import '../services/audit_service.dart';
 import '../../objectbox.g.dart';
 import 'inventory_provider.dart';
 
@@ -262,7 +264,7 @@ class SalesProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void deleteSale(Sale sale, InventoryProvider inv, {SyncService? syncService}) {
+  void deleteSale(Sale sale, InventoryProvider inv, {SyncService? syncService, AppUser? actor}) {
     try {
       final items = getSaleItems(sale);
       for (final item in items) {
@@ -275,6 +277,22 @@ class SalesProvider extends ChangeNotifier {
         }
       }
       ObjectBoxService.instance.saleBox.remove(sale.id);
+
+      // Log voided sale
+      AuditService.instance.log(
+        action: 'VOID',
+        entityType: 'Sale',
+        entityId: sale.invoiceNo,
+        description: 'Voided/Deleted Sale (Invoice: ${sale.invoiceNo}), refunded ₹${sale.total}',
+        details: {
+          'invoiceNo': sale.invoiceNo,
+          'total': sale.total,
+          'isReturn': sale.isReturn,
+          'patientName': sale.patientName,
+        },
+        actor: actor,
+      );
+
       load();
 
       final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);

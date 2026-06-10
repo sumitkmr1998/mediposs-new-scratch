@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/stock_transfer.dart';
 import '../models/medicine.dart';
+import '../models/app_user.dart';
 import '../services/objectbox_service.dart';
 import '../services/time_service.dart';
 import '../services/sync_service.dart';
@@ -102,6 +103,7 @@ class WarehouseProvider extends ChangeNotifier {
     String note = '',
     String transferredBy = '',
     SyncService? syncService,
+    AppUser? actor,
   }) async {
     if (qty <= 0) return 'Quantity must be greater than 0';
 
@@ -131,6 +133,7 @@ class WarehouseProvider extends ChangeNotifier {
       to: to,
       batchNo: batchNo,
       syncService: syncService,
+      actor: actor,
     );
 
     // Record transfer
@@ -144,7 +147,7 @@ class WarehouseProvider extends ChangeNotifier {
       batchNo: batchNo,
       expiryDate: expiryDate,
       note: note,
-      transferredBy: transferredBy,
+      transferredBy: transferredBy.isNotEmpty ? transferredBy : (actor?.name ?? 'System'),
       transferredAt: now,
     );
     ObjectBoxService.instance.transferBox.put(transfer);

@@ -33,6 +33,7 @@ import '../opd/patient_list_screen.dart';
 import '../opd/doctor_list_screen.dart';
 import '../opd/opd_report_screen.dart';
 import 'analysis_hub_screen.dart';
+import '../audit_logs_screen.dart';
 
 class AppShellWindows extends StatefulWidget {
   const AppShellWindows({super.key});
@@ -116,6 +117,10 @@ class _AppShellWindowsState extends State<AppShellWindows> {
           return AppExitResponse.exit;
         }
 
+        if (!s.firebaseEnabled && !s.googleDriveSyncEnabled) {
+          return AppExitResponse.exit;
+        }
+
         // We always want to perform Cloud Sync on exit, even if GDrive backup is off
         _showExitBackupDialog();
         return AppExitResponse.cancel;
@@ -135,11 +140,16 @@ class _AppShellWindowsState extends State<AppShellWindows> {
       ),
     );
 
-    // Run both Google Drive backup AND Firebase Cloud Sync
-    Future.wait([
-      context.read<SettingsProvider>().checkAndPerformAutoBackup('On Close'),
-      LocalServerService.instance.broadcastAllToCloud(),
-    ]).then((_) {
+    final s = context.read<SettingsProvider>().settings;
+    final futures = <Future>[];
+    if (s.googleDriveSyncEnabled) {
+      futures.add(context.read<SettingsProvider>().checkAndPerformAutoBackup('On Close'));
+    }
+    if (s.firebaseEnabled) {
+      futures.add(LocalServerService.instance.broadcastAllToCloud());
+    }
+
+    Future.wait(futures).then((_) {
       if (mounted && !_isForcedExit) {
         setState(() => _isForcedExit = true);
         SystemChannels.platform.invokeMethod('SystemNavigator.pop');
@@ -173,6 +183,9 @@ class _AppShellWindowsState extends State<AppShellWindows> {
     if (auth.canViewOpdReports) {
       dests.add(const _Dest(id: 'opd_report', icon: Icons.bar_chart_outlined, selectedIcon: Icons.bar_chart, label: 'OPD Report'));
     }
+    if (auth.isAdmin || auth.currentUser?.role.toLowerCase() == 'manager') {
+      dests.add(const _Dest(id: 'audit_logs', icon: Icons.history_toggle_off_rounded, selectedIcon: Icons.history_rounded, label: 'Audit Logs'));
+    }
     if (auth.canAccessSettings) {
       dests.add(const _Dest(id: 'settings', icon: Icons.settings_outlined, selectedIcon: Icons.settings, label: 'Settings'));
     }
@@ -196,6 +209,7 @@ class _AppShellWindowsState extends State<AppShellWindows> {
       case 'doctors': return const DoctorListScreen();
       case 'opd_report': return const OpdReportScreen();
       case 'settings': return const SettingsScreen();
+      case 'audit_logs': return const AuditLogsScreen();
       default: return const DashboardScreen();
     }
   }

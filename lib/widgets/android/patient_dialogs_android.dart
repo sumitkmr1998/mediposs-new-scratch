@@ -5,6 +5,7 @@ import '../../shared/models/doctor.dart';
 import '../../shared/models/appointment.dart';
 import '../../shared/providers/patient_provider.dart';
 import '../../shared/providers/opd_provider.dart';
+import '../../shared/providers/auth_provider.dart';
 import '../../shared/services/sync_service.dart';
 import '../../theme/app_theme.dart';
 
@@ -272,7 +273,7 @@ class _PatientRegistrationSheetState extends State<_PatientRegistrationSheet> {
                     p.address = _addressCtrl.text.trim();
 
                     final saved =
-                        provider.savePatient(p, context.read<SyncService>());
+                        provider.savePatient(p, context.read<SyncService>(), context.read<AuthProvider>().currentUser);
                     Navigator.pop(context, saved);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -979,6 +980,7 @@ class _BookAppointmentSheetState extends State<_BookAppointmentSheet> {
                         consultationFee: resolvedDoctor.consultationFee,
                         paymentMethod: _paymentMethod,
                         syncService: context.read<SyncService>(),
+                        actor: context.read<AuthProvider>().currentUser,
                       );
                       if (!context.mounted) return;
                       Navigator.pop(context);

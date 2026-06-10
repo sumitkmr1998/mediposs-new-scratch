@@ -22,6 +22,14 @@ class FirebaseSyncService {
   FirebaseFirestore get _db => FirebaseFirestore.instance;
   bool _isInitialized = false;
 
+  bool get _isEnabled {
+    try {
+      return ObjectBoxService.instance.settings.firebaseEnabled;
+    } catch (_) {
+      return true;
+    }
+  }
+
   String? _idToken;
   DateTime? _tokenExpiry;
 
@@ -67,6 +75,7 @@ class FirebaseSyncService {
     String? cloudflareUrl,
     int? port,
   }) async {
+    if (!_isEnabled) return;
     if (defaultTargetPlatform == TargetPlatform.windows) {
       await _updateHubStatusREST(isOnline: isOnline, cloudflareUrl: cloudflareUrl, port: port);
       return;
@@ -133,6 +142,7 @@ class FirebaseSyncService {
     String? cloudflareUrl,
     int? port,
   }) async {
+    if (!_isEnabled) return;
     try {
       final token = await _getIdToken();
       final projectId = DefaultFirebaseOptions.windows.projectId;
@@ -171,6 +181,7 @@ class FirebaseSyncService {
     required String action,
     required Map<String, dynamic> data,
   }) async {
+    if (!_isEnabled) return false;
     if (defaultTargetPlatform == TargetPlatform.windows) {
       return await _pushDeltaREST(entity: entity, action: action, data: data);
     }
@@ -198,6 +209,7 @@ class FirebaseSyncService {
     required String action,
     required Map<String, dynamic> data,
   }) async {
+    if (!_isEnabled) return false;
     try {
       final projectId = DefaultFirebaseOptions.windows.projectId;
       final apiKey = DefaultFirebaseOptions.windows.apiKey;
@@ -286,6 +298,7 @@ class FirebaseSyncService {
 
   /// Hub-side: Listens for incoming queue items and processes them.
   void startQueueListener(Function(Map<String, dynamic>) onNewItem) {
+    if (!_isEnabled) return;
     if (defaultTargetPlatform == TargetPlatform.windows) {
       _startQueueListenerREST(onNewItem);
       return;
@@ -306,6 +319,7 @@ class FirebaseSyncService {
   }
 
   void _startQueueListenerREST(Function(Map<String, dynamic>) onNewItem) {
+    if (!_isEnabled) return;
     Future<void> poll() async {
       try {
         final projectId = DefaultFirebaseOptions.windows.projectId;
@@ -352,6 +366,7 @@ class FirebaseSyncService {
 
   /// Hub-side: Marks a queue item as processed and deletes it from Firebase.
   Future<void> markAsProcessed(String docId) async {
+    if (!_isEnabled) return;
     if (defaultTargetPlatform == TargetPlatform.windows) {
       try {
         final projectId = DefaultFirebaseOptions.windows.projectId;
@@ -372,6 +387,7 @@ class FirebaseSyncService {
   /// Hub-side: Broadcasts an update to all devices via Firestore.
   /// Used for "after sync, hub should also post updated data to all other devices"
   Future<void> broadcastUpdate(String entity, Map<String, dynamic> data) async {
+    if (!_isEnabled) return;
     if (defaultTargetPlatform == TargetPlatform.windows) {
       await _broadcastUpdateREST(entity, data);
       return;
@@ -397,6 +413,7 @@ class FirebaseSyncService {
   }
 
   Future<void> _broadcastUpdateREST(String entity, Map<String, dynamic> data) async {
+    if (!_isEnabled) return;
     try {
       final projectId = DefaultFirebaseOptions.windows.projectId;
       final apiKey = DefaultFirebaseOptions.windows.apiKey;
@@ -450,6 +467,7 @@ class FirebaseSyncService {
 
   /// Hub-side: Deletes a document from Firebase REST.
   Future<void> deleteDocument(String entity, String docId) async {
+    if (!_isEnabled) return;
     if (defaultTargetPlatform == TargetPlatform.windows) {
       try {
         final projectId = DefaultFirebaseOptions.windows.projectId;
@@ -484,6 +502,7 @@ class FirebaseSyncService {
   /// Hub-side: Uses REST to see what needs to be pruned.
   /// Companion-side: Uses Native SDK.
   Future<List<Map<String, dynamic>>> fetchCollection(String entity) async {
+    if (!_isEnabled) return [];
     if (defaultTargetPlatform == TargetPlatform.windows) {
       return await _fetchCollectionREST(entity);
     }
@@ -515,6 +534,7 @@ class FirebaseSyncService {
   }
 
   Future<List<Map<String, dynamic>>> _fetchCollectionREST(String entity) async {
+    if (!_isEnabled) return [];
     try {
       final projectId = DefaultFirebaseOptions.windows.projectId;
       final apiKey = DefaultFirebaseOptions.windows.apiKey;
@@ -542,6 +562,7 @@ class FirebaseSyncService {
 
   /// Companion-side: Listens for global updates from the Hub.
   void startGlobalUpdateListener(String entity, Function(Map<String, dynamic>) onUpdate) {
+    if (!_isEnabled) return;
     if (!_isInitialized) return;
     _db.collection('shops').doc(_shopId).collection(entity)
         .where('syncedFrom', isEqualTo: 'hub')
@@ -555,6 +576,7 @@ class FirebaseSyncService {
 
   /// Fetches the Hub status (online/offline, cloudflare URL) from Firestore.
   Future<Map<String, dynamic>?> getHubStatus() async {
+    if (!_isEnabled) return null;
     if (!_isInitialized) return null;
     try {
       final doc = await _db.collection('shops').doc(_shopId).collection('settings').doc('hub_status').get(const GetOptions(source: Source.server)).timeout(const Duration(seconds: 5));
@@ -567,6 +589,7 @@ class FirebaseSyncService {
 
   /// Fetches the list of all available shop IDs in Firestore.
   Future<List<String>> fetchShopIds() async {
+    if (!_isEnabled) return [];
     if (!_isInitialized) return [];
     try {
       final snapshot = await _db.collection('shops').get();

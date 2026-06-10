@@ -203,8 +203,9 @@ class _QueueList extends StatelessWidget {
             ),
           ),
           onCancel: () {
+            final currentUser = context.read<AuthProvider>().currentUser;
             context.read<OpdProvider>().cancelAppointment(
-                queue[i].id, context.read<SyncService>());
+                queue[i].id, context.read<SyncService>(), currentUser);
           },
         ),
       ),

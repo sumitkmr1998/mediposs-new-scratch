@@ -11,6 +11,7 @@ import '../../../shared/providers/template_provider.dart';
 import '../../../shared/services/sync_service.dart';
 import '../../../shared/providers/procedure_provider.dart';
 import '../../../shared/providers/patient_provider.dart';
+import '../../../shared/providers/auth_provider.dart';
 import '../../../theme/app_theme.dart';
 
 class PrescriptionAndroid extends StatefulWidget {
@@ -667,6 +668,7 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
             vitals: vitals,
             syncService: syncService,
             context: context, // Added context for reactivity
+            actor: context.read<AuthProvider>().currentUser,
           );
 
       if (!mounted) return;

@@ -73,6 +73,9 @@ class _SettingsWindowsState extends State<SettingsWindows> {
   bool _isCompositionScheme = false;
   bool _showBatchExpiryRetail = true;
   bool _showBatchExpiryClinical = true;
+  bool _firebaseEnabled = true;
+  bool _googleDriveSyncEnabled = true;
+  int _auditRetentionDays = 90;
 
   @override
   void initState() {
@@ -111,6 +114,9 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     _isCompositionScheme = s.isCompositionScheme;
     _showBatchExpiryRetail = s.showBatchExpiryInRetailPrint;
     _showBatchExpiryClinical = s.showBatchExpiryInClinicalPrint;
+    _firebaseEnabled = s.firebaseEnabled;
+    _googleDriveSyncEnabled = s.googleDriveSyncEnabled;
+    _auditRetentionDays = s.auditRetentionDays;
 
     _loadPrinters();
   }
@@ -163,7 +169,10 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       ..clinicRegNo = _clinicRegCtrl.text
       ..isCompositionScheme = _isCompositionScheme
       ..showBatchExpiryInRetailPrint = _showBatchExpiryRetail
-      ..showBatchExpiryInClinicalPrint = _showBatchExpiryClinical;
+      ..showBatchExpiryInClinicalPrint = _showBatchExpiryClinical
+      ..firebaseEnabled = _firebaseEnabled
+      ..googleDriveSyncEnabled = _googleDriveSyncEnabled
+      ..auditRetentionDays = _auditRetentionDays;
 
     final wasClient = settingsProv.settings.isWindowsClient;
     settingsProv.save(s);
@@ -574,6 +583,14 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                   title: 'Google Drive Cloud Sync',
                   icon: LucideIcons.cloud,
                   children: [
+                    SettingsSwitch(
+                      title: 'Enable Google Drive Sync',
+                      subtitle: 'Allow backups to Google Drive (on close/periodic/manual)',
+                      value: _googleDriveSyncEnabled,
+                      icon: LucideIcons.cloud,
+                      onChanged: (val) => setState(() => _googleDriveSyncEnabled = val),
+                    ),
+                    const Divider(height: 24),
                     Row(
                       children: [
                         CircleAvatar(
@@ -674,10 +691,19 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                   title: 'Multi-Tenant Firebase Sync',
                   icon: LucideIcons.database,
                   children: [
+                    SettingsSwitch(
+                      title: 'Enable Firebase Sync',
+                      subtitle: 'Mirror local database changes to Firestore in real-time',
+                      value: _firebaseEnabled,
+                      icon: LucideIcons.database,
+                      onChanged: (val) => setState(() => _firebaseEnabled = val),
+                    ),
+                    const SizedBox(height: 16),
                     SettingsField(
                       controller: _shopIdCtrl, 
                       label: 'Shop ID (Leave blank to auto-generate)', 
                       icon: LucideIcons.store,
+                      enabled: _firebaseEnabled,
                     ),
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 4.0),
@@ -1496,6 +1522,32 @@ class _SettingsWindowsState extends State<SettingsWindows> {
               ],
             );
           },
+        ),
+        const SizedBox(height: 24),
+        SettingsSection(
+          title: 'System Audit Logs Policy',
+          icon: LucideIcons.shieldAlert,
+          children: [
+            SettingsDropdown<int>(
+              title: 'Keep Audit Logs For',
+              value: _auditRetentionDays,
+              icon: LucideIcons.history,
+              items: const [
+                DropdownMenuItem(value: 0, child: Text('Keep Forever')),
+                DropdownMenuItem(value: 30, child: Text('30 Days')),
+                DropdownMenuItem(value: 90, child: Text('90 Days')),
+                DropdownMenuItem(value: 180, child: Text('180 Days')),
+                DropdownMenuItem(value: 365, child: Text('1 Year')),
+                DropdownMenuItem(value: 730, child: Text('2 Years')),
+                DropdownMenuItem(value: 1095, child: Text('3 Years')),
+              ],
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() => _auditRetentionDays = val);
+                }
+              },
+            ),
+          ],
         ),
       ],
     );

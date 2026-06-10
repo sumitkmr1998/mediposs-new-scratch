@@ -13,6 +13,7 @@ import '../models/appointment.dart';
 import '../models/doctor.dart';
 import '../models/sale.dart';
 import '../models/app_user.dart';
+import '../models/audit_log.dart';
 import '../models/prescription.dart';
 import '../models/prescription_template.dart';
 import '../models/stock_transfer.dart';
@@ -1470,6 +1471,11 @@ class SyncService extends ChangeNotifier {
   Future<bool> pushPatient(Patient p) async {
     return await _unifiedPush('/api/patients/push', p.toJson(),
         entity: 'patient', action: 'create');
+  }
+
+  Future<bool> pushAuditLog(AuditLog l) async {
+    return await _unifiedPush('/api/audit/push', l.toJson(),
+        entity: 'audit_log', action: 'create');
   }
 
   Future<bool> pushAppointment(Appointment a) async {

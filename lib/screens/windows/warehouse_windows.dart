@@ -1934,6 +1934,7 @@ class _TransferDialogState extends State<_TransferDialog> {
               expiryDate: _selectedBatch?.expiryDate,
               note: _noteCtrl.text,
               syncService: sync,
+              actor: context.read<AuthProvider>().currentUser,
             );
             if (!context.mounted) return;
             if (err != null) {
@@ -3088,6 +3089,7 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
                               to: _toLoc,
                               note: 'Bulk Transfer',
                               syncService: syncService,
+                              actor: context.read<AuthProvider>().currentUser,
                             );
                             count++;
                           }

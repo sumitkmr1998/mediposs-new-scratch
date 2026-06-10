@@ -572,7 +572,9 @@ class _SaleRow extends StatelessWidget {
                 backgroundColor: AppTheme.danger,
                 foregroundColor: Colors.white),
             onPressed: () {
-              salesProvider.deleteSale(sale, inv, syncService: context.read<SyncService>());
+              salesProvider.deleteSale(sale, inv,
+                  syncService: context.read<SyncService>(),
+                  actor: context.read<AuthProvider>().currentUser);
               Navigator.pop(ctx);
             },
             child: const Text('VOID SALE'),
