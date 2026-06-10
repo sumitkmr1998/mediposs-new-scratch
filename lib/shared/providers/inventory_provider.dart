@@ -26,6 +26,7 @@ class InventoryProvider extends ChangeNotifier {
 
   String get sortBy => _sortBy;
   String get filterWarehouse => _filterWarehouse;
+  String get searchQuery => _searchQuery;
 
   List<Medicine> get medicines => _filtered();
   List<Medicine> get rawMedicines => List.unmodifiable(_medicines);

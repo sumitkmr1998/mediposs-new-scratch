@@ -30,6 +30,10 @@ class _WarehouseAndroidState extends State<WarehouseAndroid>
     _tabs = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<WarehouseProvider>().loadTransfers();
+      final inv = context.read<InventoryProvider>();
+      inv.setSearch('');
+      inv.setFilter('all');
+      inv.setSort('name');
     });
   }
 

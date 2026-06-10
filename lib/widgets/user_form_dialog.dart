@@ -433,7 +433,10 @@ class _UserFormDialogState extends State<UserFormDialog> {
                                           })),
                                           _PermTile('Edit Sales', 'Modify completed invoice records', _canEditSales, (v) => setState(() {
                                             _canEditSales = v;
-                                            if (v) _canAccessPOS = true;
+                                            if (v) {
+                                              _canAccessPOS = true;
+                                              _canViewSalesHistory = true;
+                                            }
                                           })),
                                           _PermTile('Process Returns', 'Handle item returns/refunds', _canProcessReturns, (v) => setState(() {
                                             _canProcessReturns = v;

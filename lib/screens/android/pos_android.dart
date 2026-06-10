@@ -55,14 +55,13 @@ class _PosAndroidState extends State<PosAndroid> {
   void initState() {
     super.initState();
     final cart = context.read<CartProvider>();
-    if (cart.isEditingSale) {
-      _patientCtrl.text = cart.patientName;
-      _discountCtrl.text = cart.discountAmount > 0 ? cart.discountAmount.toStringAsFixed(0) : '';
-      _paymentMethod = cart.paymentMethod;
-      _mixCashCtrl.text = cart.mixedCash.toStringAsFixed(0);
-      _mixUpiCtrl.text = cart.mixedUpi.toStringAsFixed(0);
-      _mixCardCtrl.text = cart.mixedCard.toStringAsFixed(0);
-    }
+    _patientCtrl.text = cart.patientName;
+    _discountCtrl.text = cart.discountAmount > 0 ? cart.discountAmount.toStringAsFixed(0) : '';
+    _paymentMethod = cart.paymentMethod;
+    _mixCashCtrl.text = cart.mixedCash.toStringAsFixed(0);
+    _mixUpiCtrl.text = cart.mixedUpi.toStringAsFixed(0);
+    _mixCardCtrl.text = cart.mixedCard.toStringAsFixed(0);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _currentSearchFocusNode?.requestFocus();
@@ -669,7 +668,7 @@ class _PosAndroidState extends State<PosAndroid> {
                     if (val.text.isEmpty) return const Iterable.empty();
                     final q = val.text.toLowerCase();
                     final isClinical = cart.isClinicalDispense;
-                    final meds = inv.medicines.where((m) =>
+                    final meds = inv.rawMedicines.where((m) =>
                         (isClinical ? m.mainStock > 0 : m.storeStock > 0) &&
                         (m.name.toLowerCase().contains(q) ||
                             m.barcode.contains(val.text)));

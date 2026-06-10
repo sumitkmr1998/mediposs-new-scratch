@@ -199,6 +199,7 @@ class SalesProvider extends ChangeNotifier {
   }
 
   double get totalRevenue => _sales.fold(0.0, (sum, s) => sum + s.total);
+  double get totalDiscount => _sales.fold(0.0, (sum, s) => sum + s.discount);
 
   void load() {
     final box = ObjectBoxService.instance.saleBox;

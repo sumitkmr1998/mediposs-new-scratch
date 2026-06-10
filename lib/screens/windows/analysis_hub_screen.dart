@@ -647,33 +647,35 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
                                   itemBuilder: (context, index) {
                                     final perf = procedurePerformanceList[index];
                                     return ListTile(
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                                      dense: true,
+                                      visualDensity: VisualDensity.compact,
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
                                       title: Row(
                                         children: [
                                           Expanded(
                                             flex: 3,
-                                            child: Text(perf.procedure.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                            child: Text(perf.procedure.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                                           ),
                                           Expanded(
                                             flex: 2,
-                                            child: Text(perf.procedure.category),
+                                            child: Text(perf.procedure.category, style: const TextStyle(fontSize: 13)),
                                           ),
                                           Expanded(
                                             flex: 1,
-                                            child: Text('${perf.unitsSold} sessions'),
+                                            child: Text('${perf.unitsSold} sessions', style: const TextStyle(fontSize: 13)),
                                           ),
                                           Expanded(
                                             flex: 1,
-                                            child: Text('₹${perf.revenue.toStringAsFixed(0)}'),
+                                            child: Text('₹${perf.revenue.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13)),
                                           ),
                                           Expanded(
                                             flex: 1,
-                                            child: Text('₹${perf.profit.toStringAsFixed(0)}', style: const TextStyle(color: AppTheme.success, fontWeight: FontWeight.bold)),
+                                            child: Text('₹${perf.profit.toStringAsFixed(0)}', style: const TextStyle(color: AppTheme.success, fontWeight: FontWeight.bold, fontSize: 13)),
                                           ),
                                         ],
                                       ),
                                       trailing: IconButton(
-                                        icon: const Icon(Icons.bar_chart_rounded, color: AppTheme.primary),
+                                        icon: const Icon(Icons.bar_chart_rounded, color: AppTheme.primary, size: 20),
                                         onPressed: () {
                                           setState(() {
                                             _selectedProcedure = perf.procedure;
@@ -715,33 +717,35 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
                                   itemBuilder: (context, index) {
                                     final perf = performanceList[index];
                                     return ListTile(
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                                      dense: true,
+                                      visualDensity: VisualDensity.compact,
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
                                       title: Row(
                                         children: [
                                           Expanded(
                                             flex: 3,
-                                            child: Text(perf.medicine.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                            child: Text(perf.medicine.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                                           ),
                                           Expanded(
                                             flex: 2,
-                                            child: Text(perf.medicine.category),
+                                            child: Text(perf.medicine.category, style: const TextStyle(fontSize: 13)),
                                           ),
                                           Expanded(
                                             flex: 1,
-                                            child: Text('${perf.unitsSold} ${perf.medicine.unit}'),
+                                            child: Text('${perf.unitsSold} ${perf.medicine.unit}', style: const TextStyle(fontSize: 13)),
                                           ),
                                           Expanded(
                                             flex: 1,
-                                            child: Text('₹${perf.revenue.toStringAsFixed(0)}'),
+                                            child: Text('₹${perf.revenue.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13)),
                                           ),
                                           Expanded(
                                             flex: 1,
-                                            child: Text('₹${perf.profit.toStringAsFixed(0)}', style: const TextStyle(color: AppTheme.success, fontWeight: FontWeight.bold)),
+                                            child: Text('₹${perf.profit.toStringAsFixed(0)}', style: const TextStyle(color: AppTheme.success, fontWeight: FontWeight.bold, fontSize: 13)),
                                           ),
                                         ],
                                       ),
                                       trailing: IconButton(
-                                        icon: const Icon(Icons.bar_chart_rounded, color: AppTheme.primary),
+                                        icon: const Icon(Icons.bar_chart_rounded, color: AppTheme.primary, size: 20),
                                         onPressed: () {
                                           setState(() {
                                             _selectedMedicine = perf.medicine;

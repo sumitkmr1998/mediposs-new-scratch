@@ -65,13 +65,20 @@ class _PosWindowsState extends State<PosWindows> {
   @override
   void initState() {
     super.initState();
+    final cart = context.read<CartProvider>();
+    _patientCtrl.text = cart.patientName;
+    _discountCtrl.text = cart.discountAmount > 0 ? cart.discountAmount.toStringAsFixed(0) : '';
+    _paymentMethod = cart.paymentMethod;
+    _mixCashCtrl.text = cart.mixedCash.toStringAsFixed(0);
+    _mixUpiCtrl.text = cart.mixedUpi.toStringAsFixed(0);
+    _mixCardCtrl.text = cart.mixedCard.toStringAsFixed(0);
+
     // Auto-focus search on load
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _searchFocus.requestFocus();
-        // Proactive search on start if cart is empty
-        final cart = context.read<CartProvider>();
-        if (cart.items.isEmpty) {
+        // Proactive search on start if cart is empty and no patient is selected
+        if (cart.items.isEmpty && cart.patientName.isEmpty) {
           _showPatientProactiveSearch();
         }
       }
@@ -1420,7 +1427,7 @@ class _MedicinesGridState extends State<_MedicinesGrid> {
     final query = widget.searchCtrl.text.toLowerCase();
 
     final isClinical = widget.cart.isClinicalDispense;
-    final medicines = widget.inv.medicines
+    final medicines = widget.inv.rawMedicines
         .where((m) => isClinical ? m.mainStock > 0 : m.storeStock > 0)
         .where(
           (m) =>

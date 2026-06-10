@@ -248,7 +248,7 @@ class _UserCard extends StatelessWidget {
                       _PermIcon(Icons.shopping_cart, 'POS', user.canAccessPOS || isAdmin, context),
                       _PermIcon(Icons.inventory_2, 'Stock', user.canEditInventory || isAdmin, context),
                       _PermIcon(Icons.local_hospital, 'OPD', user.canAccessOPD || isAdmin, context),
-                      _PermIcon(Icons.analytics, 'Reports', (user.canViewDashboard || user.canViewOpdReports) || isAdmin, context),
+                      _PermIcon(Icons.analytics, 'Reports', (user.canViewDashboard || user.canViewOpdReports || user.canViewAnalytics || user.canViewSalesHistory) || isAdmin, context),
                       _PermIcon(Icons.settings, 'Admin', user.canAccessSettings || isAdmin, context),
                     ],
                   ),

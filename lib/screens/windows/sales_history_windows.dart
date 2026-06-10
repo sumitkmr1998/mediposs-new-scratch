@@ -178,9 +178,9 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
               ),
               if (!isCashier)
                 AppKpiCard(
-                  label: 'Total Collected',
-                  value: '₹${sales.totalRevenue.toStringAsFixed(0)}',
-                  icon: Icons.auto_graph_rounded,
+                  label: 'Total Discount',
+                  value: '₹${sales.totalDiscount.toStringAsFixed(0)}',
+                  icon: Icons.percent_rounded,
                   color: AppTheme.accent,
                   subtitle: 'Lifetime summary',
                   width: cardWidth,

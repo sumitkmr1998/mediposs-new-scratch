@@ -645,7 +645,10 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                               _canEditSales,
                               (v) => setState(() {
                                     _canEditSales = v;
-                                    if (v) _canAccessPOS = true;
+                                    if (v) {
+                                      _canAccessPOS = true;
+                                      _canViewSalesHistory = true;
+                                    }
                                   })),
                         ],
                       ),

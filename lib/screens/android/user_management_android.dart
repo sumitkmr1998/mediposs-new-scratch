@@ -213,7 +213,7 @@ class _UserManagementAndroidState extends State<UserManagementAndroid> {
                           _moduleIcon(Icons.shopping_cart_rounded, 'POS', user.canAccessPOS || isAdmin, context),
                           _moduleIcon(Icons.inventory_2_rounded, 'Stock', user.canEditInventory || isAdmin, context),
                           _moduleIcon(Icons.local_hospital_rounded, 'OPD', user.canAccessOPD || isAdmin, context),
-                          _moduleIcon(Icons.analytics_rounded, 'Reports', (user.canViewDashboard || user.canViewOpdReports) || isAdmin, context),
+                          _moduleIcon(Icons.analytics_rounded, 'Reports', (user.canViewDashboard || user.canViewOpdReports || user.canViewAnalytics || user.canViewSalesHistory) || isAdmin, context),
                           _moduleIcon(Icons.settings_rounded, 'Admin', user.canAccessSettings || isAdmin, context),
                         ],
                       ),

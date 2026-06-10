@@ -507,6 +507,19 @@ class _StockLevelsTab extends StatefulWidget {
 class _StockLevelsTabState extends State<_StockLevelsTab> {
   final Set<int> _selectedIds = {};
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final inv = context.read<InventoryProvider>();
+        inv.setSearch('');
+        inv.setFilter('all');
+        inv.setSort('name');
+      }
+    });
+  }
+
   void _toggleSelection(int id) {
     setState(() {
       if (_selectedIds.contains(id)) {

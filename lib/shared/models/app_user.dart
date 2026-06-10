@@ -109,6 +109,7 @@ class AppUser {
         canViewAnalytics = true;
         canViewInventory = true;
         canEditInventory = true;
+        canDeleteInventory = true;
         canViewWarehouse = true;
         canTransferStock = true;
         canAccessPOS = true;
@@ -120,11 +121,16 @@ class AppUser {
         canVoidSales = true;
         canEditSales = true;
         canAccessOPD = true;
+        canManageDoctors = true;
+        canViewOpdReports = true;
+        canAccessMedicalRecords = true;
+        canDeletePatients = true;
+        canDeleteAppointments = true;
         canViewPurchasePrice = true;
         canOverrideStock = true;
         canBulkDiscount = true;
         canViewHistoricalData = true;
-        canDeleteAppointments = true;
+        canExportData = true;
         break;
       case 'pharmacist':
         canViewInventory = true;
@@ -134,6 +140,8 @@ class AppUser {
         canAccessPOS = true;
         canProcessRetailSales = true;
         canProcessClinicalDispenses = true;
+        canDiscountSales = true;
+        canViewSalesHistory = true;
         canProcessReturns = true;
         canAccessOPD = true;
         canViewHistoricalData = false; // "Today Only" for staff
@@ -143,6 +151,7 @@ class AppUser {
         canProcessRetailSales = true;
         canProcessClinicalDispenses = false;
         canViewInventory = true;
+        canViewSalesHistory = true;
         canAccessOPD = true;
         canProcessReturns = true;
         canViewHistoricalData = false; // "Today Only" for staff
@@ -155,6 +164,7 @@ class AppUser {
         canAccessMedicalRecords = true;
         canViewInventory = true;
         canViewHistoricalData = true;
+        canViewOpdReports = true;
         break;
       case 'accountant':
         canViewDashboard = true;
