@@ -254,7 +254,7 @@
     },
     {
       "id": "2:1561353773588181738",
-      "lastPropertyId": "36:6641229640248136363",
+      "lastPropertyId": "37:5668218736045193962",
       "name": "AppUser",
       "properties": [
         {
@@ -426,6 +426,11 @@
         {
           "id": "36:6641229640248136363",
           "name": "canEditSales",
+          "type": 1
+        },
+        {
+          "id": "37:5668218736045193962",
+          "name": "canViewFinancialAnalytics",
           "type": 1
         }
       ],

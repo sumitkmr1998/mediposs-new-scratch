@@ -439,9 +439,9 @@ class _PrimaryStats extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double totalRevenue = sales.filteredRevenue + opd.filteredCollectedRevenue;
+    final double totalRevenue = sales.filteredRevenue + (opd.filteredCollectedRevenue + sales.filteredConsultationRevenue) + sales.filteredProcedureRevenue;
     final String labelSuffix = _getLabelSuffix(sales.activeFilter);
-
+ 
     return Column(
       children: [
         AppKpiCard(
@@ -449,7 +449,7 @@ class _PrimaryStats extends StatelessWidget {
           value: '₹${totalRevenue.toStringAsFixed(0)}',
           icon: Icons.trending_up_rounded,
           color: AppTheme.emerald,
-          subtitle: 'Combined Product Sales & OPD Fees',
+          subtitle: 'Combined collections',
           width: double.infinity,
         ),
         const SizedBox(height: 14),
@@ -473,6 +473,15 @@ class _PrimaryStats extends StatelessWidget {
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 14),
+        AppKpiCard(
+          label: 'Procedures ($labelSuffix)',
+          value: '₹${sales.filteredProcedureRevenue.toStringAsFixed(0)}',
+          icon: Icons.medical_services_outlined,
+          color: AppTheme.accent,
+          subtitle: 'Procedure collections',
+          width: double.infinity,
         ),
       ],
     );
@@ -498,8 +507,9 @@ class _FinancialPerformance extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double productSales = sales.filteredRevenue;
-    final double opdRev = opd.filteredCollectedRevenue;
-    final double total = productSales + opdRev;
+    final double opdRev = opd.filteredCollectedRevenue + sales.filteredConsultationRevenue;
+    final double procedureRev = sales.filteredProcedureRevenue;
+    final double total = productSales + opdRev + procedureRev;
 
     final double cash = sales.filteredCashRevenue + opd.filteredCashRevenue;
     final double upi = sales.filteredUpiRevenue + opd.filteredUpiRevenue;
@@ -543,6 +553,8 @@ class _FinancialPerformance extends StatelessWidget {
               style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: context.textMutedColor)),
           const SizedBox(height: 16),
           _SourceRow(label: 'Product Sales', amount: productSales, total: total > 0 ? total : 1, color: AppTheme.emerald),
+          const SizedBox(height: 16),
+          _SourceRow(label: 'Procedures', amount: procedureRev, total: total > 0 ? total : 1, color: AppTheme.accent),
           const SizedBox(height: 16),
           _SourceRow(label: 'OPD Consults', amount: opdRev, total: total > 0 ? total : 1, color: AppTheme.primary),
           const SizedBox(height: 32),

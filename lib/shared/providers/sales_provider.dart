@@ -117,6 +117,34 @@ class SalesProvider extends ChangeNotifier {
     load();
   }
 
+  double getConsultationTotal(Sale sale) {
+    try {
+      final list = jsonDecode(sale.itemsJson) as List;
+      return list
+          .map((e) => SaleItem.fromJson(e as Map<String, dynamic>))
+          .where((item) => item.isProcedure && item.medicineName == 'Consultation Fee')
+          .fold(0.0, (sum, item) => sum + item.lineTotal);
+    } catch (_) {
+      return 0.0;
+    }
+  }
+
+  double getProcedureTotal(Sale sale) {
+    try {
+      final list = jsonDecode(sale.itemsJson) as List;
+      return list
+          .map((e) => SaleItem.fromJson(e as Map<String, dynamic>))
+          .where((item) => item.isProcedure && item.medicineName != 'Consultation Fee')
+          .fold(0.0, (sum, item) => sum + item.lineTotal);
+    } catch (_) {
+      return 0.0;
+    }
+  }
+
+  double getMedicineTotal(Sale sale) {
+    return sale.total - getConsultationTotal(sale) - getProcedureTotal(sale);
+  }
+
   double get todayRevenue {
     final today = DateTime.now();
     return _sales
@@ -126,10 +154,48 @@ class SalesProvider extends ChangeNotifier {
               s.createdAt.month == today.month &&
               s.createdAt.day == today.day,
         )
-        .fold(0.0, (sum, s) => sum + s.total);
+        .fold(0.0, (sum, s) => sum + getMedicineTotal(s));
   }
 
-  double get filteredRevenue => _sales.fold(0.0, (sum, s) => sum + s.total);
+  double get filteredRevenue => _sales.fold(0.0, (sum, s) => sum + getMedicineTotal(s));
+
+  double get todayProcedureRevenue {
+    final today = DateTime.now();
+    return _sales
+        .where(
+          (s) =>
+              s.createdAt.year == today.year &&
+              s.createdAt.month == today.month &&
+              s.createdAt.day == today.day &&
+              !s.isReturn,
+        )
+        .fold(0.0, (sum, s) => sum + getProcedureTotal(s));
+  }
+
+  double get filteredProcedureRevenue {
+    return _sales
+        .where((s) => !s.isReturn)
+        .fold(0.0, (sum, s) => sum + getProcedureTotal(s));
+  }
+
+  double get todayConsultationRevenue {
+    final today = DateTime.now();
+    return _sales
+        .where(
+          (s) =>
+              s.createdAt.year == today.year &&
+              s.createdAt.month == today.month &&
+              s.createdAt.day == today.day &&
+              !s.isReturn,
+        )
+        .fold(0.0, (sum, s) => sum + getConsultationTotal(s));
+  }
+
+  double get filteredConsultationRevenue {
+    return _sales
+        .where((s) => !s.isReturn)
+        .fold(0.0, (sum, s) => sum + getConsultationTotal(s));
+  }
 
   double get filteredCashRevenue {
     return _sales.fold(0.0, (sum, s) {
@@ -200,21 +266,8 @@ class SalesProvider extends ChangeNotifier {
         .length;
   }
 
-  double get totalRevenue => _sales.fold(0.0, (sum, s) => sum + s.total);
-  double get totalDiscount => _sales.fold(0.0, (sum, s) {
-        double fee = 0.0;
-        if (s.linkedAppointmentId != 0) {
-          try {
-            final List<dynamic> decoded = jsonDecode(s.itemsJson);
-            for (final item in decoded) {
-              if (item['medicineName'] == 'Consultation Fee') {
-                fee += (item['lineTotal'] as num).toDouble();
-              }
-            }
-          } catch (_) {}
-        }
-        return sum + (s.discount - fee);
-      });
+  double get totalRevenue => _sales.fold(0.0, (sum, s) => sum + getMedicineTotal(s));
+  double get totalDiscount => _sales.fold(0.0, (sum, s) => sum + s.discount);
 
   void load() {
     final box = ObjectBoxService.instance.saleBox;
@@ -281,6 +334,7 @@ class SalesProvider extends ChangeNotifier {
     try {
       final items = getSaleItems(sale);
       for (final item in items) {
+        if (item.medicineId <= 0) continue; // Skip consultation fees, procedures, etc.
         // Reverses the inventory action identically
         // (Returns natively have negative qty, Sales have positive qty)
         if (sale.isClinicalDispense) {
@@ -289,7 +343,22 @@ class SalesProvider extends ChangeNotifier {
           inv.deductStoreStock(item.medicineId, -item.qty);
         }
       }
-      ObjectBoxService.instance.saleBox.remove(sale.id);
+      int idToDelete = sale.id;
+      if (idToDelete == 0 && sale.invoiceNo.isNotEmpty) {
+        final existing = ObjectBoxService.instance.saleBox
+            .query(Sale_.invoiceNo.equals(sale.invoiceNo))
+            .build()
+            .findFirst();
+        if (existing != null) {
+          idToDelete = existing.id;
+        }
+      }
+
+      if (idToDelete > 0) {
+        ObjectBoxService.instance.saleBox.remove(idToDelete);
+      } else {
+        debugPrint('Warning: Could not find sale to delete by ID or invoiceNo');
+      }
 
       // Log voided sale
       AuditService.instance.log(

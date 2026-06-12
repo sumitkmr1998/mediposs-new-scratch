@@ -60,18 +60,22 @@ class AnalyticsHelper {
   }
 
   /// Calculates the daily sales rate (consumption rate) of a medicine over a list of sales
-  static double dailyConsumptionRate(int medicineId, List<Sale> sales) {
+  static double dailyConsumptionRate(int medicineId, List<Sale> sales, {int? trendDays}) {
     if (sales.isEmpty) return 0.0;
     
     final med = ObjectBoxService.instance.medicineBox.get(medicineId);
     final medName = med?.name.toLowerCase().trim();
     if (medName == null) return 0.0;
 
-    final validSales = sales.where((s) => !s.isReturn).toList();
+    Iterable<Sale> filteredSales = sales.where((s) => !s.isReturn);
+    if (trendDays != null && trendDays > 0) {
+      final cutoff = DateTime.now().subtract(Duration(days: trendDays));
+      filteredSales = filteredSales.where((s) => s.createdAt.isAfter(cutoff));
+    }
+    
+    final validSales = filteredSales.toList();
     if (validSales.isEmpty) return 0.0;
 
-    validSales.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-    
     int totalSold = 0;
     for (final sale in validSales) {
       for (final item in getItems(sale)) {
@@ -83,6 +87,11 @@ class AnalyticsHelper {
 
     if (totalSold == 0) return 0.0;
 
+    if (trendDays != null && trendDays > 0) {
+      return totalSold / trendDays;
+    }
+
+    validSales.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     final firstDate = validSales.first.createdAt;
     final lastDate = DateTime.now();
     final days = lastDate.difference(firstDate).inDays;
@@ -92,8 +101,8 @@ class AnalyticsHelper {
   }
 
   /// Calculates predicted remaining days of stock for a medicine
-  static double daysOfStockRemaining(Medicine medicine, List<Sale> sales) {
-    final daily = dailyConsumptionRate(medicine.id, sales);
+  static double daysOfStockRemaining(Medicine medicine, List<Sale> sales, {int? trendDays}) {
+    final daily = dailyConsumptionRate(medicine.id, sales, trendDays: trendDays);
     if (daily <= 0) return 999.0; // Infinite stock (no sales activity)
     return medicine.totalStock / daily;
   }
@@ -113,8 +122,19 @@ class AnalyticsHelper {
     final map = <DateTime, double>{};
     for (final sale in sales) {
       final day = DateTime(sale.createdAt.year, sale.createdAt.month, sale.createdAt.day);
-      final amount = sale.total;
-      map[day] = (map[day] ?? 0.0) + amount;
+      double consultation = 0.0;
+      double procedure = 0.0;
+      for (final item in getItems(sale)) {
+        if (item.isProcedure) {
+          if (item.medicineName == 'Consultation Fee') {
+            consultation += item.lineTotal;
+          } else {
+            procedure += item.lineTotal;
+          }
+        }
+      }
+      final medicineTotal = sale.total - consultation - procedure;
+      map[day] = (map[day] ?? 0.0) + medicineTotal;
     }
     return map;
   }
@@ -130,9 +150,7 @@ class AnalyticsHelper {
       
       double profit = 0.0;
       for (final item in getItems(sale)) {
-        if (item.isProcedure) {
-          profit += item.lineTotal; // 100% margin on clinical procedures
-        } else {
+        if (!item.isProcedure) {
           final med = medMap[item.medicineName.toLowerCase().trim()];
           if (med != null) {
             profit += item.lineTotal - (med.purchasePrice * item.qty);
@@ -159,9 +177,7 @@ class AnalyticsHelper {
     for (final sale in sales) {
       if (sale.isReturn) continue;
       for (final item in getItems(sale)) {
-        if (item.isProcedure) {
-          map['Clinical Services'] = (map['Clinical Services'] ?? 0.0) + item.lineTotal;
-        } else {
+        if (!item.isProcedure) {
           final med = medMap[item.medicineName.toLowerCase().trim()];
           final cat = med?.category ?? 'General';
           map[cat] = (map[cat] ?? 0.0) + item.lineTotal;
@@ -231,24 +247,36 @@ class AnalyticsHelper {
   }
 
   /// Retrieves reorder recommendations based on stock level life estimation
-  static List<ReorderRecommendation> getReorderList(List<Medicine> medicines, List<Sale> sales) {
+  static List<ReorderRecommendation> getReorderList(
+    List<Medicine> medicines,
+    List<Sale> sales, {
+    int trendDays = 30,
+    int depletionDaysThreshold = 90,
+    int targetStockDays = 365,
+  }) {
     final list = <ReorderRecommendation>[];
     
     for (final m in medicines) {
-      final daily = dailyConsumptionRate(m.id, sales);
-      final daysLeft = daysOfStockRemaining(m, sales);
+      final daily = dailyConsumptionRate(m.id, sales, trendDays: trendDays);
+      final daysLeft = daysOfStockRemaining(m, sales, trendDays: trendDays);
       
-      // Recommend reorder if stock is below threshold OR remaining stock life is critical (< 14 days)
-      if (m.totalStock <= m.lowStockThreshold || (daysLeft < 14 && daily > 0)) {
-        // Suggested reorder amount: 45 days of safety stock
-        final suggestAmount = (daily * 45).ceil();
-        final actualSuggest = suggestAmount > 0 ? suggestAmount : (m.lowStockThreshold * 2);
+      // Suggest reorder if stock is completely depleted OR days remaining is less than threshold
+      if (m.totalStock <= 0 || (daysLeft < depletionDaysThreshold && daily > 0)) {
+        // Suggest quantity needed to sustain target stock days minus what is currently available
+        final neededForTarget = (daily * targetStockDays).ceil();
+        int suggestAmount = neededForTarget - m.totalStock;
+        
+        // Ensure suggestion is at least a safety stock (e.g. lowStockThreshold * 2)
+        final safetyStock = m.lowStockThreshold > 0 ? m.lowStockThreshold * 2 : 10;
+        if (suggestAmount < safetyStock) {
+          suggestAmount = safetyStock;
+        }
 
         list.add(ReorderRecommendation(
           medicine: m,
           dailyVelocity: daily,
           daysLeft: daysLeft,
-          suggestedReorderQty: actualSuggest,
+          suggestedReorderQty: suggestAmount,
         ));
       }
     }

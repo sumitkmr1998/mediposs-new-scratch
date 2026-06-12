@@ -2047,6 +2047,15 @@ class _CartPanel extends StatelessWidget {
                     optionsBuilder: (TextEditingValue val) {
                       if (val.text.isEmpty) return const Iterable.empty();
                       final patients = context.read<PatientProvider>().patients;
+                      if (cart.isClinicalDispense) {
+                        final opdPatientIds = context.read<OpdProvider>().todayQueue.map((a) => a.patientId).toSet();
+                        return patients.where((p) => opdPatientIds.contains(p.id)).where((p) {
+                          final q = val.text.toLowerCase();
+                          return p.name.toLowerCase().contains(q) ||
+                              p.phone.contains(q) ||
+                              p.address.toLowerCase().contains(q);
+                        });
+                      }
                       return patients.where((p) {
                         final q = val.text.toLowerCase();
                         return p.name.toLowerCase().contains(q) ||

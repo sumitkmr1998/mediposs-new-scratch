@@ -267,8 +267,8 @@ class _KPIGrid extends StatelessWidget {
     final bool isCashier = !(auth.currentUser?.canViewHistoricalData ?? true);
 
     final double totalRevenue = isCashier
-        ? (sales.todayRevenue + opd.todayCollectedRevenue)
-        : (sales.filteredRevenue + opd.filteredCollectedRevenue);
+        ? (sales.todayRevenue + opd.todayCollectedRevenue + sales.todayConsultationRevenue + sales.todayProcedureRevenue)
+        : (sales.filteredRevenue + opd.filteredCollectedRevenue + sales.filteredConsultationRevenue + sales.filteredProcedureRevenue);
 
     final String labelSuffix = isCashier ? 'Today' : _getLabelSuffix(sales.activeFilter);
 
@@ -309,7 +309,7 @@ class _KPIGrid extends StatelessWidget {
       return GridView.count(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        crossAxisCount: constraints.maxWidth > 900 ? 3 : 2,
+        crossAxisCount: constraints.maxWidth > 1200 ? 4 : (constraints.maxWidth > 900 ? 3 : 2),
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
         childAspectRatio: 2.8,
@@ -319,7 +319,7 @@ class _KPIGrid extends StatelessWidget {
             value: '₹${totalRevenue.toStringAsFixed(0)}',
             icon: Icons.trending_up_rounded,
             color: AppTheme.emerald,
-            subtitle: 'Incl. OPD Fees',
+            subtitle: 'Combined collections',
             trendText: revTrend.substring(2),
             trendIsUp: revUp,
             onTap: () => context.read<NavigationProvider>().selectDestination('sales'),
@@ -341,6 +341,15 @@ class _KPIGrid extends StatelessWidget {
             trendText: opdTrend.substring(2),
             trendIsUp: opdUp,
             onTap: () => context.read<NavigationProvider>().selectDestination('opd_queue'),
+          ),
+          AppKpiCard(
+            label: "Procedures ($labelSuffix)",
+            value: isCashier
+                ? '₹${sales.todayProcedureRevenue.toStringAsFixed(0)}'
+                : '₹${sales.filteredProcedureRevenue.toStringAsFixed(0)}',
+            icon: Icons.medical_services_outlined,
+            color: AppTheme.accent,
+            onTap: () => context.read<NavigationProvider>().selectDestination('sales'),
           ),
           AppKpiCard(
             label: "Near Expiry",
@@ -416,8 +425,11 @@ class _RevenueBreakdown extends StatelessWidget {
 
     // Collected revenue only
     final productSales = isCashier ? sales.todayRevenue : sales.filteredRevenue;
-    final opdRev = isCashier ? opd.todayCollectedRevenue : opd.filteredCollectedRevenue;
-    final total = productSales + opdRev;
+    final opdRev = isCashier
+        ? (opd.todayCollectedRevenue + sales.todayConsultationRevenue)
+        : (opd.filteredCollectedRevenue + sales.filteredConsultationRevenue);
+    final procedureRev = isCashier ? sales.todayProcedureRevenue : sales.filteredProcedureRevenue;
+    final total = productSales + opdRev + procedureRev;
 
     final totalCash = isCashier
         ? (sales.todayCashRevenue + opd.todayCashRevenue)
@@ -463,7 +475,7 @@ class _RevenueBreakdown extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               _RevenueTotalBadge(total: total, label: labelSuffix.toUpperCase()),
               const SizedBox(width: 48),
@@ -488,6 +500,14 @@ class _RevenueBreakdown extends StatelessWidget {
                       amount: productSales,
                       total: total > 0 ? total : 1.0,
                       color: AppTheme.emerald,
+                    ),
+                    const SizedBox(height: 24),
+                    _BreakdownRow(
+                      icon: Icons.medical_services_outlined,
+                      label: 'Procedures',
+                      amount: procedureRev,
+                      total: total > 0 ? total : 1.0,
+                      color: AppTheme.accent,
                     ),
                     const SizedBox(height: 24),
                     _BreakdownRow(

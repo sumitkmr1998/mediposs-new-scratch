@@ -264,6 +264,7 @@ class InventoryProvider extends ChangeNotifier {
   // Called after a sale checkout to deduct storeStock using FIFO (soonest expiry first)
   // Or called after a return to restock (negative qty)
   List<DeductedBatch> deductStoreStock(int medicineId, int qty) {
+    if (medicineId <= 0) return [];
     final m = _box.get(medicineId);
     final deducted = <DeductedBatch>[];
     if (m != null) {
@@ -343,6 +344,7 @@ class InventoryProvider extends ChangeNotifier {
   // Called after a clinical dispense checkout to deduct mainStock using FIFO (soonest expiry first)
   // Or called after a return to restock (negative qty)
   List<DeductedBatch> deductClinicStock(int medicineId, int qty) {
+    if (medicineId <= 0) return [];
     final m = _box.get(medicineId);
     final deducted = <DeductedBatch>[];
     if (m != null) {

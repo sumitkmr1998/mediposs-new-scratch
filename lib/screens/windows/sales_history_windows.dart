@@ -59,23 +59,32 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
 
     double grossSales = 0;
     double returns = 0;
+    double procedureFeeTotal = 0;
+    double consultationFeeTotal = 0;
+    double medsDiscountTotal = 0;
     
     // For Cashier, we force the revenue summary to Today's metrics
     // For others, we calculate based on the current list (search or filter)
-    if (isCashier) {
-      grossSales = sales.filteredSales.where((s) => _isToday(s.createdAt) && !s.isReturn).fold(0.0, (sum, s) => sum + s.total);
-      returns = sales.filteredSales.where((s) => s.isReturn && _isToday(s.createdAt)).fold(0.0, (sum, s) => sum + s.total.abs());
-    } else {
-      for (final s in sales.filteredSales) {
-        if (s.isReturn) {
-          returns += s.total.abs();
-        } else {
-          grossSales += s.total;
-        }
+    final targetSales = isCashier
+        ? sales.filteredSales.where((s) => _isToday(s.createdAt)).toList()
+        : sales.filteredSales;
+
+    for (final s in targetSales) {
+      final consultation = sales.getConsultationTotal(s);
+      final procedure = sales.getProcedureTotal(s);
+      final medicine = sales.getMedicineTotal(s);
+
+      consultationFeeTotal += consultation;
+      procedureFeeTotal += procedure;
+
+      if (s.isReturn) {
+        returns += medicine.abs();
+      } else {
+        grossSales += medicine;
+        medsDiscountTotal += s.discount.abs();
       }
     }
 
-    final netTotal = grossSales - returns;
     final saleCount = sales.filteredSales.where((s) => !s.isReturn && (isCashier ? _isToday(s.createdAt) : true)).length;
     final returnCount = sales.filteredSales.where((s) => s.isReturn && (isCashier ? _isToday(s.createdAt) : true)).length;
     final rangeLabel = isCashier ? "Today's" : _getRangeLabel(sales);
@@ -87,7 +96,7 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildKpiSection(grossSales, returns, netTotal, sales, saleCount,
+            _buildKpiSection(grossSales, returns, medsDiscountTotal, procedureFeeTotal, consultationFeeTotal, sales, saleCount,
                 returnCount, rangeLabel, isCashier),
             const SizedBox(height: 24),
             _buildFilterSearchCard(sales),
@@ -128,8 +137,17 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
     );
   }
 
-  Widget _buildKpiSection(double grossSales, double returns, double netTotal,
-      SalesProvider sales, int saleCount, int returnCount, String rangeLabel, bool isCashier) {
+  Widget _buildKpiSection(
+      double grossSales,
+      double returns,
+      double medsDiscountTotal,
+      double procedureFeeTotal,
+      double consultationFeeTotal,
+      SalesProvider sales,
+      int saleCount,
+      int returnCount,
+      String rangeLabel,
+      bool isCashier) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -141,9 +159,9 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
                 color: context.textMutedColor)),
         const SizedBox(height: 12),
         LayoutBuilder(builder: (ctx, constraints) {
-          final cols = constraints.maxWidth > 1000
-              ? 4
-              : (constraints.maxWidth > 700 ? 2 : 1);
+          final cols = constraints.maxWidth > 1200
+              ? 5
+              : (constraints.maxWidth > 800 ? 3 : 2);
           const spacing = 16.0;
           final cardWidth =
               (constraints.maxWidth - (cols - 1) * spacing) / cols;
@@ -153,7 +171,23 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
             runSpacing: spacing,
             children: [
               AppKpiCard(
-                label: 'Gross Sales',
+                label: 'Procedure Fees',
+                value: '₹${procedureFeeTotal.toStringAsFixed(0)}',
+                icon: Icons.medical_services_outlined,
+                color: AppTheme.accent,
+                subtitle: 'Procedure collections',
+                width: cardWidth,
+              ),
+              AppKpiCard(
+                label: 'Consultation Fees',
+                value: '₹${consultationFeeTotal.toStringAsFixed(0)}',
+                icon: Icons.assignment_ind_outlined,
+                color: AppTheme.indigo,
+                subtitle: 'Doctor consultations',
+                width: cardWidth,
+              ),
+              AppKpiCard(
+                label: 'Meds Gross Sales',
                 value: '₹${grossSales.toStringAsFixed(0)}',
                 icon: Icons.trending_up_rounded,
                 color: AppTheme.primary,
@@ -161,7 +195,7 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
                 width: cardWidth,
               ),
               AppKpiCard(
-                label: 'Refunds',
+                label: 'Meds Refunds',
                 value: '₹${returns.toStringAsFixed(0)}',
                 icon: Icons.keyboard_return_rounded,
                 color: AppTheme.danger,
@@ -169,22 +203,13 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
                 width: cardWidth,
               ),
               AppKpiCard(
-                label: 'Net Revenue',
-                value: '₹${netTotal.toStringAsFixed(0)}',
-                icon: Icons.account_balance_wallet_rounded,
+                label: 'Meds Discounts',
+                value: '₹${medsDiscountTotal.toStringAsFixed(0)}',
+                icon: Icons.percent_rounded,
                 color: AppTheme.success,
-                subtitle: isCashier ? "Today's Performance" : '$rangeLabel performance',
+                subtitle: isCashier ? "Today's discounts" : '$rangeLabel discounts',
                 width: cardWidth,
               ),
-              if (!isCashier)
-                AppKpiCard(
-                  label: 'Total Discount',
-                  value: '₹${sales.totalDiscount.toStringAsFixed(0)}',
-                  icon: Icons.percent_rounded,
-                  color: AppTheme.accent,
-                  subtitle: 'Lifetime summary',
-                  width: cardWidth,
-                ),
             ],
           );
         }),

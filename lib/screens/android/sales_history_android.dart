@@ -59,19 +59,29 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
             child: LayoutBuilder(builder: (ctx, constraints) {
               double grossSales = 0;
               double returns = 0;
+              double procedureFeeTotal = 0;
+              double consultationFeeTotal = 0;
+              double medsDiscountTotal = 0;
               
-              if (isCashier) {
-                grossSales = sales.filteredSales.where((s) => _isToday(s.createdAt) && !s.isReturn).fold(0.0, (sum, s) => sum + s.total);
-                returns = sales.filteredSales.where((s) => s.isReturn && _isToday(s.createdAt)).fold(0.0, (sum, s) => sum + s.total.abs());
-              } else {
-                for (final s in sales.filteredSales) {
-                  if (s.isReturn)
-                    returns += s.total.abs();
-                  else
-                    grossSales += s.total;
+              final targetSales = isCashier
+                  ? sales.filteredSales.where((s) => _isToday(s.createdAt)).toList()
+                  : sales.filteredSales;
+
+              for (final s in targetSales) {
+                final consultation = sales.getConsultationTotal(s);
+                final procedure = sales.getProcedureTotal(s);
+                final medicine = sales.getMedicineTotal(s);
+
+                consultationFeeTotal += consultation;
+                procedureFeeTotal += procedure;
+
+                if (s.isReturn) {
+                  returns += medicine.abs();
+                } else {
+                  grossSales += medicine;
+                  medsDiscountTotal += s.discount.abs();
                 }
               }
-              final netTotal = grossSales - returns;
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -100,16 +110,38 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
                     children: [
                       Expanded(
                         child: _StatCard(
-                          label: "GROSS",
+                          label: "PROCEDURES",
+                          value: '₹${procedureFeeTotal.toStringAsFixed(0)}',
+                          color: AppTheme.accent,
+                          icon: Icons.medical_services_rounded,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _StatCard(
+                          label: "CONSULTATION",
+                          value: '₹${consultationFeeTotal.toStringAsFixed(0)}',
+                          color: AppTheme.indigo,
+                          icon: Icons.account_box_rounded,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _StatCard(
+                          label: "MED GROSS",
                           value: '₹${grossSales.toStringAsFixed(0)}',
                           color: AppTheme.primary,
                           icon: Icons.trending_up_rounded,
                         ),
                       ),
-                      const SizedBox(width: 12),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
                       Expanded(
                         child: _StatCard(
-                          label: "RETURNS",
+                          label: "MED RETURNS",
                           value: '₹${returns.toStringAsFixed(0)}',
                           color: AppTheme.danger,
                           icon: Icons.assignment_return_rounded,
@@ -118,10 +150,10 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: _StatCard(
-                          label: "NET INCOME",
-                          value: '₹${netTotal.toStringAsFixed(0)}',
+                          label: "MED DISCOUNTS",
+                          value: '₹${medsDiscountTotal.toStringAsFixed(0)}',
                           color: AppTheme.success,
-                          icon: Icons.account_balance_wallet_rounded,
+                          icon: Icons.percent_rounded,
                           isProminent: true,
                         ),
                       ),

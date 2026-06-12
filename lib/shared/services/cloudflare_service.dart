@@ -48,7 +48,27 @@ class CloudflareService {
 
     if (!await exeFile.exists()) {
       debugPrint('Downloading cloudflared.exe...');
-      final url = 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-stable-windows-amd64.exe';
+      
+      // Detect architecture dynamically
+      String arch = 'amd64'; // Default fallback
+      final procArch = Platform.environment['PROCESSOR_ARCHITECTURE']?.toUpperCase() ?? '';
+      
+      if (procArch.contains('ARM64')) {
+        arch = 'arm64';
+      } else if (procArch.contains('X86') || procArch == 'X86') {
+        arch = '386';
+      } else {
+        // Fallback checks using Platform.version
+        final version = Platform.version.toLowerCase();
+        if (version.contains('arm64')) {
+          arch = 'arm64';
+        } else if (version.contains('ia32') || version.contains('x86')) {
+          arch = '386';
+        }
+      }
+
+      final url = 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-stable-windows-$arch.exe';
+      debugPrint('Downloading cloudflared for architecture: $arch from $url');
       final request = await HttpClient().getUrl(Uri.parse(url));
       final response = await request.close();
       await response.pipe(exeFile.openWrite());
@@ -116,6 +136,22 @@ class CloudflareService {
     _tunnelProcess = null;
     _currentUrl = null;
     await FirebaseSyncService.instance.updateHubStatus(isOnline: false);
+  }
+
+  Future<void> redeploy() async {
+    await stop();
+    await _killExistingProcesses();
+    final appDir = await getApplicationSupportDirectory();
+    final exeFile = File(p.join(appDir.path, 'cloudflared.exe'));
+    if (await exeFile.exists()) {
+      try {
+        await exeFile.delete();
+        debugPrint('CloudflareService: Corrupted binary deleted.');
+      } catch (e) {
+        debugPrint('CloudflareService: Error deleting binary: $e');
+      }
+    }
+    await start();
   }
 
   String? get currentUrl => _currentUrl;

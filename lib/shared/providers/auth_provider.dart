@@ -25,6 +25,12 @@ class AuthProvider extends ChangeNotifier {
   bool get canViewAnalytics =>
       isAdmin || (_currentUser?.canViewAnalytics ?? false);
 
+  bool get canViewHistoricalData =>
+      isAdmin || (_currentUser?.canViewHistoricalData ?? false);
+
+  bool get canViewFinancialAnalytics =>
+      isAdmin || (_currentUser?.canViewFinancialAnalytics ?? false);
+
   bool get canViewInventory =>
       isAdmin || (_currentUser?.canViewInventory ?? false);
   bool get hasInventoryWriteAccess =>

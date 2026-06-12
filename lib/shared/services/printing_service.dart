@@ -245,21 +245,7 @@ class PrintingService {
 
               // Totals
               _buildTotalRow('Subtotal', sale.subtotal),
-              (() {
-                double consultationFee = 0.0;
-                for (final item in items) {
-                  if (item.medicineName == 'Consultation Fee') {
-                    consultationFee += item.lineTotal;
-                  }
-                }
-                final displayDiscount = sale.discount.abs() - consultationFee;
-                return pw.Column(
-                  children: [
-                    if (displayDiscount > 0) _buildTotalRow('Discount', displayDiscount),
-                    if (consultationFee > 0) _buildTotalRow('Advance Paid Consultation Fee', 0, stringValue: '-${consultationFee.toStringAsFixed(2)}'),
-                  ],
-                );
-              })(),
+              if (sale.discount.abs() > 0) _buildTotalRow('Discount', sale.discount.abs()),
               if (sale.taxAmount > 0 && !sale.isClinicalDispense) _buildTotalRow('Tax', sale.taxAmount),
 
               pw.SizedBox(height: 2),
@@ -621,6 +607,7 @@ class PrintingService {
       date: sale.createdAt,
       items: invoiceItems,
       totalAmount: sale.total.abs(),
+      discount: sale.discount.abs(),
       isClinicalDispense: sale.isClinicalDispense,
     );
 

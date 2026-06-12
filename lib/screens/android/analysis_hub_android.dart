@@ -49,6 +49,10 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
   String _h1Period = 'This Month';
   DateTimeRange? _h1CustomRange;
 
+  int _reorderTrendDays = 30;
+  int _reorderDepletionDays = 90;
+  int _reorderTargetDays = 365;
+
   List<Sale> _getFilteredSalesForPerf(List<Sale> sales) {
     final now = DateTime.now();
     DateTime start;
@@ -950,11 +954,59 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
     );
   }
 
+  Widget _buildConfigDropdownAndroid<T>({
+    required String label,
+    required T value,
+    required Map<T, String> items,
+    required ValueChanged<T?> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: context.textMutedColor),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+          decoration: BoxDecoration(
+            color: context.surfaceColor,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: context.borderColor.withValues(alpha: 0.15)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<T>(
+              value: value,
+              onChanged: onChanged,
+              isExpanded: true,
+              dropdownColor: context.surfaceColor,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: context.textColor),
+              icon: Icon(Icons.arrow_drop_down, size: 16, color: context.textMutedColor),
+              items: items.entries.map((e) {
+                return DropdownMenuItem<T>(
+                  value: e.key,
+                  child: Text(e.value, overflow: TextOverflow.ellipsis),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   // ==========================================
   // 4. REORDER & DEAD STOCK (Optimized for Mobile)
   // ==========================================
   Widget _buildReorderAndDeadStockTab(List<Sale> sales, List<Medicine> medicines) {
-    final lowStock = medicines.where((m) => m.totalStock <= m.lowStockThreshold).toList();
+    final reorders = AnalyticsHelper.getReorderList(
+      medicines,
+      sales,
+      trendDays: _reorderTrendDays,
+      depletionDaysThreshold: _reorderDepletionDays,
+      targetStockDays: _reorderTargetDays,
+    );
     final deadStock = AnalyticsHelper.getDeadStock(medicines, sales, 90);
 
     return SingleChildScrollView(
@@ -962,18 +1014,96 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Config panel
+          Container(
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: context.surfaceColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: context.borderColor.withValues(alpha: 0.12)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.settings_suggest_rounded, color: AppTheme.primary, size: 18),
+                    const SizedBox(width: 8),
+                    const Text('Calculation settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildConfigDropdownAndroid<int>(
+                        label: 'TREND WINDOW',
+                        value: _reorderTrendDays,
+                        items: {
+                          15: '15 Days',
+                          30: '30 Days (Def)',
+                          90: '90 Days',
+                        },
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _reorderTrendDays = val);
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildConfigDropdownAndroid<int>(
+                        label: 'TRIGGER HORIZON',
+                        value: _reorderDepletionDays,
+                        items: {
+                          30: '30 Days',
+                          60: '60 Days',
+                          90: '90 Days (Def)',
+                        },
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _reorderDepletionDays = val);
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildConfigDropdownAndroid<int>(
+                        label: 'STOCK TARGET',
+                        value: _reorderTargetDays,
+                        items: {
+                          90: '90 Days',
+                          180: '180 Days',
+                          365: '1 Year (Def)',
+                        },
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _reorderTargetDays = val);
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
           Row(
             children: [
               const Icon(Icons.warning_amber_rounded, color: AppTheme.warning, size: 18),
               const SizedBox(width: 8),
               Text(
-                'Critical Reorder Logs (${lowStock.length})',
+                'Critical Reorder Logs (${reorders.length})',
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          lowStock.isEmpty
+          reorders.isEmpty
               ? const Card(
                   child: Padding(
                     padding: EdgeInsets.all(16),
@@ -983,9 +1113,10 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
               : ListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  itemCount: lowStock.length,
+                  itemCount: reorders.length,
                   itemBuilder: (context, idx) {
-                    final med = lowStock[idx];
+                    final rec = reorders[idx];
+                    final isCritical = rec.daysLeft < 15;
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       child: Padding(
@@ -994,24 +1125,43 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
                           children: [
                             Container(
                               padding: const EdgeInsets.all(6),
-                              decoration: const BoxDecoration(color: Color(0xFFFEE2E2), shape: BoxShape.circle),
-                              child: const Icon(Icons.reorder, color: AppTheme.danger, size: 16),
+                              decoration: BoxDecoration(
+                                color: (isCritical ? AppTheme.danger : Colors.orange).withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                isCritical ? Icons.gpp_bad_rounded : Icons.warning_amber_rounded,
+                                color: isCritical ? AppTheme.danger : Colors.orange,
+                                size: 16,
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(med.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                  Text(rec.medicine.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                                   const SizedBox(height: 2),
-                                  Text('Alert Threshold: ${med.lowStockThreshold} ${med.unit}', style: TextStyle(color: context.textMutedColor, fontSize: 10)),
+                                  Text(
+                                    'Stock: ${rec.medicine.totalStock} ${rec.medicine.unit} (Daily: ${rec.dailyVelocity.toStringAsFixed(1)}/d)',
+                                    style: TextStyle(color: context.textMutedColor, fontSize: 10),
+                                  ),
                                 ],
                               ),
                             ),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                Text('${med.totalStock} left', style: const TextStyle(color: AppTheme.danger, fontWeight: FontWeight.bold, fontSize: 12)),
+                                Text('Suggest: +${rec.suggestedReorderQty}', style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold, fontSize: 12)),
+                                const SizedBox(height: 2),
+                                Text(
+                                  rec.daysLeft >= 999.0 ? 'Life: ∞' : 'Life: ${rec.daysLeft.toStringAsFixed(0)}d',
+                                  style: TextStyle(
+                                    color: rec.daysLeft < 7 ? AppTheme.danger : context.textMutedColor,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ],
                             ),
                           ],
@@ -1087,9 +1237,6 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
     );
   }
 
-  // ==========================================
-  // 5. PATIENT ANALYTICS (Optimized for Mobile)
-  // ==========================================
   Widget _buildPatientAnalyticsTab(List<Sale> sales, List<Patient> patients) {
     final stats = AnalyticsHelper.getPatientAnalytics(sales, patients);
 

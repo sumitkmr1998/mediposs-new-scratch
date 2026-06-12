@@ -192,8 +192,9 @@ class _ReturnDialogState extends State<ReturnDialog> {
     db.saleBox.put(returnSale);
     salesProvider.load(); // Refresh sales history
 
-    // SYNC: Push return record to Hub if on Android
-    if (Platform.isAndroid) {
+    // SYNC: Push return record to Hub if client
+    final isClient = Platform.isAndroid || (Platform.isWindows && db.settings.isWindowsClient);
+    if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'sale',
         action: 'create',

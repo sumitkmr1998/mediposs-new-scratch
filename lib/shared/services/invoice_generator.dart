@@ -9,7 +9,7 @@ class InvoiceGenerator {
     final doc = pw.Document();
     
     final bool isSmall = format.width < 400;
-    final double m = isSmall ? 16 : 32;
+    final double m = isSmall ? 12 : 24;
 
     doc.addPage(
       pw.MultiPage(
@@ -18,14 +18,14 @@ class InvoiceGenerator {
         build: (pw.Context context) => [
           _buildHeader(invoice, isSmall),
           if (invoice.isClinicalDispense) ...[
-            pw.SizedBox(height: isSmall ? 10 : 20),
+            pw.SizedBox(height: isSmall ? 6 : 12),
             _buildPatientInfo(invoice, isSmall),
           ],
-          pw.SizedBox(height: isSmall ? 10 : 20),
+          pw.SizedBox(height: isSmall ? 6 : 12),
           _buildInvoiceTable(invoice, isSmall),
-          pw.SizedBox(height: isSmall ? 15 : 30),
+          pw.SizedBox(height: isSmall ? 8 : 16),
           _buildTotal(invoice, isSmall),
-          pw.SizedBox(height: isSmall ? 25 : 50),
+          pw.SizedBox(height: isSmall ? 12 : 24),
           _buildFooter(invoice, isSmall),
         ],
       ),
@@ -129,7 +129,7 @@ class InvoiceGenerator {
 
   static pw.Widget _buildPatientInfo(Invoice invoice, bool isSmall) {
     return pw.Container(
-      padding: pw.EdgeInsets.all(isSmall ? 8 : 12),
+      padding: pw.EdgeInsets.all(isSmall ? 6 : 10),
       decoration: pw.BoxDecoration(
         border: pw.Border.all(color: PdfColors.grey300),
         borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
@@ -204,7 +204,7 @@ class InvoiceGenerator {
       border: null,
       headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: isSmall ? 9 : 12),
       headerDecoration: const pw.BoxDecoration(color: PdfColors.blue900),
-      cellHeight: isSmall ? 20 : 30,
+      cellHeight: isSmall ? 15 : 22,
       cellAlignments: {
         0: pw.Alignment.centerLeft,
         1: pw.Alignment.centerRight,
@@ -228,14 +228,7 @@ class InvoiceGenerator {
     final double fs = isSmall ? 8 : 10;
     final double titleFs = isSmall ? 12 : 14;
 
-    double consultationFee = 0.0;
-    for (final item in invoice.items) {
-      if (item.name.contains('Consultation Fee')) {
-        consultationFee += item.amount;
-      }
-    }
-
-    if (consultationFee > 0) {
+    if (invoice.discount > 0) {
       final double subtotal = invoice.items.fold(0.0, (sum, item) => sum + item.amount);
       return pw.Container(
         alignment: pw.Alignment.centerRight,
@@ -253,8 +246,8 @@ class InvoiceGenerator {
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.end,
               children: [
-                pw.Text('Advance Paid Consultation Fee: ', style: pw.TextStyle(fontSize: fs)),
-                pw.Text('-Rs. ${consultationFee.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: fs)),
+                pw.Text('Discount: ', style: pw.TextStyle(fontSize: fs)),
+                pw.Text('-Rs. ${invoice.discount.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: fs)),
               ],
             ),
             pw.SizedBox(height: 4),
@@ -304,32 +297,8 @@ class InvoiceGenerator {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Row(
-          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: pw.CrossAxisAlignment.end,
-          children: [
-            pw.Expanded(
-              child: pw.SizedBox(),
-            ),
-            if (invoice.isClinicalDispense) ...[
-              pw.SizedBox(width: 8),
-              pw.Column(
-                children: [
-                  pw.Container(
-                    width: isSmall ? 80 : 150,
-                    decoration: const pw.BoxDecoration(
-                      border: pw.Border(top: pw.BorderSide(color: PdfColors.grey)),
-                    ),
-                  ),
-                  pw.SizedBox(height: 4),
-                  pw.Text("Doctor's Signature", style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: fs)),
-                ],
-              ),
-            ],
-          ],
-        ),
         if (showCompositionNotice) ...[
-          pw.SizedBox(height: 12),
+          pw.SizedBox(height: 6),
           pw.Center(
             child: pw.Text(
               'Composition taxable person, not eligible to collect tax on supplies',
@@ -343,12 +312,12 @@ class InvoiceGenerator {
           ),
         ],
         if (invoice.isClinicalDispense) ...[
-          pw.SizedBox(height: 12),
+          pw.SizedBox(height: 6),
           pw.Center(
             child: pw.Text(
               'DISCLAIMER: Dispensed medicines must be consumed as prescribed by the doctor. Please verify the medicine name, batch, dosage, and expiry before use.',
               style: pw.TextStyle(
-                fontSize: isSmall ? 7 : 9,
+                fontSize: isSmall ? 6.5 : 8.5,
                 fontStyle: pw.FontStyle.italic,
                 color: PdfColors.grey700,
               ),
@@ -356,7 +325,7 @@ class InvoiceGenerator {
             ),
           ),
         ],
-        pw.SizedBox(height: isSmall ? 20 : 40),
+        pw.SizedBox(height: isSmall ? 8 : 12),
         pw.Center(
           child: pw.Text(
             'This is a computer generated invoice and does not require a physical seal.',

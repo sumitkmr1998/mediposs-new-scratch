@@ -1132,6 +1132,50 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                   'Use this URL to connect remotely from anywhere in the world.',
                   isLink: true,
                 ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (ctx) => const AlertDialog(
+                          content: Row(
+                            children: [
+                              CircularProgressIndicator(),
+                              SizedBox(width: 20),
+                              Text('Redeploying Cloudflare Tunnel...'),
+                            ],
+                          ),
+                        ),
+                      );
+                      try {
+                        await CloudflareService.instance.redeploy();
+                        if (context.mounted) {
+                          Navigator.of(context).pop();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Cloudflare Tunnel redeployed successfully!')),
+                          );
+                          setState(() {});
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          Navigator.of(context).pop();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Redeployment failed: $e')),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(LucideIcons.refreshCw, size: 16),
+                    label: const Text('Redeploy Cloudflare Tunnel'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.primary,
+                      side: const BorderSide(color: AppTheme.primary),
+                    ),
+                  ),
+                ),
               ] : [
                 const Text(
                   'This PC is currently acting as a Terminal Client. It will connect to the master Hub for all data.',

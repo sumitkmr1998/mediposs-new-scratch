@@ -12,6 +12,7 @@ class Invoice {
   final DateTime date;
   final List<InvoiceItem> items;
   final double totalAmount;
+  final double discount;
 
   final bool isClinicalDispense;
 
@@ -27,6 +28,7 @@ class Invoice {
     required this.date,
     required this.items,
     required this.totalAmount,
+    this.discount = 0.0,
     this.isClinicalDispense = false,
   });
 

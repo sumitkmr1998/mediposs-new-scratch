@@ -286,7 +286,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(2, 1561353773588181738),
       name: 'AppUser',
-      lastPropertyId: const obx_int.IdUid(36, 6641229640248136363),
+      lastPropertyId: const obx_int.IdUid(37, 5668218736045193962),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -457,6 +457,11 @@ final _entities = <obx_int.ModelEntity>[
         obx_int.ModelProperty(
             id: const obx_int.IdUid(36, 6641229640248136363),
             name: 'canEditSales',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(37, 5668218736045193962),
+            name: 'canViewFinancialAnalytics',
             type: 1,
             flags: 0)
       ],
@@ -1951,7 +1956,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final nameOffset = fbb.writeString(object.name);
           final roleOffset = fbb.writeString(object.role);
           final pinOffset = fbb.writeString(object.pin);
-          fbb.startTable(37);
+          fbb.startTable(38);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, nameOffset);
           fbb.addOffset(2, roleOffset);
@@ -1986,6 +1991,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addBool(33, object.canProcessClinicalDispenses);
           fbb.addBool(34, object.canViewAnalytics);
           fbb.addBool(35, object.canEditSales);
+          fbb.addBool(36, object.canViewFinancialAnalytics);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -2060,6 +2066,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.BoolReader().vTableGet(buffer, rootOffset, 54, false);
           final canViewHistoricalDataParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 56, false);
+          final canViewFinancialAnalyticsParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 76, false);
           final object = AppUser(
               id: idParam,
               name: nameParam,
@@ -2094,7 +2102,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               canDeleteAppointments: canDeleteAppointmentsParam,
               canViewPurchasePrice: canViewPurchasePriceParam,
               canExportData: canExportDataParam,
-              canViewHistoricalData: canViewHistoricalDataParam);
+              canViewHistoricalData: canViewHistoricalDataParam,
+              canViewFinancialAnalytics: canViewFinancialAnalyticsParam);
 
           return object;
         }),
@@ -3704,6 +3713,10 @@ class AppUser_ {
   /// See [AppUser.canEditSales].
   static final canEditSales =
       obx.QueryBooleanProperty<AppUser>(_entities[1].properties[33]);
+
+  /// See [AppUser.canViewFinancialAnalytics].
+  static final canViewFinancialAnalytics =
+      obx.QueryBooleanProperty<AppUser>(_entities[1].properties[34]);
 }
 
 /// [Appointment] entity fields to define ObjectBox queries.

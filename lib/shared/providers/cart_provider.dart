@@ -19,6 +19,7 @@ import 'dart:io';
 import 'package:provider/provider.dart';
 import '../services/firebase_sync_service.dart';
 
+import '../../objectbox.g.dart';
 import '../models/procedure.dart';
 
 class CartItem {
@@ -157,20 +158,21 @@ class CartProvider extends ChangeNotifier {
   double get linkedConsultationFee {
     if (_linkedAppointmentId == null || _linkedAppointmentId == 0) return 0.0;
     final appt = ObjectBoxService.instance.appointmentBox.get(_linkedAppointmentId!);
+    if (appt?.consultationBilled == true) return 0.0;
     return appt?.consultationFee ?? 0.0;
   }
 
-  double get subtotal => _items.fold(0.0, (sum, item) => sum + item.lineTotal) + linkedConsultationFee;
+  double get subtotal => _items.fold(0.0, (sum, item) => sum + item.lineTotal);
 
   double get taxRate => (_isClinicalDispense || ObjectBoxService.instance.settings.isCompositionScheme)
       ? 0.0
       : ObjectBoxService.instance.settings.taxRate / 100.0;
 
   double get taxAmount =>
-      (subtotal - (_discountAmount + linkedConsultationFee)).clamp(0, double.infinity) * taxRate;
+      (subtotal - _discountAmount).clamp(0, double.infinity) * taxRate;
 
   double get total =>
-      (subtotal - (_discountAmount + linkedConsultationFee) + taxAmount).clamp(0, double.infinity);
+      (subtotal - _discountAmount + taxAmount).clamp(0, double.infinity);
 
   double get totalRounded => (total * 10).round() / 10.0;
 
@@ -543,18 +545,34 @@ class CartProvider extends ChangeNotifier {
       }
     }
 
+    final finalSubtotal = subtotal + fee;
+    final finalTaxAmount = taxAmount;
+    final finalTotal = (finalSubtotal - _discountAmount + finalTaxAmount).clamp(0.0, double.infinity);
+    final finalTotalRounded = (finalTotal * 10).round() / 10.0;
+
     // Compute split logic
     double fCash = 0, fUpi = 0, fCard = 0;
     if (_paymentMethod == 'mixed') {
       fCash = _mixedCash;
       fUpi = _mixedUpi;
       fCard = _mixedCard;
+      final appt = _linkedAppointmentId != null && _linkedAppointmentId != 0
+          ? db.appointmentBox.get(_linkedAppointmentId!)
+          : null;
+      final apptPayMethod = appt?.paymentMethod ?? 'cash';
+      if (apptPayMethod == 'upi') {
+        fUpi += fee;
+      } else if (apptPayMethod == 'card') {
+        fCard += fee;
+      } else {
+        fCash += fee;
+      }
     } else if (_paymentMethod == 'upi') {
-      fUpi = totalRounded;
+      fUpi = finalTotalRounded;
     } else if (_paymentMethod == 'card') {
-      fCard = totalRounded;
+      fCard = finalTotalRounded;
     } else {
-      fCash = totalRounded;
+      fCash = finalTotalRounded;
     }
 
     if (_isReturnMode) {
@@ -570,11 +588,11 @@ class CartProvider extends ChangeNotifier {
       patientName: _patientName,
       patientPhone: _patientPhone,
       patientUhid: _patientUhid,
-      subtotal: _isReturnMode ? -subtotal : subtotal,
-      discount: _isReturnMode ? -(_discountAmount + fee) : (_discountAmount + fee),
+      subtotal: _isReturnMode ? -finalSubtotal : finalSubtotal,
+      discount: _isReturnMode ? -_discountAmount : _discountAmount,
       taxRate: (_isClinicalDispense || settings.isCompositionScheme) ? 0.0 : settings.taxRate,
-      taxAmount: _isReturnMode ? -taxAmount : taxAmount,
-      total: _isReturnMode ? -totalRounded : totalRounded,
+      taxAmount: _isReturnMode ? -finalTaxAmount : finalTaxAmount,
+      total: _isReturnMode ? -finalTotalRounded : finalTotalRounded,
       paymentMethod: _paymentMethod,
       cashAmount: fCash,
       upiAmount: fUpi,
@@ -667,18 +685,46 @@ class CartProvider extends ChangeNotifier {
           syncService: syncService);
     }
 
-    // OPD Queue Automation: Mark today's active appointment as Done
-    if (_patientId != 0 && !_isReturnMode) {
-      final activeAppt = _opdProvider.todayQueue
-          .where((a) =>
-              a.patientId == _patientId &&
-              (a.status == kStatusWaiting ||
-                  a.status == kStatusWithDoctor ||
-                  a.status == kStatusPharmacy))
-          .firstOrNull;
+    // OPD Queue Automation: Mark today's active appointment as Done and consultation fee as billed
+    final apptId = _linkedAppointmentId;
+    if (apptId != null && apptId != 0 && !_isReturnMode) {
+      final appt = db.appointmentBox.get(apptId);
+      if (appt != null) {
+        if (appt.status != kStatusDone) {
+          _opdProvider.updateStatus(appt.id, kStatusDone, syncService);
+        }
 
-      if (activeAppt != null) {
-        _opdProvider.updateStatus(activeAppt.id, kStatusDone, syncService);
+        if (!appt.consultationBilled) {
+          appt.consultationBilled = true;
+          db.appointmentBox.put(appt);
+
+          // Find and remove the initial advance OPD consultation fee sale to prevent double counting
+          final existingOpdSale = db.saleBox
+              .query(Sale_.linkedAppointmentId.equals(appt.id)
+                  .and(Sale_.invoiceNo.startsWith('OPD-')))
+              .build()
+              .findFirst();
+          if (existingOpdSale != null) {
+            db.saleBox.remove(existingOpdSale.id);
+            if (isClient) {
+              SyncQueueService.instance.addToQueue(
+                entity: 'sale',
+                action: 'delete',
+                data: {'invoiceNo': existingOpdSale.invoiceNo},
+              );
+            }
+          }
+
+          if (isClient) {
+            SyncQueueService.instance.addToQueue(
+              entity: 'appointment',
+              action: 'update',
+              data: appt.toJson(),
+            );
+          } else if (isHub && LocalServerService.instance.isRunning) {
+            LocalServerService.instance.broadcast({'event': 'appointments_updated'});
+          }
+        }
       }
     }
 

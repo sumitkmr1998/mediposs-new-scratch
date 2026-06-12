@@ -55,6 +55,7 @@ class AppUser {
   bool canViewPurchasePrice;     // Restricted financial data
   bool canExportData;            // Prevent bulk extraction
   bool canViewHistoricalData;    // Shield historical stats (Dashboard/Reports)
+  bool canViewFinancialAnalytics;
 
   AppUser({
     this.id = 0,
@@ -91,6 +92,7 @@ class AppUser {
     this.canViewPurchasePrice = false,
     this.canExportData = false,
     this.canViewHistoricalData = true,
+    this.canViewFinancialAnalytics = false,
   });
 
   /// Applies standard permissions based on a role name.
@@ -131,6 +133,7 @@ class AppUser {
         canBulkDiscount = true;
         canViewHistoricalData = true;
         canExportData = true;
+        canViewFinancialAnalytics = true;
         break;
       case 'pharmacist':
         canViewInventory = true;
@@ -173,6 +176,7 @@ class AppUser {
         canViewOpdReports = true;
         canViewPurchasePrice = true;
         canViewHistoricalData = true;
+        canViewFinancialAnalytics = true;
         break;
     }
   }
@@ -225,6 +229,7 @@ class AppUser {
     canViewPurchasePrice = val;
     canExportData = val;
     canViewHistoricalData = val;
+    canViewFinancialAnalytics = val;
   }
 
   Map<String, dynamic> toJson() => {
@@ -262,6 +267,7 @@ class AppUser {
         'canViewPurchasePrice': canViewPurchasePrice,
         'canExportData': canExportData,
         'canViewHistoricalData': canViewHistoricalData,
+        'canViewFinancialAnalytics': canViewFinancialAnalytics,
       };
 
   static AppUser fromJson(Map<String, dynamic> json) => AppUser(
@@ -299,6 +305,7 @@ class AppUser {
         canViewPurchasePrice: json['canViewPurchasePrice'] ?? false,
         canExportData: json['canExportData'] ?? false,
         canViewHistoricalData: json['canViewHistoricalData'] ?? true,
+        canViewFinancialAnalytics: json['canViewFinancialAnalytics'] ?? false,
       );
 }
 
