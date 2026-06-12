@@ -23,6 +23,7 @@ import '../models/doctor.dart';
 import '../models/stock_transfer.dart';
 import '../models/procedure.dart';
 import '../models/audit_log.dart';
+import '../models/schedule_h1_record.dart';
 import 'package:objectbox/objectbox.dart';
 import '../../objectbox.g.dart';
 import 'package:flutter/foundation.dart';
@@ -95,6 +96,8 @@ class LocalServerService {
     router.post('/api/procedures/delete', _withAuth(_proceduresDeleteHandler));
     router.post('/api/sync', _withAuth(_syncHandler));
     router.post('/api/audit/push', _withAuth(_auditPushHandler));
+    router.get('/api/h1-records', _withAuth(_h1RecordsGetHandler));
+    router.post('/api/h1-records/push', _withAuth(_h1RecordsPushHandler));
 
     // Deletion Endpoints
     router.post('/api/sales/delete', _withAuth(_salesDeleteHandler));
@@ -1090,6 +1093,9 @@ class LocalServerService {
         'notes': a.notes,
         'scheduledAt': a.scheduledAt.toIso8601String(),
         'createdAt': a.createdAt.toIso8601String(),
+        'calledAt': a.calledAt?.toIso8601String(),
+        'pharmacyAt': a.pharmacyAt?.toIso8601String(),
+        'completedAt': a.completedAt?.toIso8601String(),
         'isWalkIn': a.isWalkIn,
         'consultationBilled': a.consultationBilled,
       };
@@ -2306,6 +2312,58 @@ class LocalServerService {
       return Response.ok(jsonEncode({'success': true}));
     } catch (e) {
       debugPrint('Hub: Error receiving audit log push - $e');
+      return Response.internalServerError(
+        body: jsonEncode({'error': e.toString()}),
+        headers: {'content-type': 'application/json'},
+      );
+    }
+  }
+
+  Response _h1RecordsGetHandler(Request req) {
+    final sinceStr = req.url.queryParameters['since'];
+    final sinceMs = int.tryParse(sinceStr ?? '') ?? (DateTime.tryParse(sinceStr ?? '')?.millisecondsSinceEpoch) ?? 0;
+
+    final box = ObjectBoxService.instance.store.box<ScheduleH1Record>();
+    final records = box.getAll().where((r) => r.saleDate.millisecondsSinceEpoch > sinceMs - 1).toList();
+
+    debugPrint('Hub: H1 sync requested (since=$sinceMs). Returning ${records.length} records.');
+
+    final json = records.map((r) => r.toJson()).toList();
+    return Response.ok(
+      jsonEncode({'data': json, 'serverTime': DateTime.now().millisecondsSinceEpoch}),
+      headers: {'content-type': 'application/json'},
+    );
+  }
+
+  Future<Response> _h1RecordsPushHandler(Request req) async {
+    try {
+      final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      final rec = ScheduleH1Record.fromJson(body);
+
+      final box = ObjectBoxService.instance.store.box<ScheduleH1Record>();
+      final existing = box.getAll().where((r) =>
+          r.invoiceNo == rec.invoiceNo &&
+          r.medicineName == rec.medicineName &&
+          r.batchNo == rec.batchNo).firstOrNull;
+
+      if (existing != null) {
+        rec.id = existing.id;
+      } else {
+        rec.id = 0;
+      }
+
+      box.put(rec);
+
+      broadcast({'event': 'h1_records_updated'});
+      broadcast({'event': 'sync_received'});
+      _incomingDataController.add('h1_records');
+
+      return Response.ok(
+        jsonEncode({'status': 'success', 'h1RecordId': rec.id}),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      debugPrint('Hub: Error pushing H1 record - $e');
       return Response.internalServerError(
         body: jsonEncode({'error': e.toString()}),
         headers: {'content-type': 'application/json'},

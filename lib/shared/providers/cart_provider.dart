@@ -623,7 +623,16 @@ class CartProvider extends ChangeNotifier {
             linkedSaleId: sale.id,
             invoiceNo: sale.invoiceNo,
           );
-          db.store.box<ScheduleH1Record>().put(h1Record);
+          final recId = db.store.box<ScheduleH1Record>().put(h1Record);
+          h1Record.id = recId;
+
+          if (isClient) {
+            SyncQueueService.instance.addToQueue(
+              entity: 'h1_record',
+              action: 'create',
+              data: h1Record.toJson(),
+            );
+          }
         }
       }
     }

@@ -634,10 +634,23 @@ class _PosWindowsState extends State<PosWindows> {
     final patientProvider = context.read<PatientProvider>();
     final patient = cart.patientId != 0 ? patientProvider.getById(cart.patientId) : null;
     
+    final patientNameCtrl = TextEditingController(text: cart.patientName.isNotEmpty ? cart.patientName : '');
     final patientAddrCtrl = TextEditingController(text: cart.patientAddress.isNotEmpty ? cart.patientAddress : (patient?.address ?? ''));
     final docNameCtrl = TextEditingController(text: cart.doctorName);
     final docAddrCtrl = TextEditingController(text: cart.doctorAddress);
     final docRegCtrl = TextEditingController(text: cart.doctorRegistrationNo);
+
+    final settings = ObjectBoxService.instance.settings;
+    if (docNameCtrl.text.trim().isEmpty && settings.defaultDoctorId != null && settings.defaultDoctorId != 0) {
+      final docBox = ObjectBoxService.instance.store.box<Doctor>();
+      final defaultDoc = docBox.get(settings.defaultDoctorId!);
+      if (defaultDoc != null) {
+        docNameCtrl.text = defaultDoc.name;
+        docAddrCtrl.text = defaultDoc.address;
+        docRegCtrl.text = defaultDoc.registrationNo;
+      }
+    }
+
     final formKey = GlobalKey<FormState>();
 
     return showDialog<Map<String, String>>(
@@ -661,10 +674,19 @@ class _PosWindowsState extends State<PosWindows> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'This transaction contains Schedule H1 drugs. According to medical compliance rules, patient address and prescribing doctor details are mandatory.',
+                    'This transaction contains Schedule H1 drugs. According to medical compliance rules, patient name, patient address, and prescribing doctor details are mandatory.',
                     style: TextStyle(fontSize: 13, color: Colors.grey),
                   ),
                   const SizedBox(height: 16),
+                  TextFormField(
+                    controller: patientNameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Patient Name *',
+                      isDense: true,
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Patient name is required' : null,
+                  ),
+                  const SizedBox(height: 12),
                   TextFormField(
                     controller: patientAddrCtrl,
                     decoration: const InputDecoration(
@@ -714,6 +736,7 @@ class _PosWindowsState extends State<PosWindows> {
             onPressed: () {
               if (formKey.currentState!.validate()) {
                 Navigator.pop(ctx, {
+                  'patientName': patientNameCtrl.text.trim(),
                   'patientAddress': patientAddrCtrl.text.trim(),
                   'doctorName': docNameCtrl.text.trim(),
                   'doctorAddress': docAddrCtrl.text.trim(),
@@ -729,7 +752,7 @@ class _PosWindowsState extends State<PosWindows> {
   }
 
   Future<void> _doCheckout(CartProvider cart) async {
-    final pName = _patientCtrl.text.trim();
+    String pName = _patientCtrl.text.trim();
     if (cart.isClinicalDispense) {
       if (cart.patientId == 0 || pName.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -754,12 +777,29 @@ class _PosWindowsState extends State<PosWindows> {
         doctorRegistrationNo: h1Details['doctorRegistrationNo']!,
         patientAddress: h1Details['patientAddress']!,
       );
+      if (h1Details['patientName']!.isNotEmpty) {
+        _patientCtrl.text = h1Details['patientName']!;
+        pName = h1Details['patientName']!;
+        cart.setPatient(
+          name: pName,
+          id: cart.patientId,
+          phone: cart.patientPhone,
+          uhid: cart.patientUhid,
+          address: h1Details['patientAddress']!,
+        );
+      }
     }
     
     if (pName.isEmpty) {
-      cart.setPatient(name: '', phone: '', id: 0, uhid: '');
+      cart.setPatient(name: '', phone: '', id: 0, uhid: '', address: '');
     } else {
-      cart.setPatient(name: pName, id: cart.patientId, phone: cart.patientPhone, uhid: cart.patientUhid);
+      cart.setPatient(
+        name: pName, 
+        id: cart.patientId, 
+        phone: cart.patientPhone, 
+        uhid: cart.patientUhid, 
+        address: cart.patientAddress,
+      );
     }
     final discount = double.tryParse(_discountCtrl.text) ?? 0;
     cart.setDiscount(discount);

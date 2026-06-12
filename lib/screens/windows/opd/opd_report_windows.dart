@@ -122,8 +122,26 @@ class _OpdReportWindowsState extends State<OpdReportWindows> {
     );
   }
 
+  String _formatDuration(Duration d) {
+    if (d.inSeconds <= 0) return '--';
+    final mins = d.inMinutes;
+    if (mins < 1) {
+      return '< 1m';
+    }
+    if (mins < 60) {
+      return '${mins}m';
+    }
+    final hrs = d.inHours;
+    final remainingMins = mins % 60;
+    if (remainingMins == 0) return '${hrs}h';
+    return '${hrs}h ${remainingMins}m';
+  }
+
   Widget _buildKpiSection(int totalPatients, int doneCount, double revenue,
       OpdProvider opd, String rangeLabel) {
+    final avgWait = opd.filteredAverageWaitingTime;
+    final avgDoctor = opd.filteredAverageDoctorTime;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -135,9 +153,9 @@ class _OpdReportWindowsState extends State<OpdReportWindows> {
                 color: context.textMutedColor)),
         const SizedBox(height: 12),
         LayoutBuilder(builder: (ctx, constraints) {
-          final cols = constraints.maxWidth > 1000
-              ? 4
-              : (constraints.maxWidth > 700 ? 2 : 1);
+          final cols = constraints.maxWidth > 1200
+              ? 6
+              : (constraints.maxWidth > 800 ? 3 : (constraints.maxWidth > 550 ? 2 : 1));
           const spacing = 16.0;
           final cardWidth =
               (constraints.maxWidth - (cols - 1) * spacing) / cols;
@@ -178,6 +196,22 @@ class _OpdReportWindowsState extends State<OpdReportWindows> {
                 icon: Icons.medical_services_rounded,
                 color: AppTheme.purple,
                 subtitle: 'On duty',
+                width: cardWidth,
+              ),
+              AppKpiCard(
+                label: 'Avg. Waiting Time',
+                value: _formatDuration(avgWait),
+                icon: Icons.access_time_rounded,
+                color: AppTheme.warning,
+                subtitle: 'Queue delay',
+                width: cardWidth,
+              ),
+              AppKpiCard(
+                label: 'Avg. Doctor Time',
+                value: _formatDuration(avgDoctor),
+                icon: Icons.healing_rounded,
+                color: AppTheme.primaryLight,
+                subtitle: 'Session duration',
                 width: cardWidth,
               ),
             ],

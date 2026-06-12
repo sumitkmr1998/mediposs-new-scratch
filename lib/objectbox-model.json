@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:637942838794498612",
-      "lastPropertyId": "47:3858216092315493269",
+      "lastPropertyId": "48:4065307820196271581",
       "name": "AppSettings",
       "properties": [
         {
@@ -242,6 +242,11 @@
         {
           "id": "47:3858216092315493269",
           "name": "auditRetentionDays",
+          "type": 6
+        },
+        {
+          "id": "48:4065307820196271581",
+          "name": "defaultDoctorId",
           "type": 6
         }
       ],

@@ -360,6 +360,7 @@ class AppSettings {
 
   // Multi-Tenant Cloud Sync
   String shopId;
+  int? defaultDoctorId;
 
   AppSettings({
     this.id = 0,
@@ -409,6 +410,7 @@ class AppSettings {
     this.showBatchExpiryInRetailPrint = true,
     this.showBatchExpiryInClinicalPrint = true,
     this.shopId = '',
+    this.defaultDoctorId,
   });
 
   Map<String, dynamic> toJson() => {
@@ -459,6 +461,7 @@ class AppSettings {
         'showBatchExpiryInRetailPrint': showBatchExpiryInRetailPrint,
         'showBatchExpiryInClinicalPrint': showBatchExpiryInClinicalPrint,
         'shopId': shopId,
+        'defaultDoctorId': defaultDoctorId,
       };
 
   static AppSettings fromJson(Map<String, dynamic> json) => AppSettings(
@@ -511,5 +514,6 @@ class AppSettings {
         showBatchExpiryInRetailPrint: json['showBatchExpiryInRetailPrint'] ?? true,
         showBatchExpiryInClinicalPrint: json['showBatchExpiryInClinicalPrint'] ?? true,
         shopId: json['shopId'] ?? '',
+        defaultDoctorId: json['defaultDoctorId'],
       );
 }

@@ -37,15 +37,22 @@ class PrintingService {
 
     // Try to resolve related doctor name for display on the receipt
     String doctorName = '';
-    if (sale.patientId != 0) {
-      final prescription = ObjectBoxService.instance.store.box<Prescription>()
+    Prescription? prescription;
+    if (sale.linkedAppointmentId != 0) {
+      prescription = ObjectBoxService.instance.store.box<Prescription>()
+          .query(Prescription_.appointmentId.equals(sale.linkedAppointmentId))
+          .build()
+          .findFirst();
+    }
+    if (prescription == null && sale.patientId != 0) {
+      prescription = ObjectBoxService.instance.store.box<Prescription>()
           .query(Prescription_.patientId.equals(sale.patientId))
           .order(Prescription_.createdAt, flags: Order.descending)
           .build()
           .findFirst();
-      if (prescription != null) {
-        doctorName = prescription.doctorName;
-      }
+    }
+    if (prescription != null) {
+      doctorName = prescription.doctorName;
     }
 
     final doc = pw.Document();
@@ -538,17 +545,23 @@ class PrintingService {
     String doctorName = 'On-Duty Doctor';
     
     // Fetch latest prescription for this patient to get diagnosis/doctor if possible
-    if (sale.patientId != 0) {
-      final prescription = ObjectBoxService.instance.store.box<Prescription>()
+    Prescription? prescription;
+    if (sale.linkedAppointmentId != 0) {
+      prescription = ObjectBoxService.instance.store.box<Prescription>()
+          .query(Prescription_.appointmentId.equals(sale.linkedAppointmentId))
+          .build()
+          .findFirst();
+    }
+    if (prescription == null && sale.patientId != 0) {
+      prescription = ObjectBoxService.instance.store.box<Prescription>()
           .query(Prescription_.patientId.equals(sale.patientId))
           .order(Prescription_.createdAt, flags: Order.descending)
           .build()
           .findFirst();
-      
-      if (prescription != null) {
-        diagnosis = prescription.diagnosis;
-        doctorName = prescription.doctorName;
-      }
+    }
+    if (prescription != null) {
+      diagnosis = prescription.diagnosis;
+      doctorName = prescription.doctorName;
     }
 
     // Fetch patient UHID

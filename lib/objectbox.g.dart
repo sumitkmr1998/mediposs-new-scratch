@@ -37,7 +37,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(1, 637942838794498612),
       name: 'AppSettings',
-      lastPropertyId: const obx_int.IdUid(47, 3858216092315493269),
+      lastPropertyId: const obx_int.IdUid(48, 4065307820196271581),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -273,6 +273,11 @@ final _entities = <obx_int.ModelEntity>[
         obx_int.ModelProperty(
             id: const obx_int.IdUid(47, 3858216092315493269),
             name: 'auditRetentionDays',
+            type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(48, 4065307820196271581),
+            name: 'defaultDoctorId',
             type: 6,
             flags: 0)
       ],
@@ -1712,7 +1717,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
               ? null
               : fbb.writeString(object.clinicRegNo!);
           final shopIdOffset = fbb.writeString(object.shopId);
-          fbb.startTable(48);
+          fbb.startTable(49);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, storeNameOffset);
           fbb.addOffset(2, storeAddressOffset);
@@ -1760,6 +1765,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addOffset(44, shopIdOffset);
           fbb.addBool(45, object.googleDriveSyncEnabled);
           fbb.addInt64(46, object.auditRetentionDays);
+          fbb.addInt64(47, object.defaultDoctorId);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -1878,6 +1884,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.BoolReader().vTableGet(buffer, rootOffset, 90, false);
           final shopIdParam = const fb.StringReader(asciiOptimization: true)
               .vTableGet(buffer, rootOffset, 92, '');
+          final defaultDoctorIdParam =
+              const fb.Int64Reader().vTableGetNullable(buffer, rootOffset, 98);
           final object = AppSettings(
               id: idParam,
               storeName: storeNameParam,
@@ -1926,7 +1934,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               showBatchExpiryInRetailPrint: showBatchExpiryInRetailPrintParam,
               showBatchExpiryInClinicalPrint:
                   showBatchExpiryInClinicalPrintParam,
-              shopId: shopIdParam);
+              shopId: shopIdParam,
+              defaultDoctorId: defaultDoctorIdParam);
 
           return object;
         }),
@@ -3552,6 +3561,10 @@ class AppSettings_ {
   /// See [AppSettings.auditRetentionDays].
   static final auditRetentionDays =
       obx.QueryIntegerProperty<AppSettings>(_entities[0].properties[46]);
+
+  /// See [AppSettings.defaultDoctorId].
+  static final defaultDoctorId =
+      obx.QueryIntegerProperty<AppSettings>(_entities[0].properties[47]);
 }
 
 /// [AppUser] entity fields to define ObjectBox queries.

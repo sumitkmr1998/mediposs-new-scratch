@@ -21,6 +21,9 @@ import '../../shared/models/app_user.dart';
 import '../../theme/app_theme.dart';
 import '../../shared/services/local_server_service.dart';
 import '../../shared/services/printing_service.dart';
+import '../../shared/models/doctor.dart';
+import '../../shared/services/objectbox_service.dart';
+import '../../objectbox.g.dart';
 import 'package:printing/printing.dart';
 import 'package:excel/excel.dart' as excel_pkg;
 import '../../shared/providers/inventory_provider.dart';
@@ -76,6 +79,8 @@ class _SettingsWindowsState extends State<SettingsWindows> {
   bool _firebaseEnabled = true;
   bool _googleDriveSyncEnabled = true;
   int _auditRetentionDays = 90;
+  List<Doctor> _doctors = [];
+  int? _selectedDefaultDoctorId;
 
   @override
   void initState() {
@@ -117,8 +122,10 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     _firebaseEnabled = s.firebaseEnabled;
     _googleDriveSyncEnabled = s.googleDriveSyncEnabled;
     _auditRetentionDays = s.auditRetentionDays;
+    _selectedDefaultDoctorId = s.defaultDoctorId;
 
     _loadPrinters();
+    _loadDoctors();
   }
 
   Future<void> _loadPrinters() async {
@@ -137,6 +144,18 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       if (mounted) setState(() => _hubIp = ip);
     } catch (e) {
       debugPrint('Error loading Hub IP: $e');
+    }
+  }
+
+  void _loadDoctors() {
+    try {
+      final docBox = ObjectBoxService.instance.store.box<Doctor>();
+      final docs = docBox.query(Doctor_.isActive.equals(true)).build().find();
+      setState(() {
+        _doctors = docs;
+      });
+    } catch (e) {
+      debugPrint('Error loading doctors: $e');
     }
   }
 
@@ -172,7 +191,8 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       ..showBatchExpiryInClinicalPrint = _showBatchExpiryClinical
       ..firebaseEnabled = _firebaseEnabled
       ..googleDriveSyncEnabled = _googleDriveSyncEnabled
-      ..auditRetentionDays = _auditRetentionDays;
+      ..auditRetentionDays = _auditRetentionDays
+      ..defaultDoctorId = _selectedDefaultDoctorId;
 
     final wasClient = settingsProv.settings.isWindowsClient;
     settingsProv.save(s);
@@ -518,6 +538,27 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                     const SizedBox(width: 16),
                     Expanded(child: SettingsField(controller: _clinicRegCtrl, label: 'Medical Reg No.', icon: LucideIcons.fileText)),
                   ],
+                ),
+                const Divider(height: 24),
+                SettingsDropdown<int?>(
+                  title: 'Default Prescribing Doctor',
+                  value: _selectedDefaultDoctorId,
+                  icon: LucideIcons.userCheck,
+                  items: [
+                    const DropdownMenuItem<int?>(
+                      value: null,
+                      child: Text('None (Manual Entry)'),
+                    ),
+                    ..._doctors.map((d) => DropdownMenuItem<int?>(
+                          value: d.id,
+                          child: Text(d.name),
+                        )),
+                  ],
+                  onChanged: (val) {
+                    setState(() {
+                      _selectedDefaultDoctorId = val;
+                    });
+                  },
                 ),
               ],
             );

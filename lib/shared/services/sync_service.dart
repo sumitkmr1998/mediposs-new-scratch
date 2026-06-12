@@ -18,9 +18,11 @@ import '../models/prescription.dart';
 import '../models/prescription_template.dart';
 import '../models/stock_transfer.dart';
 import '../models/procedure.dart';
+import '../models/schedule_h1_record.dart';
 import '../services/objectbox_service.dart';
 import '../services/notification_service.dart';
 import '../services/firebase_sync_service.dart';
+import 'sync_queue_service.dart';
 import '../../objectbox.g.dart';
 
 class SyncService extends ChangeNotifier {
@@ -188,6 +190,13 @@ class SyncService extends ChangeNotifier {
         settings.autoLoginPin = pin;
         settings.autoLoginName = name;
         ObjectBoxService.instance.settingsBox.put(settings);
+
+        // Process any queued items first with the newly obtained JWT
+        try {
+          await SyncQueueService.instance.processQueue();
+        } catch (e) {
+          debugPrint('SyncService: Error processing queue on login: $e');
+        }
 
         // Fetch latest settings and users upon login
         await pullSettings();
@@ -523,6 +532,7 @@ class SyncService extends ChangeNotifier {
         ObjectBoxService.instance.doctorBox.removeAll();
         ObjectBoxService.instance.transferBox.removeAll();
         ObjectBoxService.instance.templateBox.removeAll();
+        ObjectBoxService.instance.store.box<ScheduleH1Record>().removeAll();
       }
       sinceStr = null; // Pull all data freshly instead of just the last 180 days!
       debugPrint('SyncService: Initial sync detected. Pulling all data freshly.');
@@ -544,6 +554,7 @@ class SyncService extends ChangeNotifier {
       final t3 = await pullSales(since: sinceStr);
       await pullTransfers();
       await pullTemplates();
+      await pullH1Records(since: sinceStr);
 
       // Update sync timestamp using the Hub's reported time if available
       final serverTime = t1 ?? t2 ?? t3;
@@ -575,6 +586,7 @@ class SyncService extends ChangeNotifier {
     ObjectBoxService.instance.doctorBox.removeAll();
     ObjectBoxService.instance.transferBox.removeAll();
     ObjectBoxService.instance.templateBox.removeAll();
+    ObjectBoxService.instance.store.box<ScheduleH1Record>().removeAll();
     // Do NOT wipe settings or users (critical for session)
 
     final settings = ObjectBoxService.instance.settings;
@@ -893,7 +905,10 @@ class SyncService extends ChangeNotifier {
               ..consultationFee = (item['consultationFee'] as num?)?.toDouble() ?? 0.0
               ..notes = item['notes'] ?? ''
               ..isWalkIn = item['isWalkIn'] ?? true
-              ..consultationBilled = item['consultationBilled'] ?? false;
+              ..consultationBilled = item['consultationBilled'] ?? false
+              ..calledAt = item['calledAt'] != null ? DateTime.tryParse(item['calledAt'].toString()) : null
+              ..pharmacyAt = item['pharmacyAt'] != null ? DateTime.tryParse(item['pharmacyAt'].toString()) : null
+              ..completedAt = item['completedAt'] != null ? DateTime.tryParse(item['completedAt'].toString()) : null;
             box.put(existing);
           } else {
             box.put(Appointment(
@@ -911,7 +926,10 @@ class SyncService extends ChangeNotifier {
               createdAt: createdAt,
               isWalkIn: item['isWalkIn'] ?? true,
               consultationBilled: item['consultationBilled'] ?? false,
-            ));
+            )
+              ..calledAt = item['calledAt'] != null ? DateTime.tryParse(item['calledAt'].toString()) : null
+              ..pharmacyAt = item['pharmacyAt'] != null ? DateTime.tryParse(item['pharmacyAt'].toString()) : null
+              ..completedAt = item['completedAt'] != null ? DateTime.tryParse(item['completedAt'].toString()) : null);
           }
         }
         // Remove appointments deleted on Hub
@@ -1278,6 +1296,50 @@ class SyncService extends ChangeNotifier {
     return null;
   }
 
+  Future<void> pullH1Records({String? since}) async {
+    if (!_isConnected || _jwtToken == null) return;
+    debugPrint('SyncService: pullH1Records starting (since=$since)...');
+    try {
+      var url = Uri.parse('$_baseUrl/api/h1-records');
+      if (since != null) {
+        url = url.replace(queryParameters: {'since': since});
+      }
+      final res = await http.get(url, headers: _authHeaders());
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body)['data'] as List;
+        final box = ObjectBoxService.instance.store.box<ScheduleH1Record>();
+        final allLocal = box.getAll();
+
+        final hubKeys = <String>{};
+        for (final item in data) {
+          final invoiceNo = item['invoiceNo'] as String? ?? '';
+          final medicineName = item['medicineName'] as String? ?? '';
+          final batchNo = item['batchNo'] as String? ?? '';
+          final key = '${invoiceNo}_${medicineName}_$batchNo';
+          hubKeys.add(key);
+
+          final existing = allLocal.where((x) =>
+              x.invoiceNo == invoiceNo &&
+              x.medicineName == medicineName &&
+              x.batchNo == batchNo).firstOrNull;
+
+          if (existing != null) {
+            final rec = ScheduleH1Record.fromJson(item as Map<String, dynamic>);
+            rec.id = existing.id;
+            box.put(rec);
+          } else {
+            final rec = ScheduleH1Record.fromJson(item as Map<String, dynamic>);
+            rec.id = 0;
+            box.put(rec);
+          }
+        }
+        debugPrint('SyncService: pullH1Records synced ${data.length} records.');
+      }
+    } catch (e) {
+      debugPrint('pullH1Records err: $e');
+    }
+  }
+
   Future<void> pullTransfers() async {
     if (!_isConnected || _jwtToken == null) return;
     debugPrint('SyncService: pullTransfers starting...');
@@ -1468,6 +1530,11 @@ class SyncService extends ChangeNotifier {
     return ok;
   }
 
+  Future<bool> pushH1Record(ScheduleH1Record r) async {
+    return await _unifiedPush('/api/h1-records/push', r.toJson(),
+        entity: 'h1_record', action: 'create');
+  }
+
   Future<bool> pushPatient(Patient p) async {
     return await _unifiedPush('/api/patients/push', p.toJson(),
         entity: 'patient', action: 'create');
@@ -1546,6 +1613,20 @@ class SyncService extends ChangeNotifier {
 
   Future<bool> pushPrescription(Prescription p) async {
     final body = p.toJson();
+
+    // Add patientUhid and tokenNumber for ID resolution on Hub
+    try {
+      final patient = ObjectBoxService.instance.patientBox.get(p.patientId);
+      if (patient != null) {
+        body['patientUhid'] = patient.uhid;
+      }
+      final appt = ObjectBoxService.instance.appointmentBox.get(p.appointmentId);
+      if (appt != null) {
+        body['tokenNumber'] = appt.tokenNumber;
+      }
+    } catch (e) {
+      debugPrint('SyncService: Error fetching patient/appointment for prescription push: $e');
+    }
 
     // If we have images, upload them to Hub first
     try {

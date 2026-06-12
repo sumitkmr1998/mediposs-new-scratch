@@ -13,6 +13,7 @@ import '../models/stock_transfer.dart';
 import '../models/medicine.dart';
 import '../models/prescription_template.dart';
 import '../models/procedure.dart';
+import '../models/schedule_h1_record.dart';
 import 'sync_service.dart';
 import '../../objectbox.g.dart';
 
@@ -118,6 +119,10 @@ class SyncQueueService extends ChangeNotifier {
           if (item.action == 'delete')
             return await syncService.pushSaleDelete(data['invoiceNo'] ?? '');
           break;
+        case 'h1_record':
+          if (item.action == 'create')
+            return await syncService.pushH1Record(ScheduleH1Record.fromJson(data));
+          break;
         case 'appointment':
           return await syncService.pushAppointment(Appointment.fromJson(data));
         case 'doctor':
@@ -129,7 +134,15 @@ class SyncQueueService extends ChangeNotifier {
         case 'transfer':
           return await syncService.pushTransfer(StockTransfer.fromJson(data));
         case 'audit_log':
-          return await syncService.pushAuditLog(AuditLog.fromJson(data));
+          try {
+            final ok = await syncService.pushAuditLog(AuditLog.fromJson(data));
+            if (!ok) {
+              debugPrint('SyncQueueService: Failed to push audit log, but skipping to avoid blocking queue.');
+            }
+          } catch (e) {
+            debugPrint('SyncQueueService: Error pushing audit log: $e');
+          }
+          return true; // Never block queue on audit log sync failure
         case 'template':
           if (item.action == 'delete') return await syncService.pushTemplateDelete(data['name']);
           return await syncService.pushTemplate(PrescriptionTemplate.fromJson(data));

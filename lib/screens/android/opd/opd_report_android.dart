@@ -41,6 +41,8 @@ class OpdReportAndroid extends StatelessWidget {
     final doneCount = opd.filteredDoneCount;
     final revenue = opd.filteredConsultationRevenue;
     final activeDocs = opd.activeDoctors.length;
+    final avgWait = opd.filteredAverageWaitingTime;
+    final avgDoctor = opd.filteredAverageDoctorTime;
 
     return Scaffold(
       backgroundColor: context.surfaceColor,
@@ -167,6 +169,18 @@ class OpdReportAndroid extends StatelessWidget {
                             value: '$activeDocs',
                             icon: Icons.medical_services_rounded,
                             color: AppTheme.purple,
+                          ),
+                          _CompactKpiCard(
+                            label: 'Avg. Wait Time',
+                            value: _formatDuration(avgWait),
+                            icon: Icons.access_time_rounded,
+                            color: AppTheme.warning,
+                          ),
+                          _CompactKpiCard(
+                            label: 'Avg. Doctor Time',
+                            value: _formatDuration(avgDoctor),
+                            icon: Icons.healing_rounded,
+                            color: AppTheme.primaryLight,
                           ),
                         ],
                       ),
@@ -438,6 +452,21 @@ class OpdReportAndroid extends StatelessWidget {
       fontSize: 9,
       fontWeight: FontWeight.w800,
     );
+  }
+
+  String _formatDuration(Duration d) {
+    if (d.inSeconds <= 0) return '--';
+    final mins = d.inMinutes;
+    if (mins < 1) {
+      return '< 1m';
+    }
+    if (mins < 60) {
+      return '${mins}m';
+    }
+    final hrs = d.inHours;
+    final remainingMins = mins % 60;
+    if (remainingMins == 0) return '${hrs}h';
+    return '${hrs}h ${remainingMins}m';
   }
 }
 

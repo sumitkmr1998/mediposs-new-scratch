@@ -16,6 +16,9 @@ import '../../shared/services/local_server_service.dart';
 import '../../shared/services/printing_service.dart';
 import '../../shared/services/audit_export_service.dart';
 import '../../shared/services/backup_restore_service.dart';
+import '../../shared/models/doctor.dart';
+import '../../shared/services/objectbox_service.dart';
+import '../../objectbox.g.dart';
 import 'package:printing/printing.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
 import '../user_management_screen.dart';
@@ -56,6 +59,8 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
   bool _showBatchExpiryRetail = true;
   bool _showBatchExpiryClinical = true;
   int _auditRetentionDays = 90;
+  List<Doctor> _doctors = [];
+  int? _selectedDefaultDoctorId;
 
   @override
   void initState() {
@@ -87,10 +92,12 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
     _showBatchExpiryRetail = s.showBatchExpiryInRetailPrint;
     _showBatchExpiryClinical = s.showBatchExpiryInClinicalPrint;
     _auditRetentionDays = s.auditRetentionDays;
+    _selectedDefaultDoctorId = s.defaultDoctorId;
 
     _loadPrinters();
     _loadDisplayModes();
     _fetchHubStatus();
+    _loadDoctors();
   }
 
   Future<void> _fetchHubStatus() async {
@@ -139,6 +146,18 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
     }
   }
 
+  void _loadDoctors() {
+    try {
+      final docBox = ObjectBoxService.instance.store.box<Doctor>();
+      final docs = docBox.query(Doctor_.isActive.equals(true)).build().find();
+      setState(() {
+        _doctors = docs;
+      });
+    } catch (e) {
+      debugPrint('Error loading doctors: $e');
+    }
+  }
+
   void _save() {
     final settingsProv = context.read<SettingsProvider>();
     final s = settingsProv.settings;
@@ -165,7 +184,8 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
       ..isCompositionScheme = _isCompositionScheme
       ..showBatchExpiryInRetailPrint = _showBatchExpiryRetail
       ..showBatchExpiryInClinicalPrint = _showBatchExpiryClinical
-      ..auditRetentionDays = _auditRetentionDays;
+      ..auditRetentionDays = _auditRetentionDays
+      ..defaultDoctorId = _selectedDefaultDoctorId;
 
     settingsProv.save(s, syncService: context.read<SyncService>());
 
@@ -465,6 +485,28 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                     const SizedBox(width: 16),
                     Expanded(child: _field(_clinicRegCtrl, 'Medical Reg No.')),
                   ]),
+                  const SizedBox(height: 16),
+                  const Text('Default Prescribing Doctor', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  DropdownButton<int?>(
+                    isExpanded: true,
+                    value: _selectedDefaultDoctorId,
+                    dropdownColor: context.surfaceColor,
+                    items: [
+                      const DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text('None (Manual Entry)'),
+                      ),
+                      ..._doctors.map((d) => DropdownMenuItem<int?>(
+                            value: d.id,
+                            child: Text(d.name),
+                          )),
+                    ],
+                    onChanged: (val) {
+                      setState(() {
+                        _selectedDefaultDoctorId = val;
+                      });
+                    },
+                  ),
                 ],
               ),
               _buildSection(

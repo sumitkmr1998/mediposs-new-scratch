@@ -61,6 +61,29 @@ class OpdProvider extends ChangeNotifier {
   double get filteredConsultationRevenue =>
       filteredQueue.fold(0.0, (sum, a) => sum + a.consultationFee);
 
+  Duration get filteredAverageWaitingTime {
+    final list = filteredQueue.where((a) => a.calledAt != null).toList();
+    if (list.isEmpty) return Duration.zero;
+    final totalMs = list.fold(0, (sum, a) {
+      final diff = a.calledAt!.difference(a.createdAt).inMilliseconds;
+      return sum + (diff > 0 ? diff : 0);
+    });
+    return Duration(milliseconds: (totalMs / list.length).round());
+  }
+
+  Duration get filteredAverageDoctorTime {
+    final list = filteredQueue
+        .where((a) => a.calledAt != null && (a.pharmacyAt != null || a.completedAt != null))
+        .toList();
+    if (list.isEmpty) return Duration.zero;
+    final totalMs = list.fold(0, (sum, a) {
+      final end = a.pharmacyAt ?? a.completedAt!;
+      final diff = end.difference(a.calledAt!).inMilliseconds;
+      return sum + (diff > 0 ? diff : 0);
+    });
+    return Duration(milliseconds: (totalMs / list.length).round());
+  }
+
   double get filteredCollectedRevenue => filteredQueue
       .where((a) => a.paymentMethod != 'pending')
       .fold(0.0, (sum, a) => sum + a.consultationFee);
