@@ -1,3 +1,13 @@
+# MediPoss v1.8.0 Release
+"Advanced Business Analytics & Cross-Device Sync Improvements"
+
+## 🚀 What's New
+- **Vibrant Analytics Dashboard (Android)**: Ported the full Windows Analytics Hub to Android, including stacked layout structures and category pie charts.
+- **Premium KPI Cards**: Redesigned Sales Trends and Patient Analytics KPI components with subtle progress metrics, trend percentages, and context descriptions.
+- **Schedule H1 Compliance**: Integrated Schedule H1 Drug registers with spreadsheet exports (.xlsx) on Windows and Android companion devices.
+- **Vibrant Custom Date Filtering**: Added custom date range pickers to Category sales, Explorer, and Compliance registers.
+- **UI & Padding Polish**: Removed bottom header divider lines and improved margins for a borderless, modern aesthetic.
+
 # MediPoss v1.0.0 Stable
 "A cinema-grade medical POS and clinic management system."
 
