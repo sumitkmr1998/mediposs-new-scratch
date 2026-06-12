@@ -245,7 +245,21 @@ class PrintingService {
 
               // Totals
               _buildTotalRow('Subtotal', sale.subtotal),
-              if (sale.discount > 0) _buildTotalRow('Discount', sale.discount),
+              (() {
+                double consultationFee = 0.0;
+                for (final item in items) {
+                  if (item.medicineName == 'Consultation Fee') {
+                    consultationFee += item.lineTotal;
+                  }
+                }
+                final displayDiscount = sale.discount.abs() - consultationFee;
+                return pw.Column(
+                  children: [
+                    if (displayDiscount > 0) _buildTotalRow('Discount', displayDiscount),
+                    if (consultationFee > 0) _buildTotalRow('Advance Paid Consultation Fee', 0, stringValue: '-${consultationFee.toStringAsFixed(2)}'),
+                  ],
+                );
+              })(),
               if (sale.taxAmount > 0 && !sale.isClinicalDispense) _buildTotalRow('Tax', sale.taxAmount),
 
               pw.SizedBox(height: 2),
@@ -278,6 +292,16 @@ class PrintingService {
 
               if (isRoll) pw.SizedBox(height: 12) else pw.Spacer(),
               // Footer
+              if (sale.isClinicalDispense) ...[
+                pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                  child: pw.Text(
+                    'DISCLAIMER: Dispensed medicines must be consumed as prescribed by the doctor. Please verify the medicine name, batch, dosage, and expiry before use.',
+                    style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                ),
+              ],
               if (settings.receiptFooterMessage.isNotEmpty)
                 pw.Text(settings.receiptFooterMessage,
                     style: const pw.TextStyle(fontSize: 10),

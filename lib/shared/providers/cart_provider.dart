@@ -154,17 +154,23 @@ class CartProvider extends ChangeNotifier {
   double get mixedUpi => _mixedUpi;
   double get mixedCard => _mixedCard;
 
-  double get subtotal => _items.fold(0.0, (sum, item) => sum + item.lineTotal);
+  double get linkedConsultationFee {
+    if (_linkedAppointmentId == null || _linkedAppointmentId == 0) return 0.0;
+    final appt = ObjectBoxService.instance.appointmentBox.get(_linkedAppointmentId!);
+    return appt?.consultationFee ?? 0.0;
+  }
+
+  double get subtotal => _items.fold(0.0, (sum, item) => sum + item.lineTotal) + linkedConsultationFee;
 
   double get taxRate => (_isClinicalDispense || ObjectBoxService.instance.settings.isCompositionScheme)
       ? 0.0
       : ObjectBoxService.instance.settings.taxRate / 100.0;
 
   double get taxAmount =>
-      (subtotal - _discountAmount).clamp(0, double.infinity) * taxRate;
+      (subtotal - (_discountAmount + linkedConsultationFee)).clamp(0, double.infinity) * taxRate;
 
   double get total =>
-      (subtotal - _discountAmount + taxAmount).clamp(0, double.infinity);
+      (subtotal - (_discountAmount + linkedConsultationFee) + taxAmount).clamp(0, double.infinity);
 
   double get totalRounded => (total * 10).round() / 10.0;
 
@@ -477,6 +483,18 @@ class CartProvider extends ChangeNotifier {
     // Build items and Deduct or Restock stock (storeStock vs mainStock)
     final saleItems = <SaleItem>[];
 
+    final fee = linkedConsultationFee;
+    if (fee > 0) {
+      saleItems.add(SaleItem(
+        medicineId: 0,
+        procedureId: 0,
+        medicineName: 'Consultation Fee',
+        qty: 1,
+        unitPrice: fee,
+        isProcedure: true,
+      ));
+    }
+
     for (final item in _items) {
       if (item.isProcedure) {
         saleItems.add(SaleItem(
@@ -553,7 +571,7 @@ class CartProvider extends ChangeNotifier {
       patientPhone: _patientPhone,
       patientUhid: _patientUhid,
       subtotal: _isReturnMode ? -subtotal : subtotal,
-      discount: _isReturnMode ? -_discountAmount : _discountAmount,
+      discount: _isReturnMode ? -(_discountAmount + fee) : (_discountAmount + fee),
       taxRate: (_isClinicalDispense || settings.isCompositionScheme) ? 0.0 : settings.taxRate,
       taxAmount: _isReturnMode ? -taxAmount : taxAmount,
       total: _isReturnMode ? -totalRounded : totalRounded,

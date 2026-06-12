@@ -201,7 +201,20 @@ class SalesProvider extends ChangeNotifier {
   }
 
   double get totalRevenue => _sales.fold(0.0, (sum, s) => sum + s.total);
-  double get totalDiscount => _sales.fold(0.0, (sum, s) => sum + s.discount);
+  double get totalDiscount => _sales.fold(0.0, (sum, s) {
+        double fee = 0.0;
+        if (s.linkedAppointmentId != 0) {
+          try {
+            final List<dynamic> decoded = jsonDecode(s.itemsJson);
+            for (final item in decoded) {
+              if (item['medicineName'] == 'Consultation Fee') {
+                fee += (item['lineTotal'] as num).toDouble();
+              }
+            }
+          } catch (_) {}
+        }
+        return sum + (s.discount - fee);
+      });
 
   void load() {
     final box = ObjectBoxService.instance.saleBox;

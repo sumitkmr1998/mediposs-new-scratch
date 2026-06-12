@@ -34,6 +34,7 @@ import 'package:flutter/services.dart';
 import '../../shared/providers/navigation_provider.dart';
 import '../../shared/widgets/connectivity_overlay.dart';
 import 'dart:async';
+import 'analysis_hub_android.dart';
 
 class AppShellAndroid extends StatefulWidget {
   const AppShellAndroid({super.key});
@@ -65,6 +66,14 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
           icon: Icons.dashboard_outlined,
           selectedIcon: Icons.dashboard,
           label: 'Dashboard'));
+    }
+
+    if (auth.canViewAnalytics) {
+      dests.add(const _Dest(
+          id: 'analysis',
+          icon: Icons.analytics_outlined,
+          selectedIcon: Icons.analytics,
+          label: 'Analysis'));
     }
 
     if (auth.canAccessPOS) {
@@ -137,6 +146,8 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
     switch (id) {
       case 'dashboard':
         return const DashboardScreen();
+      case 'analysis':
+        return const AnalysisHubScreenAndroid();
       case 'pos':
         return const PosScreen();
       case 'warehouse':

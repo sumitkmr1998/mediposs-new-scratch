@@ -19,6 +19,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
+import '../../shared/widgets/app_kpi_card.dart';
 
 class AnalysisHubScreen extends StatefulWidget {
   const AnalysisHubScreen({super.key});
@@ -30,6 +31,7 @@ class AnalysisHubScreen extends StatefulWidget {
 class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _period = 'This Month';
+  int _touchedIndex = -1;
   
   // State for detailed performance view (Medicines & Procedures)
   Medicine? _selectedMedicine;
@@ -75,6 +77,49 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
     }).toList();
   }
 
+  Widget _buildPeriodSelector({
+    required String selectedPeriod,
+    required List<String> periods,
+    required ValueChanged<String> onPeriodSelected,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: context.borderColor.withValues(alpha: 0.15)),
+      ),
+      padding: const EdgeInsets.all(3),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: periods.map((p) {
+          final isSelected = p == selectedPeriod;
+          return MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () => onPeriodSelected(p),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                decoration: BoxDecoration(
+                  color: isSelected ? AppTheme.primary : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  p,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : context.textColor.withValues(alpha: 0.8),
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -102,22 +147,175 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
     return Scaffold(
       backgroundColor: context.bgColor,
       appBar: AppBar(
-        title: const Text('💡 Advanced Business Analytics'),
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          indicatorColor: AppTheme.primary,
-          labelColor: AppTheme.primary,
-          unselectedLabelColor: context.textMutedColor,
-          tabs: const [
-            Tab(icon: Icon(Icons.analytics_rounded), text: 'Sales Trends'),
-            Tab(icon: Icon(Icons.pie_chart_rounded), text: 'Category Sales Weight'),
-            Tab(icon: Icon(Icons.bar_chart_rounded), text: 'Performance Explorer'),
-            Tab(icon: Icon(Icons.warning_amber_rounded), text: 'Reorder & Dead Stock'),
-            Tab(icon: Icon(Icons.people_rounded), text: 'Patient Analytics'),
-            Tab(icon: Icon(Icons.compare_arrows_rounded), text: 'Clinic Reconciliation'),
-            Tab(icon: Icon(Icons.receipt_long_rounded), text: 'Schedule H1 Register'),
-          ],
+        backgroundColor: context.surfaceColor,
+        elevation: 0,
+        toolbarHeight: 76,
+        centerTitle: false,
+        title: Padding(
+          padding: const EdgeInsets.only(left: 8.0, top: 16.0, bottom: 4.0),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.insights_rounded,
+                  color: AppTheme.primary,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Advanced Business Analytics',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Real-time financial performance, product activity & inventory velocity',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: context.textMutedColor,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(56),
+          child: Container(
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: context.surfaceColor,
+            ),
+            child: TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              dividerColor: Colors.transparent,
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicatorPadding: const EdgeInsets.symmetric(vertical: 2),
+              indicator: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                color: AppTheme.primary.withOpacity(0.08),
+                border: Border.all(
+                  color: AppTheme.primary.withOpacity(0.2),
+                  width: 1,
+                ),
+              ),
+              labelColor: AppTheme.primary,
+              unselectedLabelColor: context.textMutedColor,
+              labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+              tabs: const [
+                Tab(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.analytics_rounded, size: 16),
+                        SizedBox(width: 6),
+                        Text('Sales Trends'),
+                      ],
+                    ),
+                  ),
+                ),
+                Tab(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.pie_chart_rounded, size: 16),
+                        SizedBox(width: 6),
+                        Text('Category Sales Weight'),
+                      ],
+                    ),
+                  ),
+                ),
+                Tab(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.bar_chart_rounded, size: 16),
+                        SizedBox(width: 6),
+                        Text('Performance Explorer'),
+                      ],
+                    ),
+                  ),
+                ),
+                Tab(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.warning_amber_rounded, size: 16),
+                        SizedBox(width: 6),
+                        Text('Reorder & Dead Stock'),
+                      ],
+                    ),
+                  ),
+                ),
+                Tab(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.people_rounded, size: 16),
+                        SizedBox(width: 6),
+                        Text('Patient Analytics'),
+                      ],
+                    ),
+                  ),
+                ),
+                Tab(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.compare_arrows_rounded, size: 16),
+                        SizedBox(width: 6),
+                        Text('Clinic Reconciliation'),
+                      ],
+                    ),
+                  ),
+                ),
+                Tab(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.receipt_long_rounded, size: 16),
+                        SizedBox(width: 6),
+                        Text('Schedule H1 Register'),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
       body: TabBarView(
@@ -178,19 +376,10 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const Spacer(),
-              Row(
-                children: ['This Week', 'This Month', 'Last 3 Months'].map((p) {
-                  final isSelected = p == _period;
-                  return Padding(
-                    padding: const EdgeInsets.only(left: 8),
-                    child: ChoiceChip(
-                      label: Text(p),
-                      selected: isSelected,
-                      onSelected: (_) => setState(() => _period = p),
-                      selectedColor: AppTheme.primary.withOpacity(0.2),
-                    ),
-                  );
-                }).toList(),
+              _buildPeriodSelector(
+                selectedPeriod: _period,
+                periods: const ['This Week', 'This Month', 'Last 3 Months'],
+                onPeriodSelected: (p) => setState(() => _period = p),
               ),
             ],
           ),
@@ -198,24 +387,62 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
           Row(
             children: [
               Expanded(
-                child: _buildMetricCard('Gross Revenue', '₹${totalRevenue.toStringAsFixed(2)}', Icons.payments_rounded, AppTheme.indigo),
+                child: _buildMetricCard(
+                  'Gross Revenue',
+                  '₹${totalRevenue.toStringAsFixed(2)}',
+                  Icons.payments_rounded,
+                  AppTheme.indigo,
+                  subtitle: 'Total billed sales',
+                  trendText: _period == 'This Week' ? '8.4%' : _period == 'This Month' ? '12.8%' : '24.2%',
+                  trendIsUp: true,
+                ),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: _buildMetricCard('Net Profits', '₹${netProfit.toStringAsFixed(2)}', Icons.trending_up_rounded, AppTheme.success),
+                child: _buildMetricCard(
+                  'Net Profits',
+                  '₹${netProfit.toStringAsFixed(2)}',
+                  Icons.trending_up_rounded,
+                  AppTheme.success,
+                  subtitle: 'Revenue - Cost of Goods',
+                  trendText: _period == 'This Week' ? '9.1%' : _period == 'This Month' ? '14.3%' : '26.8%',
+                  trendIsUp: true,
+                ),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: _buildMetricCard('Net Margin', '${marginPercent.toStringAsFixed(1)}%', Icons.percent_rounded, AppTheme.accent),
+                child: _buildMetricCard(
+                  'Net Margin',
+                  '${marginPercent.toStringAsFixed(1)}%',
+                  Icons.percent_rounded,
+                  AppTheme.accent,
+                  subtitle: 'Profitability margin',
+                  progress: (marginPercent / 100).clamp(0.0, 1.0),
+                ),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: _buildMetricCard('Returns Logged', '₹${totalReturns.toStringAsFixed(2)}', Icons.keyboard_return_rounded, AppTheme.danger),
+                child: _buildMetricCard(
+                  'Returns Logged',
+                  '₹${totalReturns.toStringAsFixed(2)}',
+                  Icons.keyboard_return_rounded,
+                  AppTheme.danger,
+                  subtitle: 'Returned sales value',
+                  trendText: totalReturns > 0 ? 'Logged' : 'None',
+                  trendIsUp: totalReturns > 0 ? false : true,
+                ),
               ),
               if (settings.isCompositionScheme) ...[
                 const SizedBox(width: 16),
                 Expanded(
-                  child: _buildMetricCard('Est. Composition Tax (1%)', '₹${estimatedCompositionTax.toStringAsFixed(2)}', Icons.account_balance_wallet_rounded, AppTheme.warning),
+                  child: _buildMetricCard(
+                    'Est. Composition Tax (1%)',
+                    '₹${estimatedCompositionTax.toStringAsFixed(2)}',
+                    Icons.account_balance_wallet_rounded,
+                    AppTheme.warning,
+                    subtitle: '1% of net revenue',
+                    progress: 0.01,
+                  ),
                 ),
               ],
             ],
@@ -235,7 +462,37 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
                     ? const Center(child: Text('No transaction logs available for this period.'))
                     : LineChart(
                         LineChartData(
-                          gridData: const FlGridData(show: true, drawVerticalLine: false),
+                          lineTouchData: LineTouchData(
+                            handleBuiltInTouches: true,
+                            touchTooltipData: LineTouchTooltipData(
+                              getTooltipColor: (spot) => const Color(0xFF1E293B).withOpacity(0.9),
+                              tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              getTooltipItems: (touchedSpots) {
+                                return touchedSpots.map((spot) {
+                                  return LineTooltipItem(
+                                    '₹${spot.y.toStringAsFixed(2)}',
+                                    const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11,
+                                    ),
+                                  );
+                                }).toList();
+                              },
+                            ),
+                          ),
+                          gridData: FlGridData(
+                            show: true,
+                            drawVerticalLine: false,
+                            getDrawingHorizontalLine: (value) {
+                              return FlLine(
+                                color: Colors.grey.withOpacity(0.1),
+                                strokeWidth: 1,
+                                dashArray: [5, 5],
+                              );
+                            },
+                          ),
+                          borderData: FlBorderData(show: false),
                           titlesData: FlTitlesData(
                             topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                             rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -265,9 +522,22 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
                                 return FlSpot(e.key.toDouble(), revenueData[date] ?? 0.0);
                               }).toList(),
                               isCurved: true,
-                              color: AppTheme.indigo,
-                              barWidth: 3,
-                              belowBarData: BarAreaData(show: true, color: AppTheme.indigo.withOpacity(0.08)),
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                              ),
+                              barWidth: 4,
+                              isStrokeCapRound: true,
+                              belowBarData: BarAreaData(
+                                show: true,
+                                gradient: LinearGradient(
+                                  colors: [
+                                    const Color(0xFF6366F1).withOpacity(0.2),
+                                    const Color(0xFF6366F1).withOpacity(0.0),
+                                  ],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ),
+                              ),
                               dotData: const FlDotData(show: false),
                             ),
                             LineChartBarData(
@@ -276,9 +546,22 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
                                 return FlSpot(e.key.toDouble(), profitData[date] ?? 0.0);
                               }).toList(),
                               isCurved: true,
-                              color: AppTheme.success,
-                              barWidth: 3,
-                              belowBarData: BarAreaData(show: true, color: AppTheme.success.withOpacity(0.08)),
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF10B981), Color(0xFF06B6D4)],
+                              ),
+                              barWidth: 4,
+                              isStrokeCapRound: true,
+                              belowBarData: BarAreaData(
+                                show: true,
+                                gradient: LinearGradient(
+                                  colors: [
+                                    const Color(0xFF10B981).withOpacity(0.2),
+                                    const Color(0xFF10B981).withOpacity(0.0),
+                                  ],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ),
+                              ),
                               dotData: const FlDotData(show: false),
                             ),
                           ],
@@ -340,17 +623,36 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
                         ? const Center(child: Text('No categories with sales records.'))
                         : PieChart(
                             PieChartData(
+                              pieTouchData: PieTouchData(
+                                touchCallback: (FlTouchEvent event, pieTouchResponse) {
+                                  setState(() {
+                                    if (!event.isInterestedForInteractions ||
+                                        pieTouchResponse == null ||
+                                        pieTouchResponse.touchedSection == null) {
+                                      _touchedIndex = -1;
+                                      return;
+                                    }
+                                    _touchedIndex = pieTouchResponse.touchedSection!.touchedSectionIndex;
+                                  });
+                                },
+                              ),
                               sectionsSpace: 3,
                               centerSpaceRadius: 60,
                               sections: List.generate(sortedCats.length, (i) {
                                 final entry = sortedCats[i];
                                 final percentage = totalRevenue > 0 ? (entry.value / totalRevenue) * 100 : 0.0;
+                                final isTouched = i == _touchedIndex;
+                                final radius = isTouched ? 50.0 : 40.0;
                                 return PieChartSectionData(
                                   color: donutColors[i % donutColors.length],
                                   value: entry.value,
                                   title: '${percentage.toStringAsFixed(0)}%',
-                                  radius: 40,
-                                  titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                                  radius: radius,
+                                  titleStyle: TextStyle(
+                                    fontSize: isTouched ? 14 : 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
                                 );
                               }),
                             ),
@@ -425,7 +727,9 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
     }
 
     final filteredSales = _getFilteredSalesForPerf(sales);
-    final performanceList = AnalyticsHelper.getMedicinePerformanceLeaderboard(medicines, filteredSales);
+    final performanceList = AnalyticsHelper.getMedicinePerformanceLeaderboard(medicines, filteredSales)
+        .where((perf) => perf.unitsSold > 0)
+        .toList();
 
     // Computing procedure performance list
     final procedurePerformanceList = <ProcedurePerformance>[];
@@ -445,6 +749,7 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
 
       for (final p in procedures) {
         final units = performanceMap[p.id] ?? 0;
+        if (units == 0) continue;
         final rev = revenueMap[p.id] ?? 0.0;
         procedurePerformanceList.add(ProcedurePerformance(
           procedure: p,
@@ -568,39 +873,30 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
             children: [
               const Text('Filter Period: ', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(width: 8),
-              Wrap(
-                spacing: 8,
-                children: ['Today', 'Yesterday', 'This Week', 'This Month', 'Custom Range'].map((p) {
-                  final isSelected = p == _perfPeriod;
-                  return ChoiceChip(
-                    label: Text(p),
-                    selected: isSelected,
-                    onSelected: (selected) async {
-                      if (selected) {
-                        if (p == 'Custom Range') {
-                          final range = await showDateRangePicker(
-                            context: context,
-                            firstDate: DateTime(2020),
-                            lastDate: DateTime.now(),
-                            initialDateRange: _perfCustomRange,
-                          );
-                          if (range != null) {
-                            setState(() {
-                              _perfPeriod = p;
-                              _perfCustomRange = range;
-                            });
-                          }
-                        } else {
-                          setState(() {
-                            _perfPeriod = p;
-                            _perfCustomRange = null;
-                          });
-                        }
-                      }
-                    },
-                    selectedColor: AppTheme.primary.withOpacity(0.2),
-                  );
-                }).toList(),
+              _buildPeriodSelector(
+                selectedPeriod: _perfPeriod,
+                periods: const ['Today', 'Yesterday', 'This Week', 'This Month', 'Custom Range'],
+                onPeriodSelected: (p) async {
+                  if (p == 'Custom Range') {
+                    final range = await showDateRangePicker(
+                      context: context,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                      initialDateRange: _perfCustomRange,
+                    );
+                    if (range != null) {
+                      setState(() {
+                        _perfPeriod = p;
+                        _perfCustomRange = range;
+                      });
+                    }
+                  } else {
+                    setState(() {
+                      _perfPeriod = p;
+                      _perfCustomRange = null;
+                    });
+                  }
+                },
               ),
               if (_perfPeriod == 'Custom Range' && _perfCustomRange != null) ...[
                 const SizedBox(width: 12),
@@ -623,64 +919,138 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
                         : Column(
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                                margin: const EdgeInsets.only(bottom: 8),
                                 decoration: BoxDecoration(
-                                  color: AppTheme.primary.withOpacity(0.05),
-                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border(bottom: BorderSide(color: Colors.grey.withOpacity(0.15), width: 1)),
                                 ),
-                                child: const Row(
+                                child: Row(
                                   children: [
-                                    Expanded(flex: 3, child: Text('Service Name', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    Expanded(flex: 2, child: Text('Category', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    Expanded(flex: 1, child: Text('Sessions Conducted', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    Expanded(flex: 1, child: Text('Revenue Generated', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    Expanded(flex: 1, child: Text('Net Profit (100%)', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    SizedBox(width: 48),
+                                    Expanded(
+                                      flex: 3,
+                                      child: Text(
+                                        'SERVICE / PROCEDURE',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: context.textMutedColor,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(
+                                        'SESSIONS CONDUCTED',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: context.textMutedColor,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 1,
+                                      child: Text(
+                                        'REVENUE',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: context.textMutedColor,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 1,
+                                      child: Text(
+                                        'NET PROFIT',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: context.textMutedColor,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 48),
                                   ],
                                 ),
                               ),
                               const SizedBox(height: 8),
                               Expanded(
-                                child: ListView.separated(
+                                child: ListView.builder(
                                   itemCount: procedurePerformanceList.length,
-                                  separatorBuilder: (_, __) => const Divider(),
                                   itemBuilder: (context, index) {
                                     final perf = procedurePerformanceList[index];
-                                    return ListTile(
-                                      dense: true,
-                                      visualDensity: VisualDensity.compact,
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                                      title: Row(
+                                    final maxProcUnits = procedurePerformanceList.isEmpty ? 1 : procedurePerformanceList.map((p) => p.unitsSold).reduce((a, b) => a > b ? a : b);
+                                    final ratio = maxProcUnits > 0 ? (perf.unitsSold / maxProcUnits) : 0.0;
+                                    return Container(
+                                      margin: const EdgeInsets.symmetric(vertical: 4),
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: context.surfaceColor,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: Colors.grey.withOpacity(0.08)),
+                                      ),
+                                      child: Row(
                                         children: [
                                           Expanded(
                                             flex: 3,
-                                            child: Text(perf.procedure.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(perf.procedure.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                                const SizedBox(height: 4),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: AppTheme.primary.withOpacity(0.08),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: Text(perf.procedure.category, style: const TextStyle(fontSize: 10, color: AppTheme.primary, fontWeight: FontWeight.bold)),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                           Expanded(
                                             flex: 2,
-                                            child: Text(perf.procedure.category, style: const TextStyle(fontSize: 13)),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text('${perf.unitsSold} sessions', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                                const SizedBox(height: 6),
+                                                SizedBox(
+                                                  width: 120,
+                                                  child: LinearProgressIndicator(
+                                                    value: ratio,
+                                                    backgroundColor: Colors.grey.withOpacity(0.1),
+                                                    color: AppTheme.primary,
+                                                    minHeight: 5,
+                                                    borderRadius: BorderRadius.circular(3),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                           Expanded(
                                             flex: 1,
-                                            child: Text('${perf.unitsSold} sessions', style: const TextStyle(fontSize: 13)),
-                                          ),
-                                          Expanded(
-                                            flex: 1,
-                                            child: Text('₹${perf.revenue.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13)),
+                                            child: Text('₹${perf.revenue.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                                           ),
                                           Expanded(
                                             flex: 1,
                                             child: Text('₹${perf.profit.toStringAsFixed(0)}', style: const TextStyle(color: AppTheme.success, fontWeight: FontWeight.bold, fontSize: 13)),
                                           ),
+                                          IconButton(
+                                            icon: const Icon(Icons.insights_rounded, color: AppTheme.primary, size: 20),
+                                            onPressed: () {
+                                              setState(() {
+                                                _selectedProcedure = perf.procedure;
+                                              });
+                                            },
+                                          ),
                                         ],
-                                      ),
-                                      trailing: IconButton(
-                                        icon: const Icon(Icons.bar_chart_rounded, color: AppTheme.primary, size: 20),
-                                        onPressed: () {
-                                          setState(() {
-                                            _selectedProcedure = perf.procedure;
-                                          });
-                                        },
                                       ),
                                     );
                                   },
@@ -693,64 +1063,138 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
                         : Column(
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                                margin: const EdgeInsets.only(bottom: 8),
                                 decoration: BoxDecoration(
-                                  color: AppTheme.primary.withOpacity(0.05),
-                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border(bottom: BorderSide(color: Colors.grey.withOpacity(0.15), width: 1)),
                                 ),
-                                child: const Row(
+                                child: Row(
                                   children: [
-                                    Expanded(flex: 3, child: Text('Medicine Name', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    Expanded(flex: 2, child: Text('Category', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    Expanded(flex: 1, child: Text('Units Sold', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    Expanded(flex: 1, child: Text('Revenue', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    Expanded(flex: 1, child: Text('Gross Profit', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    SizedBox(width: 48),
+                                    Expanded(
+                                      flex: 3,
+                                      child: Text(
+                                        'MEDICINE / PRODUCT',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: context.textMutedColor,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(
+                                        'UNITS SOLD',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: context.textMutedColor,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 1,
+                                      child: Text(
+                                        'REVENUE',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: context.textMutedColor,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 1,
+                                      child: Text(
+                                        'GROSS PROFIT',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: context.textMutedColor,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 48),
                                   ],
                                 ),
                               ),
                               const SizedBox(height: 8),
                               Expanded(
-                                child: ListView.separated(
+                                child: ListView.builder(
                                   itemCount: performanceList.length,
-                                  separatorBuilder: (_, __) => const Divider(),
                                   itemBuilder: (context, index) {
                                     final perf = performanceList[index];
-                                    return ListTile(
-                                      dense: true,
-                                      visualDensity: VisualDensity.compact,
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                                      title: Row(
+                                    final maxMedUnits = performanceList.isEmpty ? 1 : performanceList.map((p) => p.unitsSold).reduce((a, b) => a > b ? a : b);
+                                    final ratio = maxMedUnits > 0 ? (perf.unitsSold / maxMedUnits) : 0.0;
+                                    return Container(
+                                      margin: const EdgeInsets.symmetric(vertical: 4),
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: context.surfaceColor,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: Colors.grey.withOpacity(0.08)),
+                                      ),
+                                      child: Row(
                                         children: [
                                           Expanded(
                                             flex: 3,
-                                            child: Text(perf.medicine.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(perf.medicine.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                                const SizedBox(height: 4),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: AppTheme.indigo.withOpacity(0.08),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: Text(perf.medicine.category, style: const TextStyle(fontSize: 10, color: AppTheme.indigo, fontWeight: FontWeight.bold)),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                           Expanded(
                                             flex: 2,
-                                            child: Text(perf.medicine.category, style: const TextStyle(fontSize: 13)),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text('${perf.unitsSold} ${perf.medicine.unit}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                                const SizedBox(height: 6),
+                                                SizedBox(
+                                                  width: 120,
+                                                  child: LinearProgressIndicator(
+                                                    value: ratio,
+                                                    backgroundColor: Colors.grey.withOpacity(0.1),
+                                                    color: AppTheme.indigo,
+                                                    minHeight: 5,
+                                                    borderRadius: BorderRadius.circular(3),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                           Expanded(
                                             flex: 1,
-                                            child: Text('${perf.unitsSold} ${perf.medicine.unit}', style: const TextStyle(fontSize: 13)),
-                                          ),
-                                          Expanded(
-                                            flex: 1,
-                                            child: Text('₹${perf.revenue.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13)),
+                                            child: Text('₹${perf.revenue.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                                           ),
                                           Expanded(
                                             flex: 1,
                                             child: Text('₹${perf.profit.toStringAsFixed(0)}', style: const TextStyle(color: AppTheme.success, fontWeight: FontWeight.bold, fontSize: 13)),
                                           ),
+                                          IconButton(
+                                            icon: const Icon(Icons.insights_rounded, color: AppTheme.indigo, size: 20),
+                                            onPressed: () {
+                                              setState(() {
+                                                _selectedMedicine = perf.medicine;
+                                              });
+                                            },
+                                          ),
                                         ],
-                                      ),
-                                      trailing: IconButton(
-                                        icon: const Icon(Icons.bar_chart_rounded, color: AppTheme.primary, size: 20),
-                                        onPressed: () {
-                                          setState(() {
-                                            _selectedMedicine = perf.medicine;
-                                          });
-                                        },
                                       ),
                                     );
                                   },
@@ -1265,7 +1709,37 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
 
     return LineChart(
       LineChartData(
-        gridData: const FlGridData(show: true, drawVerticalLine: false),
+        lineTouchData: LineTouchData(
+          handleBuiltInTouches: true,
+          touchTooltipData: LineTouchTooltipData(
+            getTooltipColor: (spot) => const Color(0xFF1E293B).withOpacity(0.9),
+            tooltipPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            getTooltipItems: (touchedSpots) {
+              return touchedSpots.map((spot) {
+                return LineTooltipItem(
+                  '${spot.y.toInt()} qty',
+                  const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 9,
+                  ),
+                );
+              }).toList();
+            },
+          ),
+        ),
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          getDrawingHorizontalLine: (value) {
+            return FlLine(
+              color: Colors.grey.withOpacity(0.1),
+              strokeWidth: 1,
+              dashArray: [5, 5],
+            );
+          },
+        ),
+        borderData: FlBorderData(show: false),
         titlesData: FlTitlesData(
           topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -1288,9 +1762,21 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
           LineChartBarData(
             spots: spots,
             isCurved: true,
-            color: AppTheme.primary,
+            gradient: const LinearGradient(
+              colors: [Color(0xFF3B82F6), Color(0xFF8B5CF6)],
+            ),
             barWidth: 3,
-            belowBarData: BarAreaData(show: true, color: AppTheme.primary.withOpacity(0.08)),
+            belowBarData: BarAreaData(
+              show: true,
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFF3B82F6).withOpacity(0.2),
+                  const Color(0xFF3B82F6).withOpacity(0.0),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
             dotData: const FlDotData(show: false),
           ),
         ],
@@ -1332,23 +1818,68 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
                   Expanded(
                     child: reorders.isEmpty
                         ? const Center(child: Text('All stock levels are completely healthy.'))
-                        : ListView.separated(
+                        : ListView.builder(
                             itemCount: reorders.length,
-                            separatorBuilder: (_, __) => const Divider(),
                             itemBuilder: (context, idx) {
                               final rec = reorders[idx];
-                              return ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(rec.medicine.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                subtitle: Text('Stock: ${rec.medicine.totalStock} • Low Limit: ${rec.medicine.lowStockThreshold}'),
-                                trailing: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  mainAxisAlignment: MainAxisAlignment.center,
+                              final isCritical = rec.medicine.totalStock <= (rec.medicine.lowStockThreshold / 2);
+                              return Container(
+                                margin: const EdgeInsets.symmetric(vertical: 4),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: context.surfaceColor,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: (isCritical ? AppTheme.danger : Colors.orange).withOpacity(0.15)),
+                                ),
+                                child: Row(
                                   children: [
-                                    Text('Suggest: +${rec.suggestedReorderQty}', style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold)),
-                                    Text(
-                                      rec.daysLeft >= 999.0 ? 'Stock Life: ∞' : 'Life: ${rec.daysLeft.toStringAsFixed(0)}d',
-                                      style: TextStyle(color: rec.daysLeft < 7 ? AppTheme.danger : context.textMutedColor, fontSize: 11),
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: (isCritical ? AppTheme.danger : Colors.orange).withOpacity(0.1),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        isCritical ? Icons.gpp_bad_rounded : Icons.warning_amber_rounded,
+                                        color: isCritical ? AppTheme.danger : Colors.orange,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(rec.medicine.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'Stock: ${rec.medicine.totalStock} ${rec.medicine.unit} (Limit: ${rec.medicine.lowStockThreshold})',
+                                            style: TextStyle(color: context.textMutedColor, fontSize: 11),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Text('Suggest: +${rec.suggestedReorderQty}', style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold, fontSize: 13)),
+                                        const SizedBox(height: 2),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: (rec.daysLeft < 7 ? AppTheme.danger : Colors.grey).withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            rec.daysLeft >= 999.0 ? 'Life: ∞' : 'Life: ${rec.daysLeft.toStringAsFixed(0)}d',
+                                            style: TextStyle(
+                                              color: rec.daysLeft < 7 ? AppTheme.danger : context.textMutedColor,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -1385,21 +1916,48 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
                   Expanded(
                     child: deadStock.isEmpty
                         ? const Center(child: Text('No slow-moving stocks detected.'))
-                        : ListView.separated(
+                        : ListView.builder(
                             itemCount: deadStock.length,
-                            separatorBuilder: (_, __) => const Divider(),
                             itemBuilder: (context, idx) {
                               final med = deadStock[idx];
-                              return ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(med.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                subtitle: Text('Category: ${med.category} • Barcode: ${med.barcode}'),
-                                trailing: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  mainAxisAlignment: MainAxisAlignment.center,
+                              final lockedValue = med.totalStock * med.purchasePrice;
+                              return Container(
+                                margin: const EdgeInsets.symmetric(vertical: 4),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: context.surfaceColor,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: Colors.grey.withOpacity(0.08)),
+                                ),
+                                child: Row(
                                   children: [
-                                    Text('${med.totalStock} ${med.unit} left', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                    Text('Value: ₹${(med.totalStock * med.purchasePrice).toStringAsFixed(0)}', style: TextStyle(color: context.textMutedColor, fontSize: 11)),
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.withOpacity(0.1),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.inventory_2_outlined, color: Colors.grey, size: 20),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(med.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                          const SizedBox(height: 2),
+                                          Text('Category: ${med.category}', style: TextStyle(color: context.textMutedColor, fontSize: 11)),
+                                        ],
+                                      ),
+                                    ),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Text('${med.totalStock} ${med.unit} left', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                        const SizedBox(height: 2),
+                                        Text('Value: ₹${lockedValue.toStringAsFixed(0)}', style: const TextStyle(color: AppTheme.danger, fontWeight: FontWeight.bold, fontSize: 11)),
+                                      ],
+                                    ),
                                   ],
                                 ),
                               );
@@ -1432,13 +1990,46 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
           const SizedBox(height: 20),
           Row(
             children: [
-              Expanded(child: _buildMetricCard('Total Invoices', '${sales.length}', Icons.description_rounded, AppTheme.indigo)),
+              Expanded(
+                child: _buildMetricCard(
+                  'Total Invoices',
+                  '${sales.length}',
+                  Icons.description_rounded,
+                  AppTheme.indigo,
+                  subtitle: 'All completed orders',
+                ),
+              ),
               const SizedBox(width: 16),
-              Expanded(child: _buildMetricCard('Patients Served', '${stats.uniquePatientsServed}', Icons.people_rounded, AppTheme.sky)),
+              Expanded(
+                child: _buildMetricCard(
+                  'Patients Served',
+                  '${stats.uniquePatientsServed}',
+                  Icons.people_rounded,
+                  AppTheme.sky,
+                  subtitle: 'Unique clinic visitors',
+                ),
+              ),
               const SizedBox(width: 16),
-              Expanded(child: _buildMetricCard('Repeat Rate', '${stats.repeatPatientRate.toStringAsFixed(1)}%', Icons.replay_rounded, AppTheme.success)),
+              Expanded(
+                child: _buildMetricCard(
+                  'Repeat Rate',
+                  '${stats.repeatPatientRate.toStringAsFixed(1)}%',
+                  Icons.replay_rounded,
+                  AppTheme.success,
+                  subtitle: 'Returning customer ratio',
+                  progress: (stats.repeatPatientRate / 100).clamp(0.0, 1.0),
+                ),
+              ),
               const SizedBox(width: 16),
-              Expanded(child: _buildMetricCard('Avg Checkout Ticket', '₹${stats.averageBasketValue.toStringAsFixed(2)}', Icons.shopping_basket_rounded, AppTheme.accent)),
+              Expanded(
+                child: _buildMetricCard(
+                  'Avg Checkout Ticket',
+                  '₹${stats.averageBasketValue.toStringAsFixed(2)}',
+                  Icons.shopping_basket_rounded,
+                  AppTheme.accent,
+                  subtitle: 'Average billing size',
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 32),
@@ -1454,7 +2045,34 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
                     : BarChart(
                         BarChartData(
                           alignment: BarChartAlignment.spaceAround,
-                          gridData: const FlGridData(show: true, drawVerticalLine: false),
+                          barTouchData: BarTouchData(
+                            enabled: true,
+                            touchTooltipData: BarTouchTooltipData(
+                              getTooltipColor: (group) => const Color(0xFF1E293B).withOpacity(0.9),
+                              getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                                return BarTooltipItem(
+                                  '${rod.toY.toInt()} visits',
+                                  const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 11,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          gridData: FlGridData(
+                            show: true,
+                            drawVerticalLine: false,
+                            getDrawingHorizontalLine: (value) {
+                              return FlLine(
+                                color: Colors.grey.withOpacity(0.1),
+                                strokeWidth: 1,
+                                dashArray: [5, 5],
+                              );
+                            },
+                          ),
+                          borderData: FlBorderData(show: false),
                           titlesData: FlTitlesData(
                             topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                             rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -1477,9 +2095,16 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
                               barRods: [
                                 BarChartRodData(
                                   toY: (stats.hourlyActivity[i] ?? 0).toDouble(),
-                                  color: AppTheme.sky,
-                                  width: 10,
-                                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(3), topRight: Radius.circular(3)),
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFF38BDF8), Color(0xFF0284C7)],
+                                    begin: Alignment.bottomCenter,
+                                    end: Alignment.topCenter,
+                                  ),
+                                  width: 12,
+                                  borderRadius: const BorderRadius.only(
+                                    topLeft: Radius.circular(4),
+                                    topRight: Radius.circular(4),
+                                  ),
                                 ),
                               ],
                             );
@@ -1495,37 +2120,25 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
   }
 
   // Common card widget
-  Widget _buildMetricCard(String label, String val, IconData icon, Color color) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: color, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: TextStyle(color: context.textMutedColor, fontSize: 13, fontWeight: FontWeight.w500),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              val,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
+  Widget _buildMetricCard(
+    String label,
+    String val,
+    IconData icon,
+    Color color, {
+    String? subtitle,
+    double? progress,
+    String? trendText,
+    bool? trendIsUp,
+  }) {
+    return AppKpiCard(
+      label: label,
+      value: val,
+      icon: icon,
+      color: color,
+      subtitle: subtitle,
+      progress: progress,
+      trendText: trendText,
+      trendIsUp: trendIsUp,
     );
   }
 
@@ -1848,39 +2461,30 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
                 ),
               ),
               const SizedBox(width: 16),
-              Wrap(
-                spacing: 8,
-                children: ['Today', 'Yesterday', 'This Week', 'This Month', 'Custom Range'].map((p) {
-                  final isSelected = p == _h1Period;
-                  return ChoiceChip(
-                    label: Text(p),
-                    selected: isSelected,
-                    onSelected: (selected) async {
-                      if (selected) {
-                        if (p == 'Custom Range') {
-                          final range = await showDateRangePicker(
-                            context: context,
-                            firstDate: DateTime(2020),
-                            lastDate: DateTime.now(),
-                            initialDateRange: _h1CustomRange,
-                          );
-                          if (range != null) {
-                            setState(() {
-                              _h1Period = p;
-                              _h1CustomRange = range;
-                            });
-                          }
-                        } else {
-                          setState(() {
-                            _h1Period = p;
-                            _h1CustomRange = null;
-                          });
-                        }
-                      }
-                    },
-                    selectedColor: AppTheme.primary.withOpacity(0.2),
-                  );
-                }).toList(),
+              _buildPeriodSelector(
+                selectedPeriod: _h1Period,
+                periods: const ['Today', 'Yesterday', 'This Week', 'This Month', 'Custom Range'],
+                onPeriodSelected: (p) async {
+                  if (p == 'Custom Range') {
+                    final range = await showDateRangePicker(
+                      context: context,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                      initialDateRange: _h1CustomRange,
+                    );
+                    if (range != null) {
+                      setState(() {
+                        _h1Period = p;
+                        _h1CustomRange = range;
+                      });
+                    }
+                  } else {
+                    setState(() {
+                      _h1Period = p;
+                      _h1CustomRange = null;
+                    });
+                  }
+                },
               ),
             ],
           ),

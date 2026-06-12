@@ -3,6 +3,7 @@ import '../models/appointment.dart';
 import '../models/patient.dart';
 import '../models/doctor.dart';
 import '../models/app_user.dart';
+import '../models/sale.dart';
 import '../services/objectbox_service.dart';
 import '../services/time_service.dart';
 import '../services/local_server_service.dart';
@@ -10,6 +11,7 @@ import '../services/sync_service.dart';
 import '../services/sync_queue_service.dart';
 import '../services/audit_service.dart';
 import 'dart:io';
+import 'dart:convert';
 
 enum OpdFilter { today, yesterday, last7Days, allTime, custom }
 
@@ -250,11 +252,79 @@ class OpdProvider extends ChangeNotifier {
       actor: actor,
     );
 
-    loadAll();
-
-    // Broadcast or Push network sync
+    // Generate and save separate consultation fee advance transaction
     final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
     final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+
+    if (consultationFee > 0) {
+      final dateStr = '${robustNow.year}${robustNow.month.toString().padLeft(2, '0')}${robustNow.day.toString().padLeft(2, '0')}';
+      final timeStr = '${robustNow.hour.toString().padLeft(2, '0')}${robustNow.minute.toString().padLeft(2, '0')}${robustNow.second.toString().padLeft(2, '0')}';
+      final msStr = robustNow.millisecond.toString().padLeft(3, '0');
+      final invNo = 'OPD-$dateStr-$timeStr-$msStr';
+
+      final consultationItem = SaleItem(
+        medicineId: 0,
+        procedureId: 0,
+        medicineName: 'Consultation Fee (Dr. $doctorName)',
+        qty: 1,
+        unitPrice: consultationFee,
+        isProcedure: true,
+      );
+
+      double fCash = 0, fUpi = 0, fCard = 0;
+      if (paymentMethod.toLowerCase() == 'upi') {
+        fUpi = consultationFee;
+      } else if (paymentMethod.toLowerCase() == 'card') {
+        fCard = consultationFee;
+      } else {
+        fCash = consultationFee;
+      }
+
+      String patientUhid = '';
+      final patient = ObjectBoxService.instance.patientBox.get(patientId);
+      if (patient != null) {
+        patientUhid = patient.uhid;
+      }
+
+      final advanceSale = Sale(
+        invoiceNo: invNo,
+        patientId: patientId,
+        patientName: patientName,
+        patientPhone: patientPhone,
+        patientUhid: patientUhid,
+        subtotal: consultationFee,
+        discount: 0,
+        taxRate: 0,
+        taxAmount: 0,
+        total: consultationFee,
+        paymentMethod: paymentMethod,
+        cashAmount: fCash,
+        upiAmount: fUpi,
+        cardAmount: fCard,
+        isClinicalDispense: true,
+        linkedAppointmentId: appt.id,
+        itemsJson: jsonEncode([consultationItem.toJson()]),
+        createdAt: robustNow,
+      );
+
+      ObjectBoxService.instance.saleBox.put(advanceSale);
+
+      if (isHub) {
+        if (LocalServerService.instance.isRunning) {
+          LocalServerService.instance.broadcast({'event': 'sales_updated'});
+        }
+      } else if (isClient) {
+        SyncQueueService.instance.addToQueue(
+          entity: 'sale',
+          action: 'create',
+          data: advanceSale.toJson(),
+        );
+      }
+    }
+
+    loadAll();
+
+    // Broadcast or Push network sync for appointment
     if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});

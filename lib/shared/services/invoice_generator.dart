@@ -225,7 +225,59 @@ class InvoiceGenerator {
   }
 
   static pw.Widget _buildTotal(Invoice invoice, bool isSmall) {
-    final double fs = isSmall ? 12 : 16;
+    final double fs = isSmall ? 8 : 10;
+    final double titleFs = isSmall ? 12 : 14;
+
+    double consultationFee = 0.0;
+    for (final item in invoice.items) {
+      if (item.name.contains('Consultation Fee')) {
+        consultationFee += item.amount;
+      }
+    }
+
+    if (consultationFee > 0) {
+      final double subtotal = invoice.items.fold(0.0, (sum, item) => sum + item.amount);
+      return pw.Container(
+        alignment: pw.Alignment.centerRight,
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.end,
+          children: [
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.end,
+              children: [
+                pw.Text('Subtotal: ', style: pw.TextStyle(fontSize: fs)),
+                pw.Text('Rs. ${subtotal.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: fs)),
+              ],
+            ),
+            pw.SizedBox(height: 2),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.end,
+              children: [
+                pw.Text('Advance Paid Consultation Fee: ', style: pw.TextStyle(fontSize: fs)),
+                pw.Text('-Rs. ${consultationFee.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: fs)),
+              ],
+            ),
+            pw.SizedBox(height: 4),
+            pw.SizedBox(width: 200, child: pw.Divider(thickness: 1, color: PdfColors.grey400)),
+            pw.SizedBox(height: 4),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.end,
+              children: [
+                pw.Text(
+                  'Net Total: ',
+                  style: pw.TextStyle(fontSize: titleFs, fontWeight: pw.FontWeight.bold),
+                ),
+                pw.Text(
+                  'Rs. ${invoice.totalAmount.toStringAsFixed(2)}',
+                  style: pw.TextStyle(fontSize: titleFs, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
     return pw.Container(
       alignment: pw.Alignment.centerRight,
       child: pw.Row(
@@ -233,11 +285,11 @@ class InvoiceGenerator {
         children: [
           pw.Text(
             'Total Amount: ',
-            style: pw.TextStyle(fontSize: fs, fontWeight: pw.FontWeight.bold),
+            style: pw.TextStyle(fontSize: titleFs, fontWeight: pw.FontWeight.bold),
           ),
           pw.Text(
             'Rs. ${invoice.totalAmount.toStringAsFixed(2)}',
-            style: pw.TextStyle(fontSize: fs, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900),
+            style: pw.TextStyle(fontSize: titleFs, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900),
           ),
         ],
       ),
@@ -287,6 +339,20 @@ class InvoiceGenerator {
                 fontWeight: pw.FontWeight.bold,
                 color: PdfColors.red800,
               ),
+            ),
+          ),
+        ],
+        if (invoice.isClinicalDispense) ...[
+          pw.SizedBox(height: 12),
+          pw.Center(
+            child: pw.Text(
+              'DISCLAIMER: Dispensed medicines must be consumed as prescribed by the doctor. Please verify the medicine name, batch, dosage, and expiry before use.',
+              style: pw.TextStyle(
+                fontSize: isSmall ? 7 : 9,
+                fontStyle: pw.FontStyle.italic,
+                color: PdfColors.grey700,
+              ),
+              textAlign: pw.TextAlign.center,
             ),
           ),
         ],
