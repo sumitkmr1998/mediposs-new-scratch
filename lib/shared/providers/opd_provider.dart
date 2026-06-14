@@ -222,6 +222,20 @@ class OpdProvider extends ChangeNotifier {
     SalesProvider? salesProvider,
   }) async {
     final robustNow = await TimeService.getRobustTime();
+    
+    // Prevent double-booking from rapid button clicking or client sync latency
+    final tenSecondsAgo = robustNow.subtract(const Duration(seconds: 10));
+    final existing = _appointments.where((a) =>
+        a.patientId == patientId &&
+        a.doctorId == doctorId &&
+        a.createdAt.isAfter(tenSecondsAgo) &&
+        a.status != 'cancelled').firstOrNull;
+
+    if (existing != null) {
+      debugPrint('OpdProvider: Duplicate appointment prevented for patient $patientName');
+      return existing;
+    }
+
     final appt = Appointment(
       patientId: patientId,
       patientName: patientName,

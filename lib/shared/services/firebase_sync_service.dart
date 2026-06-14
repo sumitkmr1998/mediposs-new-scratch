@@ -574,9 +574,51 @@ class FirebaseSyncService {
     });
   }
 
+  Future<Map<String, dynamic>?> _getHubStatusREST() async {
+    try {
+      final projectId = DefaultFirebaseOptions.windows.projectId;
+      final apiKey = DefaultFirebaseOptions.windows.apiKey;
+      final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops/$_shopId/settings/hub_status?key=$apiKey');
+      
+      final res = await http.get(url);
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final fields = data['fields'] as Map<String, dynamic>? ?? {};
+        return _convertFromFirestoreMap(fields);
+      }
+    } catch (e) {
+      debugPrint('Firebase [_getHubStatusREST] Error: $e');
+    }
+    return null;
+  }
+
+  Future<List<String>> _fetchShopIdsREST() async {
+    try {
+      final projectId = DefaultFirebaseOptions.windows.projectId;
+      final apiKey = DefaultFirebaseOptions.windows.apiKey;
+      final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops?key=$apiKey');
+      
+      final res = await http.get(url);
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final List docs = data['documents'] ?? [];
+        return docs.map((doc) {
+          final name = doc['name'] as String;
+          return name.split('/').last;
+        }).toList();
+      }
+    } catch (e) {
+      debugPrint('Firebase [_fetchShopIdsREST] Error: $e');
+    }
+    return [];
+  }
+
   /// Fetches the Hub status (online/offline, cloudflare URL) from Firestore.
   Future<Map<String, dynamic>?> getHubStatus() async {
     if (!_isEnabled) return null;
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      return await _getHubStatusREST();
+    }
     if (!_isInitialized) return null;
     try {
       final doc = await _db.collection('shops').doc(_shopId).collection('settings').doc('hub_status').get(const GetOptions(source: Source.server)).timeout(const Duration(seconds: 5));
@@ -590,6 +632,9 @@ class FirebaseSyncService {
   /// Fetches the list of all available shop IDs in Firestore.
   Future<List<String>> fetchShopIds() async {
     if (!_isEnabled) return [];
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      return await _fetchShopIdsREST();
+    }
     if (!_isInitialized) return [];
     try {
       final snapshot = await _db.collection('shops').get();

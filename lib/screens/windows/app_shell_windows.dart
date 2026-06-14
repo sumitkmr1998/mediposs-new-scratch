@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
@@ -21,6 +22,8 @@ import '../../theme/app_theme.dart';
 import '../../shared/widgets/interactive_hover.dart';
 import '../../widgets/exit_backup_dialog.dart';
 import '../../shared/services/ota_update_service.dart';
+import '../../widgets/shop_selection_dialog.dart';
+import '../../shared/widgets/connectivity_overlay.dart';
 
 import '../dashboard_screen.dart';
 import '../pos_screen.dart';
@@ -47,10 +50,31 @@ class _AppShellWindowsState extends State<AppShellWindows> {
   int _selectedIndex = 0;
   bool _isForcedExit = false;
   bool _isCloudSyncing = false;
+  Timer? _hubCheckTimer;
+  bool _isHubBackOnline = false;
+
+  @override
+  void dispose() {
+    _hubCheckTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   void initState() {
     super.initState();
+    
+    // Start periodic Hub availability check for Cloud Mode
+    _hubCheckTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
+      final sync = context.read<SyncService>();
+      final settings = context.read<SettingsProvider>().settings;
+      if (settings.isWindowsClient && sync.isCloudMode && sync.hubIp != null) {
+        final reachable = await sync.testConnection(sync.hubIp!);
+        if (reachable != _isHubBackOnline) {
+          setState(() => _isHubBackOnline = reachable);
+        }
+      }
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       // 1. Initial Data Load
       _loadInitialData();
@@ -223,42 +247,112 @@ class _AppShellWindowsState extends State<AppShellWindows> {
     final isWide = MediaQuery.of(context).size.width > 700;
     final wsvc = context.watch<WebSocketService>();
     final nav = context.watch<NavigationProvider>();
+    final sync = context.watch<SyncService>();
+    final settings = context.watch<SettingsProvider>().settings;
     final dests = _buildDestinations(context);
 
     int activeIndex = dests.indexWhere((d) => d.id == nav.activeDestId);
     if (activeIndex == -1) activeIndex = 0;
     final currentDestId = dests[activeIndex].id;
 
-    return Scaffold(
-      appBar: !isWide
-          ? AppBar(
-              title: Text(dests[activeIndex].label),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.logout, color: AppTheme.danger),
-                  onPressed: () => _showLogoutDialog(context),
+    return Stack(
+      children: [
+        Scaffold(
+          appBar: !isWide
+              ? AppBar(
+                  title: Text(dests[activeIndex].label),
+                  actions: [
+                    IconButton(
+                      icon: const Icon(Icons.logout, color: AppTheme.danger),
+                      onPressed: () => _showLogoutDialog(context),
+                    ),
+                  ],
+                )
+              : null,
+          body: Row(
+            children: [
+              if (isWide)
+                _SideNav(
+                  selectedIndex: activeIndex,
+                  onDestinationSelected: (i) => nav.selectDestination(dests[i].id),
+                  destinations: dests,
+                  isWindowsHub: !settings.isWindowsClient,
+                  isConnected: wsvc.connected,
+                  isCollapsed: settings.navCollapsed,
+                  onToggleCollapse: () => context.read<SettingsProvider>().toggleNavCollapse(),
+                  onConnectTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ConnectionScreen())),
+                  onCloudSync: _performManualCloudSync,
+                  isCloudSyncing: _isCloudSyncing,
                 ),
-              ],
-            )
-          : null,
-      body: Row(
-        children: [
-          if (isWide)
-            _SideNav(
-              selectedIndex: activeIndex,
-              onDestinationSelected: (i) => nav.selectDestination(dests[i].id),
-              destinations: dests,
-              isWindowsHub: !context.read<SettingsProvider>().settings.isWindowsClient,
-              isConnected: wsvc.connected,
-              isCollapsed: context.watch<SettingsProvider>().settings.navCollapsed,
-              onToggleCollapse: () => context.read<SettingsProvider>().toggleNavCollapse(),
-              onConnectTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ConnectionScreen())),
-              onCloudSync: _performManualCloudSync,
-              isCloudSyncing: _isCloudSyncing,
-            ),
-          Expanded(child: _screenForId(currentDestId)),
-        ],
-      ),
+              Expanded(child: _screenForId(currentDestId)),
+            ],
+          ),
+        ),
+        // --- HUB OFFLINE OVERLAY (BLOCKING) ---
+        if (settings.isWindowsClient && !sync.isCloudMode && !wsvc.connected && sync.hubIp != null)
+          ConnectivityOverlay(
+            title: 'Hub Connection Lost',
+            message: 'The Windows Hub is offline or unreachable. What would you like to do?',
+            actions: [
+              ElevatedButton.icon(
+                onPressed: () => showShopSelectionDialog(context),
+                icon: const Icon(Icons.cloud_sync),
+                label: const Text('Enter Cloud Mode (Firebase)'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.warning,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () {
+                  wsvc.connect(sync.hubIp!, sync.secret);
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry Connection'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+              ),
+            ],
+          ),
+
+        // --- HUB BACK ONLINE OVERLAY (NON-BLOCKING PROMPT) ---
+        if (settings.isWindowsClient && sync.isCloudMode && _isHubBackOnline)
+          ConnectivityOverlay(
+            isBlocking: false,
+            title: 'Hub is Back Online!',
+            message: 'The Windows Hub is now reachable. Would you like to return to Live Mode for faster sync?',
+            actions: [
+              ElevatedButton.icon(
+                onPressed: () {
+                  sync.exitCloudMode();
+                  setState(() => _isHubBackOnline = false);
+                  wsvc.connect(sync.hubIp!, sync.secret);
+                },
+                icon: const Icon(Icons.flash_on),
+                label: const Text('Return to Live Mode'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.success,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () {
+                  setState(() => _isHubBackOnline = false);
+                },
+                icon: const Icon(Icons.close),
+                label: const Text('Dismiss'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+              ),
+            ],
+          ),
+      ],
     );
   }
 

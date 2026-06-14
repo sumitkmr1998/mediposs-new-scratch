@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../shared/services/sync_service.dart';
 import '../../theme/app_theme.dart';
 import '../../shared/services/discovery_service.dart';
+import '../../widgets/shop_selection_dialog.dart';
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -377,20 +378,33 @@ class _ConnectionWindowsState extends State<ConnectionWindows> {
                 const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: sync.isSyncing ? null : _connect,
-                    icon: sync.isSyncing
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.link),
-                    label:
-                        Text(sync.isSyncing ? 'Pairing...' : 'Pair with Hub'),
-                  ),
+                  child: _connectionMode == 'firebase'
+                      ? ElevatedButton.icon(
+                          onPressed: () => showShopSelectionDialog(context),
+                          icon: const Icon(Icons.cloud_sync),
+                          label: const Text('Enter Cloud Mode'),
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 50),
+                            backgroundColor: AppTheme.warning,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                        )
+                      : ElevatedButton.icon(
+                          onPressed: sync.isSyncing ? null : _connect,
+                          icon: sync.isSyncing
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.link),
+                          label:
+                              Text(sync.isSyncing ? 'Pairing...' : 'Pair with Hub'),
+                        ),
                 ),
-                if (_errorMsg != null || _reachable == false) ...[
+                if (_connectionMode != 'firebase' && (_errorMsg != null || _reachable == false)) ...[
                   const SizedBox(height: 24),
                   Container(
                     padding: const EdgeInsets.all(16),
@@ -420,7 +434,7 @@ class _ConnectionWindowsState extends State<ConnectionWindows> {
                         ),
                         const SizedBox(height: 16),
                         ElevatedButton.icon(
-                          onPressed: () => sync.enterCloudMode(),
+                          onPressed: () => showShopSelectionDialog(context),
                           icon: const Icon(Icons.cloud_sync),
                           label: const Text('Enter Cloud Mode'),
                           style: ElevatedButton.styleFrom(
@@ -445,10 +459,10 @@ class _ConnectionWindowsState extends State<ConnectionWindows> {
                       children: [
                         const Icon(Icons.cloud_done, color: AppTheme.primary),
                         const SizedBox(width: 8),
-                        const Expanded(
+                        Expanded(
                           child: Text(
-                            'Active in Cloud Mode (Firebase)',
-                            style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold),
+                            'Active in Cloud Mode (Shop: ${context.read<SettingsProvider>().settings.shopId})',
+                            style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold),
                           ),
                         ),
                         TextButton(

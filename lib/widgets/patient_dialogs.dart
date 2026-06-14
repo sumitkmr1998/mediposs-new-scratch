@@ -506,6 +506,7 @@ class BookAppointmentDialog extends StatefulWidget {
 class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
   Doctor? _selectedDoctor;
   String _paymentMethod = 'cash';
+  bool _isBooking = false;
 
   @override
   Widget build(BuildContext context) {
@@ -548,12 +549,12 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
                   isDense: true,
                 ),
                 items: doctors
-                    .map((d) => DropdownMenuItem(
-                          value: d,
-                          child: Text(
-                              'Dr. ${d.name}  •  ₹${d.consultationFee.toStringAsFixed(0)}'),
-                        ))
-                    .toList(),
+                  .map((d) => DropdownMenuItem(
+                        value: d,
+                        child: Text(
+                            'Dr. ${d.name}  •  ₹${d.consultationFee.toStringAsFixed(0)}'),
+                      ))
+                  .toList(),
                 onChanged: (d) => setState(() => _selectedDoctor = d),
               ),
             if (resolvedDoctor != null) ...[
@@ -623,33 +624,55 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel')),
         ElevatedButton(
-          onPressed: resolvedDoctor == null
+          onPressed: (resolvedDoctor == null || _isBooking)
               ? null
               : () async {
-                  final opd = context.read<OpdProvider>();
-                  final appt = await opd.createAppointment(
-                    patientId: widget.patient.id,
-                    patientName: widget.patient.name,
-                    patientPhone: widget.patient.phone,
-                    doctorId: resolvedDoctor.id,
-                    doctorName: resolvedDoctor.name,
-                    consultationFee: resolvedDoctor.consultationFee,
-                    paymentMethod: _paymentMethod,
-                    syncService: context.read<SyncService>(),
-                    actor: context.read<AuthProvider>().currentUser,
-                    salesProvider: context.read<SalesProvider>(),
-                  );
-                  if (!mounted) return;
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                          'Token #${appt.tokenNumber} booked for ${widget.patient.name}'),
-                      backgroundColor: AppTheme.success,
-                    ),
-                  );
+                  setState(() => _isBooking = true);
+                  try {
+                    final opd = context.read<OpdProvider>();
+                    final appt = await opd.createAppointment(
+                      patientId: widget.patient.id,
+                      patientName: widget.patient.name,
+                      patientPhone: widget.patient.phone,
+                      doctorId: resolvedDoctor.id,
+                      doctorName: resolvedDoctor.name,
+                      consultationFee: resolvedDoctor.consultationFee,
+                      paymentMethod: _paymentMethod,
+                      syncService: context.read<SyncService>(),
+                      actor: context.read<AuthProvider>().currentUser,
+                      salesProvider: context.read<SalesProvider>(),
+                    );
+                    if (!mounted) return;
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                            'Token #${appt.tokenNumber} booked for ${widget.patient.name}'),
+                        backgroundColor: AppTheme.success,
+                      ),
+                    );
+                  } catch (e) {
+                    if (mounted) {
+                      setState(() => _isBooking = false);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to book: $e'),
+                          backgroundColor: AppTheme.danger,
+                        ),
+                      );
+                    }
+                  }
                 },
-          child: const Text('Book Appointment'),
+          child: _isBooking
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text('Book Appointment'),
         ),
       ],
     );

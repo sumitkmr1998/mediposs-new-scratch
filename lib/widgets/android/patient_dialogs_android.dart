@@ -748,6 +748,7 @@ class _AndroidPaymentChip extends StatelessWidget {
 class _BookAppointmentSheetState extends State<_BookAppointmentSheet> {
   Doctor? _selectedDoctor;
   String _paymentMethod = 'cash';
+  bool _isBooking = false;
 
   @override
   Widget build(BuildContext context) {
@@ -969,29 +970,41 @@ class _BookAppointmentSheetState extends State<_BookAppointmentSheet> {
           SizedBox(
             height: 60,
             child: ElevatedButton(
-              onPressed: resolvedDoctor == null
+              onPressed: (resolvedDoctor == null || _isBooking)
                   ? null
                   : () async {
-                      final appt = await opd.createAppointment(
-                        patientId: widget.patient.id,
-                        patientName: widget.patient.name,
-                        patientPhone: widget.patient.phone,
-                        doctorId: resolvedDoctor.id,
-                        doctorName: resolvedDoctor.name,
-                        consultationFee: resolvedDoctor.consultationFee,
-                        paymentMethod: _paymentMethod,
-                        syncService: context.read<SyncService>(),
-                        actor: context.read<AuthProvider>().currentUser,
-                        salesProvider: context.read<SalesProvider>(),
-                      );
-                      if (!context.mounted) return;
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text(
-                                '✅ Token #${appt.tokenNumber} issued for ${widget.patient.name}'),
-                            backgroundColor: AppTheme.success),
-                      );
+                      setState(() => _isBooking = true);
+                      try {
+                        final appt = await opd.createAppointment(
+                          patientId: widget.patient.id,
+                          patientName: widget.patient.name,
+                          patientPhone: widget.patient.phone,
+                          doctorId: resolvedDoctor.id,
+                          doctorName: resolvedDoctor.name,
+                          consultationFee: resolvedDoctor.consultationFee,
+                          paymentMethod: _paymentMethod,
+                          syncService: context.read<SyncService>(),
+                          actor: context.read<AuthProvider>().currentUser,
+                          salesProvider: context.read<SalesProvider>(),
+                        );
+                        if (!context.mounted) return;
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                              content: Text(
+                                  '✅ Token #${appt.tokenNumber} issued for ${widget.patient.name}'),
+                              backgroundColor: AppTheme.success),
+                        );
+                      } catch (e) {
+                        if (context.mounted) {
+                          setState(() => _isBooking = false);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                                content: Text('❌ Booking failed: $e'),
+                                backgroundColor: AppTheme.danger),
+                          );
+                        }
+                      }
                     },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primary,
@@ -1000,8 +1013,17 @@ class _BookAppointmentSheetState extends State<_BookAppointmentSheet> {
                     borderRadius: BorderRadius.circular(16)),
                 elevation: 0,
               ),
-              child: const Text('CONFIRM & ISSUE TOKEN',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1)),
+              child: _isBooking
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('CONFIRM & ISSUE TOKEN',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1)),
             ),
           ),
           const SizedBox(height: 8),
