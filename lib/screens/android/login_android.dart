@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/foundation.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/services/sync_service.dart';
 import '../../shared/providers/inventory_provider.dart';
@@ -24,6 +25,19 @@ class _LoginAndroidState extends State<LoginAndroid> {
   String _pin = '';
   bool _error = false;
   bool _isLoading = false;
+  String _version = '';
+
+  @override
+  void initState() {
+    super.initState();
+    PackageInfo.fromPlatform().then((info) {
+      if (mounted) {
+        setState(() {
+          _version = info.version;
+        });
+      }
+    });
+  }
 
   void _tap(String digit) {
     if (_pin.length < 6) {
@@ -180,9 +194,24 @@ class _LoginAndroidState extends State<LoginAndroid> {
                         size: 48, color: AppTheme.primary),
                   ),
                   const SizedBox(height: 20),
-                  Text('MediPoss',
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.w900, color: AppTheme.primary)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text('MediPoss',
+                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                              fontWeight: FontWeight.w900, color: AppTheme.primary)),
+                      if (_version.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        Text('v$_version',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: context.textMutedColor)),
+                      ],
+                    ],
+                  ),
                   const SizedBox(height: 4),
                   Text('Medical Store Management',
                       style: TextStyle(color: context.textMutedColor)),

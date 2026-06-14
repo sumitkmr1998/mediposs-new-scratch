@@ -1,7 +1,7 @@
 name: medipos
 description: MediPoss - Medical Store POS with Dual Warehouse & Real-time Sync
 publish_to: 'none'
-version: 1.8.0
+version: 2.0.0
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -50,6 +50,8 @@ dependencies:
   connectivity_plus: ^6.1.1
   reorderable_grid_view: ^2.1.0
   fl_chart: ^1.1.1
+  package_info_plus: ^8.0.0
+  ota_update: ^7.1.0
 
   # Utilities
   intl: any

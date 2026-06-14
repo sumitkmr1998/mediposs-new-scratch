@@ -267,8 +267,8 @@ class _KPIGrid extends StatelessWidget {
     final bool isCashier = !(auth.currentUser?.canViewHistoricalData ?? true);
 
     final double totalRevenue = isCashier
-        ? (sales.todayRevenue + opd.todayCollectedRevenue + sales.todayConsultationRevenue + sales.todayProcedureRevenue)
-        : (sales.filteredRevenue + opd.filteredCollectedRevenue + sales.filteredConsultationRevenue + sales.filteredProcedureRevenue);
+        ? (sales.todayRevenue + sales.todayConsultationRevenue + sales.todayProcedureRevenue)
+        : (sales.filteredRevenue + sales.filteredConsultationRevenue + sales.filteredProcedureRevenue);
 
     final String labelSuffix = isCashier ? 'Today' : _getLabelSuffix(sales.activeFilter);
 
@@ -425,21 +425,13 @@ class _RevenueBreakdown extends StatelessWidget {
 
     // Collected revenue only
     final productSales = isCashier ? sales.todayRevenue : sales.filteredRevenue;
-    final opdRev = isCashier
-        ? (opd.todayCollectedRevenue + sales.todayConsultationRevenue)
-        : (opd.filteredCollectedRevenue + sales.filteredConsultationRevenue);
+    final opdRev = isCashier ? sales.todayConsultationRevenue : sales.filteredConsultationRevenue;
     final procedureRev = isCashier ? sales.todayProcedureRevenue : sales.filteredProcedureRevenue;
     final total = productSales + opdRev + procedureRev;
 
-    final totalCash = isCashier
-        ? (sales.todayCashRevenue + opd.todayCashRevenue)
-        : (sales.filteredCashRevenue + opd.filteredCashRevenue);
-    final totalUpi = isCashier
-        ? (sales.todayUpiRevenue + opd.todayUpiRevenue)
-        : (sales.filteredUpiRevenue + opd.filteredUpiRevenue);
-    final totalCard = isCashier
-        ? (sales.todayCardRevenue + opd.todayCardRevenue)
-        : (sales.filteredCardRevenue + opd.filteredCardRevenue);
+    final totalCash = isCashier ? sales.todayCashRevenue : sales.filteredCashRevenue;
+    final totalUpi = isCashier ? sales.todayUpiRevenue : sales.filteredUpiRevenue;
+    final totalCard = isCashier ? sales.todayCardRevenue : sales.filteredCardRevenue;
 
     final String labelSuffix = isCashier ? 'Today' : _getLabelSuffix(sales.activeFilter);
 

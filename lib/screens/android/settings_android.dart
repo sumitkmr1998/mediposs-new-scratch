@@ -23,6 +23,7 @@ import 'package:printing/printing.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
 import '../user_management_screen.dart';
 import '../opd/doctor_list_screen.dart';
+import '../../shared/services/ota_update_service.dart';
 
 class SettingsAndroid extends StatefulWidget {
   const SettingsAndroid({super.key});
@@ -1158,6 +1159,33 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                                 : null,
                           ),
                         )),
+                  ],
+                ),
+              ],
+              if (Platform.isAndroid) ...[
+                _buildSection(
+                  'Software Update',
+                  children: [
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.system_update_rounded,
+                            color: AppTheme.primary, size: 20),
+                      ),
+                      title: const Text('Check for Updates',
+                          style: TextStyle(fontWeight: FontWeight.w700)),
+                      subtitle: const Text('Check for new version on Firebase',
+                          style: TextStyle(fontSize: 12)),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () {
+                        OtaUpdateService.checkForUpdate(context, forceShowNoUpdate: true);
+                      },
+                    ),
                   ],
                 ),
               ],

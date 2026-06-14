@@ -80,20 +80,15 @@ void main(List<String> args) async {
     debugPrint('Main: Background Service initialized.');
   }
 
-  // 3. Initialize Firebase (Mobile Only)
-  if (defaultTargetPlatform != TargetPlatform.windows) {
-    try {
-      debugPrint('Main: Initializing Firebase...');
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-      await FirebaseSyncService.init();
-    } catch (e) {
-      debugPrint('Firebase Initialization Failed: $e');
-      await FirebaseSyncService.init();
-    }
-  } else {
-    // On Windows, initialize the service dummy so it doesn't crash on access
+  // 3. Initialize Firebase
+  try {
+    debugPrint('Main: Initializing Firebase...');
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    await FirebaseSyncService.init();
+  } catch (e) {
+    debugPrint('Firebase Initialization Failed: $e');
     await FirebaseSyncService.init();
   }
 

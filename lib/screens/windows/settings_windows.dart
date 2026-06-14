@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../shared/services/cloudflare_service.dart';
 import '../../shared/services/sync_service.dart';
+import '../../shared/services/ota_update_service.dart';
 
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/navigation_provider.dart';
@@ -264,6 +265,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       _NavModel(LucideIcons.network, 'Networking', Colors.orange),
       _NavModel(LucideIcons.package, 'Inventory', Colors.teal),
       _NavModel(LucideIcons.database, 'Data', AppTheme.warning),
+      _NavModel(LucideIcons.refreshCw, 'Updates', Colors.pink),
       if (auth.isAdmin) ...[
         _NavModel(LucideIcons.users, 'Staff', AppTheme.success),
         _NavModel(LucideIcons.stethoscope, 'Doctors', Colors.indigo),
@@ -456,6 +458,8 @@ class _SettingsWindowsState extends State<SettingsWindows> {
         return _buildInventorySection();
       case 'Data':
         return _buildDataSection(settingsProv);
+      case 'Updates':
+        return _buildUpdatesSection();
       case 'Staff':
         return UserManagementWindows(isEmbedded: true);
       case 'Doctors':
@@ -463,6 +467,62 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       default:
         return const SizedBox();
     }
+  }
+
+  Widget _buildUpdatesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'SOFTWARE UPDATE',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.5,
+                  color: Colors.pink,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Check for new version of MediPoss and update the portable client automatically.',
+                style: TextStyle(fontSize: 12, color: context.textMutedColor),
+              ),
+            ],
+          ),
+        ),
+        SettingsSection(
+          title: 'Software Update Management',
+          icon: LucideIcons.download,
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.system_update_rounded,
+                    color: AppTheme.primary, size: 20),
+              ),
+              title: const Text('Check for Updates',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: const Text('Check for new version on Firebase Storage',
+                  style: TextStyle(fontSize: 12)),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () {
+                OtaUpdateService.checkForUpdate(context, forceShowNoUpdate: true);
+              },
+            ),
+          ],
+        ),
+      ],
+    );
   }
 
   Widget _buildStoreSection() {

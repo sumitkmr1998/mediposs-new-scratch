@@ -20,6 +20,7 @@ import '../../shared/services/notification_service.dart';
 import '../../theme/app_theme.dart';
 import '../../shared/widgets/interactive_hover.dart';
 import '../../widgets/exit_backup_dialog.dart';
+import '../../shared/services/ota_update_service.dart';
 
 import '../dashboard_screen.dart';
 import '../pos_screen.dart';
@@ -59,7 +60,10 @@ class _AppShellWindowsState extends State<AppShellWindows> {
       await settings.load();
       settings.checkAndPerformAutoBackup('At Startup');
 
-      // 3. Setup Periodic Tasks
+      // 3. Check for updates
+      OtaUpdateService.checkForUpdate(context);
+
+      // 4. Setup Periodic Tasks
       _setupPeriodicTasks();
 
       // 4. Setup Real-time Inbound Listeners

@@ -439,7 +439,7 @@ class _PrimaryStats extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double totalRevenue = sales.filteredRevenue + (opd.filteredCollectedRevenue + sales.filteredConsultationRevenue) + sales.filteredProcedureRevenue;
+    final double totalRevenue = sales.filteredRevenue + sales.filteredConsultationRevenue + sales.filteredProcedureRevenue;
     final String labelSuffix = _getLabelSuffix(sales.activeFilter);
  
     return Column(
@@ -507,13 +507,13 @@ class _FinancialPerformance extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double productSales = sales.filteredRevenue;
-    final double opdRev = opd.filteredCollectedRevenue + sales.filteredConsultationRevenue;
+    final double opdRev = sales.filteredConsultationRevenue;
     final double procedureRev = sales.filteredProcedureRevenue;
     final double total = productSales + opdRev + procedureRev;
 
-    final double cash = sales.filteredCashRevenue + opd.filteredCashRevenue;
-    final double upi = sales.filteredUpiRevenue + opd.filteredUpiRevenue;
-    final double card = sales.filteredCardRevenue + opd.filteredCardRevenue;
+    final double cash = sales.filteredCashRevenue;
+    final double upi = sales.filteredUpiRevenue;
+    final double card = sales.filteredCardRevenue;
 
     final String labelSuffix = _getLabelSuffix(sales.activeFilter);
 

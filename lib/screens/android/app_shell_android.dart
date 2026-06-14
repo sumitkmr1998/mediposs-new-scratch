@@ -35,6 +35,7 @@ import '../../shared/providers/navigation_provider.dart';
 import '../../shared/widgets/connectivity_overlay.dart';
 import 'dart:async';
 import 'analysis_hub_android.dart';
+import '../../shared/services/ota_update_service.dart';
 
 class AppShellAndroid extends StatefulWidget {
   const AppShellAndroid({super.key});
@@ -217,6 +218,9 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
         setState(() {});
       } else if (Platform.isAndroid) {
         await NotificationService.instance.init();
+
+        // Check for updates
+        unawaited(OtaUpdateService.checkForUpdate(context));
 
         // Bug 5 Fix: Auto-connect WebSocket after tryAutoConnect succeeds
         final sync = context.read<SyncService>();

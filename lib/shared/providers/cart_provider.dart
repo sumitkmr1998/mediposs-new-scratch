@@ -673,8 +673,6 @@ class CartProvider extends ChangeNotifier {
       }
     }
 
-    _salesProvider.load();
-
     _editingSaleId = null;
     _editingInvoiceNo = null;
     _editingCreatedAt = null;
@@ -688,22 +686,40 @@ class CartProvider extends ChangeNotifier {
     // OPD Queue Automation: Mark today's active appointment as Done and consultation fee as billed
     final apptId = _linkedAppointmentId;
     if (apptId != null && apptId != 0 && !_isReturnMode) {
-      final appt = db.appointmentBox.get(apptId);
+      var appt = db.appointmentBox.get(apptId);
       if (appt != null) {
         if (appt.status != kStatusDone) {
-          _opdProvider.updateStatus(appt.id, kStatusDone, syncService);
+          await _opdProvider.updateStatus(appt.id, kStatusDone, syncService);
+          // Reload from DB to get updated status and times from updateStatus to prevent stale data write
+          appt = db.appointmentBox.get(apptId) ?? appt;
         }
 
         if (!appt.consultationBilled) {
           appt.consultationBilled = true;
           db.appointmentBox.put(appt);
 
-          // Find and remove the initial advance OPD consultation fee sale to prevent double counting
+          // Find and remove the initial advance OPD consultation fee sale to prevent double counting.
+          // Match by linkedAppointmentId or fall back to matching patient info and date for sync-robustness.
+          final apptDate = appt.scheduledAt;
+          final apptPhone = appt.patientPhone;
+          final apptName = appt.patientName;
           final existingOpdSale = db.saleBox
               .query(Sale_.linkedAppointmentId.equals(appt.id)
                   .and(Sale_.invoiceNo.startsWith('OPD-')))
               .build()
-              .findFirst();
+              .findFirst() ??
+              db.saleBox.getAll().where((sale) {
+                if (!sale.invoiceNo.startsWith('OPD-')) return false;
+                final sameDay = sale.createdAt.year == apptDate.year &&
+                    sale.createdAt.month == apptDate.month &&
+                    sale.createdAt.day == apptDate.day;
+                if (!sameDay) return false;
+
+                if (apptPhone.isNotEmpty && sale.patientPhone == apptPhone) return true;
+                if (apptName.toLowerCase().trim() == sale.patientName.toLowerCase().trim()) return true;
+                return false;
+              }).firstOrNull;
+
           if (existingOpdSale != null) {
             db.saleBox.remove(existingOpdSale.id);
             if (isClient) {
@@ -727,6 +743,8 @@ class CartProvider extends ChangeNotifier {
         }
       }
     }
+
+    _salesProvider.load();
 
     clearCart();
 

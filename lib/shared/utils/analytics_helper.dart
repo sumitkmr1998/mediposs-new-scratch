@@ -126,7 +126,7 @@ class AnalyticsHelper {
       double procedure = 0.0;
       for (final item in getItems(sale)) {
         if (item.isProcedure) {
-          if (item.medicineName == 'Consultation Fee') {
+          if (item.medicineName.startsWith('Consultation Fee')) {
             consultation += item.lineTotal;
           } else {
             procedure += item.lineTotal;

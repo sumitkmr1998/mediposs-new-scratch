@@ -5,6 +5,7 @@ import '../shared/models/patient.dart';
 import '../shared/models/doctor.dart';
 import '../shared/models/appointment.dart';
 import '../shared/providers/patient_provider.dart';
+import '../shared/providers/sales_provider.dart';
 import '../shared/providers/opd_provider.dart';
 import '../shared/providers/auth_provider.dart';
 import '../shared/services/sync_service.dart';
@@ -636,6 +637,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
                     paymentMethod: _paymentMethod,
                     syncService: context.read<SyncService>(),
                     actor: context.read<AuthProvider>().currentUser,
+                    salesProvider: context.read<SalesProvider>(),
                   );
                   if (!mounted) return;
                   Navigator.pop(context);

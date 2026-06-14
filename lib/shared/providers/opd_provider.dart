@@ -12,6 +12,7 @@ import '../services/sync_queue_service.dart';
 import '../services/audit_service.dart';
 import 'dart:io';
 import 'dart:convert';
+import 'sales_provider.dart';
 
 enum OpdFilter { today, yesterday, last7Days, allTime, custom }
 
@@ -218,6 +219,7 @@ class OpdProvider extends ChangeNotifier {
     bool isWalkIn = true,
     SyncService? syncService,
     AppUser? actor,
+    SalesProvider? salesProvider,
   }) async {
     final robustNow = await TimeService.getRobustTime();
     final appt = Appointment(
@@ -320,6 +322,7 @@ class OpdProvider extends ChangeNotifier {
           data: advanceSale.toJson(),
         );
       }
+      salesProvider?.load();
     }
 
     loadAll();

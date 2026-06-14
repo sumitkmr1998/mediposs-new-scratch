@@ -122,7 +122,7 @@ class SalesProvider extends ChangeNotifier {
       final list = jsonDecode(sale.itemsJson) as List;
       return list
           .map((e) => SaleItem.fromJson(e as Map<String, dynamic>))
-          .where((item) => item.isProcedure && item.medicineName == 'Consultation Fee')
+          .where((item) => item.isProcedure && item.medicineName.startsWith('Consultation Fee'))
           .fold(0.0, (sum, item) => sum + item.lineTotal);
     } catch (_) {
       return 0.0;
@@ -134,7 +134,7 @@ class SalesProvider extends ChangeNotifier {
       final list = jsonDecode(sale.itemsJson) as List;
       return list
           .map((e) => SaleItem.fromJson(e as Map<String, dynamic>))
-          .where((item) => item.isProcedure && item.medicineName != 'Consultation Fee')
+          .where((item) => item.isProcedure && !item.medicineName.startsWith('Consultation Fee'))
           .fold(0.0, (sum, item) => sum + item.lineTotal);
     } catch (_) {
       return 0.0;
