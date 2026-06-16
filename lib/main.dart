@@ -360,8 +360,13 @@ class _MediPossAppState extends State<MediPossApp> with WidgetsBindingObserver {
       }
 
       try {
-        // Perform final cloud broadcast
-        await LocalServerService.instance.broadcastAllToCloud();
+        // Perform final cloud broadcast with a timeout to prevent hanging on exit
+        await LocalServerService.instance.broadcastAllToCloud().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {
+            debugPrint('Final Cloud Sync timed out on exit.');
+          },
+        );
       } catch (e) {
         debugPrint('Final Sync Failed: $e');
       }

@@ -174,7 +174,14 @@ class _AppShellWindowsState extends State<AppShellWindows> {
       futures.add(context.read<SettingsProvider>().checkAndPerformAutoBackup('On Close'));
     }
     if (s.firebaseEnabled) {
-      futures.add(LocalServerService.instance.broadcastAllToCloud());
+      futures.add(
+        LocalServerService.instance.broadcastAllToCloud().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {
+            debugPrint('Final Cloud Sync timed out on exit (AppShell).');
+          },
+        ),
+      );
     }
 
     Future.wait(futures).then((_) {

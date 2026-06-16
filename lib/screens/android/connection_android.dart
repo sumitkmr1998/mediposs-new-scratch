@@ -109,6 +109,134 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
     setState(() => _connectionMode = mode);
   }
 
+  Future<void> _selectShopPartition() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Text('Fetching available shops...'),
+          ],
+        ),
+      ),
+    );
+
+    final List<String> shopIds = await FirebaseSyncService.instance.fetchShopIds();
+
+    if (!mounted) return;
+    Navigator.pop(context); // Dismiss loading
+
+    String? selectedShop;
+    final writeInController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.store, color: AppTheme.primary),
+                SizedBox(width: 8),
+                Text('Select Shop Partition'),
+              ],
+            ),
+            content: SizedBox(
+              width: 350,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Choose the partition for your Windows Hub:',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 12),
+                  if (shopIds.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text('No active shops detected in Firebase.',
+                          style: TextStyle(fontSize: 12, color: AppTheme.danger)),
+                    )
+                  else
+                    Flexible(
+                      child: Container(
+                        constraints: const BoxConstraints(maxHeight: 180),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Theme.of(context).dividerColor),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: shopIds.length,
+                          itemBuilder: (_, i) {
+                            final id = shopIds[i];
+                            final isSelected = selectedShop == id;
+                            return ListTile(
+                              title: Text(id, style: const TextStyle(fontSize: 14)),
+                              selected: isSelected,
+                              trailing: isSelected ? const Icon(Icons.check, color: AppTheme.primary) : null,
+                              dense: true,
+                              onTap: () {
+                                setDialogState(() {
+                                  selectedShop = id;
+                                  writeInController.text = id;
+                                });
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: writeInController,
+                    decoration: const InputDecoration(
+                      labelText: 'Shop ID / Partition Name',
+                      hintText: 'e.g. clinic_central',
+                      isDense: true,
+                    ),
+                    onChanged: (val) {
+                      if (selectedShop != val) {
+                        setDialogState(() {
+                          selectedShop = null;
+                        });
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final finalId = writeInController.text.trim();
+                  if (finalId.isEmpty) return;
+                  Navigator.pop(ctx);
+                  
+                  final settingsProv = context.read<SettingsProvider>();
+                  final s = settingsProv.settings;
+                  s.shopId = finalId;
+                  settingsProv.save(s);
+                  
+                  _fetchCloudflareUrl();
+                },
+                child: const Text('Select'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _scanQr() async {
     final result = await Navigator.push<String>(
       context,
@@ -317,7 +445,7 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
                 ),
                 const SizedBox(height: 24),
                 // --- Hybrid Mode Selector ---
-                Row(
+                 Row(
                   children: [
                     Text('Sync Mode:',
                         style: TextStyle(
@@ -341,6 +469,26 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
                       onChanged: (val) {
                         if (val != null) _saveMode(val);
                       },
+                    ),
+                  ],
+                ),
+                // --- Shop Partition Selector ---
+                Row(
+                  children: [
+                    Text('Shop Partition:',
+                        style: TextStyle(
+                            color: context.textMutedColor,
+                            fontWeight: FontWeight.bold)),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: _selectShopPartition,
+                      icon: const Icon(Icons.store, size: 14),
+                      label: Text(
+                        context.watch<SettingsProvider>().settings.shopId.isEmpty
+                            ? 'default_shop'
+                            : context.watch<SettingsProvider>().settings.shopId,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ],
                 ),

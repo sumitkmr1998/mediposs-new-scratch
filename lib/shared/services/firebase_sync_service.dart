@@ -621,7 +621,33 @@ class FirebaseSyncService {
     }
     if (!_isInitialized) return null;
     try {
-      final doc = await _db.collection('shops').doc(_shopId).collection('settings').doc('hub_status').get(const GetOptions(source: Source.server)).timeout(const Duration(seconds: 5));
+      final targetShopId = _shopId;
+      if (targetShopId != 'default_shop') {
+        final doc = await _db.collection('shops').doc(targetShopId).collection('settings').doc('hub_status').get(const GetOptions(source: Source.server)).timeout(const Duration(seconds: 5));
+        return doc.data();
+      }
+
+      // Auto-detect active shop partition if currently default_shop (unpaired client)
+      final shopIds = await fetchShopIds();
+      for (final id in shopIds) {
+        try {
+          final doc = await _db.collection('shops').doc(id).collection('settings').doc('hub_status').get(const GetOptions(source: Source.server)).timeout(const Duration(seconds: 2));
+          if (doc.exists) {
+            final data = doc.data();
+            if (data != null && data['cloudflareUrl'] != null && data['cloudflareUrl'].toString().isNotEmpty) {
+              // Found a shop with an active tunnel URL! Save it in settings so subsequent calls use it
+              final settings = ObjectBoxService.instance.settings;
+              settings.shopId = id;
+              ObjectBoxService.instance.settingsBox.put(settings);
+              debugPrint('Firebase getHubStatus: Auto-detected active shop partition: $id');
+              return data;
+            }
+          }
+        } catch (_) {}
+      }
+
+      // Fallback to default
+      final doc = await _db.collection('shops').doc('default_shop').collection('settings').doc('hub_status').get(const GetOptions(source: Source.server)).timeout(const Duration(seconds: 3));
       return doc.data();
     } catch (e) {
       debugPrint('Firebase getHubStatus failed: $e');

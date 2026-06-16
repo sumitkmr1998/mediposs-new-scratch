@@ -259,7 +259,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
           ],
         ),
         content: SizedBox(
-          width: 500,
+          width: MediaQuery.of(context).size.width > 550 ? 500 : double.maxFinite,
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -443,64 +443,94 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _searchCtrl,
-                        onChanged: (v) {
-                          setState(() => _searchQuery = v);
-                          _loadLogs();
-                        },
-                        style: const TextStyle(fontSize: 13),
-                        decoration: InputDecoration(
-                          hintText: 'Search logs (Actor, Invoice No, Medicine)...',
-                          prefixIcon: const Icon(LucideIcons.search, size: 16),
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isMobile = constraints.maxWidth < 600;
+                    final searchField = TextField(
+                      controller: _searchCtrl,
+                      onChanged: (v) {
+                        setState(() => _searchQuery = v);
+                        _loadLogs();
+                      },
+                      style: const TextStyle(fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'Search logs (Actor, Invoice No, Medicine)...',
+                        prefixIcon: const Icon(LucideIcons.search, size: 16),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    );
+
+                    final dropdown = Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: context.borderColor),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _actionFilter,
+                          isExpanded: true,
+                          icon: const Icon(LucideIcons.chevronDown, size: 14),
+                          style: TextStyle(color: context.textColor, fontSize: 13, fontWeight: FontWeight.bold),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() => _actionFilter = val);
+                              _loadLogs();
+                            }
+                          },
+                          items: const [
+                            DropdownMenuItem(value: 'all', child: Text('All Actions')),
+                            DropdownMenuItem(value: 'CREATE', child: Text('CREATE')),
+                            DropdownMenuItem(value: 'UPDATE', child: Text('UPDATE')),
+                            DropdownMenuItem(value: 'CANCEL', child: Text('CANCEL')),
+                            DropdownMenuItem(value: 'VOID', child: Text('VOID / REFUND')),
+                            DropdownMenuItem(value: 'LOGIN', child: Text('LOGIN')),
+                          ],
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 16),
-                    DropdownButton<String>(
-                      value: _actionFilter,
-                      underline: const SizedBox(),
-                      icon: const Icon(LucideIcons.chevronDown, size: 14),
-                      style: TextStyle(color: context.textColor, fontSize: 13, fontWeight: FontWeight.bold),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() => _actionFilter = val);
-                          _loadLogs();
-                        }
-                      },
-                      items: const [
-                        DropdownMenuItem(value: 'all', child: Text('All Actions')),
-                        DropdownMenuItem(value: 'CREATE', child: Text('CREATE')),
-                        DropdownMenuItem(value: 'UPDATE', child: Text('UPDATE')),
-                        DropdownMenuItem(value: 'CANCEL', child: Text('CANCEL')),
-                        DropdownMenuItem(value: 'VOID', child: Text('VOID / REFUND')),
-                        DropdownMenuItem(value: 'LOGIN', child: Text('LOGIN')),
-                      ],
-                    ),
-                  ],
+                    );
+
+                    if (isMobile) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          searchField,
+                          const SizedBox(height: 12),
+                          dropdown,
+                        ],
+                      );
+                    } else {
+                      return Row(
+                        children: [
+                          Expanded(child: searchField),
+                          const SizedBox(width: 16),
+                          SizedBox(width: 180, child: dropdown),
+                        ],
+                      );
+                    }
+                  },
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Text(
-                      'DATE RANGE: ',
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: context.textMutedColor),
-                    ),
-                    const SizedBox(width: 12),
-                    _buildDateChip('All Time', AuditDateFilter.allTime),
-                    const SizedBox(width: 8),
-                    _buildDateChip('Today', AuditDateFilter.today),
-                    const SizedBox(width: 8),
-                    _buildDateChip('Yesterday', AuditDateFilter.yesterday),
-                    const SizedBox(width: 8),
-                    _buildDateChip('Last 7 Days', AuditDateFilter.last7Days),
-                  ],
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      Text(
+                        'DATE RANGE: ',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: context.textMutedColor),
+                      ),
+                      const SizedBox(width: 12),
+                      _buildDateChip('All Time', AuditDateFilter.allTime),
+                      const SizedBox(width: 8),
+                      _buildDateChip('Today', AuditDateFilter.today),
+                      const SizedBox(width: 8),
+                      _buildDateChip('Yesterday', AuditDateFilter.yesterday),
+                      const SizedBox(width: 8),
+                      _buildDateChip('Last 7 Days', AuditDateFilter.last7Days),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -568,20 +598,31 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                       const SizedBox(height: 4),
-                                      Row(
+                                      Wrap(
+                                        spacing: 12,
+                                        runSpacing: 4,
                                         children: [
-                                          Icon(LucideIcons.user, size: 12, color: context.textMutedColor),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            log.performedBy,
-                                            style: TextStyle(fontSize: 11, color: context.textMutedColor, fontWeight: FontWeight.w600),
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(LucideIcons.user, size: 12, color: context.textMutedColor),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                log.performedBy,
+                                                style: TextStyle(fontSize: 11, color: context.textMutedColor, fontWeight: FontWeight.w600),
+                                              ),
+                                            ],
                                           ),
-                                          const SizedBox(width: 12),
-                                          Icon(LucideIcons.cpu, size: 12, color: context.textMutedColor),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            log.entityType,
-                                            style: TextStyle(fontSize: 11, color: context.textMutedColor),
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(LucideIcons.cpu, size: 12, color: context.textMutedColor),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                log.entityType,
+                                                style: TextStyle(fontSize: 11, color: context.textMutedColor),
+                                              ),
+                                            ],
                                           ),
                                         ],
                                       ),

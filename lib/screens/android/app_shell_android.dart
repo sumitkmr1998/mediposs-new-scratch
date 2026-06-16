@@ -24,6 +24,7 @@ import '../opd/patient_list_screen.dart';
 import '../opd/doctor_list_screen.dart';
 import '../opd/opd_report_screen.dart';
 import '../connection_screen.dart';
+import '../audit_logs_screen.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/opd_provider.dart';
 import '../../shared/providers/prescription_provider.dart';
@@ -131,6 +132,14 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
           label: 'Settings'));
     }
 
+    if (auth.isAdmin || auth.currentUser?.role.toLowerCase() == 'manager') {
+      dests.add(const _Dest(
+          id: 'audit_logs',
+          icon: Icons.history_toggle_off_rounded,
+          selectedIcon: Icons.history_rounded,
+          label: 'Audit Logs'));
+    }
+
     // Failsafe: if a user literally has zero permissions, give them an empty dashboard placeholder or POS
     if (dests.isEmpty) {
       dests.add(const _Dest(
@@ -167,6 +176,8 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
         return const OpdReportScreen();
       case 'settings':
         return const SettingsScreen();
+      case 'audit_logs':
+        return const AuditLogsScreen();
       default:
         return const DashboardScreen();
     }
