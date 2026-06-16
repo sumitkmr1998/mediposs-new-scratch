@@ -1,5 +1,13 @@
+# MediPoss v2.0.2 Release
+"OTA Update Installer Fixes"
+
+## 🚀 What's New
+- **Android Package Installer Permission**: Added `REQUEST_INSTALL_PACKAGES` permission in `AndroidManifest.xml` so the system package installer can install downloaded APKs automatically.
+- **Robust Windows Updater Script**: Replaced buggy process waiting in the Windows PowerShell script with native `Wait-Process`, and added try-catch error logging (`updater_error.log`) to guarantee reliability.
+
 # MediPoss v2.0.1 Release
 "OPD Receipt Voiding & Audit Log Sync Enhancements"
+
 
 ## 🚀 What's New
 - **Automated OPD Receipt Voiding**: Cancelling an appointment in the OPD queue now automatically voids the linked consultation fee receipt (Sale record), updates the inventory/cash registers, and propagates the cancellation to all sync clients.

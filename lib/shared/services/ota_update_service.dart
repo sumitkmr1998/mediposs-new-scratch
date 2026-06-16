@@ -352,13 +352,19 @@ class OtaUpdateService {
       final escapedDestPath = exeDir.replaceAll("'", "''");
       final escapedExePath = exePath.replaceAll("'", "''");
 
+      final tempDir = File(zipPath).parent.path;
+      final escapedTempDir = tempDir.replaceAll("'", "''");
+
       final psCommand = 
           "Start-Sleep -s 2; "
-          "\$proc = Get-Process -Id ${pid} -ErrorAction SilentlyContinue; "
-          "if (\$proc) { \$proc.WaitForExit(5000) }; "
-          "Expand-Archive -Path '$escapedZipPath' -DestinationPath '$escapedDestPath' -Force; "
-          "Remove-Item -Path '$escapedZipPath' -Force; "
-          "Start-Process -FilePath '$escapedExePath' -WorkingDirectory '$escapedDestPath';";
+          "Wait-Process -Id ${pid} -Timeout 5 -ErrorAction SilentlyContinue; "
+          "try { "
+          "  Expand-Archive -Path '$escapedZipPath' -DestinationPath '$escapedDestPath' -Force; "
+          "  Remove-Item -Path '$escapedZipPath' -Force; "
+          "  Start-Process -FilePath '$escapedExePath' -WorkingDirectory '$escapedDestPath'; "
+          "} catch { "
+          "  \$.Exception | Out-File -FilePath '$escapedTempDir/updater_error.log'; "
+          "}";
 
       debugPrint('Launching PowerShell updater script: $psCommand');
 
