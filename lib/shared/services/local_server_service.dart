@@ -95,6 +95,7 @@ class LocalServerService {
     router.post('/api/procedures/push', _withAuth(_proceduresPushHandler));
     router.post('/api/procedures/delete', _withAuth(_proceduresDeleteHandler));
     router.post('/api/sync', _withAuth(_syncHandler));
+    router.get('/api/audit', _withAuth(_auditGetHandler));
     router.post('/api/audit/push', _withAuth(_auditPushHandler));
     router.get('/api/h1-records', _withAuth(_h1RecordsGetHandler));
     router.post('/api/h1-records/push', _withAuth(_h1RecordsPushHandler));
@@ -2317,6 +2318,36 @@ class LocalServerService {
         headers: {'content-type': 'application/json'},
       );
     }
+  }
+
+  Response _auditGetHandler(Request req) {
+    final sinceStr = req.url.queryParameters['since'];
+    final sinceMs = int.tryParse(sinceStr ?? '') ?? (DateTime.tryParse(sinceStr ?? '')?.millisecondsSinceEpoch) ?? 0;
+
+    final box = ObjectBoxService.instance.store.box<AuditLog>();
+    final query = box.query(AuditLog_.timestamp.greaterThan(sinceMs - 1));
+    final logs = query.build().find();
+
+    debugPrint('Hub: Audit log sync requested (since=$sinceMs). Returning ${logs.length} logs.');
+
+    final json = logs
+        .map((l) => {
+              'id': l.id,
+              'action': l.action,
+              'entityType': l.entityType,
+              'entityId': l.entityId,
+              'description': l.description,
+              'detailsJson': l.detailsJson,
+              'performedBy': l.performedBy,
+              'timestamp': l.timestamp.millisecondsSinceEpoch,
+              'deviceId': l.deviceId,
+              'isSynced': l.isSynced,
+            })
+        .toList();
+    return Response.ok(
+      jsonEncode({'data': json, 'serverTime': DateTime.now().millisecondsSinceEpoch}),
+      headers: {'content-type': 'application/json'},
+    );
   }
 
   Response _h1RecordsGetHandler(Request req) {

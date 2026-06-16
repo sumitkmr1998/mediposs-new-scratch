@@ -50,6 +50,7 @@ class AppUser {
   bool canAccessMedicalRecords;  // Clinical privacy (Prescriptions/History)
   bool canDeletePatients;        // NEW: Separate delete right
   bool canDeleteAppointments;    // NEW: Separate delete right
+  bool canDispenseMedicines;     // Dispense medicines from OPD queue
 
   // Security & Data
   bool canViewPurchasePrice;     // Restricted financial data
@@ -89,6 +90,7 @@ class AppUser {
     this.canAccessMedicalRecords = false,
     this.canDeletePatients = false,
     this.canDeleteAppointments = false,
+    this.canDispenseMedicines = false,
     this.canViewPurchasePrice = false,
     this.canExportData = false,
     this.canViewHistoricalData = true,
@@ -128,6 +130,7 @@ class AppUser {
         canAccessMedicalRecords = true;
         canDeletePatients = true;
         canDeleteAppointments = true;
+        canDispenseMedicines = true;
         canViewPurchasePrice = true;
         canOverrideStock = true;
         canBulkDiscount = true;
@@ -147,6 +150,7 @@ class AppUser {
         canViewSalesHistory = true;
         canProcessReturns = true;
         canAccessOPD = true;
+        canDispenseMedicines = true;
         canViewHistoricalData = false; // "Today Only" for staff
         break;
       case 'cashier':
@@ -157,6 +161,7 @@ class AppUser {
         canViewSalesHistory = true;
         canAccessOPD = true;
         canProcessReturns = true;
+        canDispenseMedicines = true;
         canViewHistoricalData = false; // "Today Only" for staff
         break;
       case 'doctor':
@@ -226,6 +231,7 @@ class AppUser {
     canAccessMedicalRecords = val;
     canDeletePatients = val;
     canDeleteAppointments = val;
+    canDispenseMedicines = val;
     canViewPurchasePrice = val;
     canExportData = val;
     canViewHistoricalData = val;
@@ -264,6 +270,7 @@ class AppUser {
         'canAccessMedicalRecords': canAccessMedicalRecords,
         'canDeletePatients': canDeletePatients,
         'canDeleteAppointments': canDeleteAppointments,
+        'canDispenseMedicines': canDispenseMedicines,
         'canViewPurchasePrice': canViewPurchasePrice,
         'canExportData': canExportData,
         'canViewHistoricalData': canViewHistoricalData,
@@ -302,6 +309,7 @@ class AppUser {
         canAccessMedicalRecords: json['canAccessMedicalRecords'] ?? false,
         canDeletePatients: json['canDeletePatients'] ?? false,
         canDeleteAppointments: json['canDeleteAppointments'] ?? false,
+        canDispenseMedicines: json['canDispenseMedicines'] ?? false,
         canViewPurchasePrice: json['canViewPurchasePrice'] ?? false,
         canExportData: json['canExportData'] ?? false,
         canViewHistoricalData: json['canViewHistoricalData'] ?? true,
@@ -364,6 +372,7 @@ class AppSettings {
 
   bool showBatchExpiryInRetailPrint = true;
   bool showBatchExpiryInClinicalPrint = true;
+  bool showOpdIdInPrint = true;
 
   // Multi-Tenant Cloud Sync
   String shopId;
@@ -416,6 +425,7 @@ class AppSettings {
     this.isCompositionScheme = false,
     this.showBatchExpiryInRetailPrint = true,
     this.showBatchExpiryInClinicalPrint = true,
+    this.showOpdIdInPrint = true,
     this.shopId = '',
     this.defaultDoctorId,
   });
@@ -467,6 +477,7 @@ class AppSettings {
         'isCompositionScheme': isCompositionScheme,
         'showBatchExpiryInRetailPrint': showBatchExpiryInRetailPrint,
         'showBatchExpiryInClinicalPrint': showBatchExpiryInClinicalPrint,
+        'showOpdIdInPrint': showOpdIdInPrint,
         'shopId': shopId,
         'defaultDoctorId': defaultDoctorId,
       };
@@ -520,6 +531,7 @@ class AppSettings {
         isCompositionScheme: json['isCompositionScheme'] ?? false,
         showBatchExpiryInRetailPrint: json['showBatchExpiryInRetailPrint'] ?? true,
         showBatchExpiryInClinicalPrint: json['showBatchExpiryInClinicalPrint'] ?? true,
+        showOpdIdInPrint: json['showOpdIdInPrint'] ?? true,
         shopId: json['shopId'] ?? '',
         defaultDoctorId: json['defaultDoctorId'],
       );

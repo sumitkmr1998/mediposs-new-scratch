@@ -73,6 +73,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
   bool _canManageDoctors = false;
   bool _canViewOpdReports = false;
   bool _canAccessMedicalRecords = false;
+  bool _canDispenseMedicines = false;
 
   // Security & Data
   bool _canViewPurchasePrice = false;
@@ -123,6 +124,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
       _canManageDoctors = u.canManageDoctors;
       _canViewOpdReports = u.canViewOpdReports;
       _canAccessMedicalRecords = u.canAccessMedicalRecords;
+      _canDispenseMedicines = u.canDispenseMedicines;
 
       _canViewPurchasePrice = u.canViewPurchasePrice;
       _canExportData = u.canExportData;
@@ -161,6 +163,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
       _canManageDoctors = tempUser.canManageDoctors;
       _canViewOpdReports = tempUser.canViewOpdReports;
       _canAccessMedicalRecords = tempUser.canAccessMedicalRecords;
+      _canDispenseMedicines = tempUser.canDispenseMedicines;
       _canViewPurchasePrice = tempUser.canViewPurchasePrice;
       _canExportData = tempUser.canExportData;
       _canViewHistoricalData = tempUser.canViewHistoricalData;
@@ -227,6 +230,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
     u.canManageDoctors = _canManageDoctors;
     u.canViewOpdReports = _canViewOpdReports;
     u.canAccessMedicalRecords = _canAccessMedicalRecords;
+    u.canDispenseMedicines = _canDispenseMedicines;
 
     u.canViewPurchasePrice = _canViewPurchasePrice;
     u.canExportData = _canExportData;
@@ -725,6 +729,14 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                               _canAccessMedicalRecords,
                               (v) => setState(() {
                                     _canAccessMedicalRecords = v;
+                                    if (v) _canAccessOPD = true;
+                                  })),
+                          _buildPermToggle(
+                              'Dispense Medicines',
+                              'Can load and bill prescriptions in POS',
+                              _canDispenseMedicines,
+                              (v) => setState(() {
+                                    _canDispenseMedicines = v;
                                     if (v) _canAccessOPD = true;
                                   })),
                           _buildPermToggle(

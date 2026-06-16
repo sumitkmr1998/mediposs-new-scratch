@@ -13,6 +13,7 @@ import '../services/audit_service.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'sales_provider.dart';
+import '../../objectbox.g.dart';
 
 enum OpdFilter { today, yesterday, last7Days, allTime, custom }
 
@@ -390,7 +391,7 @@ class OpdProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> cancelAppointment(int appointmentId, [SyncService? syncService, AppUser? actor]) async {
+  Future<void> cancelAppointment(int appointmentId, [SyncService? syncService, AppUser? actor, SalesProvider? salesProvider]) async {
     final appt = ObjectBoxService.instance.appointmentBox.get(appointmentId);
     if (appt == null) return;
     appt.status = kStatusCancelled;
@@ -411,10 +412,51 @@ class OpdProvider extends ChangeNotifier {
       actor: actor,
     );
 
-    loadAll();
-
     final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
     final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+
+    // Void the linked OPD sale/receipt if it exists
+    final linkedSale = ObjectBoxService.instance.saleBox
+        .query(Sale_.linkedAppointmentId.equals(appointmentId))
+        .build()
+        .findFirst();
+
+    if (linkedSale != null) {
+      ObjectBoxService.instance.saleBox.remove(linkedSale.id);
+
+      // Log voided sale
+      AuditService.instance.log(
+        action: 'VOID',
+        entityType: 'Sale',
+        entityId: linkedSale.invoiceNo,
+        description: 'Voided/Deleted Sale (Invoice: ${linkedSale.invoiceNo}) due to cancelled Appointment (Token: #${appt.tokenNumber})',
+        details: {
+          'invoiceNo': linkedSale.invoiceNo,
+          'total': linkedSale.total,
+          'isReturn': linkedSale.isReturn,
+          'patientName': linkedSale.patientName,
+          'appointmentId': appt.id,
+        },
+        actor: actor,
+      );
+
+      if (isHub) {
+        if (LocalServerService.instance.isRunning) {
+          LocalServerService.instance.broadcast({'event': 'sales_updated'});
+        }
+      } else if (isClient) {
+        SyncQueueService.instance.addToQueue(
+          entity: 'sale',
+          action: 'delete',
+          data: {'invoiceNo': linkedSale.invoiceNo},
+        );
+      }
+      
+      salesProvider?.load();
+    }
+
+    loadAll();
+
     if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});

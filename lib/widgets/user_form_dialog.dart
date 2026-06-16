@@ -55,6 +55,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
   bool _canManageDoctors = false;
   bool _canViewOpdReports = false;
   bool _canAccessMedicalRecords = false;
+  bool _canDispenseMedicines = false;
 
   // Security & Data
   bool _canViewPurchasePrice = false;
@@ -104,6 +105,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
       _canManageDoctors = u.canManageDoctors;
       _canViewOpdReports = u.canViewOpdReports;
       _canAccessMedicalRecords = u.canAccessMedicalRecords;
+      _canDispenseMedicines = u.canDispenseMedicines;
 
       _canViewPurchasePrice = u.canViewPurchasePrice;
       _canExportData = u.canExportData;
@@ -142,6 +144,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
       _canManageDoctors = tempUser.canManageDoctors;
       _canViewOpdReports = tempUser.canViewOpdReports;
       _canAccessMedicalRecords = tempUser.canAccessMedicalRecords;
+      _canDispenseMedicines = tempUser.canDispenseMedicines;
       _canViewPurchasePrice = tempUser.canViewPurchasePrice;
       _canExportData = tempUser.canExportData;
       _canOverrideStock = tempUser.canOverrideStock;
@@ -205,6 +208,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
     u.canManageDoctors = _canManageDoctors;
     u.canViewOpdReports = _canViewOpdReports;
     u.canAccessMedicalRecords = _canAccessMedicalRecords;
+    u.canDispenseMedicines = _canDispenseMedicines;
 
     u.canViewPurchasePrice = _canViewPurchasePrice;
     u.canExportData = _canExportData;
@@ -506,6 +510,10 @@ class _UserFormDialogState extends State<UserFormDialog> {
                                           })),
                                           _PermTile('Patient Privacy', 'View prescriptions & history', _canAccessMedicalRecords, (v) => setState(() {
                                             _canAccessMedicalRecords = v;
+                                            if (v) _canAccessOPD = true;
+                                          })),
+                                          _PermTile('Dispense Medicines', 'Allow loading and billing prescriptions in POS', _canDispenseMedicines, (v) => setState(() {
+                                            _canDispenseMedicines = v;
                                             if (v) _canAccessOPD = true;
                                           })),
                                           _PermTile('Manage Doctors', 'Edit doctor fees & profiles', _canManageDoctors, (v) => setState(() {

@@ -8,6 +8,9 @@ import '../../../shared/providers/prescription_provider.dart';
 import '../../../theme/app_theme.dart';
 import '../../../shared/widgets/app_status_badge.dart';
 import '../../../shared/widgets/app_kpi_card.dart';
+import '../../../shared/services/objectbox_service.dart';
+import '../../../shared/models/sale.dart';
+import '../../../objectbox.g.dart';
 
 class OpdReportAndroid extends StatelessWidget {
   const OpdReportAndroid({super.key});
@@ -378,6 +381,22 @@ class OpdReportAndroid extends StatelessWidget {
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
                     final appt = queue[index];
+                    final db = ObjectBoxService.instance;
+                    final sales = db.saleBox
+                        .query(Sale_.linkedAppointmentId.equals(appt.id))
+                        .build()
+                        .find();
+                    
+                    Sale? opdSale;
+                    Sale? dispenseSale;
+                    for (final s in sales) {
+                      if (s.invoiceNo.startsWith('OPD-')) {
+                        opdSale = s;
+                      } else {
+                        dispenseSale = s;
+                      }
+                    }
+
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       decoration: BoxDecoration(
@@ -397,10 +416,42 @@ class OpdReportAndroid extends StatelessWidget {
                         title: Text(appt.patientName,
                             style: const TextStyle(
                                 fontWeight: FontWeight.bold, fontSize: 14)),
-                        subtitle: Text(
-                          'Dr. ${appt.doctorName} • ${DateFormat('h:mm a').format(appt.scheduledAt)}',
-                          style: TextStyle(
-                              color: context.textMutedColor, fontSize: 12),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Dr. ${appt.doctorName} • ${DateFormat('h:mm a').format(appt.scheduledAt)}',
+                              style: TextStyle(
+                                  color: context.textMutedColor, fontSize: 12),
+                            ),
+                            if (opdSale != null || dispenseSale != null) ...[
+                              const SizedBox(height: 4),
+                              Wrap(
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 4,
+                                runSpacing: 2,
+                                children: [
+                                  if (opdSale != null)
+                                    Text('OPD ID: ${opdSale.invoiceNo}',
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color: context.textMutedColor,
+                                            fontWeight: FontWeight.w500)),
+                                  if (opdSale != null && dispenseSale != null)
+                                    Text('|',
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color: context.borderColor)),
+                                  if (dispenseSale != null)
+                                    Text('Receipt: ${dispenseSale.invoiceNo}',
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color: context.textMutedColor,
+                                            fontWeight: FontWeight.w500)),
+                                ],
+                              ),
+                            ],
+                          ],
                         ),
                         trailing: Column(
                           mainAxisAlignment: MainAxisAlignment.center,

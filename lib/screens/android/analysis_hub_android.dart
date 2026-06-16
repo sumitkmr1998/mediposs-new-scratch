@@ -238,7 +238,7 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
     late DateTime start;
 
     if (_period == 'This Week') {
-      start = now.subtract(Duration(days: now.weekday - 1));
+      start = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
     } else if (_period == 'This Month') {
       start = DateTime(now.year, now.month, 1);
     } else {
@@ -246,11 +246,36 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
     }
 
     final filteredSales = sales.where((s) => s.createdAt.isAfter(start)).toList();
-    final revenueData = AnalyticsHelper.aggregateDailyRevenue(filteredSales);
     final profitData = AnalyticsHelper.aggregateDailyProfit(filteredSales, medicines);
 
-    double totalRevenue = filteredSales.where((s) => !s.isReturn).fold(0.0, (sum, s) => sum + s.total);
-    double totalReturns = filteredSales.where((s) => s.isReturn).fold(0.0, (sum, s) => sum + s.total.abs());
+    final medsRevenueData = <DateTime, double>{};
+    final procedureRevenueData = <DateTime, double>{};
+    final consultationRevenueData = <DateTime, double>{};
+
+    final salesProvider = context.read<SalesProvider>();
+    for (final s in filteredSales) {
+      final day = DateTime(s.createdAt.year, s.createdAt.month, s.createdAt.day);
+      if (!medsRevenueData.containsKey(day)) medsRevenueData[day] = 0.0;
+      if (!procedureRevenueData.containsKey(day)) procedureRevenueData[day] = 0.0;
+      if (!consultationRevenueData.containsKey(day)) consultationRevenueData[day] = 0.0;
+
+      final consultation = salesProvider.getConsultationTotal(s);
+      final procedure = salesProvider.getProcedureTotal(s);
+      final medicine = salesProvider.getMedicineTotal(s);
+
+      if (s.isReturn) {
+        medsRevenueData[day] = medsRevenueData[day]! - medicine.abs();
+      } else {
+        medsRevenueData[day] = medsRevenueData[day]! + medicine;
+        procedureRevenueData[day] = procedureRevenueData[day]! + procedure;
+        consultationRevenueData[day] = consultationRevenueData[day]! + consultation;
+      }
+    }
+
+    double totalRevenue = filteredSales.where((s) => !s.isReturn).fold(0.0, (sum, s) => sum + salesProvider.getMedicineTotal(s));
+    double totalReturns = filteredSales.where((s) => s.isReturn).fold(0.0, (sum, s) => sum + salesProvider.getMedicineTotal(s).abs());
+    double totalProcedures = filteredSales.fold(0.0, (sum, s) => sum + salesProvider.getProcedureTotal(s));
+    double totalConsultations = filteredSales.fold(0.0, (sum, s) => sum + salesProvider.getConsultationTotal(s));
     double netRevenue = totalRevenue - totalReturns;
     
     double netProfit = 0.0;
@@ -290,190 +315,248 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
             childAspectRatio: 1.4,
             children: [
               _buildMetricCard(
-                'Gross Revenue',
+                'Meds Gross Sales',
                 '₹${totalRevenue.toStringAsFixed(0)}',
                 Icons.payments_rounded,
                 AppTheme.indigo,
-                subtitle: 'Total billed sales',
+                subtitle: 'Meds billed sales',
                 trendText: _period == 'This Week' ? '8.4%' : _period == 'This Month' ? '12.8%' : '24.2%',
                 trendIsUp: true,
               ),
               _buildMetricCard(
-                'Net Profits',
+                'Procedure Revenue',
+                '₹${totalProcedures.toStringAsFixed(0)}',
+                Icons.medical_services_outlined,
+                AppTheme.teal,
+                subtitle: 'Clinical procedures',
+              ),
+              _buildMetricCard(
+                'Consultation Revenue',
+                '₹${totalConsultations.toStringAsFixed(0)}',
+                Icons.assignment_ind_outlined,
+                AppTheme.purple,
+                subtitle: 'Consultation fees',
+              ),
+              _buildMetricCard(
+                'Meds Net Profits',
                 '₹${netProfit.toStringAsFixed(0)}',
                 Icons.trending_up_rounded,
                 AppTheme.success,
-                subtitle: 'Revenue - COGS',
+                subtitle: 'Meds Revenue - Cost',
                 trendText: _period == 'This Week' ? '9.1%' : _period == 'This Month' ? '14.3%' : '26.8%',
                 trendIsUp: true,
               ),
               _buildMetricCard(
-                'Net Margin',
+                'Meds Net Margin',
                 '${marginPercent.toStringAsFixed(1)}%',
                 Icons.percent_rounded,
                 AppTheme.accent,
-                subtitle: 'Profit margin',
+                subtitle: 'Profitability margin',
                 progress: (marginPercent / 100).clamp(0.0, 1.0),
               ),
               _buildMetricCard(
-                'Returns Logged',
+                'Meds Returns',
                 '₹${totalReturns.toStringAsFixed(0)}',
                 Icons.keyboard_return_rounded,
                 AppTheme.danger,
-                subtitle: 'Returned value',
+                subtitle: 'Returned meds value',
                 trendText: totalReturns > 0 ? 'Logged' : 'None',
                 trendIsUp: totalReturns > 0 ? false : true,
               ),
               if (settings.isCompositionScheme)
                 _buildMetricCard(
-                  'Composition Tax',
+                  'Est. Composition Tax (1%)',
                   '₹${estimatedCompositionTax.toStringAsFixed(0)}',
                   Icons.account_balance_wallet_rounded,
                   AppTheme.warning,
-                  subtitle: '1% composition scheme',
+                  subtitle: '1% of net revenue',
                   progress: 0.01,
                 ),
             ],
           ),
-          const SizedBox(height: 24),
-          const Text(
-            'Revenue & Profit Curve',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          _buildSectionChart(
+            title: 'Meds Revenue & Profit Curve',
+            data1: medsRevenueData,
+            label1: 'Net Sales',
+            color1: AppTheme.indigo,
+            data2: profitData,
+            label2: 'Profit',
+            color2: AppTheme.success,
           ),
-          const SizedBox(height: 12),
-          Card(
-            margin: EdgeInsets.zero,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: SizedBox(
-                height: 220,
-                child: revenueData.isEmpty
-                    ? const Center(child: Text('No transaction logs available.'))
-                    : LineChart(
-                        LineChartData(
-                          lineTouchData: LineTouchData(
-                            handleBuiltInTouches: true,
-                            touchTooltipData: LineTouchTooltipData(
-                              getTooltipColor: (spot) => const Color(0xFF1E293B).withValues(alpha: 0.9),
-                              tooltipPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              getTooltipItems: (touchedSpots) {
-                                return touchedSpots.map((spot) {
-                                  return LineTooltipItem(
-                                    '₹${spot.y.toStringAsFixed(0)}',
-                                    const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 10,
-                                    ),
-                                  );
-                                }).toList();
-                              },
-                            ),
-                          ),
-                          gridData: FlGridData(
-                            show: true,
-                            drawVerticalLine: false,
-                            getDrawingHorizontalLine: (value) {
-                              return FlLine(
-                                color: Colors.grey.withValues(alpha: 0.1),
-                                strokeWidth: 1,
-                                dashArray: [5, 5],
-                              );
-                            },
-                          ),
-                          titlesData: FlTitlesData(
-                            bottomTitles: AxisTitles(
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                reservedSize: 22,
-                                interval: (revenueData.length / 4).clamp(1.0, double.infinity),
-                                getTitlesWidget: (value, meta) {
-                                  final sortedKeys = revenueData.keys.toList()..sort();
-                                  final idx = value.toInt();
-                                  if (idx >= 0 && idx < sortedKeys.length) {
-                                    final date = sortedKeys[idx];
-                                    return Text('${date.day}/${date.month}', style: const TextStyle(fontSize: 9));
-                                  }
-                                  return const SizedBox();
-                                },
-                              ),
-                            ),
-                            leftTitles: AxisTitles(
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                reservedSize: 32,
-                                getTitlesWidget: (value, meta) {
-                                  if (value >= 1000) {
-                                    return Text('${(value / 1000).toStringAsFixed(1)}K', style: const TextStyle(fontSize: 9));
-                                  }
-                                  return Text(value.toStringAsFixed(0), style: const TextStyle(fontSize: 9));
-                                },
-                              ),
-                            ),
-                            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          ),
-                          borderData: FlBorderData(show: false),
-                          lineBarsData: [
-                            LineChartBarData(
-                              spots: revenueData.keys.toList().asMap().entries.map((e) {
-                                return FlSpot(e.key.toDouble(), revenueData[e.value] ?? 0.0);
-                              }).toList(),
-                              isCurved: true,
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                              ),
-                              barWidth: 3,
-                              isStrokeCapRound: true,
-                              dotData: const FlDotData(show: false),
-                              belowBarData: BarAreaData(
-                                show: true,
-                                gradient: LinearGradient(
-                                  colors: [AppTheme.indigo.withValues(alpha: 0.2), AppTheme.indigo.withValues(alpha: 0.0)],
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                ),
-                              ),
-                            ),
-                            LineChartBarData(
-                              spots: profitData.keys.toList().asMap().entries.map((e) {
-                                return FlSpot(e.key.toDouble(), profitData[e.value] ?? 0.0);
-                              }).toList(),
-                              isCurved: true,
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF10B981), Color(0xFF059669)],
-                              ),
-                              barWidth: 3,
-                              isStrokeCapRound: true,
-                              dotData: const FlDotData(show: false),
-                              belowBarData: BarAreaData(
-                                show: true,
-                                gradient: LinearGradient(
-                                  colors: [AppTheme.success.withValues(alpha: 0.2), AppTheme.success.withValues(alpha: 0.0)],
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-              ),
-            ),
+          _buildSectionChart(
+            title: 'Procedure Revenue Curve',
+            data1: procedureRevenueData,
+            label1: 'Procedure collections',
+            color1: AppTheme.teal,
           ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildIndicator(AppTheme.indigo, 'Net Sales'),
-              const SizedBox(width: 16),
-              _buildIndicator(AppTheme.success, 'Profit'),
-            ],
+          _buildSectionChart(
+            title: 'Consultation Revenue Curve',
+            data1: consultationRevenueData,
+            label1: 'Consultation fees',
+            color1: AppTheme.purple,
           ),
         ],
       ),
     );
   }
+
+  Widget _buildSectionChart({
+    required String title,
+    required Map<DateTime, double> data1,
+    String? label1,
+    required Color color1,
+    Map<DateTime, double>? data2,
+    String? label2,
+    Color? color2,
+  }) {
+    final sortedDates = data1.keys.toList()..sort();
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 24),
+        Text(
+          title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: SizedBox(
+              height: 220,
+              child: data1.isEmpty
+                  ? const Center(child: Text('No transaction logs available for this period.'))
+                  : LineChart(
+                      LineChartData(
+                        lineTouchData: LineTouchData(
+                          handleBuiltInTouches: true,
+                          touchTooltipData: LineTouchTooltipData(
+                            getTooltipColor: (spot) => const Color(0xFF1E293B).withValues(alpha: 0.9),
+                            tooltipPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            getTooltipItems: (touchedSpots) {
+                              return touchedSpots.map((spot) {
+                                return LineTooltipItem(
+                                  '₹${spot.y.toStringAsFixed(0)}',
+                                  const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 10,
+                                  ),
+                                );
+                              }).toList();
+                            },
+                          ),
+                        ),
+                        gridData: FlGridData(
+                          show: true,
+                          drawVerticalLine: false,
+                          getDrawingHorizontalLine: (value) {
+                            return FlLine(
+                              color: Colors.grey.withValues(alpha: 0.1),
+                              strokeWidth: 1,
+                              dashArray: [5, 5],
+                            );
+                          },
+                        ),
+                        titlesData: FlTitlesData(
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 22,
+                              interval: (sortedDates.length / 4).clamp(1.0, double.infinity),
+                              getTitlesWidget: (value, meta) {
+                                final idx = value.toInt();
+                                if (idx >= 0 && idx < sortedDates.length) {
+                                  final date = sortedDates[idx];
+                                  return Text('${date.day}/${date.month}', style: const TextStyle(fontSize: 9));
+                                }
+                                return const SizedBox();
+                              },
+                            ),
+                          ),
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 32,
+                              getTitlesWidget: (value, meta) {
+                                if (value >= 1000) {
+                                  return Text('${(value / 1000).toStringAsFixed(1)}K', style: const TextStyle(fontSize: 9));
+                                }
+                                return Text(value.toStringAsFixed(0), style: const TextStyle(fontSize: 9));
+                              },
+                            ),
+                          ),
+                          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        ),
+                        borderData: FlBorderData(show: false),
+                        lineBarsData: [
+                          LineChartBarData(
+                            spots: sortedDates.asMap().entries.map((e) {
+                              return FlSpot(e.key.toDouble(), data1[e.value] ?? 0.0);
+                            }).toList(),
+                            isCurved: true,
+                            gradient: LinearGradient(
+                              colors: [color1, color1.withValues(alpha: 0.7)],
+                            ),
+                            barWidth: 3,
+                            isStrokeCapRound: true,
+                            dotData: const FlDotData(show: false),
+                            belowBarData: BarAreaData(
+                              show: true,
+                              gradient: LinearGradient(
+                                colors: [color1.withValues(alpha: 0.2), color1.withValues(alpha: 0.0)],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                              ),
+                            ),
+                          ),
+                          if (data2 != null && color2 != null)
+                            LineChartBarData(
+                              spots: sortedDates.asMap().entries.map((e) {
+                                return FlSpot(e.key.toDouble(), data2[e.value] ?? 0.0);
+                              }).toList(),
+                              isCurved: true,
+                              gradient: LinearGradient(
+                                colors: [color2, color2.withValues(alpha: 0.7)],
+                              ),
+                              barWidth: 3,
+                              isStrokeCapRound: true,
+                              dotData: const FlDotData(show: false),
+                              belowBarData: BarAreaData(
+                                show: true,
+                                gradient: LinearGradient(
+                                  colors: [color2.withValues(alpha: 0.2), color2.withValues(alpha: 0.0)],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+            ),
+          ),
+        ),
+        if (label1 != null) ...[
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildIndicator(color1, label1),
+              if (label2 != null && color2 != null) ...[
+                const SizedBox(width: 16),
+                _buildIndicator(color2, label2),
+              ],
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
 
   Widget _buildMetricCard(
     String title,

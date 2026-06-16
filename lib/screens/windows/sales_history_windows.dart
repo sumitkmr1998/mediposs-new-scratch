@@ -480,37 +480,44 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
 
   Widget _buildTableHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
       decoration: BoxDecoration(
         color: AppTheme.primary.withValues(alpha: 0.04),
         borderRadius: const BorderRadius.vertical(
             top: Radius.circular(AppTheme.radiusCard)),
       ),
-      child: Row(
-        children: [
-          const SizedBox(width: 48),
-          SizedBox(
-              width: 190,
-              child: Text('INVOICE ID', style: _headerStyle(context))),
-          Expanded(
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+        leading: const SizedBox(width: 34), // Matches leading container width (18 icon + 8 + 8 padding)
+        title: Row(
+          children: [
+            SizedBox(
+              width: 230,
+              child: Text('INVOICE ID', style: _headerStyle(context)),
+            ),
+            Expanded(
               flex: 3,
-              child: Text('CUSTOMER NAME', style: _headerStyle(context))),
-          const SizedBox(width: 12),
-          SizedBox(
+              child: Text('CUSTOMER NAME', style: _headerStyle(context)),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
               width: 110,
-              child:
-                  Center(child: Text('METHOD', style: _headerStyle(context)))),
-          const SizedBox(width: 12),
-          SizedBox(
-              width: 120,
               child: Center(
-                  child: Text('TOTAL AMOUNT', style: _headerStyle(context)))),
-          const SizedBox(width: 12),
-          SizedBox(
-              width: 120,
-              child: Text('DATE & TIME', style: _headerStyle(context))),
-          const SizedBox(width: 40),
-        ],
+                  child: Text('METHOD', style: _headerStyle(context))),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 130,
+              child: Center(
+                  child: Text('TOTAL AMOUNT', style: _headerStyle(context))),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 160,
+              child: Text('DATE & TIME', style: _headerStyle(context)),
+            ),
+          ],
+        ),
+        trailing: const SizedBox(width: 40), // Matches trailing expansion chevron space plus default ListTile margins
       ),
     );
   }
@@ -579,12 +586,29 @@ class _SaleRow extends StatelessWidget {
         title: Row(
           children: [
             SizedBox(
-              width: 190,
-              child: Text(sale.invoiceNo,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
-                      color: AppTheme.primary)),
+              width: 230,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(sale.invoiceNo,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          color: AppTheme.primary)),
+                  if (sale.opdInvoiceNo.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      'OPD ID: ${sale.opdInvoiceNo}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: context.textMutedColor,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
             Expanded(
               flex: 3,
@@ -629,7 +653,7 @@ class _SaleRow extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             SizedBox(
-              width: 120,
+              width: 130,
               child: Center(
                 child: Text(
                   '₹${sale.total.toStringAsFixed(2)}',
@@ -644,9 +668,9 @@ class _SaleRow extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             SizedBox(
-              width: 120,
+              width: 160,
               child: Text(
-                '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}',
+                '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}',
                 style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,

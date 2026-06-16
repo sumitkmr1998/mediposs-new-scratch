@@ -256,6 +256,17 @@ class _SaleHistoryTile extends StatelessWidget {
                       Text('Sale: ${sale.invoiceNo}',
                           style: const TextStyle(
                               fontWeight: FontWeight.w700, fontSize: 16)),
+                      if (sale.opdInvoiceNo.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'OPD Link ID: ${sale.opdInvoiceNo}',
+                          style: const TextStyle(
+                            color: AppTheme.primary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 4),
                       Text(
                         DateFormat('dd MMM yyyy, hh:mm a')
@@ -304,6 +315,10 @@ class _SaleDetailDialog extends StatelessWidget {
             Text(
                 'Date: ${DateFormat('dd MMM yyyy, hh:mm a').format(sale.createdAt)}'),
             Text('Payment: ${sale.paymentMethod.toUpperCase()}'),
+            if (sale.opdInvoiceNo.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text('OPD Link ID: ${sale.opdInvoiceNo}', style: const TextStyle(fontWeight: FontWeight.bold)),
+            ],
             const Divider(),
             Flexible(
               child: ListView.builder(

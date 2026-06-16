@@ -77,6 +77,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
   bool _isCompositionScheme = false;
   bool _showBatchExpiryRetail = true;
   bool _showBatchExpiryClinical = true;
+  bool _showOpdIdInPrint = true;
   bool _firebaseEnabled = true;
   bool _googleDriveSyncEnabled = true;
   int _auditRetentionDays = 90;
@@ -120,6 +121,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     _isCompositionScheme = s.isCompositionScheme;
     _showBatchExpiryRetail = s.showBatchExpiryInRetailPrint;
     _showBatchExpiryClinical = s.showBatchExpiryInClinicalPrint;
+    _showOpdIdInPrint = s.showOpdIdInPrint;
     _firebaseEnabled = s.firebaseEnabled;
     _googleDriveSyncEnabled = s.googleDriveSyncEnabled;
     _auditRetentionDays = s.auditRetentionDays;
@@ -190,6 +192,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       ..isCompositionScheme = _isCompositionScheme
       ..showBatchExpiryInRetailPrint = _showBatchExpiryRetail
       ..showBatchExpiryInClinicalPrint = _showBatchExpiryClinical
+      ..showOpdIdInPrint = _showOpdIdInPrint
       ..firebaseEnabled = _firebaseEnabled
       ..googleDriveSyncEnabled = _googleDriveSyncEnabled
       ..auditRetentionDays = _auditRetentionDays
@@ -1063,6 +1066,14 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                   value: _showBatchExpiryClinical,
                   icon: LucideIcons.calendar,
                   onChanged: (val) => setState(() => _showBatchExpiryClinical = val),
+                ),
+                const Divider(),
+                SettingsSwitch(
+                  title: 'Show OPD Transaction ID',
+                  subtitle: 'Show OPD ID on final dispense receipts',
+                  value: _showOpdIdInPrint,
+                  icon: LucideIcons.receipt,
+                  onChanged: (val) => setState(() => _showOpdIdInPrint = val),
                 ),
                 const SizedBox(height: 12),
                 SizedBox(

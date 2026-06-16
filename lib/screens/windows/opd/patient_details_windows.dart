@@ -1497,6 +1497,22 @@ class _ExpandableSaleState extends State<_ExpandableSale> {
                                         fontWeight: FontWeight.w700,
                                         color: context.textMutedColor)),
                               ),
+                              if (s.opdInvoiceNo.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primary.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text('OPD ID: ${s.opdInvoiceNo}',
+                                      style: const TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppTheme.primary)),
+                                ),
+                              ],
                               if (isReturn) ...[
                                 const SizedBox(width: 6),
                                 Container(

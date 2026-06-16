@@ -10,6 +10,9 @@ import '../../../shared/widgets/app_kpi_card.dart';
 import '../../../shared/widgets/app_filter_chip.dart';
 import '../../../shared/widgets/app_empty_state.dart';
 import '../../../shared/widgets/app_status_badge.dart';
+import '../../../shared/services/objectbox_service.dart';
+import '../../../shared/models/sale.dart';
+import '../../../objectbox.g.dart';
 
 class OpdReportWindows extends StatefulWidget {
   const OpdReportWindows({super.key});
@@ -688,6 +691,22 @@ class _AppointmentRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final db = ObjectBoxService.instance;
+    final sales = db.saleBox
+        .query(Sale_.linkedAppointmentId.equals(appt.id))
+        .build()
+        .find();
+    
+    Sale? opdSale;
+    Sale? dispenseSale;
+    for (final s in sales) {
+      if (s.invoiceNo.startsWith('OPD-')) {
+        opdSale = s;
+      } else {
+        dispenseSale = s;
+      }
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: Row(
@@ -730,10 +749,43 @@ class _AppointmentRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(appt.patientName,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 13),
-                      overflow: TextOverflow.ellipsis),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(appt.patientName,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 13),
+                          overflow: TextOverflow.ellipsis),
+                      if (opdSale != null || dispenseSale != null) ...[
+                        const SizedBox(height: 2),
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 4,
+                          runSpacing: 2,
+                          children: [
+                            if (opdSale != null)
+                              Text('OPD ID: ${opdSale.invoiceNo}',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: context.textMutedColor,
+                                      fontWeight: FontWeight.w500)),
+                            if (opdSale != null && dispenseSale != null)
+                              Text('|',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: context.borderColor)),
+                            if (dispenseSale != null)
+                              Text('Receipt: ${dispenseSale.invoiceNo}',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: context.textMutedColor,
+                                      fontWeight: FontWeight.w500)),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ],
             ),

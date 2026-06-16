@@ -36,6 +36,7 @@ class Sale {
 
   int linkedAppointmentId; // Link to Appointment (if clinical dispense)
   int linkedProcedureId;   // Link to Procedure (if clinical dispense)
+  String opdInvoiceNo;     // Link to the initial OPD advance transaction/invoice number
 
   // Stored as JSON string for ObjectBox compatibility
   String itemsJson;
@@ -63,6 +64,7 @@ class Sale {
     this.isClinicalDispense = false,
     this.linkedAppointmentId = 0,
     this.linkedProcedureId = 0,
+    this.opdInvoiceNo = '',
     this.itemsJson = '[]',
   })  : createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? createdAt ?? DateTime.now();
@@ -90,6 +92,7 @@ class Sale {
         'isClinicalDispense': isClinicalDispense,
         'linkedAppointmentId': linkedAppointmentId,
         'linkedProcedureId': linkedProcedureId,
+        'opdInvoiceNo': opdInvoiceNo,
         'itemsJson': itemsJson,
       };
 
@@ -116,6 +119,7 @@ class Sale {
         isClinicalDispense: json['isClinicalDispense'] ?? false,
         linkedAppointmentId: json['linkedAppointmentId'] ?? 0,
         linkedProcedureId: json['linkedProcedureId'] ?? 0,
+        opdInvoiceNo: json['opdInvoiceNo'] ?? '',
         itemsJson: json['itemsJson'] ?? '[]',
       );
 }

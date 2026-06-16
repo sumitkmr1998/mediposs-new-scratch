@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:637942838794498612",
-      "lastPropertyId": "48:4065307820196271581",
+      "lastPropertyId": "49:4051149874881453646",
       "name": "AppSettings",
       "properties": [
         {
@@ -248,13 +248,18 @@
           "id": "48:4065307820196271581",
           "name": "defaultDoctorId",
           "type": 6
+        },
+        {
+          "id": "49:4051149874881453646",
+          "name": "showOpdIdInPrint",
+          "type": 1
         }
       ],
       "relations": []
     },
     {
       "id": "2:1561353773588181738",
-      "lastPropertyId": "37:5668218736045193962",
+      "lastPropertyId": "38:3749317672120738414",
       "name": "AppUser",
       "properties": [
         {
@@ -431,6 +436,11 @@
         {
           "id": "37:5668218736045193962",
           "name": "canViewFinancialAnalytics",
+          "type": 1
+        },
+        {
+          "id": "38:3749317672120738414",
+          "name": "canDispenseMedicines",
           "type": 1
         }
       ],
@@ -986,7 +996,7 @@
     },
     {
       "id": "11:2308013346348508445",
-      "lastPropertyId": "23:6175242095605562542",
+      "lastPropertyId": "24:3156319025601909690",
       "name": "Sale",
       "properties": [
         {
@@ -1103,6 +1113,11 @@
         {
           "id": "23:6175242095605562542",
           "name": "patientUhid",
+          "type": 9
+        },
+        {
+          "id": "24:3156319025601909690",
+          "name": "opdInvoiceNo",
           "type": 9
         }
       ],

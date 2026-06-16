@@ -59,6 +59,7 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
   bool _isCompositionScheme = false;
   bool _showBatchExpiryRetail = true;
   bool _showBatchExpiryClinical = true;
+  bool _showOpdIdInPrint = true;
   int _auditRetentionDays = 90;
   List<Doctor> _doctors = [];
   int? _selectedDefaultDoctorId;
@@ -92,6 +93,7 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
     _isCompositionScheme = s.isCompositionScheme;
     _showBatchExpiryRetail = s.showBatchExpiryInRetailPrint;
     _showBatchExpiryClinical = s.showBatchExpiryInClinicalPrint;
+    _showOpdIdInPrint = s.showOpdIdInPrint;
     _auditRetentionDays = s.auditRetentionDays;
     _selectedDefaultDoctorId = s.defaultDoctorId;
 
@@ -185,6 +187,7 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
       ..isCompositionScheme = _isCompositionScheme
       ..showBatchExpiryInRetailPrint = _showBatchExpiryRetail
       ..showBatchExpiryInClinicalPrint = _showBatchExpiryClinical
+      ..showOpdIdInPrint = _showOpdIdInPrint
       ..auditRetentionDays = _auditRetentionDays
       ..defaultDoctorId = _selectedDefaultDoctorId;
 
@@ -667,6 +670,26 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                           AppTheme.primaryLight.withValues(alpha: 0.3),
                       activeColor: AppTheme.primaryLight,
                       onChanged: (val) => setState(() => _showBatchExpiryClinical = val),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: context.borderColor),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: SwitchListTile(
+                      title: const Text('Show OPD Transaction ID',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text(
+                          'Show OPD ID on final dispense receipts',
+                          style: TextStyle(
+                              color: context.textMutedColor, fontSize: 12)),
+                      value: _showOpdIdInPrint,
+                      activeTrackColor:
+                          AppTheme.primaryLight.withValues(alpha: 0.3),
+                      activeColor: AppTheme.primaryLight,
+                      onChanged: (val) => setState(() => _showOpdIdInPrint = val),
                     ),
                   ),
                   const SizedBox(height: 16),

@@ -116,6 +116,8 @@ class InvoiceGenerator {
                   )
                 ),
                 pw.Text('No: ${invoice.invoiceNo}', style: pw.TextStyle(fontSize: isSmall ? 9 : 12, fontWeight: pw.FontWeight.bold)),
+                if (invoice.opdInvoiceNo.isNotEmpty && settings.showOpdIdInPrint)
+                  pw.Text('OPD ID: ${invoice.opdInvoiceNo}', style: pw.TextStyle(fontSize: isSmall ? 8 : 10, fontWeight: pw.FontWeight.bold)),
                 pw.Text('Date: ${invoice.formattedDate}', style: pw.TextStyle(fontSize: isSmall ? 9 : 12)),
               ],
             ),
@@ -187,9 +189,15 @@ class InvoiceGenerator {
         : settings.showBatchExpiryInRetailPrint;
 
     final data = invoice.items.map((item) {
-      final desc = (item.batchNo.isNotEmpty && showBatchExpiry)
-          ? '${item.name}\nBatch: ${item.batchNo} | Exp: ${item.expiryDate}'
-          : item.name;
+      String desc = item.name;
+      if (item.batchNo.isNotEmpty && showBatchExpiry) {
+        desc = '${item.name}\nBatch: ${item.batchNo} | Exp: ${item.expiryDate}';
+      } else if (item.name.contains('Consultation Fee') && settings.showOpdIdInPrint) {
+        final opdId = invoice.invoiceNo.startsWith('OPD-') ? invoice.invoiceNo : invoice.opdInvoiceNo;
+        if (opdId.isNotEmpty) {
+          desc = '${item.name}\nOPD ID: $opdId';
+        }
+      }
       return [
         desc,
         '${item.quantity}',

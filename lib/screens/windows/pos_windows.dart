@@ -569,6 +569,9 @@ class _PosWindowsState extends State<PosWindows> {
 
   void _handleClinicalDispenseToggle(bool val, CartProvider cart) {
     if (!val) {
+      cart.setPatient(name: '', phone: '', id: 0, uhid: '', address: '');
+      cart.setLinkedAppointment(null);
+      _patientCtrl.clear();
       cart.setClinicalDispense(false);
       return;
     }
@@ -1106,100 +1109,18 @@ class _PosWindowsState extends State<PosWindows> {
 
   void _loadPrescriptionIntoCart(BuildContext context, dynamic prescription) {
     final cart = context.read<CartProvider>();
-    final inv = context.read<InventoryProvider>();
+    cart.loadPrescriptionIntoCart(
+      prescription: prescription,
+      inv: context.read<InventoryProvider>(),
+      patientProv: context.read<PatientProvider>(),
+      pProvider: context.read<PrescriptionProvider>(),
+      procProv: context.read<ProcedureProvider>(),
+    );
+
     final pProvider = context.read<PrescriptionProvider>();
-
-    cart.clearCart();
-    cart.setClinicalDispense(true);
-    if (prescription.appointmentId != 0) {
-      cart.setLinkedAppointment(prescription.appointmentId);
-    }
-    final patientProv = context.read<PatientProvider>();
-    var patientPhone = '';
-    if (prescription.appointmentId != 0) {
-      final apptBox = ObjectBoxService.instance.store.box<Appointment>();
-      final appt = apptBox.get(prescription.appointmentId);
-      if (appt != null) {
-        patientPhone = appt.patientPhone;
-      }
-    }
-
-    Patient? patient;
-    if (prescription.patientId != 0) {
-      final p = patientProv.getById(prescription.patientId);
-      if (p != null && p.name.trim().toLowerCase() == prescription.patientName.trim().toLowerCase()) {
-        patient = p;
-      }
-    }
-    if (patient == null && (prescription.patientName.isNotEmpty || patientPhone.isNotEmpty)) {
-      patient = patientProv.getByInfo(prescription.patientName, patientPhone);
-    }
-    if (patient == null && prescription.patientName.isNotEmpty) {
-      final cleanName = prescription.patientName.trim().toLowerCase();
-      patient = patientProv.patients
-          .where((p) => p.name.trim().toLowerCase() == cleanName)
-          .firstOrNull;
-    }
-
-    cart.setPatient(
-      name: prescription.patientName,
-      phone: patient?.phone ?? patientPhone,
-      id: patient?.id ?? 0,
-      uhid: patient?.uhid ?? '',
-      address: patient?.address ?? '',
-    );
-    cart.setLinkedPrescription(prescription.id);
-
-    final docBox = ObjectBoxService.instance.store.box<Doctor>();
-    var doctorObj = docBox.get(prescription.doctorId);
-    if (doctorObj == null && prescription.doctorName.isNotEmpty) {
-      doctorObj = docBox.query(Doctor_.name.equals(prescription.doctorName, caseSensitive: false)).build().findFirst();
-    }
-    
-    final settings = ObjectBoxService.instance.settings;
-    String doctorAddress = '';
-    if (doctorObj != null && doctorObj.address.trim().isNotEmpty) {
-      doctorAddress = doctorObj.address.trim();
-    } else if (settings.clinicAddress != null && settings.clinicAddress!.trim().isNotEmpty) {
-      doctorAddress = settings.clinicAddress!.trim();
-    } else if (settings.storeAddress != null && settings.storeAddress!.trim().isNotEmpty) {
-      doctorAddress = settings.storeAddress!.trim();
-    }
-
-    cart.setH1PrescriptionDetails(
-      doctorName: prescription.doctorName,
-      doctorAddress: doctorAddress,
-      doctorRegistrationNo: doctorObj?.registrationNo ?? '',
-      patientAddress: patient?.address ?? '',
-    );
-
     final items = pProvider.getItems(prescription);
-    int foundCount = 0;
-
-    for (final pItem in items) {
-      // Find matching medicine in inventory by exact Name (IDs differ between synced client devices)
-      final medicine = inv.medicines
-          .where(
-            (m) => m.name.toLowerCase() == pItem.medicineName.toLowerCase(),
-          )
-          .firstOrNull;
-
-      if (medicine != null) {
-        cart.addItem(medicine, qty: pItem.qty);
-        foundCount++;
-      }
-    }
-
-    // Load procedures
-    final procProv = context.read<ProcedureProvider>();
     final procedures = pProvider.getProcedures(prescription);
-    for (final pName in procedures) {
-      final proc = procProv.procedures.where((p) => p.name.toLowerCase() == pName.toLowerCase()).firstOrNull;
-      if (proc != null) {
-        cart.addProcedure(proc);
-        foundCount++;
-      }
-    }
+    final foundCount = items.length + procedures.length;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

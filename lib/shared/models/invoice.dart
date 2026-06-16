@@ -15,6 +15,7 @@ class Invoice {
   final double discount;
 
   final bool isClinicalDispense;
+  final String opdInvoiceNo;
 
   Invoice({
     required this.invoiceNo,
@@ -30,6 +31,7 @@ class Invoice {
     required this.totalAmount,
     this.discount = 0.0,
     this.isClinicalDispense = false,
+    this.opdInvoiceNo = '',
   });
 
   String get formattedDate => DateFormat('dd/MM/yyyy').format(date);

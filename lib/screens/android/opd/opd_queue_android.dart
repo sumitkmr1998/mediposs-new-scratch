@@ -11,8 +11,13 @@ import '../../../widgets/android/patient_dialogs_android.dart';
 import '../../../shared/services/sync_service.dart';
 import '../../../shared/providers/patient_provider.dart';
 import '../../opd/prescription_screen.dart';
-import '../../../shared/widgets/app_empty_state.dart';
 import '../../../shared/widgets/app_status_badge.dart';
+import '../../../shared/widgets/app_empty_state.dart';
+import '../../../shared/providers/cart_provider.dart';
+import '../../../shared/providers/navigation_provider.dart';
+import '../../../shared/providers/procedure_provider.dart';
+import '../../../shared/providers/inventory_provider.dart';
+import '../../../shared/providers/sales_provider.dart';
 
 class OpdQueueAndroid extends StatefulWidget {
   const OpdQueueAndroid({super.key});
@@ -57,6 +62,7 @@ class _OpdQueueAndroidState extends State<OpdQueueAndroid>
         label: const Text('Add Patient'),
         backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
+        elevation: 4,
       ),
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
@@ -66,38 +72,74 @@ class _OpdQueueAndroidState extends State<OpdQueueAndroid>
             floating: true,
             forceElevated: innerBoxIsScrolled,
             elevation: innerBoxIsScrolled ? 4 : 0,
-            bottom: TabBar(
-              controller: _tabs,
-              labelColor: AppTheme.primary,
-              unselectedLabelColor: context.textMutedColor,
-              indicatorColor: AppTheme.primary,
-              indicatorWeight: 3,
-              labelStyle: const TextStyle(fontWeight: FontWeight.w700),
-              tabs: const [
-                Tab(icon: Icon(Icons.people_alt), text: 'Active'),
-                Tab(icon: Icon(Icons.check_circle_outline), text: 'Done'),
-              ],
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(60),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: context.borderColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: TabBar(
+                  controller: _tabs,
+                  labelColor: Colors.white,
+                  unselectedLabelColor: context.textMutedColor,
+                  indicator: BoxDecoration(
+                    color: AppTheme.primary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  dividerColor: Colors.transparent,
+                  labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                  unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  tabs: const [
+                    Tab(text: 'ACTIVE QUEUE'),
+                    Tab(text: 'COMPLETED'),
+                  ],
+                ),
+              ),
             ),
           ),
           SliverToBoxAdapter(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppTheme.primary.withValues(alpha: 0.08),
+                    AppTheme.accent.withValues(alpha: 0.03),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: AppTheme.primary.withValues(alpha: 0.12),
+                ),
+              ),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _StatBadge(
-                    label: '${opd.filteredPatientCount} Patients',
+                  _MetricColumn(
+                    value: '${opd.filteredPatientCount}',
+                    label: 'Patients',
+                    icon: Icons.people_alt_outlined,
                     color: AppTheme.primary,
                   ),
-                  const SizedBox(width: 8),
-                  _StatBadge(
-                    label: '${opd.filteredDoneCount} Done',
+                  const _MetricDivider(),
+                  _MetricColumn(
+                    value: '${opd.filteredDoneCount}',
+                    label: 'Completed',
+                    icon: Icons.check_circle_outline_rounded,
                     color: AppTheme.success,
                   ),
-                  const SizedBox(width: 8),
-                  _StatBadge(
-                    label:
-                        '₹${opd.filteredConsultationRevenue.toStringAsFixed(0)} Fees',
+                  const _MetricDivider(),
+                  _MetricColumn(
+                    value: '₹${opd.filteredConsultationRevenue.toStringAsFixed(0)}',
+                    label: 'Fees',
+                    icon: Icons.currency_rupee_rounded,
                     color: AppTheme.accent,
                   ),
                 ],
@@ -130,7 +172,7 @@ class _OpdQueueAndroidState extends State<OpdQueueAndroid>
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.grey.withOpacity(0.3),
+              color: Colors.grey.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -205,7 +247,10 @@ class _QueueList extends StatelessWidget {
           onCancel: () {
             final currentUser = context.read<AuthProvider>().currentUser;
             context.read<OpdProvider>().cancelAppointment(
-                queue[i].id, context.read<SyncService>(), currentUser);
+                queue[i].id,
+                context.read<SyncService>(),
+                currentUser,
+                context.read<SalesProvider>());
           },
         ),
       ),
@@ -241,7 +286,6 @@ class _ModernQueueCardState extends State<_ModernQueueCard> {
 
   void _startTimer() {
     _timer?.cancel();
-    // Refresh every minute for duration updates
     _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (mounted) setState(() {});
     });
@@ -277,14 +321,16 @@ class _ModernQueueCardState extends State<_ModernQueueCard> {
         prefix = "In Cabin: ";
         break;
       case kStatusPharmacy:
-        if (widget.appointment.pharmacyAt == null)
+        if (widget.appointment.pharmacyAt == null) {
           return "Wait: ${_format(now.difference(widget.appointment.scheduledAt))}";
+        }
         diff = now.difference(widget.appointment.pharmacyAt!);
         prefix = "Pharm: ";
         break;
       case kStatusDone:
-        if (widget.appointment.completedAt == null ||
-            widget.appointment.scheduledAt == null) return "Done";
+        if (widget.appointment.completedAt == null) {
+          return "Done";
+        }
         diff = widget.appointment.completedAt!
             .difference(widget.appointment.scheduledAt);
         prefix = "Total: ";
@@ -432,7 +478,7 @@ class _ModernQueueCardState extends State<_ModernQueueCard> {
                               children: [
                                 Text(widget.appointment.patientName,
                                     style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
+                                        fontWeight: FontWeight.w800,
                                         fontSize: 17,
                                         letterSpacing: -0.2)),
                                 Text(
@@ -446,22 +492,49 @@ class _ModernQueueCardState extends State<_ModernQueueCard> {
                               ],
                             ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              _getDuration(),
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                color: color,
-                                letterSpacing: 0.2,
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  _getDuration(),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: color,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
                               ),
-                            ),
+                              if (widget.appointment.status != kStatusDone)
+                                PopupMenuButton<String>(
+                                  icon: Icon(Icons.more_vert, color: context.textMutedColor, size: 20),
+                                  padding: EdgeInsets.zero,
+                                  onSelected: (value) {
+                                    if (value == 'cancel') {
+                                      _confirmCancel(context);
+                                    }
+                                  },
+                                  itemBuilder: (context) => [
+                                    const PopupMenuItem(
+                                      value: 'cancel',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.cancel_outlined, color: AppTheme.danger, size: 18),
+                                          SizedBox(width: 8),
+                                          Text('Cancel Appointment', style: TextStyle(color: AppTheme.danger)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                            ],
                           ),
                         ],
                       ),
@@ -502,61 +575,99 @@ class _ModernQueueCardState extends State<_ModernQueueCard> {
                     top: BorderSide(
                         color: context.borderColor.withValues(alpha: 0.2))),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (widget.appointment.status == kStatusWaiting)
-                    Expanded(
-                      child: _ActionBtn(
-                        label: 'CALL PATIENT',
-                        icon: Icons.play_arrow_rounded,
-                        color: AppTheme.primary,
-                        onTap: () => widget.onStatusChange(kStatusWithDoctor),
-                      ),
+                    _ActionBtn(
+                      label: 'CALL PATIENT',
+                      icon: Icons.play_arrow_rounded,
+                      color: AppTheme.primary,
+                      onTap: () => widget.onStatusChange(kStatusWithDoctor),
+                      isFilled: true,
                     ),
                   if (widget.appointment.status == kStatusWithDoctor) ...[
-                    if (context.read<AuthProvider>().canAccessMedicalRecords)
-                      Expanded(
-                        child: _ActionBtn(
-                          label: 'PRESCRIBE',
-                          icon: Icons.medical_information_rounded,
-                          color: AppTheme.primary,
-                          onTap: widget.onConsult,
-                        ),
+                    if (context.read<AuthProvider>().canAccessMedicalRecords) ...[
+                      _ActionBtn(
+                        label: 'PRESCRIBE',
+                        icon: Icons.medical_information_rounded,
+                        color: AppTheme.primary,
+                        onTap: widget.onConsult,
+                        isFilled: true,
                       ),
-                    if (context.read<AuthProvider>().canAccessMedicalRecords)
-                      const SizedBox(width: 12),
-                    Expanded(
-                      child: _ActionBtn(
-                        label: 'TO PHARMACY',
-                        icon: Icons.arrow_forward_rounded,
-                        color: AppTheme.purple,
-                        onTap: () => widget.onStatusChange(kStatusPharmacy),
-                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    Builder(builder: (ctx) {
+                      final prescription = ctx.read<PrescriptionProvider>().getPrescriptionForAppointment(widget.appointment.id);
+                      if (ctx.read<AuthProvider>().canDispenseMedicines && prescription != null) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _ActionBtn(
+                            label: 'DISPENSE',
+                            icon: Icons.medication_rounded,
+                            color: AppTheme.success,
+                            onTap: () {
+                              ctx.read<CartProvider>().loadPrescriptionIntoCart(
+                                prescription: prescription,
+                                inv: ctx.read<InventoryProvider>(),
+                                patientProv: ctx.read<PatientProvider>(),
+                                pProvider: ctx.read<PrescriptionProvider>(),
+                                procProv: ctx.read<ProcedureProvider>(),
+                              );
+                              ctx.read<NavigationProvider>().selectDestination('pos');
+                            },
+                            isFilled: true,
+                          ),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    }),
+                    _ActionBtn(
+                      label: 'TO PHARMACY',
+                      icon: Icons.arrow_forward_rounded,
+                      color: AppTheme.purple,
+                      onTap: () => widget.onStatusChange(kStatusPharmacy),
+                      isFilled: false,
                     ),
                   ],
-                  if (widget.appointment.status == kStatusPharmacy)
-                    Expanded(
-                      child: _ActionBtn(
-                        label: 'MARK COMPLETED',
-                        icon: Icons.check_circle_rounded,
-                        color: AppTheme.success,
-                        onTap: () => widget.onStatusChange(kStatusDone),
-                      ),
+                  if (widget.appointment.status == kStatusPharmacy) ...[
+                    Builder(builder: (ctx) {
+                      final prescription = ctx.read<PrescriptionProvider>().getPrescriptionForAppointment(widget.appointment.id);
+                      if (ctx.read<AuthProvider>().canDispenseMedicines && prescription != null) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _ActionBtn(
+                            label: 'DISPENSE',
+                            icon: Icons.medication_rounded,
+                            color: AppTheme.success,
+                            onTap: () {
+                              ctx.read<CartProvider>().loadPrescriptionIntoCart(
+                                prescription: prescription,
+                                inv: ctx.read<InventoryProvider>(),
+                                patientProv: ctx.read<PatientProvider>(),
+                                pProvider: ctx.read<PrescriptionProvider>(),
+                                procProv: ctx.read<ProcedureProvider>(),
+                              );
+                              ctx.read<NavigationProvider>().selectDestination('pos');
+                            },
+                            isFilled: true,
+                          ),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    }),
+                    _ActionBtn(
+                      label: 'MARK COMPLETED',
+                      icon: Icons.check_circle_rounded,
+                      color: AppTheme.success,
+                      onTap: () => widget.onStatusChange(kStatusDone),
+                      isFilled: true,
                     ),
+                  ],
                 ],
               ),
             ),
           ],
-          if (widget.appointment.status != kStatusDone)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: _ActionBtn(
-                label: 'CANCEL APPOINTMENT',
-                icon: Icons.cancel_outlined,
-                color: AppTheme.danger,
-                onTap: () => _confirmCancel(context),
-              ),
-            ),
         ],
       ),
     );
@@ -568,12 +679,14 @@ class _ActionBtn extends StatelessWidget {
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
+  final bool isFilled;
 
   const _ActionBtn({
     required this.label,
     required this.icon,
     required this.color,
     required this.onTap,
+    this.isFilled = false,
   });
 
   @override
@@ -587,20 +700,29 @@ class _ActionBtn extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
+            color: isFilled ? color : color.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: color.withValues(alpha: 0.15)),
+            border: Border.all(color: isFilled ? color : color.withValues(alpha: 0.15)),
+            boxShadow: isFilled
+                ? [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.25),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    )
+                  ]
+                : null,
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 16, color: color),
+              Icon(icon, size: 16, color: isFilled ? Colors.white : color),
               const SizedBox(width: 8),
               Text(label,
                   style: TextStyle(
-                      color: color,
+                      color: isFilled ? Colors.white : color,
                       fontSize: 11,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w800,
                       letterSpacing: 0.5)),
             ],
           ),
@@ -610,27 +732,58 @@ class _ActionBtn extends StatelessWidget {
   }
 }
 
-class _StatBadge extends StatelessWidget {
+class _MetricColumn extends StatelessWidget {
+  final String value;
   final String label;
+  final IconData icon;
   final Color color;
 
-  const _StatBadge({required this.label, required this.color});
+  const _MetricColumn({
+    required this.value,
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 22),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.5,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label.toUpperCase(),
+          style: TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+            color: context.textMutedColor,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MetricDivider extends StatelessWidget {
+  const _MetricDivider();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
-      ),
-      child: Text(label,
-          style: TextStyle(
-              color: color,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.2)),
+      width: 1,
+      height: 32,
+      color: context.borderColor.withValues(alpha: 0.2),
     );
   }
 }

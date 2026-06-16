@@ -60,6 +60,8 @@ class AuthProvider extends ChangeNotifier {
       isAdmin || (_currentUser?.canViewOpdReports ?? false);
   bool get canAccessMedicalRecords =>
       isAdmin || (_currentUser?.canAccessMedicalRecords ?? false);
+  bool get canDispenseMedicines =>
+      isAdmin || (_currentUser?.canDispenseMedicines ?? false);
 
   // Security & Data
   bool get canViewPurchasePrice =>

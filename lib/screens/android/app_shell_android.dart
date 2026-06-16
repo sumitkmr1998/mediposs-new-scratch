@@ -225,7 +225,7 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
         // Bug 5 Fix: Auto-connect WebSocket after tryAutoConnect succeeds
         final sync = context.read<SyncService>();
         final connected = await sync.tryAutoConnect();
-        if (connected && sync.hubIp != null) {
+        if (connected && sync.hubIp != null && mounted) {
           debugPrint(
               'AppShellAndroid [Android]: Auto-connect succeeded, starting WebSocket to ${sync.hubIp}');
           context.read<WebSocketService>().connect(sync.hubIp!, sync.secret);

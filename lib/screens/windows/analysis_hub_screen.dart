@@ -364,7 +364,7 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
     if (isStaffOnly) {
       start = DateTime(now.year, now.month, now.day);
     } else if (_period == 'This Week') {
-      start = now.subtract(Duration(days: now.weekday - 1));
+      start = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
     } else if (_period == 'This Month') {
       start = DateTime(now.year, now.month, 1);
     } else {

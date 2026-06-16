@@ -145,6 +145,9 @@ class _PosAndroidState extends State<PosAndroid> {
 
   void _handleClinicalDispenseToggle(bool val, CartProvider cart) {
     if (!val) {
+      cart.setPatient(name: '', phone: '', id: 0, uhid: '');
+      cart.setLinkedAppointment(null);
+      _patientCtrl.clear();
       cart.setClinicalDispense(false);
       return;
     }

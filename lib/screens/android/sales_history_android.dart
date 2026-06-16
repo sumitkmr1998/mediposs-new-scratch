@@ -22,6 +22,7 @@ class SalesHistoryAndroid extends StatefulWidget {
 
 class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
   final TextEditingController _searchCtrl = TextEditingController();
+  bool _showFilters = false;
 
   @override
   void dispose() {
@@ -45,298 +46,339 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
       appBar: AppBar(
         title: const Text('Verified Audit Log'),
       ),
-      body: Column(
-        children: [
-          // 1. High-Density Financial Summary (Glassmorphic)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            decoration: BoxDecoration(
-              color: context.surfaceColor,
-              border: Border(
-                  bottom: BorderSide(
-                      color: context.borderColor.withValues(alpha: 0.5))),
-            ),
-            child: LayoutBuilder(builder: (ctx, constraints) {
-              double grossSales = 0;
-              double returns = 0;
-              double procedureFeeTotal = 0;
-              double consultationFeeTotal = 0;
-              double medsDiscountTotal = 0;
-              
-              final targetSales = isCashier
-                  ? sales.filteredSales.where((s) => _isToday(s.createdAt)).toList()
-                  : sales.filteredSales;
-
-              for (final s in targetSales) {
-                final consultation = sales.getConsultationTotal(s);
-                final procedure = sales.getProcedureTotal(s);
-                final medicine = sales.getMedicineTotal(s);
-
-                consultationFeeTotal += consultation;
-                procedureFeeTotal += procedure;
-
-                if (s.isReturn) {
-                  returns += medicine.abs();
-                } else {
-                  grossSales += medicine;
-                  medsDiscountTotal += s.discount.abs();
-                }
-              }
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text('REVENUE COMPOSITION',
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              color: context.textMutedColor,
-                              letterSpacing: 1.5)),
-                      const Spacer(),
-                      const Icon(Icons.verified_user,
-                          size: 12, color: AppTheme.success),
-                      const SizedBox(width: 4),
-                      Text('SENTRY PROTECTION ACTIVE',
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.success.withValues(alpha: 0.8))),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _StatCard(
-                          label: "PROCEDURES",
-                          value: '₹${procedureFeeTotal.toStringAsFixed(0)}',
-                          color: AppTheme.accent,
-                          icon: Icons.medical_services_rounded,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _StatCard(
-                          label: "CONSULTATION",
-                          value: '₹${consultationFeeTotal.toStringAsFixed(0)}',
-                          color: AppTheme.indigo,
-                          icon: Icons.account_box_rounded,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _StatCard(
-                          label: "MED GROSS",
-                          value: '₹${grossSales.toStringAsFixed(0)}',
-                          color: AppTheme.primary,
-                          icon: Icons.trending_up_rounded,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _StatCard(
-                          label: "MED RETURNS",
-                          value: '₹${returns.toStringAsFixed(0)}',
-                          color: AppTheme.danger,
-                          icon: Icons.assignment_return_rounded,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _StatCard(
-                          label: "MED DISCOUNTS",
-                          value: '₹${medsDiscountTotal.toStringAsFixed(0)}',
-                          color: AppTheme.success,
-                          icon: Icons.percent_rounded,
-                          isProminent: true,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              );
-            }),
-          ),
-
-          // 2. Search Bar
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: TextField(
-              controller: _searchCtrl,
-              onChanged: (v) => sales.search(v),
-              decoration: InputDecoration(
-                hintText: 'Search by patient, mobile or bill #',
-                prefixIcon: const Icon(Icons.search_rounded),
-                suffixIcon: _searchCtrl.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.close_rounded),
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          sales.search('');
-                        },
-                      )
-                    : null,
-                filled: true,
-                fillColor: context.surfaceColor,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(
-                      color: context.borderColor.withValues(alpha: 0.5)),
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+      body: CustomScrollView(
+        slivers: [
+          // 1. High-Density Financial Summary (Glassmorphic) - Horizontal Scrollable
+          SliverToBoxAdapter(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: BoxDecoration(
+                color: context.surfaceColor,
+                border: Border(
+                    bottom: BorderSide(
+                        color: context.borderColor.withValues(alpha: 0.5))),
               ),
-            ),
-          ),
+              child: LayoutBuilder(builder: (ctx, constraints) {
+                double grossSales = 0;
+                double returns = 0;
+                double procedureFeeTotal = 0;
+                double consultationFeeTotal = 0;
+                double medsDiscountTotal = 0;
+                
+                final targetSales = isCashier
+                    ? sales.filteredSales.where((s) => _isToday(s.createdAt)).toList()
+                    : sales.filteredSales;
 
-          // 3. Filter Bar
-          Container(
-            color: context.surfaceColor,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  AppFilterChip(
-                    label: 'Today',
-                    isSelected: !sales.isSearching && (sales.activeFilter == SalesFilter.today || isCashier),
-                    onTap: () => sales.setFilter(SalesFilter.today),
-                    style: AppFilterChipStyle.filled,
-                  ),
-                  if (!isCashier) ...[
-                    const SizedBox(width: 8),
-                    AppFilterChip(
-                      label: 'Yesterday',
-                      isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.yesterday,
-                      onTap: () => sales.setFilter(SalesFilter.yesterday),
-                      style: AppFilterChipStyle.filled,
+                for (final s in targetSales) {
+                  final consultation = sales.getConsultationTotal(s);
+                  final procedure = sales.getProcedureTotal(s);
+                  final medicine = sales.getMedicineTotal(s);
+
+                  consultationFeeTotal += consultation;
+                  procedureFeeTotal += procedure;
+
+                  if (s.isReturn) {
+                    returns += medicine.abs();
+                  } else {
+                    grossSales += medicine;
+                    medsDiscountTotal += s.discount.abs();
+                  }
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text('REVENUE COMPOSITION',
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: context.textMutedColor,
+                                letterSpacing: 1.5)),
+                        const Spacer(),
+                        const Icon(Icons.verified_user,
+                            size: 12, color: AppTheme.success),
+                        const SizedBox(width: 4),
+                        Text('SENTRY PROTECTION ACTIVE',
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.success.withValues(alpha: 0.8))),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    AppFilterChip(
-                      label: 'Last 7 Days',
-                      isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.last7Days,
-                      onTap: () => sales.setFilter(SalesFilter.last7Days),
-                      style: AppFilterChipStyle.filled,
-                    ),
-                    const SizedBox(width: 8),
-                    AppFilterChip(
-                      label: 'History',
-                      isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.allTime,
-                      onTap: () => sales.setFilter(SalesFilter.allTime),
-                      style: AppFilterChipStyle.filled,
-                    ),
-                    const SizedBox(width: 8),
-                    AppFilterChip(
-                      label: 'Range',
-                      isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.custom,
-                      onTap: () async {
-                        final range = await showDateRangePicker(
-                          context: context,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime.now(),
-                          locale: const Locale('en', 'GB'),
-                          initialEntryMode: DatePickerEntryMode.input,
-                        );
-                        if (range != null) {
-                          sales.setFilter(SalesFilter.custom, range: range);
-                        }
-                      },
-                      style: AppFilterChipStyle.filled,
+                    const SizedBox(height: 12),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      clipBehavior: Clip.none,
+                      child: Row(
+                        children: [
+                          _StatCard(
+                            label: "PROCEDURES",
+                            value: '₹${procedureFeeTotal.toStringAsFixed(0)}',
+                            color: AppTheme.accent,
+                            icon: Icons.medical_services_rounded,
+                          ),
+                          const SizedBox(width: 8),
+                          _StatCard(
+                            label: "CONSULTATION",
+                            value: '₹${consultationFeeTotal.toStringAsFixed(0)}',
+                            color: AppTheme.indigo,
+                            icon: Icons.account_box_rounded,
+                          ),
+                          const SizedBox(width: 8),
+                          _StatCard(
+                            label: "MED GROSS",
+                            value: '₹${grossSales.toStringAsFixed(0)}',
+                            color: AppTheme.primary,
+                            icon: Icons.trending_up_rounded,
+                          ),
+                          const SizedBox(width: 8),
+                          _StatCard(
+                            label: "MED RETURNS",
+                            value: '₹${returns.toStringAsFixed(0)}',
+                            color: AppTheme.danger,
+                            icon: Icons.assignment_return_rounded,
+                          ),
+                          const SizedBox(width: 8),
+                          _StatCard(
+                            label: "MED DISCOUNTS",
+                            value: '₹${medsDiscountTotal.toStringAsFixed(0)}',
+                            color: AppTheme.success,
+                            icon: Icons.percent_rounded,
+                            isProminent: true,
+                          ),
+                        ],
+                      ),
                     ),
                   ],
+                );
+              }),
+            ),
+          ),
+
+          // 2. Search Bar & Filter Toggle
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchCtrl,
+                      onChanged: (v) => sales.search(v),
+                      decoration: InputDecoration(
+                        hintText: 'Search by patient, mobile or bill #',
+                        prefixIcon: const Icon(Icons.search_rounded),
+                        suffixIcon: _searchCtrl.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.close_rounded),
+                                onPressed: () {
+                                  _searchCtrl.clear();
+                                  sales.search('');
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: context.surfaceColor,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(
+                              color: context.borderColor.withValues(alpha: 0.5)),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        _showFilters = !_showFilters;
+                      });
+                    },
+                    icon: Icon(
+                      _showFilters ? Icons.filter_alt_rounded : Icons.filter_alt_outlined,
+                      color: _showFilters ? AppTheme.primaryLight : context.textMutedColor,
+                    ),
+                    style: IconButton.styleFrom(
+                      backgroundColor: context.surfaceColor,
+                      padding: const EdgeInsets.all(12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(
+                          color: (_showFilters ? AppTheme.primaryLight : context.borderColor).withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ),
+                    tooltip: 'Toggle Filters',
+                  ),
                 ],
               ),
             ),
           ),
 
-          // Transaction Type Filter Bar
-          Container(
-            color: context.surfaceColor,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Row(
-              children: [
-                Text(
-                  'TYPE: ',
-                  style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      color: context.textMutedColor,
-                      letterSpacing: 1),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
+          // 3. Collapsible Filter Bar
+          if (_showFilters)
+            SliverToBoxAdapter(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                color: context.surfaceColor,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      AppFilterChip(
+                        label: 'Today',
+                        isSelected: !sales.isSearching && (sales.activeFilter == SalesFilter.today || isCashier),
+                        onTap: () => sales.setFilter(SalesFilter.today),
+                        style: AppFilterChipStyle.filled,
+                      ),
+                      if (!isCashier) ...[
+                        const SizedBox(width: 8),
                         AppFilterChip(
-                          label: 'All',
-                          isSelected: sales.typeFilter == 'all',
-                          onTap: () => sales.setTypeFilter('all'),
+                          label: 'Yesterday',
+                          isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.yesterday,
+                          onTap: () => sales.setFilter(SalesFilter.yesterday),
                           style: AppFilterChipStyle.filled,
                         ),
                         const SizedBox(width: 8),
                         AppFilterChip(
-                          label: 'Retail',
-                          isSelected: sales.typeFilter == 'retail',
-                          onTap: () => sales.setTypeFilter('retail'),
+                          label: 'Last 7 Days',
+                          isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.last7Days,
+                          onTap: () => sales.setFilter(SalesFilter.last7Days),
                           style: AppFilterChipStyle.filled,
                         ),
                         const SizedBox(width: 8),
                         AppFilterChip(
-                          label: 'Dispense',
-                          isSelected: sales.typeFilter == 'dispense',
-                          onTap: () => sales.setTypeFilter('dispense'),
+                          label: 'History',
+                          isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.allTime,
+                          onTap: () => sales.setFilter(SalesFilter.allTime),
+                          style: AppFilterChipStyle.filled,
+                        ),
+                        const SizedBox(width: 8),
+                        AppFilterChip(
+                          label: 'Range',
+                          isSelected: !sales.isSearching && sales.activeFilter == SalesFilter.custom,
+                          onTap: () async {
+                            final range = await showDateRangePicker(
+                              context: context,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime.now(),
+                              locale: const Locale('en', 'GB'),
+                              initialEntryMode: DatePickerEntryMode.input,
+                            );
+                            if (range != null) {
+                              sales.setFilter(SalesFilter.custom, range: range);
+                            }
+                          },
                           style: AppFilterChipStyle.filled,
                         ),
                       ],
-                    ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
+
+          // Transaction Type Filter Bar
+          if (_showFilters)
+            SliverToBoxAdapter(
+              child: Container(
+                color: context.surfaceColor,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: Row(
+                  children: [
+                    Text(
+                      'TYPE: ',
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: context.textMutedColor,
+                          letterSpacing: 1),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            AppFilterChip(
+                              label: 'All',
+                              isSelected: sales.typeFilter == 'all',
+                              onTap: () => sales.setTypeFilter('all'),
+                              style: AppFilterChipStyle.filled,
+                            ),
+                            const SizedBox(width: 8),
+                            AppFilterChip(
+                              label: 'Retail',
+                              isSelected: sales.typeFilter == 'retail',
+                              onTap: () => sales.setTypeFilter('retail'),
+                              style: AppFilterChipStyle.filled,
+                            ),
+                            const SizedBox(width: 8),
+                            AppFilterChip(
+                              label: 'Dispense',
+                              isSelected: sales.typeFilter == 'dispense',
+                              onTap: () => sales.setTypeFilter('dispense'),
+                              style: AppFilterChipStyle.filled,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
 
           // 3. Verified Stream Header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-            child: Row(
-              children: [
-                Text(sales.isSearching ? 'SEARCH RESULTS' : 'TRANSACTION STREAM',
-                    style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: context.textMutedColor,
-                        letterSpacing: 1)),
-                const Spacer(),
-                Text('${sales.filteredSales.length} LOGS',
-                    style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: context.textMutedColor)),
-              ],
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+              child: Row(
+                children: [
+                  Text(sales.isSearching ? 'SEARCH RESULTS' : 'TRANSACTION STREAM',
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: context.textMutedColor,
+                          letterSpacing: 1)),
+                  const Spacer(),
+                  Text('${sales.filteredSales.length} LOGS',
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: context.textMutedColor)),
+                ],
+              ),
             ),
           ),
 
           // list
-          Expanded(
-            child: sales.filteredSales.isEmpty
-                ? const AppEmptyState(
-                    icon: Icons.history_rounded,
-                    title: 'No verified logs found',
-                  )
-                : ListView.builder(
-                    itemCount: sales.filteredSales.length,
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 32),
-                    itemBuilder: (ctx, i) =>
-                        _SaleRow(sale: sales.filteredSales[i], salesProvider: sales),
+          sales.filteredSales.isEmpty
+              ? const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 48.0),
+                    child: AppEmptyState(
+                      icon: Icons.history_rounded,
+                      title: 'No verified logs found',
+                    ),
                   ),
-          ),
+                )
+              : SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 32),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (ctx, i) => _SaleRow(
+                        sale: sales.filteredSales[i],
+                        salesProvider: sales,
+                      ),
+                      childCount: sales.filteredSales.length,
+                    ),
+                  ),
+                ),
         ],
       ),
     );
@@ -414,37 +456,53 @@ class _SaleRow extends StatelessWidget {
             ),
           ],
         ),
-        subtitle: Row(
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              sale.invoiceNo,
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 11,
-                color: context.textMutedColor,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
-                color: AppTheme.success.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: const Text('VERIFIED',
+            Row(
+              children: [
+                Text(
+                  sale.invoiceNo,
                   style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.success)),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                    color: context.textMutedColor,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: AppTheme.success.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text('VERIFIED',
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.success)),
+                ),
+                const Spacer(),
+                Text(
+                  '${dt.hour}:${dt.minute.toString().padLeft(2, '0')}',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: context.textMutedColor),
+                ),
+              ],
             ),
-            const Spacer(),
-            Text(
-              '${dt.hour}:${dt.minute.toString().padLeft(2, '0')}',
-              style: TextStyle(
+            if (sale.opdInvoiceNo.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                'OPD ID: ${sale.opdInvoiceNo}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
                   fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: context.textMutedColor),
-            ),
+                  color: AppTheme.primaryLight,
+                ),
+              ),
+            ],
           ],
         ),
         children: [
@@ -509,17 +567,18 @@ class _SaleRow extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton.icon(
+                      child: FilledButton.icon(
                         onPressed: () {
                           PrintingService.instance.printReceipt(context, sale);
                         },
-                        icon: const Icon(Icons.print_rounded, size: 18),
-                        label: const Text('PRINT'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppTheme.primaryLight,
-                          side: const BorderSide(color: AppTheme.primaryLight),
+                        icon: const Icon(Icons.print_rounded, size: 16),
+                        label: const Text('PRINT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppTheme.primaryLight,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
+                              borderRadius: BorderRadius.circular(12)),
                         ),
                       ),
                     ),
@@ -534,13 +593,15 @@ class _SaleRow extends StatelessWidget {
                                     ReturnDialog(originalSale: sale));
                           },
                           icon: const Icon(Icons.assignment_return_rounded,
-                              size: 18),
-                          label: const Text('RETURN'),
+                              size: 16),
+                          label: const Text('RETURN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppTheme.danger,
                             side: const BorderSide(color: AppTheme.danger),
+                            backgroundColor: AppTheme.danger.withValues(alpha: 0.05),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
+                                borderRadius: BorderRadius.circular(12)),
                           ),
                         ),
                       ),
@@ -558,13 +619,15 @@ class _SaleRow extends StatelessWidget {
                               ),
                             );
                           },
-                          icon: const Icon(Icons.edit_rounded, size: 18),
-                          label: const Text('EDIT'),
+                          icon: const Icon(Icons.edit_rounded, size: 16),
+                          label: const Text('EDIT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppTheme.primaryLight,
                             side: const BorderSide(color: AppTheme.primaryLight),
+                            backgroundColor: AppTheme.primaryLight.withValues(alpha: 0.05),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
+                                borderRadius: BorderRadius.circular(12)),
                           ),
                         ),
                       ),
@@ -576,6 +639,9 @@ class _SaleRow extends StatelessWidget {
                         icon: const Icon(Icons.delete_outline_rounded,
                             color: AppTheme.danger),
                         tooltip: 'Void Sale',
+                        style: IconButton.styleFrom(
+                          padding: const EdgeInsets.all(12),
+                        ),
                       ),
                     ],
                   ],
@@ -635,6 +701,7 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: 135,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: isProminent ? color : color.withValues(alpha: 0.05),

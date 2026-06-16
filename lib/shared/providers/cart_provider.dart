@@ -21,6 +21,11 @@ import '../services/firebase_sync_service.dart';
 
 import '../../objectbox.g.dart';
 import '../models/procedure.dart';
+import '../models/doctor.dart';
+import '../models/patient.dart';
+import '../models/prescription.dart';
+import 'patient_provider.dart';
+import 'procedure_provider.dart';
 
 class CartItem {
   final Medicine? medicine;
@@ -95,6 +100,7 @@ class CartProvider extends ChangeNotifier {
   );
 
   final List<CartItem> _items = [];
+  bool _isCheckingOut = false;
   double _discountAmount = 0;
   String _patientName = '';
   String _patientPhone = '';
@@ -156,6 +162,7 @@ class CartProvider extends ChangeNotifier {
   double get mixedCard => _mixedCard;
 
   double get linkedConsultationFee {
+    if (!_isClinicalDispense) return 0.0;
     if (_linkedAppointmentId == null || _linkedAppointmentId == 0) return 0.0;
     final appt = ObjectBoxService.instance.appointmentBox.get(_linkedAppointmentId!);
     if (appt?.consultationBilled == true) return 0.0;
@@ -337,6 +344,99 @@ class CartProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void loadPrescriptionIntoCart({
+    required Prescription prescription,
+    required InventoryProvider inv,
+    required PatientProvider patientProv,
+    required PrescriptionProvider pProvider,
+    required ProcedureProvider procProv,
+  }) {
+    clearCart();
+    setClinicalDispense(true);
+    if (prescription.appointmentId != 0) {
+      setLinkedAppointment(prescription.appointmentId);
+    }
+    var patientPhone = '';
+    if (prescription.appointmentId != 0) {
+      final apptBox = ObjectBoxService.instance.store.box<Appointment>();
+      final appt = apptBox.get(prescription.appointmentId);
+      if (appt != null) {
+        patientPhone = appt.patientPhone;
+      }
+    }
+
+    Patient? patient;
+    if (prescription.patientId != 0) {
+      final p = patientProv.getById(prescription.patientId);
+      if (p != null && p.name.trim().toLowerCase() == prescription.patientName.trim().toLowerCase()) {
+        patient = p;
+      }
+    }
+    if (patient == null && (prescription.patientName.isNotEmpty || patientPhone.isNotEmpty)) {
+      patient = patientProv.getByInfo(prescription.patientName, patientPhone);
+    }
+    if (patient == null && prescription.patientName.isNotEmpty) {
+      final cleanName = prescription.patientName.trim().toLowerCase();
+      patient = patientProv.patients
+          .where((p) => p.name.trim().toLowerCase() == cleanName)
+          .firstOrNull;
+    }
+
+    setPatient(
+      name: prescription.patientName,
+      phone: patient?.phone ?? patientPhone,
+      id: patient?.id ?? 0,
+      uhid: patient?.uhid ?? '',
+      address: patient?.address ?? '',
+    );
+    setLinkedPrescription(prescription.id);
+
+    final docBox = ObjectBoxService.instance.store.box<Doctor>();
+    var doctorObj = docBox.get(prescription.doctorId);
+    if (doctorObj == null && prescription.doctorName.isNotEmpty) {
+      doctorObj = docBox.query(Doctor_.name.equals(prescription.doctorName, caseSensitive: false)).build().findFirst();
+    }
+    
+    final settings = ObjectBoxService.instance.settings;
+    String doctorAddress = '';
+    if (doctorObj != null && doctorObj.address.trim().isNotEmpty) {
+      doctorAddress = doctorObj.address.trim();
+    } else if (settings.clinicAddress != null && settings.clinicAddress!.trim().isNotEmpty) {
+      doctorAddress = settings.clinicAddress!.trim();
+    } else if (settings.storeAddress != null && settings.storeAddress!.trim().isNotEmpty) {
+      doctorAddress = settings.storeAddress!.trim();
+    }
+
+    setH1PrescriptionDetails(
+      doctorName: prescription.doctorName,
+      doctorAddress: doctorAddress,
+      doctorRegistrationNo: doctorObj?.registrationNo ?? '',
+      patientAddress: patient?.address ?? '',
+    );
+
+    final items = pProvider.getItems(prescription);
+
+    for (final pItem in items) {
+      final medicine = inv.medicines
+          .where(
+            (m) => m.name.toLowerCase() == pItem.medicineName.toLowerCase(),
+          )
+          .firstOrNull;
+
+      if (medicine != null) {
+        addItem(medicine, qty: pItem.qty);
+      }
+    }
+
+    final procedures = pProvider.getProcedures(prescription);
+    for (final pName in procedures) {
+      final proc = procProv.procedures.where((p) => p.name.toLowerCase() == pName.toLowerCase()).firstOrNull;
+      if (proc != null) {
+        addProcedure(proc);
+      }
+    }
+  }
+
   void loadSaleForEditing(Sale sale) {
     clearCart();
     _editingSaleId = sale.id;
@@ -450,7 +550,11 @@ class CartProvider extends ChangeNotifier {
   /// Completes checkout: saves sale, deducts storeStock, clears cart.
   /// Returns the created Sale on success.
   Future<Sale?> checkout([SyncService? syncService, AppUser? actor]) async {
-    if (_items.isEmpty) return null;
+    if (_items.isEmpty || _isCheckingOut) return null;
+    _isCheckingOut = true;
+    notifyListeners();
+
+    try {
 
     final db = ObjectBoxService.instance;
     final settings = db.settings;
@@ -485,7 +589,7 @@ class CartProvider extends ChangeNotifier {
     // Build items and Deduct or Restock stock (storeStock vs mainStock)
     final saleItems = <SaleItem>[];
 
-    final fee = linkedConsultationFee;
+    final fee = _isClinicalDispense ? linkedConsultationFee : 0.0;
     if (fee > 0) {
       saleItems.add(SaleItem(
         medicineId: 0,
@@ -581,6 +685,36 @@ class CartProvider extends ChangeNotifier {
       fCard = -fCard;
     }
 
+    String resolvedOpdInvoiceNo = '';
+    final apptId = _linkedAppointmentId;
+    if (_isClinicalDispense && apptId != null && apptId != 0 && !_isReturnMode) {
+      final appt = db.appointmentBox.get(apptId);
+      if (appt != null) {
+        final apptDate = appt.scheduledAt;
+        final apptPhone = appt.patientPhone;
+        final apptName = appt.patientName;
+        final existingOpdSale = db.saleBox
+            .query(Sale_.linkedAppointmentId.equals(appt.id)
+                .and(Sale_.invoiceNo.startsWith('OPD-')))
+            .build()
+            .findFirst() ??
+            db.saleBox.getAll().where((sale) {
+              if (!sale.invoiceNo.startsWith('OPD-')) return false;
+              final sameDay = sale.createdAt.year == apptDate.year &&
+                  sale.createdAt.month == apptDate.month &&
+                  sale.createdAt.day == apptDate.day;
+              if (!sameDay) return false;
+
+              if (apptPhone.isNotEmpty && sale.patientPhone == apptPhone) return true;
+              if (apptName.toLowerCase().trim() == sale.patientName.toLowerCase().trim()) return true;
+              return false;
+            }).firstOrNull;
+        if (existingOpdSale != null) {
+          resolvedOpdInvoiceNo = existingOpdSale.invoiceNo;
+        }
+      }
+    }
+
     final sale = Sale(
       id: _editingSaleId ?? 0,
       invoiceNo: _editingInvoiceNo ?? invoiceNo,
@@ -601,6 +735,7 @@ class CartProvider extends ChangeNotifier {
       isClinicalDispense: _isClinicalDispense,
       linkedAppointmentId: _linkedAppointmentId ?? 0,
       linkedProcedureId: _linkedProcedureId ?? 0,
+      opdInvoiceNo: resolvedOpdInvoiceNo,
       itemsJson: jsonEncode(saleItems.map((i) => i.toJson()).toList()),
       createdAt: _editingCreatedAt ?? now,
     );
@@ -684,8 +819,7 @@ class CartProvider extends ChangeNotifier {
     }
 
     // OPD Queue Automation: Mark today's active appointment as Done and consultation fee as billed
-    final apptId = _linkedAppointmentId;
-    if (apptId != null && apptId != 0 && !_isReturnMode) {
+    if (_isClinicalDispense && apptId != null && apptId != 0 && !_isReturnMode) {
       var appt = db.appointmentBox.get(apptId);
       if (appt != null) {
         if (appt.status != kStatusDone) {
@@ -779,5 +913,9 @@ class CartProvider extends ChangeNotifier {
     }
 
     return sale;
+    } finally {
+      _isCheckingOut = false;
+      notifyListeners();
+    }
   }
 }

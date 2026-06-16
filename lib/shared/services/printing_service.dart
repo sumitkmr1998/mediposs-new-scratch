@@ -141,6 +141,16 @@ class PrintingService {
                       style: const pw.TextStyle(fontSize: 10)),
                 ],
               ),
+              if (sale.opdInvoiceNo.isNotEmpty && settings.showOpdIdInPrint) ...[
+                pw.SizedBox(height: 2),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('OPD ID: ${sale.opdInvoiceNo}',
+                        style: const pw.TextStyle(fontSize: 10)),
+                  ],
+                ),
+              ],
               if (sale.patientName.isNotEmpty) ...[
                 pw.SizedBox(height: 2),
                 pw.Row(
@@ -217,6 +227,13 @@ class PrintingService {
                                     padding: const pw.EdgeInsets.only(top: 1),
                                     child: pw.Text(
                                         'Batch: ${item.batchNo} | Exp: ${item.expiryDate}',
+                                        style: pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+                                  )
+                                else if (item.medicineName.contains('Consultation Fee') && settings.showOpdIdInPrint)
+                                  pw.Padding(
+                                    padding: const pw.EdgeInsets.only(top: 1),
+                                    child: pw.Text(
+                                        'OPD ID: ${sale.invoiceNo.startsWith('OPD-') ? sale.invoiceNo : (sale.opdInvoiceNo.isNotEmpty ? sale.opdInvoiceNo : '')}',
                                         style: pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
                                   ),
                               ],
@@ -609,6 +626,7 @@ class PrintingService {
       totalAmount: sale.total.abs(),
       discount: sale.discount.abs(),
       isClinicalDispense: sale.isClinicalDispense,
+      opdInvoiceNo: sale.opdInvoiceNo,
     );
 
     await printInvoice(context, invoice);

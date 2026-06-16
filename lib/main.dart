@@ -157,7 +157,8 @@ void main(List<String> args) async {
                event == 'medicines_updated' || 
                event == 'sales_updated' ||
                event == 'patients_updated' ||
-               event == 'appointments_updated') {
+               event == 'appointments_updated' ||
+               event == 'audit_logs_updated') {
       syncService.syncAll().then((_) {
         inventoryProvider.load();
         salesProvider.load();

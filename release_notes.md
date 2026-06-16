@@ -1,5 +1,13 @@
+# MediPoss v2.0.1 Release
+"OPD Receipt Voiding & Audit Log Sync Enhancements"
+
+## 🚀 What's New
+- **Automated OPD Receipt Voiding**: Cancelling an appointment in the OPD queue now automatically voids the linked consultation fee receipt (Sale record), updates the inventory/cash registers, and propagates the cancellation to all sync clients.
+- **Audit Log Synchronization**: Implemented full synchronization of audit logs from the Hub server back to client terminals, allowing companion devices to see a unified verifiable trail of actions.
+
 # MediPoss v1.8.0 Release
 "Advanced Business Analytics & Cross-Device Sync Improvements"
+
 
 ## 🚀 What's New
 - **Vibrant Analytics Dashboard (Android)**: Ported the full Windows Analytics Hub to Android, including stacked layout structures and category pie charts.

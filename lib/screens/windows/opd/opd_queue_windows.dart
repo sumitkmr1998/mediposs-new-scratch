@@ -15,6 +15,11 @@ import '../../opd/prescription_screen.dart';
 import '../../opd/patient_details_screen.dart';
 import '../../../shared/widgets/app_empty_state.dart';
 import '../../../shared/widgets/app_kpi_card.dart';
+import '../../../shared/providers/cart_provider.dart';
+import '../../../shared/providers/navigation_provider.dart';
+import '../../../shared/providers/procedure_provider.dart';
+import '../../../shared/providers/inventory_provider.dart';
+import '../../../shared/providers/sales_provider.dart';
 
 class OpdQueueWindows extends StatefulWidget {
   const OpdQueueWindows({super.key});
@@ -192,7 +197,7 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                                         letterSpacing: 1.5,
                                         color: AppTheme.primaryLight)))),
                         const SizedBox(
-                            width: 240,
+                            width: 320,
                             child: Align(
                                 alignment: Alignment.centerRight,
                                 child: Text('ACTIONS',
@@ -273,7 +278,10 @@ class _OpdQueueWindowsState extends State<OpdQueueWindows> {
                           onCancel: () {
                             final currentUser = context.read<AuthProvider>().currentUser;
                             context.read<OpdProvider>().cancelAppointment(
-                                appt.id, context.read<SyncService>(), currentUser);
+                                appt.id,
+                                context.read<SyncService>(),
+                                currentUser,
+                                context.read<SalesProvider>());
                           },
                         )),
                 ],
@@ -573,7 +581,7 @@ class _QueueRowState extends State<_QueueRow> {
                 ),
               ),
               SizedBox(
-                width: 240,
+                width: 320,
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: Icon(Icons.more_vert_rounded,
@@ -722,7 +730,7 @@ class _QueueRowState extends State<_QueueRow> {
               ),
             ),
             SizedBox(
-              width: 240,
+              width: 320,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -734,7 +742,36 @@ class _QueueRowState extends State<_QueueRow> {
                       onTap: widget.onConsult,
                       filled: true,
                     ),
-                  const SizedBox(width: 8),
+                  if (context.read<AuthProvider>().canAccessMedicalRecords)
+                    const SizedBox(width: 8),
+                  Builder(builder: (ctx) {
+                    final prescription = ctx.read<PrescriptionProvider>().getPrescriptionForAppointment(a.id);
+                    if (ctx.read<AuthProvider>().canDispenseMedicines && prescription != null) {
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _ActionBtn(
+                            label: 'Dispense',
+                            icon: Icons.medication_rounded,
+                            color: AppTheme.success,
+                            onTap: () {
+                              ctx.read<CartProvider>().loadPrescriptionIntoCart(
+                                prescription: prescription,
+                                inv: ctx.read<InventoryProvider>(),
+                                patientProv: ctx.read<PatientProvider>(),
+                                pProvider: ctx.read<PrescriptionProvider>(),
+                                procProv: ctx.read<ProcedureProvider>(),
+                              );
+                              ctx.read<NavigationProvider>().selectDestination('pos');
+                            },
+                            filled: true,
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  }),
                   _ActionBtn(
                     label: 'Cancel',
                     icon: Icons.cancel_outlined,
@@ -837,10 +874,38 @@ class _QueueRowState extends State<_QueueRow> {
               ),
             ),
             SizedBox(
-              width: 240,
+              width: 320,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  Builder(builder: (ctx) {
+                    final prescription = ctx.read<PrescriptionProvider>().getPrescriptionForAppointment(a.id);
+                    if (ctx.read<AuthProvider>().canDispenseMedicines && prescription != null) {
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _ActionBtn(
+                            label: 'Dispense',
+                            icon: Icons.medication_rounded,
+                            color: AppTheme.success,
+                            onTap: () {
+                              ctx.read<CartProvider>().loadPrescriptionIntoCart(
+                                prescription: prescription,
+                                inv: ctx.read<InventoryProvider>(),
+                                patientProv: ctx.read<PatientProvider>(),
+                                pProvider: ctx.read<PrescriptionProvider>(),
+                                procProv: ctx.read<ProcedureProvider>(),
+                              );
+                              ctx.read<NavigationProvider>().selectDestination('pos');
+                            },
+                            filled: true,
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  }),
                   _ActionBtn(
                     label: 'Complete',
                     icon: Icons.check_circle_rounded,
@@ -945,7 +1010,7 @@ class _QueueRowState extends State<_QueueRow> {
             ),
           ),
           SizedBox(
-            width: 240,
+            width: 320,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [

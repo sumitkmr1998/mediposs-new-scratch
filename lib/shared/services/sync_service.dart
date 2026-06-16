@@ -533,6 +533,7 @@ class SyncService extends ChangeNotifier {
         ObjectBoxService.instance.transferBox.removeAll();
         ObjectBoxService.instance.templateBox.removeAll();
         ObjectBoxService.instance.store.box<ScheduleH1Record>().removeAll();
+        ObjectBoxService.instance.store.box<AuditLog>().removeAll();
       }
       sinceStr = null; // Pull all data freshly instead of just the last 180 days!
       debugPrint('SyncService: Initial sync detected. Pulling all data freshly.');
@@ -555,6 +556,7 @@ class SyncService extends ChangeNotifier {
       await pullTransfers();
       await pullTemplates();
       await pullH1Records(since: sinceStr);
+      await pullAuditLogs(since: sinceStr);
 
       // Update sync timestamp using the Hub's reported time if available
       final serverTime = t1 ?? t2 ?? t3;
@@ -1103,6 +1105,7 @@ class SyncService extends ChangeNotifier {
           hubKeys.add(key);
 
           final existing = allLocal.where((p) {
+            if (p.patientId <= 0) return false;
             final patient = ObjectBoxService.instance.patientBox.get(p.patientId);
             if (patient == null) return false;
             final lKey = _pKey(patient.uhid, p.createdAt);
@@ -1147,6 +1150,10 @@ class SyncService extends ChangeNotifier {
         // Remove prescriptions deleted on Hub (Full Sync only)
         if (since == null) {
           for (final p in allLocal) {
+            if (p.patientId <= 0) {
+              box.remove(p.id);
+              continue;
+            }
             final patient = ObjectBoxService.instance.patientBox.get(p.patientId);
             if (patient == null) {
               box.remove(p.id);
@@ -1786,6 +1793,42 @@ class SyncService extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('SyncService: pullSettings err: $e');
+    }
+  }
+
+  Future<void> pullAuditLogs({String? since}) async {
+    if (!_isConnected || _jwtToken == null) return;
+    debugPrint('SyncService: pullAuditLogs starting (since=$since)...');
+    try {
+      var url = Uri.parse('$_baseUrl/api/audit');
+      if (since != null) {
+        url = url.replace(queryParameters: {'since': since});
+      }
+      final res = await http.get(url, headers: _authHeaders());
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body)['data'] as List;
+        final box = ObjectBoxService.instance.store.box<AuditLog>();
+        final allLocal = box.getAll();
+
+        for (final item in data) {
+          final deviceId = item['deviceId'] as String? ?? '';
+          final timestampMs = item['timestamp'] as int? ?? 0;
+
+          final existing = allLocal.where((l) =>
+              l.deviceId == deviceId &&
+              l.timestamp.millisecondsSinceEpoch == timestampMs).firstOrNull;
+
+          if (existing == null) {
+            final log = AuditLog.fromJson(item as Map<String, dynamic>);
+            log.id = 0;
+            log.isSynced = true;
+            box.put(log);
+          }
+        }
+        debugPrint('SyncService: pullAuditLogs synced ${data.length} logs.');
+      }
+    } catch (e) {
+      debugPrint('pullAuditLogs err: $e');
     }
   }
 

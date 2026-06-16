@@ -37,7 +37,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(1, 637942838794498612),
       name: 'AppSettings',
-      lastPropertyId: const obx_int.IdUid(48, 4065307820196271581),
+      lastPropertyId: const obx_int.IdUid(49, 4051149874881453646),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -279,6 +279,11 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(48, 4065307820196271581),
             name: 'defaultDoctorId',
             type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(49, 4051149874881453646),
+            name: 'showOpdIdInPrint',
+            type: 1,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
@@ -286,7 +291,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(2, 1561353773588181738),
       name: 'AppUser',
-      lastPropertyId: const obx_int.IdUid(37, 5668218736045193962),
+      lastPropertyId: const obx_int.IdUid(38, 3749317672120738414),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -462,6 +467,11 @@ final _entities = <obx_int.ModelEntity>[
         obx_int.ModelProperty(
             id: const obx_int.IdUid(37, 5668218736045193962),
             name: 'canViewFinancialAnalytics',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(38, 3749317672120738414),
+            name: 'canDispenseMedicines',
             type: 1,
             flags: 0)
       ],
@@ -1017,7 +1027,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(11, 2308013346348508445),
       name: 'Sale',
-      lastPropertyId: const obx_int.IdUid(23, 6175242095605562542),
+      lastPropertyId: const obx_int.IdUid(24, 3156319025601909690),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -1133,6 +1143,11 @@ final _entities = <obx_int.ModelEntity>[
         obx_int.ModelProperty(
             id: const obx_int.IdUid(23, 6175242095605562542),
             name: 'patientUhid',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(24, 3156319025601909690),
+            name: 'opdInvoiceNo',
             type: 9,
             flags: 0)
       ],
@@ -1722,7 +1737,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
               ? null
               : fbb.writeString(object.clinicRegNo!);
           final shopIdOffset = fbb.writeString(object.shopId);
-          fbb.startTable(49);
+          fbb.startTable(50);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, storeNameOffset);
           fbb.addOffset(2, storeAddressOffset);
@@ -1771,6 +1786,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addBool(45, object.googleDriveSyncEnabled);
           fbb.addInt64(46, object.auditRetentionDays);
           fbb.addInt64(47, object.defaultDoctorId);
+          fbb.addBool(48, object.showOpdIdInPrint);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -1887,6 +1903,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.BoolReader().vTableGet(buffer, rootOffset, 88, false);
           final showBatchExpiryInClinicalPrintParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 90, false);
+          final showOpdIdInPrintParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 100, false);
           final shopIdParam = const fb.StringReader(asciiOptimization: true)
               .vTableGet(buffer, rootOffset, 92, '');
           final defaultDoctorIdParam =
@@ -1939,6 +1957,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
               showBatchExpiryInRetailPrint: showBatchExpiryInRetailPrintParam,
               showBatchExpiryInClinicalPrint:
                   showBatchExpiryInClinicalPrintParam,
+              showOpdIdInPrint: showOpdIdInPrintParam,
               shopId: shopIdParam,
               defaultDoctorId: defaultDoctorIdParam);
 
@@ -1956,7 +1975,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final nameOffset = fbb.writeString(object.name);
           final roleOffset = fbb.writeString(object.role);
           final pinOffset = fbb.writeString(object.pin);
-          fbb.startTable(38);
+          fbb.startTable(39);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, nameOffset);
           fbb.addOffset(2, roleOffset);
@@ -1992,6 +2011,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addBool(34, object.canViewAnalytics);
           fbb.addBool(35, object.canEditSales);
           fbb.addBool(36, object.canViewFinancialAnalytics);
+          fbb.addBool(37, object.canDispenseMedicines);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -2060,6 +2080,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.BoolReader().vTableGet(buffer, rootOffset, 60, false);
           final canDeleteAppointmentsParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 62, false);
+          final canDispenseMedicinesParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 78, false);
           final canViewPurchasePriceParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 52, false);
           final canExportDataParam =
@@ -2100,6 +2122,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
               canAccessMedicalRecords: canAccessMedicalRecordsParam,
               canDeletePatients: canDeletePatientsParam,
               canDeleteAppointments: canDeleteAppointmentsParam,
+              canDispenseMedicines: canDispenseMedicinesParam,
               canViewPurchasePrice: canViewPurchasePriceParam,
               canExportData: canExportDataParam,
               canViewHistoricalData: canViewHistoricalDataParam,
@@ -2720,7 +2743,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final paymentMethodOffset = fbb.writeString(object.paymentMethod);
           final itemsJsonOffset = fbb.writeString(object.itemsJson);
           final patientUhidOffset = fbb.writeString(object.patientUhid);
-          fbb.startTable(24);
+          final opdInvoiceNoOffset = fbb.writeString(object.opdInvoiceNo);
+          fbb.startTable(25);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, invoiceNoOffset);
           fbb.addInt64(2, object.patientId);
@@ -2744,6 +2768,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addInt64(20, object.linkedAppointmentId);
           fbb.addInt64(21, object.linkedProcedureId);
           fbb.addOffset(22, patientUhidOffset);
+          fbb.addOffset(23, opdInvoiceNoOffset);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -2798,6 +2823,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 44, 0);
           final linkedProcedureIdParam =
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 46, 0);
+          final opdInvoiceNoParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGet(buffer, rootOffset, 50, '');
           final itemsJsonParam = const fb.StringReader(asciiOptimization: true)
               .vTableGet(buffer, rootOffset, 38, '');
           final object = Sale(
@@ -2823,6 +2851,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
               isClinicalDispense: isClinicalDispenseParam,
               linkedAppointmentId: linkedAppointmentIdParam,
               linkedProcedureId: linkedProcedureIdParam,
+              opdInvoiceNo: opdInvoiceNoParam,
               itemsJson: itemsJsonParam);
 
           return object;
@@ -3574,6 +3603,10 @@ class AppSettings_ {
   /// See [AppSettings.defaultDoctorId].
   static final defaultDoctorId =
       obx.QueryIntegerProperty<AppSettings>(_entities[0].properties[47]);
+
+  /// See [AppSettings.showOpdIdInPrint].
+  static final showOpdIdInPrint =
+      obx.QueryBooleanProperty<AppSettings>(_entities[0].properties[48]);
 }
 
 /// [AppUser] entity fields to define ObjectBox queries.
@@ -3717,6 +3750,10 @@ class AppUser_ {
   /// See [AppUser.canViewFinancialAnalytics].
   static final canViewFinancialAnalytics =
       obx.QueryBooleanProperty<AppUser>(_entities[1].properties[34]);
+
+  /// See [AppUser.canDispenseMedicines].
+  static final canDispenseMedicines =
+      obx.QueryBooleanProperty<AppUser>(_entities[1].properties[35]);
 }
 
 /// [Appointment] entity fields to define ObjectBox queries.
@@ -4215,6 +4252,10 @@ class Sale_ {
   /// See [Sale.patientUhid].
   static final patientUhid =
       obx.QueryStringProperty<Sale>(_entities[10].properties[22]);
+
+  /// See [Sale.opdInvoiceNo].
+  static final opdInvoiceNo =
+      obx.QueryStringProperty<Sale>(_entities[10].properties[23]);
 }
 
 /// [StockTransfer] entity fields to define ObjectBox queries.
