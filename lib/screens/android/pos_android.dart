@@ -451,6 +451,291 @@ class _PosAndroidState extends State<PosAndroid> {
     );
   }
 
+  void _showCheckoutBottomSheet(CartProvider cart) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final double keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+            return Container(
+              padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).padding.bottom + 20 + keyboardHeight),
+              decoration: BoxDecoration(
+                color: context.surfaceColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 48,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: context.borderColor.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'CHECKOUT SUMMARY',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      color: AppTheme.primaryLight,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _SummaryField(
+                    label: 'Subtotal',
+                    value: '₹${cart.subtotal.toStringAsFixed(2)}',
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Discount (₹)',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.textMutedColor),
+                      ),
+                      SizedBox(
+                        width: 120,
+                        height: 36,
+                        child: TextField(
+                          controller: _discountCtrl,
+                          focusNode: _discountFocus,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.end,
+                          decoration: InputDecoration(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onChanged: (val) {
+                            final disc = double.tryParse(val) ?? 0;
+                            cart.setDiscount(disc);
+                            setSheetState(() {});
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'TOTAL DUE',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                      ),
+                      Text(
+                        '₹${cart.totalRounded.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          color: AppTheme.primaryLight,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Payment Method',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: context.textMutedColor),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _PayChip(
+                        id: 'cash',
+                        label: 'Cash',
+                        selected: _paymentMethod,
+                        onTap: (val) {
+                          setSheetState(() => _paymentMethod = val);
+                          setState(() => _paymentMethod = val);
+                        },
+                      ),
+                      _PayChip(
+                        id: 'upi',
+                        label: 'UPI',
+                        selected: _paymentMethod,
+                        onTap: (val) {
+                          setSheetState(() => _paymentMethod = val);
+                          setState(() => _paymentMethod = val);
+                        },
+                      ),
+                      _PayChip(
+                        id: 'card',
+                        label: 'Card',
+                        selected: _paymentMethod,
+                        onTap: (val) {
+                          setSheetState(() => _paymentMethod = val);
+                          setState(() => _paymentMethod = val);
+                        },
+                      ),
+                      _PayChip(
+                        id: 'mixed',
+                        label: 'Mixed',
+                        selected: _paymentMethod,
+                        onTap: (val) {
+                          setSheetState(() => _paymentMethod = val);
+                          setState(() => _paymentMethod = val);
+                        },
+                      ),
+                    ],
+                  ),
+                  if (_paymentMethod == 'mixed') ...[
+                    const SizedBox(height: 16),
+                    _MixedPaymentInputs(
+                      cashCtrl: _mixCashCtrl,
+                      upiCtrl: _mixUpiCtrl,
+                      cardCtrl: _mixCardCtrl,
+                      cashFocus: _mixCashFocus,
+                      upiFocus: _mixUpiFocus,
+                      cardFocus: _mixCardFocus,
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        await _doCheckout(cart);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: Ink(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: cart.isReturnMode
+                                ? [AppTheme.danger, const Color(0xFFB91C1C)]
+                                : [AppTheme.primary, AppTheme.primaryLight],
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Container(
+                          alignment: Alignment.center,
+                          child: Text(
+                            cart.isEditingSale
+                                ? 'UPDATE SALE'
+                                : (cart.isReturnMode ? 'PROCESS RETURN' : 'COMPLETE CHECKOUT'),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                              letterSpacing: 1.2,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildStickyBottomBar(CartProvider cart) {
+    final int itemCount = cart.items.fold(0, (sum, item) => sum + item.qty);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        border: Border(top: BorderSide(color: context.borderColor.withValues(alpha: 0.12))),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$itemCount ${itemCount == 1 ? 'item' : 'items'}',
+                    style: TextStyle(
+                      color: context.textMutedColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '₹${cart.totalRounded.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: AppTheme.primaryLight,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            SizedBox(
+              height: 46,
+              width: 170,
+              child: ElevatedButton(
+                onPressed: () => _showCheckoutBottomSheet(cart),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  padding: EdgeInsets.zero,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Ink(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: cart.isReturnMode
+                          ? [AppTheme.danger, const Color(0xFFB91C1C)]
+                          : [AppTheme.primary, AppTheme.primaryLight],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Container(
+                    alignment: Alignment.center,
+                    child: Text(
+                      cart.isReturnMode ? 'RETURN' : 'PROCEED TO PAY',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                        letterSpacing: 0.8,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final inv = context.watch<InventoryProvider>();
@@ -685,7 +970,6 @@ class _PosAndroidState extends State<PosAndroid> {
                   onSelected: (item) {
                     if (item is Medicine) {
                       cart.addItem(item);
-                      _onMedicineAddedToCart(item.id);
                     } else if (item is Procedure) {
                       cart.addProcedure(item);
                     }
@@ -816,202 +1100,45 @@ class _PosAndroidState extends State<PosAndroid> {
               ],
             ),
           ),
+          // 2. Scrollable Middle Area for Cart Items
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (cart.items.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 64),
-                      child: Center(
-                        child: Column(
-                          children: [
-                            Icon(Icons.shopping_basket_outlined,
-                                size: 80,
-                                color:
-                                    context.borderColor.withValues(alpha: 0.3)),
-                            const SizedBox(height: 16),
-                            Text('YOUR CART IS EMPTY',
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
-                                    color: context.textMutedColor,
-                                    letterSpacing: 1.5)),
-                          ],
-                        ),
-                      ),
-                    )
-                  else
-                    ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: cart.items.length,
-                      separatorBuilder: (_, __) => Divider(
-                          height: 1,
-                          color: context.borderColor.withValues(alpha: 0.1)),
-                      itemBuilder: (ctx, i) {
-                        final item = cart.items[i];
-                        return _CartItemTile(
-                          item: item,
-                          qtyFocusNode: _getQtyFocusNode(item.id),
-                          qtyController:
-                              _getQtyController(item.id, item.qty),
-                          onQtyChanged: (val) {
-                            final newQty = int.tryParse(val);
-                            if (newQty != null && newQty > 0) {
-                              int finalQty = newQty;
-                              final maxStock = cart.isClinicalDispense ? item.medicine!.mainStock : item.medicine!.storeStock;
-                              if (!item.isProcedure &&
-                                  !cart.isReturnMode &&
-                                  finalQty > maxStock) {
-                                finalQty = maxStock;
-                                final ctrl = _getQtyController(item.id, item.qty);
-                                ctrl.text = finalQty.toString();
-                                ctrl.selection = TextSelection.collapsed(
-                                  offset: finalQty.toString().length,
-                                );
-                              }
-                              cart.updateQty(item.id, finalQty,
-                                  isProcedure: item.isProcedure);
-                            }
-                          },
-                          onRemove: () => cart.removeItem(item.id,
-                              isProcedure: item.isProcedure),
-                          onLongPress: () => _showItemContextMenu(item, cart),
-                        );
-                      },
+            child: cart.items.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.shopping_basket_outlined,
+                            size: 80,
+                            color: context.borderColor.withValues(alpha: 0.3)),
+                        const SizedBox(height: 16),
+                        Text('YOUR CART IS EMPTY',
+                            style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: context.textMutedColor,
+                                letterSpacing: 1.5)),
+                      ],
                     ),
-                  const SizedBox(height: 24),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(24),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                      child: Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: context.surfaceColor.withValues(alpha: 0.7),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.2)),
-                          boxShadow: [
-                            BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.05),
-                                blurRadius: 20,
-                                offset: const Offset(0, 10)),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text('TRANSACTION SUMMARY',
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppTheme.primaryLight,
-                                    letterSpacing: 1)),
-                            const SizedBox(height: 16),
-                            _SummaryField(
-                                label: 'Subtotal',
-                                value: '₹${cart.subtotal.toStringAsFixed(2)}'),
-                            if (cart.discountAmount > 0)
-                              _SummaryField(
-                                  label: 'Discount',
-                                  value:
-                                      '-₹${cart.discountAmount.toStringAsFixed(2)}',
-                                  color: AppTheme.danger),
-                            const Divider(height: 32),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('TOTAL DUE',
-                                    style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: 0.5)),
-                                Text('₹${cart.totalRounded.toStringAsFixed(0)}',
-                                    style: const TextStyle(
-                                        fontSize: 28,
-                                        fontWeight: FontWeight.w900,
-                                        color: AppTheme.primaryLight,
-                                        letterSpacing: -1)),
-                              ],
-                            ),
-                            const SizedBox(height: 24),
-                            _PaymentSelector(
-                              selected: _paymentMethod,
-                              onSelected: (val) =>
-                                  setState(() => _paymentMethod = val),
-                            ),
-                            if (_paymentMethod == 'mixed') ...[
-                              const SizedBox(height: 16),
-                              _MixedPaymentInputs(
-                                cashCtrl: _mixCashCtrl,
-                                upiCtrl: _mixUpiCtrl,
-                                cardCtrl: _mixCardCtrl,
-                                cashFocus: _mixCashFocus,
-                                upiFocus: _mixUpiFocus,
-                                cardFocus: _mixCardFocus,
-                              ),
-                            ],
-                            const SizedBox(height: 24),
-                            SizedBox(
-                              height: 60,
-                              child: ElevatedButton(
-                                onPressed: cart.items.isEmpty
-                                    ? null
-                                    : () => _doCheckout(cart),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.transparent,
-                                  shadowColor: Colors.transparent,
-                                  padding: EdgeInsets.zero,
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(18)),
-                                ),
-                                child: Ink(
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: cart.isReturnMode
-                                          ? [
-                                              AppTheme.danger,
-                                              const Color(0xFFB91C1C)
-                                            ]
-                                          : [
-                                              AppTheme.primary,
-                                              AppTheme.primaryLight
-                                            ],
-                                    ),
-                                    borderRadius: BorderRadius.circular(18),
-                                  ),
-                                  child: Container(
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      cart.isEditingSale
-                                          ? 'UPDATE SALE'
-                                          : (cart.isReturnMode
-                                              ? 'PROCESS RETURN'
-                                              : 'COMPLETE CHECKOUT'),
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 16,
-                                          letterSpacing: 1.5,
-                                          color: Colors.white),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    itemCount: cart.items.length,
+                    separatorBuilder: (_, __) => Divider(
+                        height: 1,
+                        color: context.borderColor.withValues(alpha: 0.1)),
+                    itemBuilder: (ctx, i) {
+                      final item = cart.items[i];
+                      return _CartItemTile(
+                        item: item,
+                        onRemove: () => cart.removeItem(item.id, isProcedure: item.isProcedure),
+                        onLongPress: () => _showItemContextMenu(item, cart),
+                      );
+                    },
                   ),
-                  const SizedBox(height: 48),
-                ],
-              ),
-            ),
           ),
+          // 3. Sticky Bottom Bar
+          if (cart.items.isNotEmpty)
+            _buildStickyBottomBar(cart),
         ],
       ),
     );
@@ -1197,17 +1324,11 @@ class _MixedPaymentInputs extends StatelessWidget {
 
 class _CartItemTile extends StatelessWidget {
   final CartItem item;
-  final FocusNode qtyFocusNode;
-  final TextEditingController qtyController;
-  final ValueChanged<String> onQtyChanged;
   final VoidCallback onRemove;
   final VoidCallback onLongPress;
 
   const _CartItemTile({
     required this.item,
-    required this.qtyFocusNode,
-    required this.qtyController,
-    required this.onQtyChanged,
     required this.onRemove,
     required this.onLongPress,
   });
@@ -1215,36 +1336,66 @@ class _CartItemTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cart = context.watch<CartProvider>();
+    final maxStock = item.isProcedure ? 9999 : (cart.isClinicalDispense ? item.medicine!.mainStock : item.medicine!.storeStock);
+
     return GestureDetector(
       onLongPress: onLongPress,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: context.borderColor.withValues(alpha: 0.05))),
+        ),
         child: Row(
           children: [
+            // Sleek Rounded Quantity Selector
             Container(
-              width: 48,
-              height: 48,
               decoration: BoxDecoration(
-                color: AppTheme.primary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(14),
+                color: context.surfaceColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: context.borderColor.withValues(alpha: 0.15)),
               ),
-              child: Center(
-                child: TextField(
-                  focusNode: qtyFocusNode,
-                  controller: qtyController,
-                  keyboardType: TextInputType.number,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18,
-                      color: AppTheme.primary),
-                  decoration: const InputDecoration(
-                      border: InputBorder.none, isDense: true),
-                  onChanged: onQtyChanged,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.remove_rounded, size: 16),
+                    onPressed: item.qty > 1
+                        ? () => cart.updateQty(item.id, item.qty - 1, isProcedure: item.isProcedure)
+                        : onRemove,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    color: AppTheme.primary,
+                  ),
+                  GestureDetector(
+                    onTap: () => _showManualQtyDialog(context, cart, maxStock),
+                    child: Container(
+                      constraints: const BoxConstraints(minWidth: 28),
+                      alignment: Alignment.center,
+                      child: Text(
+                        '${item.qty}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14,
+                          color: AppTheme.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.add_rounded, size: 16),
+                    onPressed: (item.isProcedure || cart.isReturnMode || item.qty < maxStock)
+                        ? () => cart.updateQty(item.id, item.qty + 1, isProcedure: item.isProcedure)
+                        : null,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    color: AppTheme.primary,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1252,59 +1403,79 @@ class _CartItemTile extends StatelessWidget {
                   Text(
                     item.name.toUpperCase(),
                     style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                        letterSpacing: 0.5),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      letterSpacing: 0.3,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Row(
                     children: [
                       _Tag(
-                          label:
-                              '₹${item.isProcedure ? (item.customPrice ?? item.procedure!.basePrice).toStringAsFixed(0) : item.medicine!.sellingPrice.toStringAsFixed(0)}',
-                          color: context.textMutedColor),
+                        label: '₹${item.isProcedure ? (item.customPrice ?? item.procedure!.basePrice).toStringAsFixed(0) : item.medicine!.sellingPrice.toStringAsFixed(0)}',
+                        color: context.textMutedColor,
+                      ),
                       const SizedBox(width: 4),
                       _Tag(
-                          label: item.isProcedure
-                              ? 'PROCEDURE'
-                              : 'BATCH: ${(item.medicine!.getActiveBatch(cart.isClinicalDispense) ?? (item.medicine!.batches.isNotEmpty ? item.medicine!.batches.first : null))?.batchNo ?? "N/A"}',
-                          color: AppTheme.accent),
+                        label: item.isProcedure
+                            ? 'PROCEDURE'
+                            : 'BATCH: ${(item.medicine!.getActiveBatch(cart.isClinicalDispense) ?? (item.medicine!.batches.isNotEmpty ? item.medicine!.batches.first : null))?.batchNo ?? "N/A"}',
+                        color: AppTheme.accent,
+                      ),
                     ],
                   ),
                 ],
               ),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text('₹${item.lineTotal.toStringAsFixed(0)}',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18,
-                        letterSpacing: -0.5)),
-                const SizedBox(height: 4),
-                GestureDetector(
-                  onTap: onRemove,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppTheme.danger.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text('REMOVE',
-                        style: TextStyle(
-                            color: AppTheme.danger,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700)),
-                  ),
-                ),
-              ],
+            const SizedBox(width: 8),
+            Text(
+              '₹${item.lineTotal.toStringAsFixed(0)}',
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
+                letterSpacing: -0.5,
+              ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showManualQtyDialog(BuildContext context, CartProvider cart, int maxStock) {
+    final ctrl = TextEditingController(text: item.qty.toString());
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Enter Quantity', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: 'Max: $maxStock',
+            suffixText: item.isProcedure ? '' : item.medicine!.unit,
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL')),
+          ElevatedButton(
+            onPressed: () {
+              final val = int.tryParse(ctrl.text);
+              if (val != null && val > 0) {
+                int finalQty = val;
+                if (!item.isProcedure && !cart.isReturnMode && finalQty > maxStock) {
+                  finalQty = maxStock;
+                }
+                cart.updateQty(item.id, finalQty, isProcedure: item.isProcedure);
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('SET'),
+          ),
+        ],
       ),
     );
   }

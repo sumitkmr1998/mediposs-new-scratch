@@ -306,73 +306,95 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
             ],
           ),
           const SizedBox(height: 16),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.4,
-            children: [
-              _buildMetricCard(
-                'Meds Gross Sales',
-                '₹${totalRevenue.toStringAsFixed(0)}',
-                Icons.payments_rounded,
-                AppTheme.indigo,
-                subtitle: 'Meds billed sales',
-                trendText: _period == 'This Week' ? '8.4%' : _period == 'This Month' ? '12.8%' : '24.2%',
-                trendIsUp: true,
+          SizedBox(
+            height: 85,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  _buildMetricCard(
+                    'Meds Gross Sales',
+                    '₹${totalRevenue.toStringAsFixed(0)}',
+                    Icons.payments_rounded,
+                    AppTheme.indigo,
+                    subtitle: 'Meds billed sales',
+                    trendText: _period == 'This Week' ? '8.4%' : _period == 'This Month' ? '12.8%' : '24.2%',
+                    trendIsUp: true,
+                    width: 170,
+                    compact: true,
+                  ),
+                  const SizedBox(width: 10),
+                  _buildMetricCard(
+                    'Procedure Revenue',
+                    '₹${totalProcedures.toStringAsFixed(0)}',
+                    Icons.medical_services_outlined,
+                    AppTheme.teal,
+                    subtitle: 'Clinical procedures',
+                    width: 170,
+                    compact: true,
+                  ),
+                  const SizedBox(width: 10),
+                  _buildMetricCard(
+                    'Consultation Revenue',
+                    '₹${totalConsultations.toStringAsFixed(0)}',
+                    Icons.assignment_ind_outlined,
+                    AppTheme.purple,
+                    subtitle: 'Consultation fees',
+                    width: 170,
+                    compact: true,
+                  ),
+                  const SizedBox(width: 10),
+                  _buildMetricCard(
+                    'Meds Net Profits',
+                    '₹${netProfit.toStringAsFixed(0)}',
+                    Icons.trending_up_rounded,
+                    AppTheme.success,
+                    subtitle: 'Meds Revenue - Cost',
+                    trendText: _period == 'This Week' ? '9.1%' : _period == 'This Month' ? '14.3%' : '26.8%',
+                    trendIsUp: true,
+                    width: 170,
+                    compact: true,
+                  ),
+                  const SizedBox(width: 10),
+                  _buildMetricCard(
+                    'Meds Net Margin',
+                    '${marginPercent.toStringAsFixed(1)}%',
+                    Icons.percent_rounded,
+                    AppTheme.accent,
+                    subtitle: 'Profitability margin',
+                    progress: (marginPercent / 100).clamp(0.0, 1.0),
+                    width: 170,
+                    compact: true,
+                  ),
+                  const SizedBox(width: 10),
+                  _buildMetricCard(
+                    'Meds Returns',
+                    '₹${totalReturns.toStringAsFixed(0)}',
+                    Icons.keyboard_return_rounded,
+                    AppTheme.danger,
+                    subtitle: 'Returned meds value',
+                    trendText: totalReturns > 0 ? 'Logged' : 'None',
+                    trendIsUp: totalReturns > 0 ? false : true,
+                    width: 170,
+                    compact: true,
+                  ),
+                  if (settings.isCompositionScheme) ...[
+                    const SizedBox(width: 10),
+                    _buildMetricCard(
+                      'Est. Composition Tax (1%)',
+                      '₹${estimatedCompositionTax.toStringAsFixed(0)}',
+                      Icons.account_balance_wallet_rounded,
+                      AppTheme.warning,
+                      subtitle: '1% of net revenue',
+                      progress: 0.01,
+                      width: 170,
+                      compact: true,
+                    ),
+                  ],
+                ],
               ),
-              _buildMetricCard(
-                'Procedure Revenue',
-                '₹${totalProcedures.toStringAsFixed(0)}',
-                Icons.medical_services_outlined,
-                AppTheme.teal,
-                subtitle: 'Clinical procedures',
-              ),
-              _buildMetricCard(
-                'Consultation Revenue',
-                '₹${totalConsultations.toStringAsFixed(0)}',
-                Icons.assignment_ind_outlined,
-                AppTheme.purple,
-                subtitle: 'Consultation fees',
-              ),
-              _buildMetricCard(
-                'Meds Net Profits',
-                '₹${netProfit.toStringAsFixed(0)}',
-                Icons.trending_up_rounded,
-                AppTheme.success,
-                subtitle: 'Meds Revenue - Cost',
-                trendText: _period == 'This Week' ? '9.1%' : _period == 'This Month' ? '14.3%' : '26.8%',
-                trendIsUp: true,
-              ),
-              _buildMetricCard(
-                'Meds Net Margin',
-                '${marginPercent.toStringAsFixed(1)}%',
-                Icons.percent_rounded,
-                AppTheme.accent,
-                subtitle: 'Profitability margin',
-                progress: (marginPercent / 100).clamp(0.0, 1.0),
-              ),
-              _buildMetricCard(
-                'Meds Returns',
-                '₹${totalReturns.toStringAsFixed(0)}',
-                Icons.keyboard_return_rounded,
-                AppTheme.danger,
-                subtitle: 'Returned meds value',
-                trendText: totalReturns > 0 ? 'Logged' : 'None',
-                trendIsUp: totalReturns > 0 ? false : true,
-              ),
-              if (settings.isCompositionScheme)
-                _buildMetricCard(
-                  'Est. Composition Tax (1%)',
-                  '₹${estimatedCompositionTax.toStringAsFixed(0)}',
-                  Icons.account_balance_wallet_rounded,
-                  AppTheme.warning,
-                  subtitle: '1% of net revenue',
-                  progress: 0.01,
-                ),
-            ],
+            ),
           ),
           _buildSectionChart(
             title: 'Meds Revenue & Profit Curve',
@@ -567,6 +589,8 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
     double? progress,
     String? trendText,
     bool? trendIsUp,
+    double? width,
+    bool compact = false,
   }) {
     return AppKpiCard(
       label: title,
@@ -577,6 +601,8 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
       progress: progress,
       trendText: trendText,
       trendIsUp: trendIsUp,
+      width: width,
+      compact: compact,
     );
   }
 
@@ -1381,75 +1407,87 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
                 height: 200,
                 child: stats.hourlyActivity.isEmpty
                     ? const Center(child: Text('No traffic data recorded.'))
-                    : BarChart(
-                        BarChartData(
-                          alignment: BarChartAlignment.spaceAround,
-                          barTouchData: BarTouchData(
-                            enabled: true,
-                            touchTooltipData: BarTouchTooltipData(
-                              getTooltipColor: (group) => const Color(0xFF1E293B).withValues(alpha: 0.9),
-                              getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                                return BarTooltipItem(
-                                  '${rod.toY.toInt()} visits',
-                                  const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
-                                );
-                              },
-                            ),
-                          ),
-                          gridData: FlGridData(
-                            show: true,
-                            drawVerticalLine: false,
-                            getDrawingHorizontalLine: (value) {
-                              return FlLine(
-                                color: Colors.grey.withValues(alpha: 0.1),
-                                strokeWidth: 1,
-                                dashArray: [5, 5],
-                              );
-                            },
-                          ),
-                          borderData: FlBorderData(show: false),
-                          titlesData: FlTitlesData(
-                            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                            leftTitles: AxisTitles(
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                reservedSize: 24,
-                                getTitlesWidget: (val, meta) => Text(val.toInt().toString(), style: const TextStyle(fontSize: 8)),
-                              ),
-                            ),
-                            bottomTitles: AxisTitles(
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                getTitlesWidget: (val, meta) {
-                                  final hr = val.toInt();
-                                  if (hr == 9 || hr == 12 || hr == 15 || hr == 18 || hr == 21) {
-                                    final period = hr >= 12 ? 'PM' : 'AM';
-                                    final showHr = hr > 12 ? hr - 12 : hr;
-                                    return Text('$showHr$period', style: const TextStyle(fontSize: 8));
-                                  }
-                                  return const SizedBox();
-                                },
-                              ),
-                            ),
-                          ),
-                          barGroups: List.generate(24, (i) {
-                            return BarChartGroupData(
-                              x: i,
-                              barRods: [
-                                BarChartRodData(
-                                  toY: (stats.hourlyActivity[i] ?? 0).toDouble(),
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFF38BDF8), Color(0xFF0284C7)],
-                                    begin: Alignment.bottomCenter,
-                                    end: Alignment.topCenter,
+                    : SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        child: InteractiveViewer(
+                          clipBehavior: Clip.none,
+                          minScale: 1.0,
+                          maxScale: 3.5,
+                          child: SizedBox(
+                            width: 540,
+                            child: BarChart(
+                              BarChartData(
+                                alignment: BarChartAlignment.spaceAround,
+                                barTouchData: BarTouchData(
+                                  enabled: true,
+                                  touchTooltipData: BarTouchTooltipData(
+                                    getTooltipColor: (group) => const Color(0xFF1E293B).withValues(alpha: 0.9),
+                                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                                      return BarTooltipItem(
+                                        '${rod.toY.toInt()} visits',
+                                        const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
+                                      );
+                                    },
                                   ),
-                                  width: 6,
-                                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(2), topRight: Radius.circular(2)),
                                 ),
-                              ],
-                            );
-                          }),
+                                gridData: FlGridData(
+                                  show: true,
+                                  drawVerticalLine: false,
+                                  getDrawingHorizontalLine: (value) {
+                                    return FlLine(
+                                      color: Colors.grey.withValues(alpha: 0.1),
+                                      strokeWidth: 1,
+                                      dashArray: [5, 5],
+                                    );
+                                  },
+                                ),
+                                borderData: FlBorderData(show: false),
+                                titlesData: FlTitlesData(
+                                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                  leftTitles: AxisTitles(
+                                    sideTitles: SideTitles(
+                                      showTitles: true,
+                                      reservedSize: 24,
+                                      getTitlesWidget: (val, meta) => Text(val.toInt().toString(), style: const TextStyle(fontSize: 8)),
+                                    ),
+                                  ),
+                                  bottomTitles: AxisTitles(
+                                    sideTitles: SideTitles(
+                                      showTitles: true,
+                                      getTitlesWidget: (val, meta) {
+                                        final hr = val.toInt();
+                                        if (hr == 9 || hr == 12 || hr == 15 || hr == 18 || hr == 21) {
+                                          final period = hr >= 12 ? 'PM' : 'AM';
+                                          final showHr = hr > 12 ? hr - 12 : hr;
+                                          return Text('$showHr$period', style: const TextStyle(fontSize: 8));
+                                        }
+                                        return const SizedBox();
+                                      },
+                                    ),
+                                  ),
+                                ),
+                                barGroups: List.generate(24, (i) {
+                                  return BarChartGroupData(
+                                    x: i,
+                                    barRods: [
+                                      BarChartRodData(
+                                        toY: (stats.hourlyActivity[i] ?? 0).toDouble(),
+                                        gradient: const LinearGradient(
+                                          colors: [Color(0xFF38BDF8), Color(0xFF0284C7)],
+                                          begin: Alignment.bottomCenter,
+                                          end: Alignment.topCenter,
+                                        ),
+                                        width: 8,
+                                        borderRadius: const BorderRadius.only(topLeft: Radius.circular(2), topRight: Radius.circular(2)),
+                                      ),
+                                    ],
+                                  );
+                                }),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
               ),
@@ -1891,7 +1929,8 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
       if (sale.isReturn) continue;
       final day = DateTime(sale.createdAt.year, sale.createdAt.month, sale.createdAt.day);
       for (final item in AnalyticsHelper.getItems(sale)) {
-        if (medicine != null && !item.isProcedure && item.medicineId == medicine.id) {
+        if (medicine != null && !item.isProcedure && 
+            (item.medicineId == medicine.id || item.medicineName.toLowerCase().trim() == medicine.name.toLowerCase().trim())) {
           aggregatedDaily[day] = (aggregatedDaily[day] ?? 0) + item.qty;
         } else if (procedure != null && item.isProcedure && item.procedureId == procedure.id) {
           aggregatedDaily[day] = (aggregatedDaily[day] ?? 0) + item.qty;
@@ -1904,7 +1943,8 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
     for (final sale in filteredSales) {
       if (sale.isReturn) continue;
       for (final item in AnalyticsHelper.getItems(sale)) {
-        if (medicine != null && !item.isProcedure && item.medicineId == medicine.id) {
+        if (medicine != null && !item.isProcedure && 
+            (item.medicineId == medicine.id || item.medicineName.toLowerCase().trim() == medicine.name.toLowerCase().trim())) {
           totalQty += item.qty;
           totalRev += item.lineTotal;
         } else if (procedure != null && item.isProcedure && item.procedureId == procedure.id) {

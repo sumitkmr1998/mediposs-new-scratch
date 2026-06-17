@@ -396,6 +396,10 @@ class PrintingService {
       );
     } else {
       if (context.mounted) {
+        final isMobile = Theme.of(context).platform == TargetPlatform.iOS ||
+            Theme.of(context).platform == TargetPlatform.android;
+        final dialogWidth = isMobile ? MediaQuery.of(context).size.width * 0.95 : 500.0;
+        final dialogHeight = isMobile ? MediaQuery.of(context).size.height * 0.90 : 700.0;
         await showDialog(
           context: context,
           builder: (ctx) => CallbackShortcuts(
@@ -416,10 +420,10 @@ class PrintingService {
               autofocus: true,
               child: Dialog(
                 backgroundColor: Colors.transparent,
-                insetPadding: const EdgeInsets.all(24),
+                insetPadding: const EdgeInsets.all(12),
                 child: Container(
-                  width: 500,
-                  height: 700,
+                  width: dialogWidth,
+                  height: dialogHeight,
                   decoration: BoxDecoration(
                     color: Theme.of(context).scaffoldBackgroundColor,
                     borderRadius: BorderRadius.circular(16),
@@ -429,8 +433,8 @@ class PrintingService {
                     child: PdfPreview(
                       build: (f) async => await _generateReceiptBytes(sale, f),
                       initialPageFormat: format,
-                      allowSharing: false,
-                      canChangeOrientation: false,
+                      allowSharing: true,
+                      canChangeOrientation: true,
                       canChangePageFormat: true,
                       pageFormats: const {
                         'A4': PdfPageFormat.a4,
@@ -494,6 +498,10 @@ class PrintingService {
       );
     } else {
       if (context.mounted) {
+        final isMobile = Theme.of(context).platform == TargetPlatform.iOS ||
+            Theme.of(context).platform == TargetPlatform.android;
+        final dialogWidth = isMobile ? MediaQuery.of(context).size.width * 0.95 : 600.0;
+        final dialogHeight = isMobile ? MediaQuery.of(context).size.height * 0.90 : 800.0;
         await showDialog(
           context: context,
           builder: (ctx) => CallbackShortcuts(
@@ -513,10 +521,10 @@ class PrintingService {
               autofocus: true,
               child: Dialog(
                 backgroundColor: Colors.transparent,
-                insetPadding: const EdgeInsets.all(24),
+                insetPadding: const EdgeInsets.all(12),
                 child: Container(
-                  width: 600,
-                  height: 800,
+                  width: dialogWidth,
+                  height: dialogHeight,
                   decoration: BoxDecoration(
                     color: Theme.of(context).scaffoldBackgroundColor,
                     borderRadius: BorderRadius.circular(16),
@@ -661,14 +669,18 @@ class PrintingService {
       );
     } else {
       if (context.mounted) {
+        final isMobile = Theme.of(context).platform == TargetPlatform.iOS ||
+            Theme.of(context).platform == TargetPlatform.android;
+        final dialogWidth = isMobile ? MediaQuery.of(context).size.width * 0.95 : 500.0;
+        final dialogHeight = isMobile ? MediaQuery.of(context).size.height * 0.90 : 700.0;
         showDialog(
           context: context,
           builder: (ctx) => Dialog(
             backgroundColor: Colors.transparent,
-            insetPadding: const EdgeInsets.all(24),
+            insetPadding: const EdgeInsets.all(12),
             child: Container(
-              width: 500,
-              height: 700,
+              width: dialogWidth,
+              height: dialogHeight,
               decoration: BoxDecoration(
                 color: Theme.of(context).scaffoldBackgroundColor,
                 borderRadius: BorderRadius.circular(16),
@@ -678,8 +690,8 @@ class PrintingService {
                 child: PdfPreview(
                   build: (f) async => await _generateTestPrintBytes(f),
                   initialPageFormat: format,
-                  allowSharing: false,
-                  canChangeOrientation: false,
+                  allowSharing: true,
+                  canChangeOrientation: true,
                   canChangePageFormat: true,
                   pageFormats: const {
                     'A4': PdfPageFormat.a4,

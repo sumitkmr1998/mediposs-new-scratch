@@ -291,67 +291,31 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
             child: Row(
               children: [
                 Expanded(
-                  child: Column(
-                    children: [
-                      _StockIndicator(
-                          label: 'CLINIC BULK',
-                          value: widget.medicine.bulkClinicStock,
-                          color: Colors.blueGrey),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: InkWell(
-                          onTap: () => _showTransferDialog(
-                              context, widget.medicine, 'bulkClinic', 'main', widget.wh),
-                          borderRadius: BorderRadius.circular(20),
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: AppTheme.indigo.withValues(alpha: 0.1),
-                            ),
-                            child: const Icon(Icons.arrow_downward_rounded,
-                                size: 16, color: AppTheme.indigo),
-                          ),
-                        ),
-                      ),
-                      _StockIndicator(
-                          label: 'CLINIC',
-                          value: widget.medicine.mainStock,
-                          color: AppTheme.indigo),
-                    ],
+                  child: _CompactStockFlow(
+                    title: 'CLINIC STOCK',
+                    bulkLabel: 'BULK',
+                    activeLabel: 'ACTIVE',
+                    bulkValue: widget.medicine.bulkClinicStock,
+                    activeValue: widget.medicine.mainStock,
+                    color: AppTheme.indigo,
+                    bulkColor: Colors.blueGrey,
+                    onTransfer: () => _showTransferDialog(
+                        context, widget.medicine, 'bulkClinic', 'main', widget.wh),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    children: [
-                      _StockIndicator(
-                          label: 'STORE BULK',
-                          value: widget.medicine.bulkStoreStock,
-                          color: Colors.brown),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: InkWell(
-                          onTap: () => _showTransferDialog(
-                              context, widget.medicine, 'bulkStore', 'store', widget.wh),
-                          borderRadius: BorderRadius.circular(20),
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: AppTheme.success.withValues(alpha: 0.1),
-                            ),
-                            child: const Icon(Icons.arrow_downward_rounded,
-                                size: 16, color: AppTheme.success),
-                          ),
-                        ),
-                      ),
-                      _StockIndicator(
-                          label: 'STORE',
-                          value: widget.medicine.storeStock,
-                          color: AppTheme.success,
-                          isLow: widget.medicine.isLowStock),
-                    ],
+                  child: _CompactStockFlow(
+                    title: 'STORE STOCK',
+                    bulkLabel: 'BULK',
+                    activeLabel: 'ACTIVE',
+                    bulkValue: widget.medicine.bulkStoreStock,
+                    activeValue: widget.medicine.storeStock,
+                    color: AppTheme.success,
+                    bulkColor: Colors.brown,
+                    isLow: widget.medicine.isLowStock,
+                    onTransfer: () => _showTransferDialog(
+                        context, widget.medicine, 'bulkStore', 'store', widget.wh),
                   ),
                 ),
               ],
@@ -476,44 +440,142 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
   }
 }
 
-class _StockIndicator extends StatelessWidget {
-  final String label;
-  final int value;
+class _CompactStockFlow extends StatelessWidget {
+  final String title;
+  final String bulkLabel;
+  final String activeLabel;
+  final int bulkValue;
+  final int activeValue;
   final Color color;
+  final Color bulkColor;
   final bool isLow;
+  final VoidCallback onTransfer;
 
-  const _StockIndicator(
-      {required this.label,
-      required this.value,
-      required this.color,
-      this.isLow = false});
+  const _CompactStockFlow({
+    required this.title,
+    required this.bulkLabel,
+    required this.activeLabel,
+    required this.bulkValue,
+    required this.activeValue,
+    required this.color,
+    required this.bulkColor,
+    this.isLow = false,
+    required this.onTransfer,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final finalColor = isLow ? AppTheme.warning : color;
+    final activeColor = isLow ? AppTheme.warning : color;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: finalColor.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: finalColor.withValues(alpha: 0.1)),
+        color: activeColor.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: activeColor.withValues(alpha: 0.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: TextStyle(
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
                   fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: context.textMutedColor,
-                  letterSpacing: 0.5)),
-          const SizedBox(height: 4),
-          Text(value.toString(),
-              style: TextStyle(
-                  fontSize: 18,
                   fontWeight: FontWeight.w900,
-                  color: finalColor,
-                  letterSpacing: -0.5)),
+                  color: activeColor,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              if (isLow)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: AppTheme.warning.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'LOW',
+                    style: TextStyle(
+                      fontSize: 8,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.warning,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      bulkLabel,
+                      style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w600,
+                        color: context.textMutedColor,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      bulkValue.toString(),
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: bulkColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              InkWell(
+                onTap: onTransfer,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: activeColor.withValues(alpha: 0.08),
+                  ),
+                  child: Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 14,
+                    color: activeColor,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      activeLabel,
+                      style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w600,
+                        color: context.textMutedColor,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      activeValue.toString(),
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: activeColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -568,6 +630,12 @@ class _TransferDialogState extends State<_TransferDialog> {
     _fromLoc = widget.from;
     _toLoc = widget.to;
     _updateSelectedBatch();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _qtyCtrl.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _qtyCtrl.text.length,
+      );
+    });
   }
 
   @override
@@ -595,96 +663,115 @@ class _TransferDialogState extends State<_TransferDialog> {
     final availableBatches = widget.medicine.batches.where((b) =>
         _getStock(b, _fromLoc) > 0).toList();
 
+    final fieldDeco = InputDecoration(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      isDense: true,
+      filled: true,
+      fillColor: context.borderColor.withValues(alpha: 0.03),
+    );
+
     return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Column(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      titlePadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      contentPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      title: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-                color: accentColor.withValues(alpha: 0.1),
-                shape: BoxShape.circle),
-            child: Icon(
-                toStore ? Icons.local_shipping_rounded : Icons.medical_services_rounded,
-                color: accentColor,
-                size: 28),
+          Icon(
+            toStore ? Icons.local_shipping_rounded : Icons.medical_services_rounded,
+            color: accentColor,
+            size: 22,
           ),
-          const SizedBox(height: 16),
-          Text('Stock Transfer',
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-          Text(widget.medicine.name,
-              style: TextStyle(
-                  fontSize: 13,
-                  color: context.textMutedColor,
-                  fontWeight: FontWeight.w600)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Stock Transfer',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                Text(widget.medicine.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: context.textMutedColor,
+                        fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
         ],
       ),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            DropdownButtonFormField<String>(
-              value: _fromLoc,
-              decoration: InputDecoration(
-                labelText: 'From Location',
-                prefixIcon: const Icon(Icons.warehouse_outlined),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-              ),
-              dropdownColor: context.surfaceColor,
-              items: locations.entries.map((e) {
-                return DropdownMenuItem(value: e.key, child: Text(e.value));
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) {
-                  setState(() {
-                    _fromLoc = val;
-                    _updateSelectedBatch();
-                  });
-                }
-              },
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _fromLoc,
+                    decoration: fieldDeco.copyWith(
+                      labelText: 'From',
+                    ),
+                    dropdownColor: context.surfaceColor,
+                    style: const TextStyle(fontSize: 12, color: AppTheme.primaryLight, fontWeight: FontWeight.w600),
+                    items: locations.entries.map((e) {
+                      return DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 12)));
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() {
+                          _fromLoc = val;
+                          _updateSelectedBatch();
+                        });
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _toLoc,
+                    decoration: fieldDeco.copyWith(
+                      labelText: 'To',
+                    ),
+                    dropdownColor: context.surfaceColor,
+                    style: const TextStyle(fontSize: 12, color: AppTheme.primaryLight, fontWeight: FontWeight.w600),
+                    items: locations.entries.map((e) {
+                      return DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 12)));
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() {
+                          _toLoc = val;
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              value: _toLoc,
-              decoration: InputDecoration(
-                labelText: 'To Location',
-                prefixIcon: const Icon(Icons.warehouse),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-              ),
-              dropdownColor: context.surfaceColor,
-              items: locations.entries.map((e) {
-                return DropdownMenuItem(value: e.key, child: Text(e.value));
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) {
-                  setState(() {
-                    _toLoc = val;
-                  });
-                }
-              },
-            ),
+            const SizedBox(height: 12),
             if (availableBatches.isNotEmpty) ...[
-              const SizedBox(height: 20),
               DropdownButtonFormField<MedicineBatch>(
                 value: _selectedBatch,
-                decoration: InputDecoration(
-                  labelText: 'SELECT BATCH',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                  filled: true,
-                  fillColor: context.borderColor.withValues(alpha: 0.05),
+                decoration: fieldDeco.copyWith(
+                  labelText: 'Batch',
                 ),
                 dropdownColor: context.surfaceColor,
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppTheme.primaryLight),
+                isExpanded: true,
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11, color: AppTheme.primaryLight),
                 items: availableBatches.map((b) {
                   final stock = _getStock(b, _fromLoc);
                   final expiryStr = DateFormat('MM/yy').format(b.expiryDate);
                   return DropdownMenuItem<MedicineBatch>(
                     value: b,
                     child: Text(
-                      'Batch: ${b.batchNo} (Exp: $expiryStr) [Qty: $stock]',
-                      style: TextStyle(
-                        color: context.read<AuthProvider>().currentUser == null ? Colors.black : null,
-                      ),
+                      '${b.batchNo} ($expiryStr) [Qty: $stock]',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11),
                     ),
                   );
                 }).toList(),
@@ -694,29 +781,78 @@ class _TransferDialogState extends State<_TransferDialog> {
                   });
                 },
               ),
+              const SizedBox(height: 12),
             ],
-            const SizedBox(height: 20),
-            TextField(
-              controller: _qtyCtrl,
-              keyboardType: TextInputType.number,
-              autofocus: true,
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
-              decoration: InputDecoration(
-                labelText: 'TRANSFER QUANTITY',
-                suffixText: 'AVAL: $available',
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                floatingLabelBehavior: FloatingLabelBehavior.always,
-              ),
+            Row(
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    final current = int.tryParse(_qtyCtrl.text) ?? 0;
+                    if (current > 1) {
+                      setState(() {
+                        _qtyCtrl.text = (current - 1).toString();
+                      });
+                      _qtyCtrl.selection = TextSelection(
+                        baseOffset: 0,
+                        extentOffset: _qtyCtrl.text.length,
+                      );
+                    }
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.fromLTRB(4, 12, 12, 12),
+                    child: Icon(Icons.remove_circle_outline, color: AppTheme.danger),
+                  ),
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _qtyCtrl,
+                    keyboardType: TextInputType.number,
+                    autofocus: true,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                    onTap: () {
+                      _qtyCtrl.selection = TextSelection(
+                        baseOffset: 0,
+                        extentOffset: _qtyCtrl.text.length,
+                      );
+                    },
+                    decoration: fieldDeco.copyWith(
+                      labelText: 'Transfer Quantity',
+                      suffixText: 'Max: $available',
+                      suffixStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppTheme.primaryLight),
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    final current = int.tryParse(_qtyCtrl.text) ?? 0;
+                    if (current < available) {
+                      setState(() {
+                        _qtyCtrl.text = (current + 1).toString();
+                      });
+                      _qtyCtrl.selection = TextSelection(
+                        baseOffset: 0,
+                        extentOffset: _qtyCtrl.text.length,
+                      );
+                    }
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.fromLTRB(12, 12, 4, 12),
+                    child: Icon(Icons.add_circle_outline, color: AppTheme.success),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             TextField(
               controller: _noteCtrl,
-              decoration: InputDecoration(
-                labelText: 'AUDIT NOTE (OPTIONAL)',
-                hintText: 'e.g. Weekly Restock',
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+              style: const TextStyle(fontSize: 12),
+              decoration: fieldDeco.copyWith(
+                labelText: 'Audit Note (Optional)',
+                hintText: 'e.g. Restock',
+                hintStyle: const TextStyle(fontSize: 11),
               ),
             ),
           ],
@@ -725,14 +861,14 @@ class _TransferDialogState extends State<_TransferDialog> {
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('CANCEL')),
+            child: const Text('CANCEL', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
             backgroundColor: accentColor,
             foregroundColor: Colors.white,
-            minimumSize: const Size(120, 44),
+            minimumSize: const Size(100, 36),
             shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
           onPressed: () async {
             if (availableBatches.isNotEmpty && _selectedBatch == null) {
@@ -763,7 +899,7 @@ class _TransferDialogState extends State<_TransferDialog> {
             }
           },
           child: const Text('CONFIRM',
-              style: TextStyle(fontWeight: FontWeight.w700)),
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
         ),
       ],
     );

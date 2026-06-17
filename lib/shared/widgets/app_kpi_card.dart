@@ -15,6 +15,8 @@ class AppKpiCard extends StatelessWidget {
   final String? trendText;
   final bool? trendIsUp;
 
+  final bool compact;
+
   const AppKpiCard({
     super.key,
     required this.label,
@@ -28,6 +30,7 @@ class AppKpiCard extends StatelessWidget {
     this.progress,
     this.trendText,
     this.trendIsUp,
+    this.compact = false,
   });
 
   @override
@@ -53,10 +56,10 @@ class AppKpiCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         gradient: bgGradient,
-        borderRadius: BorderRadius.circular(AppTheme.radiusDialog),
+        borderRadius: BorderRadius.circular(compact ? AppTheme.radiusCard : AppTheme.radiusDialog),
         border: Border.all(
           color: color.withValues(alpha: 0.15),
-          width: 1.5,
+          width: compact ? 1.0 : 1.5,
         ),
         boxShadow: AppTheme.subtleShadow,
       ),
@@ -65,34 +68,34 @@ class AppKpiCard extends StatelessWidget {
         children: [
           // Watermark Icon rotated in bottom-right corner
           Positioned(
-            right: -12,
-            bottom: -12,
+            right: compact ? -8 : -12,
+            bottom: compact ? -8 : -12,
             child: Transform.rotate(
               angle: 0.25, // ~15 degrees
               child: Icon(
                 icon,
-                size: 80,
+                size: compact ? 60 : 80,
                 color: color.withValues(alpha: isDark ? 0.05 : 0.03),
               ),
             ),
           ),
           // Content Row
           Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppTheme.spacingXl,
-              vertical: AppTheme.spacingMd,
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? AppTheme.spacingMd : AppTheme.spacingXl,
+              vertical: compact ? AppTheme.spacingSm : AppTheme.spacingMd,
             ),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(AppTheme.spacingSm),
+                  padding: EdgeInsets.all(compact ? AppTheme.spacingXs : AppTheme.spacingSm),
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(AppTheme.radiusInput),
+                    borderRadius: BorderRadius.circular(compact ? AppTheme.radiusChip : AppTheme.radiusInput),
                   ),
-                  child: Icon(icon, size: 22, color: color),
+                  child: Icon(icon, size: compact ? 18 : 22, color: color),
                 ),
-                const SizedBox(width: AppTheme.spacingMd),
+                SizedBox(width: compact ? AppTheme.spacingSm : AppTheme.spacingMd),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -104,14 +107,14 @@ class AppKpiCard extends StatelessWidget {
                         children: [
                           Text(
                             value,
-                            style: const TextStyle(
-                              fontSize: 24,
+                            style: TextStyle(
+                              fontSize: compact ? 18 : 24,
                               fontWeight: FontWeight.w900,
-                              letterSpacing: -1,
+                              letterSpacing: compact ? -0.5 : -1,
                             ),
                           ),
                           if (trendText != null) ...[
-                            const SizedBox(width: 8),
+                            SizedBox(width: compact ? 4 : 8),
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 6,
@@ -155,13 +158,13 @@ class AppKpiCard extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         label.toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 10,
+                        style: TextStyle(
+                          fontSize: compact ? 8 : 10,
                           fontWeight: FontWeight.w800,
-                          letterSpacing: 1.2,
+                          letterSpacing: compact ? 0.8 : 1.2,
                         ),
                       ),
-                      if (subtitle != null) ...[
+                      if (subtitle != null && !compact) ...[
                         const SizedBox(height: AppTheme.spacingXs + 2),
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -187,7 +190,7 @@ class AppKpiCard extends StatelessWidget {
                   ),
                 ),
                 if (count != null) ...[
-                  const SizedBox(width: AppTheme.spacingSm),
+                  SizedBox(width: compact ? AppTheme.spacingXs : AppTheme.spacingSm),
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppTheme.spacingSm,
@@ -200,7 +203,7 @@ class AppKpiCard extends StatelessWidget {
                     child: Text(
                       '+$count',
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: compact ? 10 : 12,
                         fontWeight: FontWeight.w800,
                         color: color,
                       ),
@@ -220,7 +223,7 @@ class AppKpiCard extends StatelessWidget {
                 alignment: Alignment.bottomLeft,
                 widthFactor: progress!.clamp(0.0, 1.0),
                 child: Container(
-                  height: 4,
+                  height: compact ? 3 : 4,
                   decoration: BoxDecoration(
                     color: color,
                     borderRadius: const BorderRadius.only(
@@ -230,7 +233,7 @@ class AppKpiCard extends StatelessWidget {
                     boxShadow: [
                       BoxShadow(
                         color: color.withValues(alpha: 0.4),
-                        blurRadius: 4,
+                        blurRadius: compact ? 3 : 4,
                         offset: const Offset(0, -1),
                       ),
                     ],
@@ -244,7 +247,7 @@ class AppKpiCard extends StatelessWidget {
 
     if (onTap != null) {
       return InteractiveHover(
-        borderRadius: BorderRadius.circular(AppTheme.radiusDialog),
+        borderRadius: BorderRadius.circular(compact ? AppTheme.radiusCard : AppTheme.radiusDialog),
         onTap: onTap!,
         child: card,
       );
