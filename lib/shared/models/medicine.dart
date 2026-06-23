@@ -16,7 +16,7 @@ class Medicine {
 
   // These will now be aggregated from batches but kept for compatibility/legacy if needed,
   // or we can transition to getters. Let's keep them as cached values or transition.
-  int mainStock; // Main Warehouse quantity
+  int mainStock; // Clinic quantity
   int storeStock; // Store Stock (Shop floor) quantity
   int bulkClinicStock; // Clinic Bulk Warehouse quantity
   int bulkStoreStock; // Store Bulk Warehouse quantity

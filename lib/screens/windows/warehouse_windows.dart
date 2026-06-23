@@ -192,7 +192,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
                 ..sellingPrice =
                     sellingPrice > 0 ? sellingPrice : existing.sellingPrice;
 
-              inv.updateMedicine(existing);
+              inv.updateMedicine(existing, actor: auth.currentUser);
 
               if (mainStock > 0) {
                 inv.addBatchStock(
@@ -201,6 +201,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
                   batchNo: 'IMPORT-${DateTime.now().millisecondsSinceEpoch}',
                   expiryDate: DateTime.now().add(const Duration(days: 365 * 2)),
                   note: 'Imported from Excel (Tally)',
+                  actor: auth.currentUser,
                 );
               }
               updated++;
@@ -216,7 +217,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
                 storeStock: 0,
                 lowStockThreshold: 10,
               );
-              inv.addMedicine(newMed);
+              inv.addMedicine(newMed, actor: auth.currentUser);
 
               if (mainStock > 0) {
                 inv.addBatchStock(
@@ -225,6 +226,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
                   batchNo: 'IMPORT-${DateTime.now().millisecondsSinceEpoch}',
                   expiryDate: DateTime.now().add(const Duration(days: 365 * 2)),
                   note: 'Imported from Excel (Tally)',
+                  actor: auth.currentUser,
                 );
               }
               added++;
@@ -358,7 +360,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
                   sellingPrice > 0 ? sellingPrice : existing.sellingPrice
               ..lowStockThreshold = lowStock;
 
-            inv.updateMedicine(existing);
+            inv.updateMedicine(existing, actor: auth.currentUser);
 
             // If stock is provided in Excel, add it as a new batch to avoid total drift
             if (mainStock > 0 || storeStock > 0) {
@@ -369,6 +371,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
                 expiryDate: DateTime.now()
                     .add(const Duration(days: 365 * 2)), // 2 year default
                 note: 'Imported from Excel',
+                actor: auth.currentUser,
               );
             }
             updated++;
@@ -385,7 +388,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
               storeStock: 0,
               lowStockThreshold: lowStock,
             );
-            inv.addMedicine(newMed);
+            inv.addMedicine(newMed, actor: auth.currentUser);
 
             if (mainStock > 0 || storeStock > 0) {
               inv.addBatchStock(
@@ -394,6 +397,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
                 batchNo: 'IMPORT-${DateTime.now().millisecondsSinceEpoch}',
                 expiryDate: DateTime.now().add(const Duration(days: 365 * 2)),
                 note: 'Imported from Excel',
+                actor: auth.currentUser,
               );
             }
             added++;
@@ -768,7 +772,7 @@ class _ModernMedicineCardWindowsState
                                   context,
                                   widget.medicine,
                                   'bulkClinic',
-                                  'main',
+                                  'clinic',
                                   widget.wh),
                               borderRadius: BorderRadius.circular(20),
                               child: Container(
@@ -867,7 +871,7 @@ class _ModernMedicineCardWindowsState
                         _showBatchDetails(context, widget.medicine);
                       } else if (val == 'transfer') {
                         _showTransferDialog(context, widget.medicine,
-                            'bulkClinic', 'main', widget.wh);
+                            'bulkClinic', 'clinic', widget.wh);
                       } else if (val == 'delete') {
                         _confirmDelete(context, widget.medicine);
                       }
@@ -1179,7 +1183,7 @@ class _BatchDetailsDialog extends StatelessWidget {
                         ),
                         onPressed: () {
                           Navigator.pop(context);
-                          _showTransfer(context, m, 'bulkClinic', 'main', wh);
+                           _showTransfer(context, m, 'bulkClinic', 'clinic', wh);
                         },
                         icon: const Icon(Icons.swap_horiz, size: 16),
                         label: const Text('Transfer Stock'),
@@ -1721,7 +1725,7 @@ class _TransferDialogState extends State<_TransferDialog> {
   late String _toLoc;
 
   int _getStock(MedicineBatch b, String loc) {
-    if (loc == 'main') return b.mainStock;
+    if (loc == 'main' || loc == 'clinic') return b.mainStock;
     if (loc == 'store') return b.storeStock;
     if (loc == 'bulkClinic') return b.bulkClinicStock;
     if (loc == 'bulkStore') return b.bulkStoreStock;
@@ -1754,7 +1758,7 @@ class _TransferDialogState extends State<_TransferDialog> {
   Widget build(BuildContext context) {
     final locations = const {
       'bulkClinic': 'Clinic Bulk',
-      'main': 'Clinic',
+      'clinic': 'Clinic',
       'bulkStore': 'Store Bulk',
       'store': 'Store',
     };
@@ -1762,7 +1766,7 @@ class _TransferDialogState extends State<_TransferDialog> {
     // Calculate available stock based on selected batch or total
     final available = _selectedBatch != null
         ? _getStock(_selectedBatch!, _fromLoc)
-        : (_fromLoc == 'main'
+        : (_fromLoc == 'main' || _fromLoc == 'clinic'
             ? widget.medicine.mainStock
             : (_fromLoc == 'store'
                 ? widget.medicine.storeStock
@@ -1907,7 +1911,7 @@ class _TransferDialogState extends State<_TransferDialog> {
             // Re-validate against selected batch
             final maxAvail = _selectedBatch != null
                 ? _getStock(_selectedBatch!, _fromLoc)
-                : (_fromLoc == 'main'
+                : (_fromLoc == 'main' || _fromLoc == 'clinic'
                     ? widget.medicine.mainStock
                     : (_fromLoc == 'store'
                         ? widget.medicine.storeStock
@@ -2208,7 +2212,7 @@ class _BulkStockEntryDialogState extends State<_BulkStockEntryDialog> {
                           value: 'bulkClinic', child: Text('Clinic Bulk')),
                       DropdownMenuItem(
                           value: 'bulkStore', child: Text('Store Bulk')),
-                      DropdownMenuItem(value: 'main', child: Text('Clinic')),
+                      DropdownMenuItem(value: 'clinic', child: Text('Clinic')),
                       DropdownMenuItem(value: 'store', child: Text('Store')),
                     ],
                     onChanged: (val) {
@@ -2283,7 +2287,7 @@ class _BulkStockEntryDialogState extends State<_BulkStockEntryDialog> {
               ? null
               : () {
                   inv.addBatchStock(
-                    _destinationWarehouse == 'main' ? _selectedItems : {},
+                    _destinationWarehouse == 'main' || _destinationWarehouse == 'clinic' ? _selectedItems : {},
                     storeUpdates:
                         _destinationWarehouse == 'store' ? _selectedItems : {},
                     bulkClinicUpdates: _destinationWarehouse == 'bulkClinic'
@@ -2296,6 +2300,7 @@ class _BulkStockEntryDialogState extends State<_BulkStockEntryDialog> {
                     supplier: _supplierCtrl.text,
                     batchNo: _batchNoCtrl.text.trim(),
                     expiryDate: _expiryDate,
+                    actor: context.read<AuthProvider>().currentUser,
                   );
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -2595,7 +2600,7 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
   String _searchQuery = '';
   bool _isProcessing = false;
   String _fromLoc = 'bulkClinic';
-  String _toLoc = 'main';
+  String _toLoc = 'clinic';
 
   final FocusNode _searchFocusNode = FocusNode();
   int _highlightedIndex = 0;
@@ -2633,7 +2638,7 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
 
     final locations = const {
       'bulkClinic': 'Clinic Bulk',
-      'main': 'Clinic',
+      'clinic': 'Clinic',
       'bulkStore': 'Store Bulk',
       'store': 'Store',
     };
@@ -2642,7 +2647,7 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
     final eligibleMeds = inv.rawMedicines.where((m) {
       int stock = 0;
       if (_fromLoc == 'bulkClinic') stock = m.bulkClinicStock;
-      if (_fromLoc == 'main') stock = m.mainStock;
+      if (_fromLoc == 'main' || _fromLoc == 'clinic') stock = m.mainStock;
       if (_fromLoc == 'bulkStore') stock = m.bulkStoreStock;
       if (_fromLoc == 'store') stock = m.storeStock;
       return stock > 0;
@@ -2906,7 +2911,7 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
                                   if (m != null) {
                                     final maxQty = _fromLoc == 'bulkClinic'
                                         ? m.bulkClinicStock
-                                        : (_fromLoc == 'main'
+                                        : (_fromLoc == 'main' || _fromLoc == 'clinic'
                                             ? m.mainStock
                                             : (_fromLoc == 'bulkStore'
                                                 ? m.bulkStoreStock
@@ -3020,7 +3025,7 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
                             final isHighlighted = _highlightedIndex == idx;
                             final maxQty = _fromLoc == 'bulkClinic'
                                 ? m.bulkClinicStock
-                                : (_fromLoc == 'main'
+                                : (_fromLoc == 'main' || _fromLoc == 'clinic'
                                     ? m.mainStock
                                     : (_fromLoc == 'bulkStore'
                                         ? m.bulkStoreStock
@@ -3075,14 +3080,15 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
                     ? null
                     : () async {
                         setState(() => _isProcessing = true);
-                        int count = 0;
+                        int successCount = 0;
+                        final failures = <String>[];
                         for (final id in _selectedIds) {
                           final m = inv.rawMedicines
                               .where((med) => med.id == id)
                               .firstOrNull;
                           final qty = _transferQtys[id] ?? 0;
                           if (m != null && qty > 0) {
-                            await widget.wh.transfer(
+                            final err = await widget.wh.transfer(
                               medicine: m,
                               qty: qty,
                               from: _fromLoc,
@@ -3091,18 +3097,49 @@ class _BulkTransferDialogState extends State<_BulkTransferDialog> {
                               syncService: syncService,
                               actor: context.read<AuthProvider>().currentUser,
                             );
-                            count++;
+                            if (err == null) {
+                              successCount++;
+                            } else {
+                              failures.add('${m.name}: $err');
+                            }
                           }
                         }
                         if (mounted) {
                           Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                  'Successfully transferred stock for $count medicines.'),
-                              backgroundColor: AppTheme.success,
-                            ),
-                          );
+                          if (failures.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                    'Successfully transferred stock for $successCount medicines.'),
+                                backgroundColor: AppTheme.success,
+                              ),
+                            );
+                          } else {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Bulk Transfer Results'),
+                                content: SingleChildScrollView(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text('Successfully transferred: $successCount items.\n'),
+                                      const Text('Failed transfers:', style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.danger)),
+                                      const SizedBox(height: 8),
+                                      ...failures.map((f) => Text('• $f', style: const TextStyle(fontSize: 12))),
+                                    ],
+                                  ),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx),
+                                    child: const Text('OK'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
                         }
                       },
               ),
@@ -3168,7 +3205,7 @@ class _BulkTransferRowState extends State<_BulkTransferRow> {
   Widget build(BuildContext context) {
     final maxQty = widget.fromLoc == 'bulkClinic'
         ? widget.medicine.bulkClinicStock
-        : (widget.fromLoc == 'main'
+        : (widget.fromLoc == 'main' || widget.fromLoc == 'clinic'
             ? widget.medicine.mainStock
             : (widget.fromLoc == 'bulkStore'
                 ? widget.medicine.bulkStoreStock
@@ -3176,7 +3213,7 @@ class _BulkTransferRowState extends State<_BulkTransferRow> {
 
     final destQty = widget.toLoc == 'bulkClinic'
         ? widget.medicine.bulkClinicStock
-        : (widget.toLoc == 'main'
+        : (widget.toLoc == 'main' || widget.toLoc == 'clinic'
             ? widget.medicine.mainStock
             : (widget.toLoc == 'bulkStore'
                 ? widget.medicine.bulkStoreStock
