@@ -7,7 +7,10 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../../firebase_options.dart';
 import 'objectbox_service.dart';
+import 'subscription_service.dart';
 import 'dart:convert';
+
+import 'sync_service.dart';
 
 class FirebaseSyncService {
   static FirebaseSyncService? _instance;
@@ -24,6 +27,7 @@ class FirebaseSyncService {
 
   bool get _isEnabled {
     try {
+      if (!SubscriptionService.instance.isPro) return false;
       return ObjectBoxService.instance.settings.firebaseEnabled;
     } catch (_) {
       return true;
@@ -58,6 +62,11 @@ class FirebaseSyncService {
         debugPrint('FirebaseSyncService: Triggering anonymous sign-in on mobile...');
         FirebaseAuth.instance.signInAnonymously().then((credential) {
           debugPrint('FirebaseSyncService: Anonymous sign-in successful: ${credential.user?.uid}');
+          try {
+            SyncService.instance.initializeFirestoreRealTimeSync();
+          } catch (e) {
+            debugPrint('FirebaseSyncService: post-auth sync init error: $e');
+          }
         }).catchError((error) {
           debugPrint('FirebaseSyncService: Anonymous sign-in failed: $error');
         });
@@ -83,11 +92,18 @@ class FirebaseSyncService {
 
     if (!_isInitialized) return;
     try {
+      final licenseKey = SubscriptionService.instance.licenseKey;
+      final licenseTier = SubscriptionService.instance.currentTier.name;
+      final licenseExpiryMs = SubscriptionService.instance.licenseExpiry?.millisecondsSinceEpoch;
+
       await _db.collection('shops').doc(_shopId).collection('settings').doc('hub_status').set({
         'hubOnline': isOnline,
         'cloudflareUrl': cloudflareUrl,
         'serverPort': port ?? 8080,
         'lastGlobalSync': FieldValue.serverTimestamp(),
+        'licenseKey': licenseKey,
+        'licenseTier': licenseTier,
+        'licenseExpiry': licenseExpiryMs,
       }, SetOptions(merge: true));
     } catch (e) {
       debugPrint('Firebase updateHubStatus failed: $e');
@@ -149,12 +165,19 @@ class FirebaseSyncService {
       final apiKey = DefaultFirebaseOptions.windows.apiKey;
       final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops/$_shopId/settings/hub_status?key=$apiKey');
       
+      final licenseKey = SubscriptionService.instance.licenseKey;
+      final licenseTier = SubscriptionService.instance.currentTier.name;
+      final licenseExpiryMs = SubscriptionService.instance.licenseExpiry?.millisecondsSinceEpoch;
+
       final body = jsonEncode({
         'fields': {
           'hubOnline': {'booleanValue': isOnline},
           'cloudflareUrl': {'stringValue': cloudflareUrl ?? ''},
           'serverPort': {'integerValue': port ?? 8080},
           'lastGlobalSync': {'timestampValue': DateTime.now().toUtc().toIso8601String()},
+          'licenseKey': {'stringValue': licenseKey},
+          'licenseTier': {'stringValue': licenseTier},
+          'licenseExpiry': licenseExpiryMs != null ? {'integerValue': licenseExpiryMs.toString()} : {'nullValue': null},
         }
       });
 
@@ -326,7 +349,11 @@ class FirebaseSyncService {
         final apiKey = DefaultFirebaseOptions.windows.apiKey;
         final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops/$_shopId/sync_queue?key=$apiKey');
         
-        final res = await http.get(url);
+        final token = await _getIdToken();
+        final res = await http.get(
+          url,
+          headers: token != null ? {'Authorization': 'Bearer $token'} : {},
+        );
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body);
           final docs = data['documents'] as List?;
@@ -358,8 +385,8 @@ class FirebaseSyncService {
     // Run poll immediately on startup
     poll();
 
-    // Polling every 15 seconds for new deltas
-    Timer.periodic(const Duration(seconds: 15), (timer) async {
+    // Polling every 5 seconds for new deltas on Windows Hub
+    Timer.periodic(const Duration(seconds: 5), (timer) async {
       await poll();
     });
   }
@@ -372,7 +399,11 @@ class FirebaseSyncService {
         final projectId = DefaultFirebaseOptions.windows.projectId;
         final apiKey = DefaultFirebaseOptions.windows.apiKey;
         final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops/$_shopId/sync_queue/$docId?key=$apiKey');
-        await http.delete(url);
+        final token = await _getIdToken();
+        await http.delete(
+          url,
+          headers: token != null ? {'Authorization': 'Bearer $token'} : {},
+        );
       } catch (e) {
         debugPrint('Firebase [REST] MarkAsProcessed Error: $e');
       }
@@ -523,9 +554,13 @@ class FirebaseSyncService {
       }
 
       debugPrint('Firebase: Found ${snapshot.docs.length} documents in "$entity".');
-      return snapshot.docs.map((doc) => {
-        ...doc.data(),
-        'cloudId': doc.id, // Store doc.id separately to avoid overwriting Hub's local id
+      return snapshot.docs.map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        if (data['id'] is String) {
+          data['id'] = 0;
+        }
+        data['cloudId'] = doc.id;
+        return data;
       }).toList();
     } catch (e) {
       debugPrint('Firebase fetchCollection failed for "$entity": $e');
@@ -540,7 +575,11 @@ class FirebaseSyncService {
       final apiKey = DefaultFirebaseOptions.windows.apiKey;
       final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops/$_shopId/$entity?key=$apiKey');
       
-      final res = await http.get(url);
+      final token = await _getIdToken();
+      final res = await http.get(
+        url,
+        headers: token != null ? {'Authorization': 'Bearer $token'} : {},
+      );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final List docs = data['documents'] ?? [];
@@ -548,10 +587,12 @@ class FirebaseSyncService {
           final fields = doc['fields'] as Map<String, dynamic>? ?? {};
           final name = doc['name'] as String;
           final docId = name.split('/').last;
-          return {
-            ..._convertFromFirestoreMap(fields),
-            'cloudId': docId,
-          };
+          final itemData = _convertFromFirestoreMap(fields);
+          if (itemData['id'] is String) {
+            itemData['id'] = 0;
+          }
+          itemData['cloudId'] = docId;
+          return itemData;
         }).toList();
       }
     } catch (e) {
@@ -561,17 +602,41 @@ class FirebaseSyncService {
   }
 
   /// Companion-side: Listens for global updates from the Hub.
-  void startGlobalUpdateListener(String entity, Function(Map<String, dynamic>) onUpdate) {
-    if (!_isEnabled) return;
-    if (!_isInitialized) return;
-    _db.collection('shops').doc(_shopId).collection(entity)
-        .where('syncedFrom', isEqualTo: 'hub')
-        .snapshots()
-        .listen((snapshot) {
-      for (var doc in snapshot.docs) {
-        onUpdate({...doc.data(), 'id': doc.id});
-      }
-    });
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? startGlobalUpdateListener(
+      String entity, Function(Map<String, dynamic>) onUpdate) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    debugPrint('FirebaseSyncService: startGlobalUpdateListener called for "$entity". Shop ID: "$_shopId", Firebase User: ${currentUser?.uid ?? "null"}');
+    if (!_isEnabled) {
+      debugPrint('FirebaseSyncService: startGlobalUpdateListener aborted for "$entity" - FirebaseSyncService is NOT enabled.');
+      return null;
+    }
+    if (!_isInitialized) {
+      debugPrint('FirebaseSyncService: startGlobalUpdateListener aborted for "$entity" - FirebaseSyncService is NOT initialized.');
+      return null;
+    }
+    try {
+      final path = 'shops/$_shopId/$entity';
+      debugPrint('FirebaseSyncService: Creating Firestore listener for path "$path" where syncedFrom == "hub"');
+      return _db.collection('shops').doc(_shopId).collection(entity)
+          .where('syncedFrom', isEqualTo: 'hub')
+          .snapshots()
+          .listen((snapshot) {
+        debugPrint('FirebaseSyncService: Real-time snapshot received for "$entity" with ${snapshot.docs.length} docs.');
+        for (var doc in snapshot.docs) {
+          final data = Map<String, dynamic>.from(doc.data());
+          if (data['id'] is String) {
+            data['id'] = 0;
+          }
+          data['cloudId'] = doc.id;
+          onUpdate(data);
+        }
+      }, onError: (error) {
+        debugPrint('FirebaseSyncService: startGlobalUpdateListener error on "$entity": $error');
+      });
+    } catch (e) {
+      debugPrint('FirebaseSyncService: startGlobalUpdateListener failed to listen for "$entity": $e');
+      return null;
+    }
   }
 
   Future<Map<String, dynamic>?> _getHubStatusREST() async {
@@ -580,7 +645,11 @@ class FirebaseSyncService {
       final apiKey = DefaultFirebaseOptions.windows.apiKey;
       final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops/$_shopId/settings/hub_status?key=$apiKey');
       
-      final res = await http.get(url);
+      final token = await _getIdToken();
+      final res = await http.get(
+        url,
+        headers: token != null ? {'Authorization': 'Bearer $token'} : {},
+      );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final fields = data['fields'] as Map<String, dynamic>? ?? {};
@@ -598,7 +667,11 @@ class FirebaseSyncService {
       final apiKey = DefaultFirebaseOptions.windows.apiKey;
       final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops?key=$apiKey');
       
-      final res = await http.get(url);
+      final token = await _getIdToken();
+      final res = await http.get(
+        url,
+        headers: token != null ? {'Authorization': 'Bearer $token'} : {},
+      );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final List docs = data['documents'] ?? [];

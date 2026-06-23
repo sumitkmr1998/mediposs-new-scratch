@@ -35,8 +35,10 @@ import 'package:flutter/services.dart';
 import '../../shared/providers/navigation_provider.dart';
 import '../../shared/widgets/connectivity_overlay.dart';
 import 'dart:async';
-import 'analysis_hub_android.dart';
 import '../../shared/services/ota_update_service.dart';
+import '../../shared/services/subscription_service.dart';
+import '../paywall_screen.dart';
+import 'analysis_hub_android.dart';
 
 class AppShellAndroid extends StatefulWidget {
   const AppShellAndroid({super.key});
@@ -51,9 +53,38 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
   Timer? _hubCheckTimer;
   bool _isHubBackOnline = false;
 
+  bool _isFeatureLocked(BuildContext context, String destId) {
+    final sub = context.read<SubscriptionService>();
+    if (destId == 'analysis' && !sub.isPro) return true;
+    if ((destId == 'opd_queue' || destId == 'patients' || destId == 'opd_report') && !sub.isEnterprise) return true;
+    if (destId == 'audit_logs' && !sub.isEnterprise) return true;
+    return false;
+  }
+
+  void _showPaywall(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const PaywallScreen()),
+    );
+  }
+
+  void _onSyncServiceChange() {
+    if (!mounted) return;
+    debugPrint('AppShellAndroid: SyncService notified change. Reloading providers.');
+    context.read<InventoryProvider>().load();
+    context.read<SalesProvider>().load();
+    context.read<WarehouseProvider>().loadTransfers();
+    context.read<OpdProvider>().loadAll();
+    context.read<PrescriptionProvider>().load();
+    context.read<PatientProvider>().load();
+    context.read<TemplateProvider>().load();
+  }
+
   @override
   void dispose() {
     _hubCheckTimer?.cancel();
+    try {
+      context.read<SyncService>().removeListener(_onSyncServiceChange);
+    } catch (_) {}
     super.dispose();
   }
 
@@ -186,14 +217,30 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
   @override
   void initState() {
     super.initState();
+    try {
+      context.read<SyncService>().addListener(_onSyncServiceChange);
+    } catch (e) {
+      debugPrint('AppShellAndroid: Failed to add SyncService listener: $e');
+    }
     
-    // Start periodic Hub availability check for Cloud Mode
+    // Start periodic Hub availability check and WebSocket reconnection
     _hubCheckTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
       final sync = context.read<SyncService>();
+      final ws = context.read<WebSocketService>();
+      
       if (sync.isCloudMode && sync.hubIp != null) {
         final reachable = await sync.testConnection(sync.hubIp!);
         if (reachable != _isHubBackOnline) {
           setState(() => _isHubBackOnline = reachable);
+        }
+      }
+      
+      // Auto-reconnect WebSocket if disconnected but hub IP is known
+      if (!sync.isCloudMode && !ws.connected && sync.hubIp != null) {
+        final reachable = await sync.testConnection(sync.hubIp!);
+        if (reachable) {
+          debugPrint('AppShellAndroid: Hub reachable but WS disconnected. Reconnecting...');
+          ws.connect(sync.hubIp!, sync.secret);
         }
       }
     });
@@ -206,17 +253,19 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
       context.read<OpdProvider>().loadAll();
       context.read<PrescriptionProvider>().load();
 
-      // Start hub server on Windows
-      if (Platform.isWindows) {
+      final isClient = ObjectBoxService.instance.settings.isWindowsClient;
+
+      if (!isClient) {
+        // Start Hub server and advertising
         await LocalServerService.instance.start();
         await DiscoveryService.startAdvertising(
             ObjectBoxService.instance.settings.serverPort);
 
-        // Bug 4 Fix: Listen to incoming data pushes from Android and reload Windows providers
+        // Listen to incoming data pushes from terminals and reload local providers
         LocalServerService.instance.incomingDataStream.listen((entityType) {
           if (!mounted) return;
           debugPrint(
-              'AppShellAndroid [Windows]: incoming data push for $entityType — reloading providers');
+              'AppShellAndroid [Hub]: incoming data push for $entityType — reloading providers');
           context.read<InventoryProvider>().load();
           context.read<SalesProvider>().load();
           context.read<OpdProvider>().loadAll();
@@ -227,18 +276,20 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
         });
 
         setState(() {});
-      } else if (Platform.isAndroid) {
-        await NotificationService.instance.init();
+      } else {
+        // Client / Companion Terminal Mode setup
+        if (Platform.isAndroid) {
+          await NotificationService.instance.init();
+          // Check for updates
+          unawaited(OtaUpdateService.checkForUpdate(context));
+        }
 
-        // Check for updates
-        unawaited(OtaUpdateService.checkForUpdate(context));
-
-        // Bug 5 Fix: Auto-connect WebSocket after tryAutoConnect succeeds
+        // Auto-connect WebSocket after tryAutoConnect succeeds
         final sync = context.read<SyncService>();
         final connected = await sync.tryAutoConnect();
         if (connected && sync.hubIp != null && mounted) {
           debugPrint(
-              'AppShellAndroid [Android]: Auto-connect succeeded, starting WebSocket to ${sync.hubIp}');
+              'AppShellAndroid [Client]: Auto-connect succeeded, starting WebSocket to ${sync.hubIp}');
           context.read<WebSocketService>().connect(sync.hubIp!, sync.secret);
         }
       }
@@ -257,14 +308,26 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
         );
 
         final sync = context.read<SyncService>();
-        if (msg['event'] == 'new_patient' ||
+        final shouldSync = msg['event'] == 'new_patient' ||
             msg['event'] == 'sync_received' ||
-            msg['event'] == 'medicines_updated') {
-          debugPrint('AppShellAndroid: Triggering pull cascade...');
+            msg['event'] == 'medicines_updated' ||
+            msg['event'] == 'patients_updated' ||
+            msg['event'] == 'appointments_updated' ||
+            msg['event'] == 'sales_updated' ||
+            msg['event'] == 'prescriptions_updated' ||
+            msg['event'] == 'procedures_updated' ||
+            msg['event'] == 'doctors_updated' ||
+            msg['event'] == 'transfers_updated' ||
+            msg['event'] == 'templates_updated' ||
+            msg['event'] == 'h1_records_updated' ||
+            msg['event'] == 'audit_logs_updated';
+
+        if (shouldSync) {
+          debugPrint('AppShellAndroid: Triggering pull cascade due to ${msg['event']}...');
           
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('🔄 Syncing changes from Hub...'),
+              content: Text('Syncing changes from Hub...'),
               duration: Duration(seconds: 1),
             ),
           );
@@ -280,23 +343,52 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
               context.read<PrescriptionProvider>().load();
               context.read<TemplateProvider>().load();
               context.read<WarehouseProvider>().loadTransfers();
-              
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('✅ Sync Complete'),
-                  backgroundColor: Color(0xFF4CAF50),
-                  duration: Duration(seconds: 2),
-                ),
-              );
             }
           } catch (e) {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('❌ Sync Failed: $e'),
-                  backgroundColor: Color(0xFFF44336),
-                ),
-              );
+              debugPrint('AppShellAndroid: Sync error: $e');
+            }
+          }
+        } else if (msg['event'] == 'settings_updated') {
+          await sync.pullSettings();
+        } else if (msg['event'] == 'users_updated') {
+          await sync.pullUsers();
+        } else if (msg['event'] == 'patient_deleted') {
+          final uhid = msg['uhid']?.toString() ?? '';
+          if (uhid.isNotEmpty) {
+            final box = ObjectBoxService.instance.patientBox;
+            final allPatients = box.getAll();
+            final match = allPatients.where((p) => p.uhid == uhid).firstOrNull;
+            if (match != null) {
+              box.remove(match.id);
+              if (mounted) context.read<PatientProvider>().load();
+            }
+          }
+        } else if (msg['event'] == 'medicine_deleted') {
+          final barcode = msg['barcode']?.toString() ?? '';
+          final name = msg['name']?.toString() ?? '';
+          if (barcode.isNotEmpty || name.isNotEmpty) {
+            final box = ObjectBoxService.instance.medicineBox;
+            final allMeds = box.getAll();
+            final match = allMeds.where((m) {
+              if (barcode.isNotEmpty && m.barcode == barcode) return true;
+              if (name.isNotEmpty && m.name == name) return true;
+              return false;
+            }).firstOrNull;
+            if (match != null) {
+              box.remove(match.id);
+              if (mounted) context.read<InventoryProvider>().load();
+            }
+          }
+        } else if (msg['event'] == 'sale_deleted') {
+          final invoiceNo = msg['invoiceNo']?.toString() ?? '';
+          if (invoiceNo.isNotEmpty) {
+            final box = ObjectBoxService.instance.saleBox;
+            final allSales = box.getAll();
+            final match = allSales.where((s) => s.invoiceNo == invoiceNo).firstOrNull;
+            if (match != null) {
+              box.remove(match.id);
+              if (mounted) context.read<SalesProvider>().load();
             }
           }
         }
@@ -356,8 +448,14 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
                     children: [
                       _SideNav(
                         selectedIndex: activeIndex,
-                        onDestinationSelected: (i) =>
-                            navProvider.selectDestination(dests[i].id),
+                        onDestinationSelected: (i) {
+                          final dest = dests[i];
+                          if (_isFeatureLocked(context, dest.id)) {
+                            _showPaywall(context);
+                          } else {
+                            navProvider.selectDestination(dest.id);
+                          }
+                        },
                         destinations: dests,
                         isWindowsHub: Platform.isWindows,
                         isConnected: wsvc.connected,
@@ -374,8 +472,14 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
                     bottomNavigationBar: navProvider.isBottomNavVisible
                         ? _ScrollableNavigationBar(
                             selectedIndex: activeIndex,
-                            onDestinationSelected: (i) =>
-                                navProvider.selectDestination(dests[i].id),
+                            onDestinationSelected: (i) {
+                              final dest = dests[i];
+                              if (_isFeatureLocked(context, dest.id)) {
+                                _showPaywall(context);
+                              } else {
+                                navProvider.selectDestination(dest.id);
+                              }
+                            },
                             destinations: dests,
                           )
                         : null,
@@ -555,6 +659,8 @@ class _SideNav extends StatelessWidget {
                                             : FontWeight.w400)),
                               ),
                             ],
+                            if (_isDestLockedStatic(d.id, context.watch<SubscriptionService>().currentTier))
+                               Icon(Icons.lock_outline, size: 14, color: context.textMutedColor),
                           ],
                         ),
                       ),
@@ -787,6 +893,8 @@ class _NavItem extends StatelessWidget {
                 letterSpacing: isSelected ? 0.2 : 0,
               ),
             ),
+            if (_isDestLockedStatic(dest.id, context.watch<SubscriptionService>().currentTier))
+              Icon(Icons.lock_outline, size: 10, color: context.textMutedColor),
             if (isSelected)
               Container(
                 margin: const EdgeInsets.only(top: 4),
@@ -802,4 +910,12 @@ class _NavItem extends StatelessWidget {
       ),
     );
   }
+}
+
+bool _isDestLockedStatic(String destId, UserTier tier) {
+  if (tier == UserTier.enterprise) return false;
+  if (tier == UserTier.pro) {
+    return destId == 'opd_queue' || destId == 'patients' || destId == 'opd_report' || destId == 'audit_logs';
+  }
+  return destId == 'analysis' || destId == 'opd_queue' || destId == 'patients' || destId == 'opd_report' || destId == 'audit_logs';
 }

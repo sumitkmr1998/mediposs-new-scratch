@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MediPoss Admin Portal</title>
+  <!-- Google Fonts Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+  <!-- Background Glow Effects -->
+  <div class="glow-bg glow-1"></div>
+  <div class="glow-bg glow-2"></div>
+
+  <!-- Login Gate Screen -->
+  <div id="login-screen" class="login-container">
+    <div class="login-card">
+      <div class="logo">
+        <i class="fa-solid fa-shield-halved"></i>
+        <span>MediPoss Admin</span>
+      </div>
+      <h2>Secure Access Gate</h2>
+      <p>Enter administrative passcode to unlock key generation.</p>
+      
+      <div class="input-group">
+        <i class="fa-solid fa-lock"></i>
+        <input type="password" id="admin-passcode" placeholder="Enter Admin Passcode" onkeydown="if(event.key==='Enter') attemptLogin()">
+      </div>
+      <button onclick="attemptLogin()">Unlock Console</button>
+      <div id="login-error" class="error-msg">Incorrect passcode. Access Denied.</div>
+    </div>
+  </div>
+
+  <!-- Main Portal Layout (Hidden by default) -->
+  <div id="portal-container" class="portal-layout hidden">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo">
+        <i class="fa-solid fa-prescription-bottle-medical"></i>
+        <span>MediPoss Console</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" onclick="switchTab('dashboard')">
+          <i class="fa-solid fa-chart-pie"></i>
+          <span>Dashboard</span>
+        </a>
+        <a href="#" class="nav-item" onclick="switchTab('generate')">
+          <i class="fa-solid fa-key"></i>
+          <span>Generate Keys</span>
+        </a>
+        <a href="#" class="nav-item" onclick="switchTab('manage')">
+          <i class="fa-solid fa-list-check"></i>
+          <span>Manage Keys</span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="btn-logout" onclick="logout()">
+          <i class="fa-solid fa-right-from-bracket"></i>
+          <span>Lock System</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="content-area">
+      <!-- Top header bar -->
+      <header class="content-header">
+        <h1>Dashboard Overview</h1>
+        <div class="user-info">
+          <i class="fa-solid fa-circle-user"></i>
+          <span>Administrator</span>
+        </div>
+      </header>
+
+      <!-- TAB: Dashboard -->
+      <section id="tab-dashboard" class="tab-content">
+        <!-- Stats Row -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-header">
+              <h3>Total License Keys</h3>
+              <div class="stat-icon icon-blue"><i class="fa-solid fa-hashtag"></i></div>
+            </div>
+            <p class="stat-number" id="stat-total">0</p>
+          </div>
+          <div class="stat-card">
+            <div class="stat-header">
+              <h3>Unused Keys</h3>
+              <div class="stat-icon icon-green"><i class="fa-solid fa-ticket"></i></div>
+            </div>
+            <p class="stat-number" id="stat-unused">0</p>
+          </div>
+          <div class="stat-card">
+            <div class="stat-header">
+              <h3>Active Pro Users</h3>
+              <div class="stat-icon icon-yellow"><i class="fa-solid fa-gem"></i></div>
+            </div>
+            <p class="stat-number" id="stat-pro">0</p>
+          </div>
+          <div class="stat-card">
+            <div class="stat-header">
+              <h3>Active Enterprise</h3>
+              <div class="stat-icon icon-purple"><i class="fa-solid fa-building-user"></i></div>
+            </div>
+            <p class="stat-number" id="stat-enterprise">0</p>
+          </div>
+        </div>
+
+        <!-- Quick actions -->
+        <div class="dashboard-widgets">
+          <div class="widget-card">
+            <h2>Quick Actions</h2>
+            <div class="quick-actions">
+              <button onclick="switchTab('generate')"><i class="fa-solid fa-plus"></i> Generate Pro Key</button>
+              <button onclick="switchTab('manage')"><i class="fa-solid fa-search"></i> Search Active Licenses</button>
+            </div>
+          </div>
+          <div class="widget-card">
+            <h2>Recent Activities</h2>
+            <ul class="activity-list" id="recent-activities">
+              <li>Loading system logs...</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB: Generate Keys -->
+      <section id="tab-generate" class="tab-content hidden">
+        <div class="form-container">
+          <h2>Batch License Generator</h2>
+          <p class="form-description">Generate secure license keys to activate Pro or Enterprise features for shops.</p>
+          
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="gen-tier">Subscription Tier</label>
+              <select id="gen-tier">
+                <option value="pro">Pro Plan (₹2,999 / Year)</option>
+                <option value="enterprise">Enterprise Plan (₹5,999 / Year)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="gen-duration">License Duration (Days)</label>
+              <input type="number" id="gen-duration" value="365" min="1">
+            </div>
+            <div class="form-group">
+              <label for="gen-count">Batch Count</label>
+              <input type="number" id="gen-count" value="1" min="1" max="100">
+            </div>
+          </div>
+
+          <button class="btn-primary" onclick="generateBatchKeys()">
+            <i class="fa-solid fa-gears"></i> Create Keys
+          </button>
+
+          <div id="generation-result" class="result-box hidden">
+            <h3>Generated Keys</h3>
+            <p>Make sure to copy these keys now. They are also saved in your database.</p>
+            <textarea id="keys-output" readonly rows="5"></textarea>
+            <button class="btn-secondary" onclick="copyGeneratedKeys()">
+              <i class="fa-solid fa-clipboard"></i> Copy All to Clipboard
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB: Manage Keys -->
+      <section id="tab-manage" class="tab-content hidden">
+        <div class="table-container">
+          <div class="table-header-bar">
+            <h2>All Issued Licenses</h2>
+            <div class="search-bar">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="search-input" placeholder="Search by Key or Shop ID..." oninput="filterTable()">
+            </div>
+          </div>
+
+          <div class="table-scroll">
+            <table id="licenses-table">
+              <thead>
+                <tr>
+                  <th>License Key</th>
+                  <th>Tier</th>
+                  <th>Status</th>
+                  <th>Duration</th>
+                  <th>Used By Shop</th>
+                  <th>Expiration Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="licenses-tbody">
+                <tr>
+                  <td colspan="7" class="loading-row"><i class="fa-solid fa-spinner fa-spin"></i> Loading license keys...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Firebase Scripts (Compat version for local file:// protocol support) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="portal.js"></script>
+
+</body>
+</html>

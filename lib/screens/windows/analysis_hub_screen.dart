@@ -2416,10 +2416,10 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
     for (final transfer in allTransfers) {
       final localId = medMap[transfer.medicineName.toLowerCase().trim()];
       if (localId != null) {
-        if (transfer.toWarehouse == 'main') {
+        if (transfer.toWarehouse == 'main' || transfer.toWarehouse == 'clinic') {
           transferMap[localId] = (transferMap[localId] ?? 0) + transfer.qty;
         }
-        if (transfer.fromWarehouse == 'main') {
+        if (transfer.fromWarehouse == 'main' || transfer.fromWarehouse == 'clinic') {
           transferMap[localId] = (transferMap[localId] ?? 0) - transfer.qty;
         }
       }

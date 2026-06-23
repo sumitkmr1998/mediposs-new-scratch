@@ -300,7 +300,7 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
                     color: AppTheme.indigo,
                     bulkColor: Colors.blueGrey,
                     onTransfer: () => _showTransferDialog(
-                        context, widget.medicine, 'bulkClinic', 'main', widget.wh),
+                        context, widget.medicine, 'bulkClinic', 'clinic', widget.wh),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -345,7 +345,7 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
                                 ),
                               ),
                               onPressed: () => _showTransferDialog(
-                                  context, widget.medicine, 'bulkClinic', 'main', widget.wh),
+                                  context, widget.medicine, 'bulkClinic', 'clinic', widget.wh),
                               icon: const Icon(Icons.swap_horiz, size: 18),
                               label: const Text('TRANSFER STOCK',
                                   style: TextStyle(
@@ -606,7 +606,7 @@ class _TransferDialogState extends State<_TransferDialog> {
   late String _toLoc;
 
   int _getStock(MedicineBatch b, String loc) {
-    if (loc == 'main') return b.mainStock;
+    if (loc == 'main' || loc == 'clinic') return b.mainStock;
     if (loc == 'store') return b.storeStock;
     if (loc == 'bulkClinic') return b.bulkClinicStock;
     if (loc == 'bulkStore') return b.bulkStoreStock;
@@ -642,14 +642,14 @@ class _TransferDialogState extends State<_TransferDialog> {
   Widget build(BuildContext context) {
     final locations = const {
       'bulkClinic': 'Clinic Bulk',
-      'main': 'Clinic',
+      'clinic': 'Clinic',
       'bulkStore': 'Store Bulk',
       'store': 'Store',
     };
 
     final available = _selectedBatch != null
         ? _getStock(_selectedBatch!, _fromLoc)
-        : (_fromLoc == 'main'
+        : (_fromLoc == 'main' || _fromLoc == 'clinic'
             ? widget.medicine.mainStock
             : (_fromLoc == 'store'
                 ? widget.medicine.storeStock
@@ -981,7 +981,7 @@ class _TransferHistoryTab extends StatelessWidget {
                   delegate: SliverChildBuilderDelegate(
                     (context, i) {
                       final t = wh.transfers[i];
-                      final isSendOut = t.fromWarehouse == 'main';
+                      final isSendOut = t.fromWarehouse == 'main' || t.fromWarehouse == 'clinic';
                       final accentColor =
                           isSendOut ? AppTheme.success : AppTheme.indigo;
                       return Container(

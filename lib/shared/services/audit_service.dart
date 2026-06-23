@@ -64,7 +64,7 @@ class AuditService {
       db.store.box<AuditLog>().put(logEntry);
       debugPrint('AuditLog saved: $description by ${logEntry.performedBy}');
 
-      final isClient = Platform.isAndroid || (Platform.isWindows && settings.isWindowsClient);
+      final isClient = settings.isWindowsClient;
       if (isClient) {
         SyncQueueService.instance.addToQueue(
           entity: 'audit_log',

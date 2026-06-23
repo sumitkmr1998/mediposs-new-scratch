@@ -3,8 +3,13 @@ import 'package:provider/provider.dart';
 import '../shared/services/sync_service.dart';
 import '../shared/services/firebase_sync_service.dart';
 import '../theme/app_theme.dart';
+import '../shared/providers/settings_provider.dart';
 
-Future<void> showShopSelectionDialog(BuildContext context) async {
+Future<void> showShopSelectionDialog(
+  BuildContext context, {
+  bool enterCloud = true,
+  VoidCallback? onSelected,
+}) async {
   final sync = context.read<SyncService>();
   final scaffoldMessenger = ScaffoldMessenger.of(context);
   
@@ -126,9 +131,18 @@ Future<void> showShopSelectionDialog(BuildContext context) async {
                   return;
                 }
                 Navigator.pop(ctx);
-                sync.enterCloudMode(finalId);
+                
+                if (enterCloud) {
+                  sync.enterCloudMode(finalId);
+                } else {
+                  final settingsProv = context.read<SettingsProvider>();
+                  final s = settingsProv.settings;
+                  s.shopId = finalId;
+                  settingsProv.save(s);
+                  if (onSelected != null) onSelected();
+                }
               },
-              child: const Text('Enter Cloud Mode'),
+              child: Text(enterCloud ? 'Enter Cloud Mode' : 'Select'),
             ),
           ],
         );

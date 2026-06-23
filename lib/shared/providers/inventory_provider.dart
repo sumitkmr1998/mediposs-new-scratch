@@ -141,6 +141,10 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   void addMedicine(Medicine m, {SyncService? syncService, AppUser? actor}) {
+    if (actor != null &&
+        !(actor.role.toLowerCase() == 'admin' || actor.canEditInventory)) {
+      throw Exception('Unauthorized: You do not have permission to add new medicines.');
+    }
     m.name = m.name.trim();
     m.barcode = m.barcode.trim();
     m.updatedAt = DateTime.now();
@@ -177,6 +181,10 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   void updateMedicine(Medicine m, {SyncService? syncService, AppUser? actor}) {
+    if (actor != null &&
+        !(actor.role.toLowerCase() == 'admin' || actor.canEditInventory)) {
+      throw Exception('Unauthorized: You do not have permission to update medicines.');
+    }
     m.name = m.name.trim();
     m.barcode = m.barcode.trim();
     m.updatedAt = DateTime.now();
@@ -220,6 +228,10 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   void deleteMedicine(int id, {SyncService? syncService, AppUser? actor}) {
+    if (actor != null &&
+        !(actor.role.toLowerCase() == 'admin' || actor.canDeleteInventory)) {
+      throw Exception('Unauthorized: You do not have permission to delete medicines.');
+    }
     final m = _box.get(id);
     if (m == null) return;
     final barcode = m.barcode;
@@ -276,6 +288,7 @@ class InventoryProvider extends ChangeNotifier {
 
         for (var batch in batches) {
           if (remainingToDeduct <= 0) break;
+          if (batch.expiryDate.isBefore(DateTime.now())) continue;
 
           if (batch.storeStock > 0) {
             final deduction = remainingToDeduct > batch.storeStock
@@ -356,6 +369,7 @@ class InventoryProvider extends ChangeNotifier {
 
         for (var batch in batches) {
           if (remainingToDeduct <= 0) break;
+          if (batch.expiryDate.isBefore(DateTime.now())) continue;
 
           if (batch.mainStock > 0) {
             final deduction = remainingToDeduct > batch.mainStock
@@ -458,6 +472,11 @@ class InventoryProvider extends ChangeNotifier {
     SyncService? syncService,
     AppUser? actor,
   }) {
+    if (actor != null &&
+        !(actor.role.toLowerCase() == 'admin' || actor.canTransferStock)) {
+      throw Exception('Unauthorized: You do not have permission to execute stock transfers.');
+    }
+
     final m = _box.get(medicineId);
     if (m != null) {
       int remaining = qty;
@@ -477,7 +496,7 @@ class InventoryProvider extends ChangeNotifier {
           if (remaining <= 0) break;
 
           int available = 0;
-          if (from == 'main')
+          if (from == 'main' || from == 'clinic')
             available = batch.mainStock;
           else if (from == 'store')
             available = batch.storeStock;
@@ -494,7 +513,7 @@ class InventoryProvider extends ChangeNotifier {
       }
 
       int getStock(String loc) {
-        if (loc == 'main') return m.mainStock;
+        if (loc == 'main' || loc == 'clinic') return m.mainStock;
         if (loc == 'store') return m.storeStock;
         if (loc == 'bulkClinic') return m.bulkClinicStock;
         if (loc == 'bulkStore') return m.bulkStoreStock;
@@ -502,7 +521,7 @@ class InventoryProvider extends ChangeNotifier {
       }
 
       void setStock(String loc, int val) {
-        if (loc == 'main') m.mainStock = val;
+        if (loc == 'main' || loc == 'clinic') m.mainStock = val;
         if (loc == 'store') m.storeStock = val;
         if (loc == 'bulkClinic') m.bulkClinicStock = val;
         if (loc == 'bulkStore') m.bulkStoreStock = val;
@@ -551,7 +570,7 @@ class InventoryProvider extends ChangeNotifier {
 
   void _transferInBatch(MedicineBatch batch, int qty, String from, String to) {
     int getStock(String loc) {
-      if (loc == 'main') return batch.mainStock;
+      if (loc == 'main' || loc == 'clinic') return batch.mainStock;
       if (loc == 'store') return batch.storeStock;
       if (loc == 'bulkClinic') return batch.bulkClinicStock;
       if (loc == 'bulkStore') return batch.bulkStoreStock;
@@ -559,7 +578,7 @@ class InventoryProvider extends ChangeNotifier {
     }
 
     void setStock(String loc, int val) {
-      if (loc == 'main') batch.mainStock = val;
+      if (loc == 'main' || loc == 'clinic') batch.mainStock = val;
       if (loc == 'store') batch.storeStock = val;
       if (loc == 'bulkClinic') batch.bulkClinicStock = val;
       if (loc == 'bulkStore') batch.bulkStoreStock = val;
@@ -584,6 +603,12 @@ class InventoryProvider extends ChangeNotifier {
     SyncService? syncService,
     AppUser? actor,
   }) {
+    if (actor != null &&
+        !(actor.role.toLowerCase() == 'admin' ||
+            actor.canOverrideStock ||
+            actor.canEditInventory)) {
+      throw Exception('Unauthorized: You do not have permission to modify batch stock.');
+    }
     final ids = {
       ...mainUpdates.keys,
       ...storeUpdates.keys,

@@ -5,14 +5,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_background_service_android/flutter_background_service_android.dart';
-import '../services/objectbox_service.dart';
-import '../services/sync_service.dart';
-import '../services/notification_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import '../../objectbox.g.dart';
-import '../models/patient.dart';
-import '../models/medicine.dart';
-import '../models/sale.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter/foundation.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/sales_provider.dart';
@@ -24,7 +18,6 @@ import '../providers/template_provider.dart';
 Future<void> initializeBackgroundService() async {
   final service = FlutterBackgroundService();
 
-  // Create notification channel for Android 8.0+
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
     'sync_channel',
     'MediPoss Sync Service',
@@ -82,127 +75,202 @@ void onStart(ServiceInstance service) async {
   }
 
   service.on('stopService').listen((event) async {
-    try {
-      await ObjectBoxService.instance.close();
-    } catch (_) {}
     service.stopSelf();
   });
 
-  // Initialize DB in this isolate
-  // We add a small delay to avoid race conditions with the main isolate during boot
-  await Future.delayed(const Duration(seconds: 1));
-  
-  try {
-    debugPrint('BackgroundService: Initializing ObjectBox...');
-    await ObjectBoxService.init();
-    debugPrint('BackgroundService: ObjectBox initialized.');
-  } catch (e) {
-    debugPrint('BackgroundService: DB Init failed: $e');
-    // If it fails, we might be in a lock situation. 
-    // We'll retry once after a longer delay.
-    await Future.delayed(const Duration(seconds: 5));
-    try {
-      await ObjectBoxService.init();
-    } catch (e2) {
-      debugPrint('BackgroundService: DB Init retry failed: $e2');
-    }
-  }
-  
-  final syncService = SyncService();
-  final wsService = WebSocketService();
+  debugPrint('BackgroundService: Started (standalone WebSocket, no ObjectBox)');
 
-  // Helper to notify foreground app
+  String? hubIp;
+  String? secret;
+  WebSocketChannel? channel;
+  bool connected = false;
+  bool intentionalDisconnect = false;
+  int reconnectAttempts = 0;
+  Timer? heartbeatTimer;
+  Timer? reconnectTimer;
+
   void notifyForeground(String event, dynamic data) {
     service.invoke('data_synced', {'event': event, 'data': data});
   }
 
-  // Real-time listener logic (duplicated from main.dart but for background)
-  wsService.eventStream.listen((msg) async {
-    if (!ObjectBoxService.isInitialized) return;
-    final event = msg['event'];
-    debugPrint('Background WebSocket Event: $event');
-    
-    if (event == 'sync_received' || 
-        event == 'medicines_updated' || 
-        event == 'sales_updated' ||
-        event == 'patients_updated' ||
-        event == 'appointments_updated') {
-      
-      await syncService.syncAll();
-      notifyForeground(event, msg);
-      
-    } else if (event == 'settings_updated') {
-      await syncService.pullSettings();
-      notifyForeground(event, msg);
-    } else if (event == 'users_updated') {
-      await syncService.pullUsers();
-      notifyForeground(event, msg);
-    } else if (event == 'patient_deleted') {
-      final uhid = msg['uhid'];
-      if (uhid != null) {
-        final box = ObjectBoxService.instance.patientBox;
-        final p = box.query(Patient_.uhid.equals(uhid)).build().findFirst();
-        if (p != null) {
-          box.remove(p.id);
-          notifyForeground(event, msg);
-        }
+  void updateNotification(String title, String content) {
+    if (service is AndroidServiceInstance) {
+      service.setForegroundNotificationInfo(title: title, content: content);
+    }
+  }
+
+  Future<bool> testHubConnection(String address) async {
+    try {
+      final url = address.startsWith('http')
+          ? Uri.parse('$address/health')
+          : Uri.parse('http://$address:8080/health');
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 4);
+      final req = await client.getUrl(url);
+      final res = await req.close().timeout(const Duration(seconds: 4));
+      await res.drain();
+      client.close(force: false);
+      return res.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  late final void Function(String ip, String sec) doConnect;
+  late final void Function() scheduleReconnect;
+
+  scheduleReconnect = () {
+    if (intentionalDisconnect || hubIp == null || secret == null) return;
+    reconnectTimer?.cancel();
+
+    final int delaySeconds = (2 << reconnectAttempts).clamp(2, 30);
+    if (reconnectAttempts < 5) reconnectAttempts++;
+
+    debugPrint('BackgroundService: Reconnecting in ${delaySeconds}s (attempt $reconnectAttempts)...');
+    reconnectTimer = Timer(Duration(seconds: delaySeconds), () {
+      if (!intentionalDisconnect && hubIp != null && !connected) {
+        doConnect(hubIp!, secret!);
       }
-    } else if (event == 'medicine_deleted') {
-      final barcode = msg['barcode'];
-      final name = msg['name'];
-      if (barcode != null || name != null) {
-        final box = ObjectBoxService.instance.medicineBox;
-        Condition<Medicine>? cond;
-        if (barcode != null) cond = Medicine_.barcode.equals(barcode);
-        if (name != null) {
-          final nameCond = Medicine_.name.equals(name);
-          cond = (cond == null) ? nameCond : cond.and(nameCond);
-        }
-        
-        if (cond != null) {
-          final m = box.query(cond).build().findFirst();
-          if (m != null) {
-            box.remove(m.id);
-            notifyForeground(event, msg);
+    });
+  };
+
+  doConnect = (String ip, String sec) {
+    if (connected) return;
+    try {
+      Uri uri;
+      if (ip.startsWith('http')) {
+        final base = Uri.parse(ip);
+        final scheme = base.scheme == 'https' ? 'wss' : 'ws';
+        String path = base.path;
+        if (!path.endsWith('/')) path += '/';
+        path += 'ws/updates';
+        uri = base.replace(scheme: scheme, path: path, queryParameters: {'secret': sec});
+      } else {
+        uri = Uri.parse('ws://$ip:8080/ws/updates?secret=$sec');
+      }
+
+      debugPrint('BackgroundService: WebSocket connecting to $uri');
+      channel = WebSocketChannel.connect(uri);
+      connected = true;
+      reconnectAttempts = 0;
+
+      channel!.stream.listen(
+        (data) {
+          try {
+            final Map<String, dynamic> msg;
+            if (data is Map) {
+              msg = Map<String, dynamic>.from(data);
+            } else {
+              String dataStr;
+              if (data is String) {
+                dataStr = data;
+              } else if (data is List<int>) {
+                dataStr = utf8.decode(data);
+              } else {
+                dataStr = data.toString();
+              }
+              final decoded = jsonDecode(dataStr);
+              if (decoded is Map) {
+                msg = Map<String, dynamic>.from(decoded);
+              } else {
+                return;
+              }
+            }
+
+            debugPrint('BackgroundService: WS event: ${msg['event']}');
+            notifyForeground(msg['event'], msg);
+          } catch (e) {
+            debugPrint('BackgroundService: Error parsing message: $e');
           }
-        }
+        },
+        onDone: () {
+          connected = false;
+          debugPrint('BackgroundService: WebSocket closed.');
+          updateNotification("MediPoss Disconnected", "Hub connection lost. Reconnecting...");
+          if (!intentionalDisconnect && hubIp != null) {
+            scheduleReconnect();
+          }
+        },
+        onError: (e) {
+          connected = false;
+          debugPrint('BackgroundService: WebSocket error: $e');
+          updateNotification("MediPoss Disconnected", "Connection error. Reconnecting...");
+          if (!intentionalDisconnect && hubIp != null) {
+            scheduleReconnect();
+          }
+        },
+      );
+
+      updateNotification("MediPoss Connected", "Listening for updates from Hub");
+    } catch (e) {
+      connected = false;
+      debugPrint('BackgroundService: Connect failed: $e');
+      if (!intentionalDisconnect && hubIp != null) {
+        scheduleReconnect();
       }
-    } else if (event == 'sale_deleted') {
-      final inv = msg['invoiceNo'];
-      if (inv != null) {
-        final box = ObjectBoxService.instance.saleBox;
-        final s = box.query(Sale_.invoiceNo.equals(inv)).build().findFirst();
-        if (s != null) {
-          box.remove(s.id);
-          notifyForeground(event, msg);
-        }
+    }
+  };
+
+  void startHeartbeat() {
+    heartbeatTimer?.cancel();
+    heartbeatTimer = Timer.periodic(const Duration(seconds: 20), (timer) async {
+      if (intentionalDisconnect || hubIp == null) {
+        timer.cancel();
+        return;
+      }
+      final reachable = await testHubConnection(hubIp!);
+      if (!reachable && connected) {
+        debugPrint('BackgroundService: Heartbeat failed! Reconnecting...');
+        connected = false;
+        channel?.sink.close();
+        updateNotification("MediPoss Disconnected", "Hub unreachable. Reconnecting...");
+        scheduleReconnect();
+      }
+    });
+  }
+
+  // Listen for config updates from foreground (hubIp + secret)
+  service.on('updateConfig').listen((event) {
+    if (event == null) return;
+    final newHubIp = event['hubIp'] as String?;
+    final newSecret = event['secret'] as String?;
+    if (newHubIp != null && newSecret != null) {
+      hubIp = newHubIp;
+      secret = newSecret;
+      debugPrint('BackgroundService: Config updated - hubIp=$hubIp');
+      intentionalDisconnect = false;
+      if (!connected) {
+        doConnect(hubIp!, secret!);
+        startHeartbeat();
       }
     }
   });
 
-  // Connection Management
-  Timer.periodic(const Duration(seconds: 15), (timer) async {
-    if (!ObjectBoxService.isInitialized) return;
-    if (wsService.connected) return;
-
-    final connected = await syncService.tryAutoConnect();
-    if (connected && syncService.hubIp != null) {
-      wsService.connect(syncService.hubIp!, syncService.secret);
-      
-      if (service is AndroidServiceInstance) {
-        service.setForegroundNotificationInfo(
-          title: "MediPoss Connected",
-          content: "Listening for updates from Hub (${syncService.hubIp})",
-        );
-      }
-    } else {
-      if (service is AndroidServiceInstance) {
-        service.setForegroundNotificationInfo(
-          title: "MediPoss Sync Paused",
-          content: "Hub unreachable. Waiting for connection...",
-        );
-      }
+  // Also listen for explicit connect/disconnect commands
+  service.on('connectHub').listen((event) {
+    if (event == null) return;
+    final ip = event['hubIp'] as String?;
+    final sec = event['secret'] as String?;
+    if (ip != null && sec != null) {
+      hubIp = ip;
+      secret = sec;
+      intentionalDisconnect = false;
+      connected = false;
+      channel?.sink.close();
+      doConnect(hubIp!, secret!);
+      startHeartbeat();
     }
+  });
+
+  service.on('disconnectHub').listen((event) {
+    intentionalDisconnect = true;
+    heartbeatTimer?.cancel();
+    reconnectTimer?.cancel();
+    channel?.sink.close();
+    connected = false;
+    hubIp = null;
+    secret = null;
+    updateNotification("MediPoss Paused", "Disconnected from Hub");
   });
 }
 

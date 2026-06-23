@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
@@ -12,6 +13,7 @@ import '../../shared/models/app_user.dart';
 import '../../shared/services/sync_service.dart';
 import '../../shared/services/firebase_sync_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/shop_selection_dialog.dart';
 import '../../shared/services/local_server_service.dart';
 import '../../shared/services/printing_service.dart';
 import '../../shared/services/audit_export_service.dart';
@@ -24,6 +26,9 @@ import 'package:flutter_displaymode/flutter_displaymode.dart';
 import '../user_management_screen.dart';
 import '../opd/doctor_list_screen.dart';
 import '../../shared/services/ota_update_service.dart';
+import '../../shared/services/subscription_service.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'dart:math' as math;
 
 class SettingsAndroid extends StatefulWidget {
   const SettingsAndroid({super.key});
@@ -45,6 +50,9 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
   late final TextEditingController _clinicAddressCtrl;
   late final TextEditingController _clinicPhoneCtrl;
   late final TextEditingController _clinicRegCtrl;
+  final _settingsKeyCtrl = TextEditingController();
+  bool _isActivatingInSettings = false;
+  String _settingsActivationErr = '';
 
   String _selectedTheme = 'system';
   List<Printer> _printers = [];
@@ -63,6 +71,7 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
   int _auditRetentionDays = 90;
   List<Doctor> _doctors = [];
   int? _selectedDefaultDoctorId;
+  bool _isWindowsClient = false;
 
   @override
   void initState() {
@@ -96,6 +105,7 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
     _showOpdIdInPrint = s.showOpdIdInPrint;
     _auditRetentionDays = s.auditRetentionDays;
     _selectedDefaultDoctorId = s.defaultDoctorId;
+    _isWindowsClient = s.isWindowsClient;
 
     _loadPrinters();
     _loadDisplayModes();
@@ -164,6 +174,8 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
   void _save() {
     final settingsProv = context.read<SettingsProvider>();
     final s = settingsProv.settings;
+    final wasClient = s.isWindowsClient;
+
     s
       ..storeName = _storeNameCtrl.text
       ..storeAddress = _addressCtrl.text
@@ -189,9 +201,36 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
       ..showBatchExpiryInClinicalPrint = _showBatchExpiryClinical
       ..showOpdIdInPrint = _showOpdIdInPrint
       ..auditRetentionDays = _auditRetentionDays
-      ..defaultDoctorId = _selectedDefaultDoctorId;
+      ..defaultDoctorId = _selectedDefaultDoctorId
+      ..isWindowsClient = _isWindowsClient;
 
     settingsProv.save(s, syncService: context.read<SyncService>());
+
+    if (wasClient != _isWindowsClient) {
+      SharedPreferences.getInstance().then((prefs) async {
+        await prefs.setBool('isTerminalMode', _isWindowsClient);
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Restart Required'),
+              content: const Text(
+                  'Changing between Standalone Hub and Companion Terminal mode requires a full application restart to apply database locks and server configuration.'),
+              actions: [
+                ElevatedButton(
+                  onPressed: () {
+                    exit(0);
+                  },
+                  child: const Text('Close App'),
+                ),
+              ],
+            ),
+          );
+        }
+      });
+      return;
+    }
 
     // Apply FPS immediately on Android
     if (Platform.isAndroid) {
@@ -219,6 +258,203 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
     } catch (e) {
       debugPrint('Error applying FPS: $e');
     }
+  }
+
+  @override
+  void dispose() {
+    _settingsKeyCtrl.dispose();
+    super.dispose();
+  }
+
+  Widget _tierPriceBadge(String planName, String price, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Text(
+        '$planName: $price',
+        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Future<void> _activateKeyInSettings() async {
+    final key = _settingsKeyCtrl.text.trim();
+    if (key.isEmpty) {
+      setState(() => _settingsActivationErr = 'Please enter a key');
+      return;
+    }
+
+    setState(() {
+      _isActivatingInSettings = true;
+      _settingsActivationErr = '';
+    });
+
+    final success = await SubscriptionService.instance.activateLicense(key);
+
+    if (mounted) {
+      setState(() {
+        _isActivatingInSettings = false;
+        if (success) {
+          _settingsKeyCtrl.clear();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('MediPoss Activated successfully!'), backgroundColor: AppTheme.success),
+          );
+        } else {
+          _settingsActivationErr = 'Invalid key. Check internet & try again.';
+        }
+      });
+    }
+  }
+
+  Widget _buildLicensingSection(BuildContext context) {
+    final sub = context.watch<SubscriptionService>();
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    String tierName = 'Free Tier';
+    Color badgeColor = Colors.grey;
+    if (sub.currentTier == UserTier.pro) {
+      tierName = 'Pro Plan';
+      badgeColor = AppTheme.primary;
+    } else if (sub.currentTier == UserTier.enterprise) {
+      tierName = 'Enterprise Plan';
+      badgeColor = AppTheme.emerald;
+    }
+
+    final String expiryText = sub.licenseExpiry != null
+        ? DateFormat('dd MMM yyyy').format(sub.licenseExpiry!)
+        : 'Never (Free Mode)';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: badgeColor.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: badgeColor.withOpacity(0.5)),
+              ),
+              child: Text(
+                tierName,
+                style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                sub.licenseKey.isNotEmpty 
+                    ? 'Key: ${sub.licenseKey.substring(0, math.min(10, sub.licenseKey.length))}...'
+                    : 'No License Key Activated',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'License Expiration: $expiryText',
+          style: TextStyle(color: context.textMutedColor, fontSize: 12),
+        ),
+        const Divider(height: 24),
+        const Text(
+          'Activate New Key',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _settingsKeyCtrl,
+                style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                decoration: InputDecoration(
+                  hintText: 'Enter Activation Key',
+                  prefixIcon: const Icon(Icons.vpn_key_rounded),
+                  filled: true,
+                  fillColor: isDark ? const Color(0xFF1E293B) : Colors.grey[100],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            ElevatedButton(
+              onPressed: _isActivatingInSettings ? null : _activateKeyInSettings,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: _isActivatingInSettings
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('Activate', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+        if (_settingsActivationErr.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            _settingsActivationErr,
+            style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+        ],
+        const Divider(height: 32),
+        if (sub.currentTier != UserTier.enterprise && sub.upiId.isNotEmpty) ...[
+          const Text(
+            'Upgrade to Pro or Enterprise Plan',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Scan to pay & message admin with receipt to get your license key instantly.',
+            style: TextStyle(color: context.textMutedColor, fontSize: 12),
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: QrImageView(
+                    data: 'upi://pay?pa=${sub.upiId}&pn=MediPoss&cu=INR',
+                    version: QrVersions.auto,
+                    size: 130.0,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'UPI ID: ${sub.upiId}',
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _tierPriceBadge('Pro', '₹2,999/yr', AppTheme.primary),
+                    const SizedBox(width: 16),
+                    _tierPriceBadge('Enterprise', '₹5,999/yr', AppTheme.emerald),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
   }
 
   Future<void> _backupDatabase() async {
@@ -291,7 +527,7 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
             content: const Text('The database has been successfully restored.\n\nThe application must now restart to secure the new data lock. Please close the app and open it again.'),
             actions: [
               ElevatedButton(
-                onPressed: () => SystemNavigator.pop(),
+                onPressed: () => exit(0),
                 child: const Text('Exit App'),
               ),
             ],
@@ -399,7 +635,7 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
               title: const Text('Restore Complete'),
               content: const Text('Data restored successfully. Please restart app.'),
               actions: [
-                ElevatedButton(onPressed: () => SystemNavigator.pop(), child: const Text('Exit App')),
+                ElevatedButton(onPressed: () => exit(0), child: const Text('Exit App')),
               ],
             ),
           );
@@ -443,8 +679,15 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildSection(
-                'Store Details & General',
+                'Licensing & Subscriptions',
                 initiallyExpanded: true,
+                children: [
+                  _buildLicensingSection(context),
+                ],
+              ),
+              _buildSection(
+                'Store Details & General',
+                initiallyExpanded: false,
                 children: [
                   _field(_storeNameCtrl, 'Store Name'),
                   const SizedBox(height: 12),
@@ -823,8 +1066,29 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                 ],
               ),
               _buildSection(
-                'Hybrid Connectivity',
+                'App Mode & Hybrid Connectivity (Hub / Companion)',
+                initiallyExpanded: true,
                 children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: context.borderColor),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: SwitchListTile(
+                      title: const Text('Companion Terminal Mode',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text(
+                          'Enable client mode to pair with a standalone Hub. Disable to run this device as the Hub/Server.',
+                          style: TextStyle(
+                              color: context.textMutedColor, fontSize: 12)),
+                      value: _isWindowsClient,
+                      activeTrackColor:
+                          AppTheme.primaryLight.withValues(alpha: 0.3),
+                      activeColor: AppTheme.primaryLight,
+                      onChanged: (val) => setState(() => _isWindowsClient = val),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   Text(
                     'Configure how this app connects to the Windows Hub when you are away from the clinic.',
                     style:
@@ -856,6 +1120,51 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                         onChanged: (val) {
                           if (val != null) setState(() => _connectionMode = val);
                         },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Shop ID / Partition',
+                                style: TextStyle(
+                                    color: context.textMutedColor,
+                                    fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 4),
+                            Text(
+                              context.watch<SettingsProvider>().settings.shopId.isNotEmpty
+                                  ? context.watch<SettingsProvider>().settings.shopId
+                                  : 'default_shop (Fallback to Store Name)',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ElevatedButton(
+                        onPressed: () async {
+                          await showShopSelectionDialog(
+                            context,
+                            enterCloud: false,
+                            onSelected: () {
+                              setState(() {});
+                              // Restart Firestore listeners with the new shop ID
+                              SyncService.instance.initializeFirestoreRealTimeSync();
+                            },
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: const Text('Change'),
                       ),
                     ],
                   ),

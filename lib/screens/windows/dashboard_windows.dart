@@ -1083,7 +1083,7 @@ class _RecentTransfersTimeline extends StatelessWidget {
               separatorBuilder: (context, index) => const SizedBox(height: 16),
               itemBuilder: (context, index) {
                 final t = transfers[index];
-                final isSendOut = t.fromWarehouse == 'main';
+                final isSendOut = t.fromWarehouse == 'main' || t.fromWarehouse == 'clinic';
                 final accentColor = isSendOut ? AppTheme.success : AppTheme.indigo;
                 
                 return Row(

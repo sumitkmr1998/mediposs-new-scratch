@@ -9,6 +9,7 @@ import '../services/local_server_service.dart';
 import '../services/sync_service.dart';
 import '../services/sync_queue_service.dart';
 import '../services/audit_service.dart';
+import '../services/firebase_sync_service.dart';
 import '../../objectbox.g.dart';
 import 'inventory_provider.dart';
 
@@ -377,12 +378,15 @@ class SalesProvider extends ChangeNotifier {
 
       load();
 
-      final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-      final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+      final isClient = ObjectBoxService.instance.settings.isWindowsClient;
+      final isHub = !ObjectBoxService.instance.settings.isWindowsClient;
 
-      if (isHub && LocalServerService.instance.isRunning) {
-        LocalServerService.instance.broadcast({'event': 'sync_received'});
-        LocalServerService.instance.broadcast({'event': 'medicines_updated'});
+      if (isHub) {
+        if (LocalServerService.instance.isRunning) {
+          LocalServerService.instance.broadcast({'event': 'sync_received'});
+          LocalServerService.instance.broadcast({'event': 'medicines_updated'});
+        }
+        FirebaseSyncService.instance.deleteDocument('sales', sale.invoiceNo);
       } else if (isClient) {
         SyncQueueService.instance.addToQueue(
           entity: 'sale',

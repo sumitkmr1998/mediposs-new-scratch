@@ -16,7 +16,7 @@ class Medicine {
 
   // These will now be aggregated from batches but kept for compatibility/legacy if needed,
   // or we can transition to getters. Let's keep them as cached values or transition.
-  int mainStock; // Main Warehouse quantity
+  int mainStock; // Clinic quantity
   int storeStock; // Store Stock (Shop floor) quantity
   int bulkClinicStock; // Clinic Bulk Warehouse quantity
   int bulkStoreStock; // Store Bulk Warehouse quantity
@@ -128,7 +128,8 @@ class Medicine {
   /// Returns the batch that is expiring soonest and has store stock
   MedicineBatch? get activeBatch {
     if (batches.isEmpty) return null;
-    final available = batches.where((b) => b.storeStock > 0).toList();
+    final now = DateTime.now();
+    final available = batches.where((b) => b.storeStock > 0 && !b.expiryDate.isBefore(now)).toList();
     if (available.isEmpty) return null;
     available.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
     return available.first;
@@ -137,12 +138,28 @@ class Medicine {
   /// Returns the batch that is expiring soonest and has stock for the active mode
   MedicineBatch? getActiveBatch(bool isClinicalDispense) {
     if (batches.isEmpty) return null;
+    final now = DateTime.now();
     final available = batches.where((b) {
+      if (b.expiryDate.isBefore(now)) return false;
       return isClinicalDispense ? b.mainStock > 0 : b.storeStock > 0;
     }).toList();
     if (available.isEmpty) return null;
     available.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
     return available.first;
+  }
+
+  int getNonExpiredMainStock() {
+    final now = DateTime.now();
+    return batches
+        .where((b) => !b.expiryDate.isBefore(now))
+        .fold(0, (sum, b) => sum + b.mainStock);
+  }
+
+  int getNonExpiredStoreStock() {
+    final now = DateTime.now();
+    return batches
+        .where((b) => !b.expiryDate.isBefore(now))
+        .fold(0, (sum, b) => sum + b.storeStock);
   }
 
   bool get hasExpiredBatch => batches.any((b) => 

@@ -7,6 +7,7 @@ import '../services/objectbox_service.dart';
 import '../services/sync_service.dart';
 import '../services/google_drive_service.dart';
 import '../services/backup_restore_service.dart';
+import '../services/subscription_service.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 
 class SettingsProvider extends ChangeNotifier {
@@ -53,6 +54,11 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   Future<void> linkGoogleDrive() async {
+    if (!SubscriptionService.instance.isPro) {
+      _googleError = 'Google Drive features require Pro or Enterprise tier';
+      notifyListeners();
+      return;
+    }
     _isGoogleLoading = true;
     notifyListeners();
 
@@ -81,6 +87,11 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   Future<bool> performManualBackup() async {
+    if (!SubscriptionService.instance.isPro) {
+      _googleError = 'Google Drive Backup requires Pro or Enterprise tier';
+      notifyListeners();
+      return false;
+    }
     if (!_settings.googleDriveSyncEnabled) {
       _googleError = 'Google Drive Sync is disabled';
       notifyListeners();
@@ -146,6 +157,10 @@ class SettingsProvider extends ChangeNotifier {
 
   /// Triggers auto-backup based on the specified logic ('At Startup', 'On Close', 'Periodic')
   Future<void> checkAndPerformAutoBackup(String trigger) async {
+    if (!SubscriptionService.instance.isPro) {
+      debugPrint('Auto-Backup: skipped because Google Drive Sync requires Pro or Enterprise tier.');
+      return;
+    }
     if (!_settings.googleDriveSyncEnabled) {
       debugPrint('Auto-Backup: skipped because googleDriveSyncEnabled is false.');
       return;

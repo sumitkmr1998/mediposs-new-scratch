@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'objectbox_service.dart';
 import '../models/sync_queue_item.dart';
 import '../models/sale.dart';
@@ -23,11 +24,25 @@ class SyncQueueService extends ChangeNotifier {
 
   bool _isProcessing = false;
   Timer? _syncTimer;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   void init() {
     debugPrint('SyncQueueService: Initializing...');
     _startAutoSync();
+    _listenToConnectivity();
     processQueue(); // Run once at start
+  }
+
+  void _listenToConnectivity() {
+    _connectivitySubscription?.cancel();
+    _connectivitySubscription = Connectivity()
+        .onConnectivityChanged
+        .listen((List<ConnectivityResult> results) {
+      if (results.isNotEmpty && !results.contains(ConnectivityResult.none)) {
+        debugPrint('SyncQueueService: Connection restored (${results.toString()}). Processing queue...');
+        processQueue();
+      }
+    });
   }
 
   void _startAutoSync() {

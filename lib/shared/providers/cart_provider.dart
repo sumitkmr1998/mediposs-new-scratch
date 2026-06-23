@@ -558,8 +558,8 @@ class CartProvider extends ChangeNotifier {
 
     final db = ObjectBoxService.instance;
     final settings = db.settings;
-    final isClient = Platform.isAndroid || (Platform.isWindows && settings.isWindowsClient);
-    final isHub = Platform.isWindows && !settings.isWindowsClient;
+    final isClient = settings.isWindowsClient;
+    final isHub = !settings.isWindowsClient;
 
     // If editing a sale, revert the original stock deductions first
     Map<String, dynamic> oldSaleJson = {};
@@ -738,6 +738,7 @@ class CartProvider extends ChangeNotifier {
       opdInvoiceNo: resolvedOpdInvoiceNo,
       itemsJson: jsonEncode(saleItems.map((i) => i.toJson()).toList()),
       createdAt: _editingCreatedAt ?? now,
+      updatedAt: now,
     );
 
     db.saleBox.put(sale);

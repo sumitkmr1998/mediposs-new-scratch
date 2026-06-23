@@ -281,6 +281,26 @@ class _ConnectionWindowsState extends State<ConnectionWindows> {
                     ),
                   ],
                 ),
+                // --- Shop Partition Selector ---
+                Row(
+                  children: [
+                    Text('Shop Partition:',
+                        style: TextStyle(
+                            color: context.textMutedColor,
+                            fontWeight: FontWeight.bold)),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: () => showShopSelectionDialog(context),
+                      icon: const Icon(Icons.store, size: 14),
+                      label: Text(
+                        context.watch<SettingsProvider>().settings.shopId.isEmpty
+                            ? 'default_shop'
+                            : context.watch<SettingsProvider>().settings.shopId,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
                 if (_connectionMode == 'cloudflare' ||
                     _connectionMode == 'auto') ...[
                   const SizedBox(height: 8),

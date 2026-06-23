@@ -16,6 +16,7 @@ import '../models/patient_image.dart';
 import '../models/patient.dart';
 import 'patient_provider.dart';
 import 'opd_provider.dart';
+import '../services/firebase_sync_service.dart';
 
 class PrescriptionProvider extends ChangeNotifier {
   List<Prescription> _prescriptions = [];
@@ -173,17 +174,19 @@ class PrescriptionProvider extends ChangeNotifier {
         context.read<OpdProvider>().loadAll();
       }
 
-      final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+      final isHub = !ObjectBoxService.instance.settings.isWindowsClient;
       if (isHub) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
+        FirebaseSyncService.instance.broadcastUpdate('appointments', appt.toJson());
       }
     }
 
-    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    final isClient = ObjectBoxService.instance.settings.isWindowsClient;
+    final isHub = !ObjectBoxService.instance.settings.isWindowsClient;
 
     if (isHub) {
       LocalServerService.instance.broadcast({'event': 'sync_received'});
+      FirebaseSyncService.instance.broadcastUpdate('prescriptions', prescription.toJson());
     } else if (isClient) {
       final patient = ObjectBoxService.instance.patientBox.get(patientId);
       final syncData = prescription.toJson();
@@ -303,11 +306,12 @@ class PrescriptionProvider extends ChangeNotifier {
       actor: actor,
     );
 
-    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    final isClient = ObjectBoxService.instance.settings.isWindowsClient;
+    final isHub = !ObjectBoxService.instance.settings.isWindowsClient;
 
     if (isHub) {
       LocalServerService.instance.broadcast({'event': 'sync_received'});
+      FirebaseSyncService.instance.broadcastUpdate('prescriptions', p.toJson());
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'prescription',
@@ -343,11 +347,12 @@ class PrescriptionProvider extends ChangeNotifier {
       actor: actor,
     );
 
-    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    final isClient = ObjectBoxService.instance.settings.isWindowsClient;
+    final isHub = !ObjectBoxService.instance.settings.isWindowsClient;
 
     if (isHub) {
       LocalServerService.instance.broadcast({'event': 'sync_received'});
+      FirebaseSyncService.instance.deleteDocument('prescriptions', id.toString());
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'prescription',

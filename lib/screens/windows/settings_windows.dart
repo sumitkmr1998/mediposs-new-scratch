@@ -14,6 +14,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../shared/services/cloudflare_service.dart';
 import '../../shared/services/sync_service.dart';
 import '../../shared/services/ota_update_service.dart';
+import '../../shared/services/subscription_service.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'dart:math' as math;
 
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/navigation_provider.dart';
@@ -60,6 +63,9 @@ class _SettingsWindowsState extends State<SettingsWindows> {
   late final TextEditingController _portCtrl;
   late final TextEditingController _lowStockCtrl;
   late final TextEditingController _nearExpiryCtrl;
+  final _windowsKeyCtrl = TextEditingController();
+  bool _isActivatingInWindows = false;
+  String _windowsActivationErr = '';
 
   String _selectedTheme = 'system';
   List<Printer> _printers = [];
@@ -252,6 +258,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     _portCtrl.dispose();
     _lowStockCtrl.dispose();
     _nearExpiryCtrl.dispose();
+    _windowsKeyCtrl.dispose();
     super.dispose();
   }
 
@@ -262,6 +269,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
 
     final navItems = [
       _NavModel(LucideIcons.store, 'Store Details', AppTheme.primary),
+      _NavModel(LucideIcons.key, 'Licensing', Colors.amber),
       _NavModel(LucideIcons.printer, 'Printing', AppTheme.accent),
       _NavModel(LucideIcons.monitor, 'Interface', AppTheme.purple),
       _NavModel(LucideIcons.cloud, 'Cloud Sync', AppTheme.sky),
@@ -449,6 +457,8 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     switch (title) {
       case 'Store Details':
         return _buildStoreSection();
+      case 'Licensing':
+        return _buildLicensingSectionWindows();
       case 'Printing':
         return _buildPrintingSection();
       case 'Interface':
@@ -2311,6 +2321,262 @@ class _SettingsWindowsState extends State<SettingsWindows> {
           backgroundColor: AppTheme.danger,
         ));
       }
+    }
+  }
+
+  Widget _buildLicensingSectionWindows() {
+    final sub = context.watch<SubscriptionService>();
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    String tierName = 'Free Tier';
+    Color badgeColor = Colors.grey;
+    if (sub.currentTier == UserTier.pro) {
+      tierName = 'Pro Plan';
+      badgeColor = AppTheme.primary;
+    } else if (sub.currentTier == UserTier.enterprise) {
+      tierName = 'Enterprise Plan';
+      badgeColor = AppTheme.emerald;
+    }
+
+    final String expiryText = sub.licenseExpiry != null
+        ? DateFormat('dd MMM yyyy, hh:mm a').format(sub.licenseExpiry!)
+        : 'Never (Free Mode)';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'LICENSING & SUBSCRIPTION',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.5,
+                  color: Colors.amber,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Manage your software activation, view active tier details, and enter renewal keys.',
+                style: TextStyle(fontSize: 12, color: context.textMutedColor),
+              ),
+            ],
+          ),
+        ),
+        SettingsSection(
+          title: 'Active Subscription Status',
+          icon: LucideIcons.key,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: badgeColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: badgeColor.withOpacity(0.5)),
+                  ),
+                  child: Text(
+                    tierName,
+                    style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                ),
+                const SizedBox(width: 24),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        sub.licenseKey.isNotEmpty 
+                            ? 'Key: ${sub.licenseKey}'
+                            : 'No Active Key (Running on Free Version)',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Expiration: $expiryText',
+                        style: TextStyle(color: context.textMutedColor, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 32),
+            const Text(
+              'Activate Renewal or Upgrade Key',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _windowsKeyCtrl,
+                    style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                    decoration: InputDecoration(
+                      hintText: 'Enter activation key (e.g. MP-PRO-xxxx-xxxx)',
+                      prefixIcon: const Icon(Icons.vpn_key_rounded),
+                      filled: true,
+                      fillColor: isDark ? const Color(0xFF1E293B) : Colors.grey[100],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                ElevatedButton.icon(
+                  onPressed: _isActivatingInWindows ? null : _activateKeyInWindows,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  icon: _isActivatingInWindows
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Icon(LucideIcons.check, size: 16),
+                  label: const Text('Activate Key', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+            if (_windowsActivationErr.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                _windowsActivationErr,
+                style: const TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ],
+        ),
+        if (sub.currentTier != UserTier.enterprise && sub.upiId.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          SettingsSection(
+            title: 'Upgrade via Scan-to-Pay',
+            icon: LucideIcons.qrCode,
+            children: [
+              const Text(
+                'Scan the QR code with any UPI app to purchase an upgrade. Once paid, share the confirmation screenshot with the administrator to receive your key.',
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                    ),
+                    child: QrImageView(
+                      data: 'upi://pay?pa=${sub.upiId}&pn=MediPoss&cu=INR',
+                      version: QrVersions.auto,
+                      size: 160.0,
+                    ),
+                  ),
+                  const SizedBox(width: 32),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Payment Address: ${sub.upiId}',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Select your desired plan:',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                        const SizedBox(height: 8),
+                        _tierPriceRow('Pro Tier', '₹2,999 / Year', 'Unlocks real-time Firestore sync & advanced Analysis module.', AppTheme.primary),
+                        const SizedBox(height: 8),
+                        _tierPriceRow('Enterprise Tier', '₹5,999 / Year', 'Unlocks everything in Pro + OPD Clinician queue & Audit Logging.', AppTheme.emerald),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _tierPriceRow(String title, String price, String desc, Color color) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.15)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              title,
+              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(price, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                Text(desc, style: TextStyle(color: context.textMutedColor, fontSize: 11)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _activateKeyInWindows() async {
+    final key = _windowsKeyCtrl.text.trim();
+    if (key.isEmpty) {
+      setState(() => _windowsActivationErr = 'Please enter a key');
+      return;
+    }
+
+    setState(() {
+      _isActivatingInWindows = true;
+      _windowsActivationErr = '';
+    });
+
+    final success = await SubscriptionService.instance.activateLicense(key);
+
+    if (mounted) {
+      setState(() {
+        _isActivatingInWindows = false;
+        if (success) {
+          _windowsKeyCtrl.clear();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('MediPoss Activated successfully!'), backgroundColor: AppTheme.success),
+          );
+        } else {
+          _windowsActivationErr = 'Invalid key. Check internet & try again.';
+        }
+      });
     }
   }
 }

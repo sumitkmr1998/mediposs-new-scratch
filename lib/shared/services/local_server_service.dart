@@ -728,8 +728,9 @@ class LocalServerService {
             int remaining = qty;
             final batches = m.batches.toList();
             batches.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
-            for (var b in batches) {
+             for (var b in batches) {
               if (remaining <= 0) break;
+              if (b.expiryDate.isBefore(DateTime.now())) continue;
               if (sale.isClinicalDispense) {
                 if (b.mainStock > 0) {
                   final d = remaining > b.mainStock ? b.mainStock : remaining;
@@ -1432,12 +1433,12 @@ class LocalServerService {
       // Update medicine stock on Hub
       final m = ObjectBoxService.instance.medicineBox.get(transfer.medicineId);
       if (m != null) {
-        if (transfer.fromWarehouse == 'main' &&
+        if ((transfer.fromWarehouse == 'main' || transfer.fromWarehouse == 'clinic') &&
             transfer.toWarehouse == 'store') {
           m.mainStock = (m.mainStock - transfer.qty).clamp(0, 999999);
           m.storeStock += transfer.qty;
         } else if (transfer.fromWarehouse == 'store' &&
-            transfer.toWarehouse == 'main') {
+            (transfer.toWarehouse == 'main' || transfer.toWarehouse == 'clinic')) {
           m.storeStock = (m.storeStock - transfer.qty).clamp(0, 999999);
           m.mainStock += transfer.qty;
         }

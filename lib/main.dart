@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'shared/services/objectbox_service.dart';
 import 'shared/services/sync_service.dart';
+import 'shared/services/subscription_service.dart';
 import 'shared/providers/auth_provider.dart';
 import 'shared/providers/settings_provider.dart';
 import 'shared/providers/inventory_provider.dart';
@@ -21,6 +22,7 @@ import 'theme/app_theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/app_shell.dart';
 import 'screens/connection_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'shared/services/local_server_service.dart';
@@ -41,6 +43,16 @@ import 'firebase_options.dart';
 
 import 'shared/services/background_sync_service.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
+
+void _pushConfigToBackgroundService(String hubIp, String secret) {
+  try {
+    final service = FlutterBackgroundService();
+    service.invoke('updateConfig', {'hubIp': hubIp, 'secret': secret});
+    debugPrint('Main: Pushed hubIp+secret to background service');
+  } catch (e) {
+    debugPrint('Main: Failed to push config to background service: $e');
+  }
+}
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -72,12 +84,16 @@ void main(List<String> args) async {
     debugPrint('Main: ObjectBox initialization failed: $e');
   }
 
-  // 2. Initialize Background Service (Android)
-  // We start this AFTER DB init so main isolate has the handle
-  if (defaultTargetPlatform == TargetPlatform.android) {
-    debugPrint('Main: Initializing Background Service...');
+  // 2. Initialize Background Service (Android) - ONLY for terminal mode
+  // Hub mode doesn't need background sync; it IS the server
+  final settings = ObjectBoxService.instance.settings;
+  final isTerminal = settings.isWindowsClient;
+  if (defaultTargetPlatform == TargetPlatform.android && isTerminal) {
+    debugPrint('Main: Initializing Background Service (terminal mode)...');
     await initializeBackgroundService();
     debugPrint('Main: Background Service initialized.');
+  } else if (defaultTargetPlatform == TargetPlatform.android) {
+    debugPrint('Main: Skipping Background Service (hub mode).');
   }
 
   // 3. Initialize Firebase
@@ -96,6 +112,13 @@ void main(List<String> args) async {
     await CloudflareService.init();
   } catch (e) {
     debugPrint('Cloudflare Initialization Failed: $e');
+  }
+
+  // Initialize Subscription Service
+  try {
+    await SubscriptionService.instance.init();
+  } catch (e) {
+    debugPrint('Subscription Service Initialization Failed: $e');
   }
 
   // 2. Set high refresh rate for Android
@@ -139,6 +162,15 @@ void main(List<String> args) async {
   final wsService = WebSocketService();
   SyncQueueService.instance.init();
 
+  // Push hubIp + secret to background service whenever SyncService connects
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    syncService.addListener(() {
+      if (syncService.isConnected && syncService.hubIp != null) {
+        _pushConfigToBackgroundService(syncService.hubIp!, syncService.secret);
+      }
+    });
+  }
+
   // Global listener for real-time data sync (Mobile Only)
   setupForegroundSyncListeners(
       inventoryProvider,
@@ -158,6 +190,12 @@ void main(List<String> args) async {
                event == 'sales_updated' ||
                event == 'patients_updated' ||
                event == 'appointments_updated' ||
+               event == 'prescriptions_updated' ||
+               event == 'procedures_updated' ||
+               event == 'doctors_updated' ||
+               event == 'transfers_updated' ||
+               event == 'templates_updated' ||
+               event == 'h1_records_updated' ||
                event == 'audit_logs_updated') {
       syncService.syncAll().then((_) {
         inventoryProvider.load();
@@ -166,6 +204,7 @@ void main(List<String> args) async {
         opdProvider.loadAll();
         prescriptionProvider.load();
         templateProvider.load();
+        warehouseProvider.loadTransfers();
       });
     } else if (event == 'settings_updated') {
       syncService.pullSettings().then((_) => settingsProvider.load());
@@ -213,19 +252,17 @@ void main(List<String> args) async {
     }
   });
 
-  // Try to auto-connect to a saved Hub IP so companion app skips connection screen
-  final isMobile = !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS);
-  final isClient = isMobile || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+  final isClient = ObjectBoxService.instance.settings.isWindowsClient;
 
   if (isClient) {
     final connected = await syncService.tryAutoConnect().timeout(const Duration(seconds: 5), onTimeout: () => false);
     if (connected && syncService.hubIp != null) {
       wsService.connect(syncService.hubIp!, syncService.secret);
+      // Push connection info to background service so it can connect WebSocket too
+      _pushConfigToBackgroundService(syncService.hubIp!, syncService.secret);
     }
-  } else if (Platform.isWindows) {
-    // Start Hub server immediately on Windows launch
+  } else {
+    // Start Hub server immediately on launch (Windows or Android Hub)
     await LocalServerService.instance.start();
     await DiscoveryService.startAdvertising(
         ObjectBoxService.instance.settings.serverPort);
@@ -253,6 +290,7 @@ void main(List<String> args) async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => NavigationProvider()),
+        ChangeNotifierProvider.value(value: SubscriptionService.instance),
         ChangeNotifierProvider.value(value: authProvider),
         ChangeNotifierProvider.value(value: settingsProvider),
         ChangeNotifierProvider.value(value: inventoryProvider),
@@ -406,11 +444,12 @@ class _MediPossAppState extends State<MediPossApp> with WidgetsBindingObserver {
         Locale('en', 'US'),
         Locale('en', 'IN'),
       ],
-      home: Consumer2<AuthProvider, SyncService>(
-        builder: (ctx, auth, sync, _) {
-          final isMobileDevice = !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
-          final isWindowsClient = defaultTargetPlatform == TargetPlatform.windows && ObjectBoxService.instance.settings.isWindowsClient;
-          final isClient = isMobileDevice || isWindowsClient;
+      home: Consumer3<AuthProvider, SyncService, SubscriptionService>(
+        builder: (ctx, auth, sync, sub, _) {
+          if (sub.isFirstLaunch) {
+            return const OnboardingScreen();
+          }
+          final isClient = ObjectBoxService.instance.settings.isWindowsClient;
 
           if (isClient && !sync.isConnected) {
             return const ConnectionScreen();

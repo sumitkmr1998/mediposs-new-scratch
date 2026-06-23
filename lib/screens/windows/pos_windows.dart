@@ -28,6 +28,8 @@ import '../../widgets/procedure_dialog.dart';
 import '../../shared/services/printing_service.dart';
 import '../../shared/services/sync_service.dart';
 import '../../shared/providers/procedure_provider.dart';
+import '../../shared/services/subscription_service.dart';
+import '../paywall_screen.dart';
 
 class PosWindows extends StatefulWidget {
   const PosWindows({super.key});
@@ -493,8 +495,16 @@ class _PosWindowsState extends State<PosWindows> {
                                 onPaymentMethodConfirm: _onPaymentMethodConfirm,
                                 onPaymentMethodChanged: (v) =>
                                     setState(() => _paymentMethod = v),
-                                onLoadPrescription: () =>
-                                    _showPrescriptionLoader(context),
+                                onLoadPrescription: () {
+                                   if (!SubscriptionService.instance.isEnterprise) {
+                                     Navigator.push(
+                                       context,
+                                       MaterialPageRoute(builder: (_) => const PaywallScreen()),
+                                     );
+                                   } else {
+                                     _showPrescriptionLoader(context);
+                                   }
+                                 },
                                 onImportPreviousSales: () =>
                                     _showImportPreviousSalesDialog(context, cart),
                                 onCheckout: () => _doCheckout(cart),
@@ -550,8 +560,16 @@ class _PosWindowsState extends State<PosWindows> {
                                 onPaymentMethodConfirm: _onPaymentMethodConfirm,
                                 onPaymentMethodChanged: (v) =>
                                     setState(() => _paymentMethod = v),
-                                onLoadPrescription: () =>
-                                    _showPrescriptionLoader(context),
+                                onLoadPrescription: () {
+                                  if (!SubscriptionService.instance.isEnterprise) {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => const PaywallScreen()),
+                                    );
+                                  } else {
+                                    _showPrescriptionLoader(context);
+                                  }
+                                },
                                 onImportPreviousSales: () =>
                                     _showImportPreviousSalesDialog(context, cart),
                                 onCheckout: () => _doCheckout(cart),
@@ -568,6 +586,13 @@ class _PosWindowsState extends State<PosWindows> {
   }
 
   void _handleClinicalDispenseToggle(bool val, CartProvider cart) {
+    if (val && !SubscriptionService.instance.isEnterprise) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const PaywallScreen()),
+      );
+      return;
+    }
     if (!val) {
       cart.setPatient(name: '', phone: '', id: 0, uhid: '', address: '');
       cart.setLinkedAppointment(null);
@@ -1390,7 +1415,7 @@ class _MedicinesGridState extends State<_MedicinesGrid> {
 
     final isClinical = widget.cart.isClinicalDispense;
     final medicines = widget.inv.rawMedicines
-        .where((m) => isClinical ? m.mainStock > 0 : m.storeStock > 0)
+        .where((m) => isClinical ? m.getNonExpiredMainStock() > 0 : m.getNonExpiredStoreStock() > 0)
         .where(
           (m) =>
               query.isEmpty ||
@@ -1869,7 +1894,7 @@ class _ProductCard extends StatelessWidget {
                         ),
                       ),
                       child: Text(
-                        '${cart.isClinicalDispense ? item.mainStock : item.storeStock}',
+                        '${cart.isClinicalDispense ? item.getNonExpiredMainStock() : item.getNonExpiredStoreStock()}',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
@@ -2250,7 +2275,7 @@ class _CartPanel extends StatelessWidget {
                               final newQty = int.tryParse(val);
                               if (newQty != null && newQty > 0) {
                                 int finalQty = newQty;
-                                final maxStock = cart.isClinicalDispense ? item.medicine!.mainStock : item.medicine!.storeStock;
+                                final maxStock = cart.isClinicalDispense ? item.medicine!.getNonExpiredMainStock() : item.medicine!.getNonExpiredStoreStock();
                                 if (!item.isProcedure &&
                                     !cart.isReturnMode &&
                                     finalQty > maxStock) {

@@ -10,6 +10,7 @@ import '../services/local_server_service.dart';
 import '../services/sync_service.dart';
 import '../services/sync_queue_service.dart';
 import '../services/audit_service.dart';
+import '../services/firebase_sync_service.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'sales_provider.dart';
@@ -270,8 +271,8 @@ class OpdProvider extends ChangeNotifier {
     );
 
     // Generate and save separate consultation fee advance transaction
-    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    final isClient = ObjectBoxService.instance.settings.isWindowsClient;
+    final isHub = !ObjectBoxService.instance.settings.isWindowsClient;
 
     if (consultationFee > 0) {
       final dateStr = '${robustNow.year}${robustNow.month.toString().padLeft(2, '0')}${robustNow.day.toString().padLeft(2, '0')}';
@@ -330,6 +331,7 @@ class OpdProvider extends ChangeNotifier {
         if (LocalServerService.instance.isRunning) {
           LocalServerService.instance.broadcast({'event': 'sales_updated'});
         }
+        FirebaseSyncService.instance.broadcastUpdate('sales', advanceSale.toJson());
       } else if (isClient) {
         SyncQueueService.instance.addToQueue(
           entity: 'sale',
@@ -349,6 +351,7 @@ class OpdProvider extends ChangeNotifier {
         LocalServerService.instance
             .broadcast({'event': 'appointments_updated'});
       }
+      FirebaseSyncService.instance.broadcastUpdate('appointments', appt.toJson());
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'appointment',
@@ -376,12 +379,13 @@ class OpdProvider extends ChangeNotifier {
     loadAll();
 
     // Broadcast sync
-    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    final isClient = ObjectBoxService.instance.settings.isWindowsClient;
+    final isHub = !ObjectBoxService.instance.settings.isWindowsClient;
     if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
+      FirebaseSyncService.instance.broadcastUpdate('appointments', appt.toJson());
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'appointment',
@@ -412,8 +416,8 @@ class OpdProvider extends ChangeNotifier {
       actor: actor,
     );
 
-    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    final isClient = ObjectBoxService.instance.settings.isWindowsClient;
+    final isHub = !ObjectBoxService.instance.settings.isWindowsClient;
 
     // Void the linked OPD sale/receipt if it exists
     final linkedSale = ObjectBoxService.instance.saleBox
@@ -444,6 +448,7 @@ class OpdProvider extends ChangeNotifier {
         if (LocalServerService.instance.isRunning) {
           LocalServerService.instance.broadcast({'event': 'sales_updated'});
         }
+        FirebaseSyncService.instance.deleteDocument('sales', linkedSale.invoiceNo);
       } else if (isClient) {
         SyncQueueService.instance.addToQueue(
           entity: 'sale',
@@ -461,6 +466,7 @@ class OpdProvider extends ChangeNotifier {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
+      FirebaseSyncService.instance.broadcastUpdate('appointments', appt.toJson());
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'appointment',
@@ -488,12 +494,13 @@ class OpdProvider extends ChangeNotifier {
     loadAll();
 
     // Broadcast sync
-    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    final isClient = ObjectBoxService.instance.settings.isWindowsClient;
+    final isHub = !ObjectBoxService.instance.settings.isWindowsClient;
     if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
+      FirebaseSyncService.instance.broadcastUpdate('appointments', appt.toJson());
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'appointment',
@@ -509,12 +516,13 @@ class OpdProvider extends ChangeNotifier {
     loadAll();
 
     // Broadcast sync
-    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    final isClient = ObjectBoxService.instance.settings.isWindowsClient;
+    final isHub = !ObjectBoxService.instance.settings.isWindowsClient;
     if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
+      FirebaseSyncService.instance.broadcastUpdate('doctors', d.toJson());
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'doctor',
@@ -525,21 +533,25 @@ class OpdProvider extends ChangeNotifier {
   }
 
   void deleteDoctor(int id, {SyncService? syncService}) {
+    final doc = ObjectBoxService.instance.doctorBox.get(id);
+    if (doc == null) return;
+    final name = doc.name;
     ObjectBoxService.instance.doctorBox.remove(id);
     loadAll();
 
     // Broadcast sync
-    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    final isClient = ObjectBoxService.instance.settings.isWindowsClient;
+    final isHub = !ObjectBoxService.instance.settings.isWindowsClient;
     if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
+      FirebaseSyncService.instance.deleteDocument('doctors', name);
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'doctor',
         action: 'delete',
-        data: {'id': id},
+        data: {'name': name},
       );
     }
   }

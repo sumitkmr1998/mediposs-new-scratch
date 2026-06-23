@@ -1,5 +1,6 @@
 import 'package:objectbox/objectbox.dart';
 import '../utils/date_helper.dart';
+import '../services/objectbox_service.dart';
 
 @Entity()
 class Prescription {
@@ -52,25 +53,40 @@ class Prescription {
   })  : createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? createdAt ?? DateTime.now();
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'appointmentId': appointmentId,
-        'patientId': patientId,
-        'patientName': patientName,
-        'doctorId': doctorId,
-        'doctorName': doctorName,
-        'diagnosis': diagnosis,
-        'complaints': complaints,
-        'notes': notes,
-        'itemsJson': itemsJson,
-        'labTestsJson': labTestsJson,
-        'vitalsJson': vitalsJson,
-        'imagesJson': imagesJson,
-        'proceduresJson': proceduresJson,
-        'dispensed': dispensed,
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-      };
+  Map<String, dynamic> toJson() {
+    String uhid = '';
+    int token = 0;
+    try {
+      if (ObjectBoxService.isInitialized) {
+        final p = ObjectBoxService.instance.patientBox.get(patientId);
+        if (p != null) uhid = p.uhid;
+        final appt = ObjectBoxService.instance.appointmentBox.get(appointmentId);
+        if (appt != null) token = appt.tokenNumber;
+      }
+    } catch (_) {}
+
+    return {
+      'id': id,
+      'appointmentId': appointmentId,
+      'patientId': patientId,
+      'patientUhid': uhid, // Added for robust sync mapping
+      'tokenNumber': token, // Added for robust sync mapping
+      'patientName': patientName,
+      'doctorId': doctorId,
+      'doctorName': doctorName,
+      'diagnosis': diagnosis,
+      'complaints': complaints,
+      'notes': notes,
+      'itemsJson': itemsJson,
+      'labTestsJson': labTestsJson,
+      'vitalsJson': vitalsJson,
+      'imagesJson': imagesJson,
+      'proceduresJson': proceduresJson,
+      'dispensed': dispensed,
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
+    };
+  }
 
   factory Prescription.fromJson(Map<String, dynamic> json) => Prescription(
         id: json['id'] ?? 0,

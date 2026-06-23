@@ -1,5 +1,6 @@
 import 'package:objectbox/objectbox.dart';
 import '../utils/date_helper.dart';
+import '../services/objectbox_service.dart';
 
 // Status constants
 const String kStatusWaiting = 'waiting';
@@ -63,26 +64,37 @@ class Appointment {
     this.paymentMethod = 'cash',
   }) : createdAt = createdAt ?? DateTime.now();
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'patientId': patientId,
-        'patientName': patientName,
-        'patientPhone': patientPhone,
-        'doctorId': doctorId,
-        'doctorName': doctorName,
-        'tokenNumber': tokenNumber,
-        'status': status,
-        'consultationFee': consultationFee,
-        'notes': notes,
-        'scheduledAt': scheduledAt.toIso8601String(),
-        'calledAt': calledAt?.toIso8601String(),
-        'pharmacyAt': pharmacyAt?.toIso8601String(),
-        'completedAt': completedAt?.toIso8601String(),
-        'createdAt': createdAt.toIso8601String(),
-        'isWalkIn': isWalkIn,
-        'consultationBilled': consultationBilled,
-        'paymentMethod': paymentMethod,
-      };
+  Map<String, dynamic> toJson() {
+    String uhid = '';
+    try {
+      if (ObjectBoxService.isInitialized) {
+        final p = ObjectBoxService.instance.patientBox.get(patientId);
+        if (p != null) uhid = p.uhid;
+      }
+    } catch (_) {}
+
+    return {
+      'id': id,
+      'patientId': patientId,
+      'patientName': patientName,
+      'patientPhone': patientPhone,
+      'patientUhid': uhid, // Added for robust sync mapping
+      'doctorId': doctorId,
+      'doctorName': doctorName,
+      'tokenNumber': tokenNumber,
+      'status': status,
+      'consultationFee': consultationFee,
+      'notes': notes,
+      'scheduledAt': scheduledAt.toIso8601String(),
+      'calledAt': calledAt?.toIso8601String(),
+      'pharmacyAt': pharmacyAt?.toIso8601String(),
+      'completedAt': completedAt?.toIso8601String(),
+      'createdAt': createdAt.toIso8601String(),
+      'isWalkIn': isWalkIn,
+      'consultationBilled': consultationBilled,
+      'paymentMethod': paymentMethod,
+    };
+  }
 
   factory Appointment.fromJson(Map<String, dynamic> json) => Appointment(
         id: json['id'] ?? 0,

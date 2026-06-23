@@ -11,6 +11,7 @@ import '../services/local_server_service.dart';
 import '../services/sync_service.dart';
 import '../services/sync_queue_service.dart';
 import '../services/audit_service.dart';
+import '../services/firebase_sync_service.dart';
 
 class PatientProvider extends ChangeNotifier {
   List<Patient> _patients = [];
@@ -60,6 +61,7 @@ class PatientProvider extends ChangeNotifier {
     final oldPatient = isNew ? null : ObjectBoxService.instance.patientBox.get(p.id);
     final oldJson = oldPatient != null ? oldPatient.toJson() : <String, dynamic>{};
 
+    p.updatedAt = DateTime.now();
     ObjectBoxService.instance.patientBox.put(p);
 
     // Log patient save/update
@@ -82,12 +84,13 @@ class PatientProvider extends ChangeNotifier {
     load();
 
     // Broadcast or Push network sync
-    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    final isClient = ObjectBoxService.instance.settings.isWindowsClient;
+    final isHub = !ObjectBoxService.instance.settings.isWindowsClient;
     if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
+      FirebaseSyncService.instance.broadcastUpdate('patients', p.toJson());
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'patient',
@@ -127,12 +130,13 @@ class PatientProvider extends ChangeNotifier {
     load();
 
     // Broadcast sync
-    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    final isClient = ObjectBoxService.instance.settings.isWindowsClient;
+    final isHub = !ObjectBoxService.instance.settings.isWindowsClient;
     if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'patient_deleted', 'uhid': uhid});
       }
+      FirebaseSyncService.instance.deleteDocument('patients', uhid);
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'patient',
@@ -218,8 +222,8 @@ class PatientProvider extends ChangeNotifier {
 
         ObjectBoxService.instance.patientImageBox.put(pImage);
 
-        final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-        final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+        final isClient = ObjectBoxService.instance.settings.isWindowsClient;
+        final isHub = !ObjectBoxService.instance.settings.isWindowsClient;
         if (isHub) {
           if (LocalServerService.instance.isRunning) {
             LocalServerService.instance.broadcast({'event': 'sync_received'});
@@ -261,8 +265,8 @@ class PatientProvider extends ChangeNotifier {
       ObjectBoxService.instance.patientImageBox.remove(pImage.id);
       notifyListeners();
 
-      final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-      final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+      final isClient = ObjectBoxService.instance.settings.isWindowsClient;
+      final isHub = !ObjectBoxService.instance.settings.isWindowsClient;
       if (isHub && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       } else if (isClient && uhid.isNotEmpty) {

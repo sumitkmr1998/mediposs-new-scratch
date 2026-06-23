@@ -24,6 +24,8 @@ import '../../widgets/exit_backup_dialog.dart';
 import '../../shared/services/ota_update_service.dart';
 import '../../widgets/shop_selection_dialog.dart';
 import '../../shared/widgets/connectivity_overlay.dart';
+import '../../shared/services/subscription_service.dart';
+import '../paywall_screen.dart';
 
 import '../dashboard_screen.dart';
 import '../pos_screen.dart';
@@ -53,15 +55,45 @@ class _AppShellWindowsState extends State<AppShellWindows> {
   Timer? _hubCheckTimer;
   bool _isHubBackOnline = false;
 
+  bool _isFeatureLocked(BuildContext context, String destId) {
+    final sub = context.read<SubscriptionService>();
+    if (destId == 'analysis' && !sub.isPro) return true;
+    if ((destId == 'opd_queue' || destId == 'patients' || destId == 'opd_report') && !sub.isEnterprise) return true;
+    if (destId == 'audit_logs' && !sub.isEnterprise) return true;
+    return false;
+  }
+
+  void _showPaywall(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const PaywallScreen()),
+    );
+  }
+
+  void _onSyncServiceChange() {
+    if (!mounted) return;
+    debugPrint('AppShellWindows: SyncService notified change. Reloading initial data.');
+    _loadInitialData();
+  }
+
   @override
   void dispose() {
     _hubCheckTimer?.cancel();
+    try {
+      context.read<SyncService>().removeListener(_onSyncServiceChange);
+    } catch (_) {}
     super.dispose();
   }
 
   @override
   void initState() {
     super.initState();
+    
+    // Listen to SyncService changes to refresh local providers when sync executes
+    try {
+      context.read<SyncService>().addListener(_onSyncServiceChange);
+    } catch (e) {
+      debugPrint('AppShellWindows: Failed to add SyncService listener: $e');
+    }
     
     // Start periodic Hub availability check for Cloud Mode
     _hubCheckTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
@@ -281,7 +313,14 @@ class _AppShellWindowsState extends State<AppShellWindows> {
               if (isWide)
                 _SideNav(
                   selectedIndex: activeIndex,
-                  onDestinationSelected: (i) => nav.selectDestination(dests[i].id),
+                  onDestinationSelected: (i) {
+                    final dest = dests[i];
+                    if (_isFeatureLocked(context, dest.id)) {
+                      _showPaywall(context);
+                    } else {
+                      nav.selectDestination(dest.id);
+                    }
+                  },
                   destinations: dests,
                   isWindowsHub: !settings.isWindowsClient,
                   isConnected: wsvc.connected,
@@ -496,6 +535,8 @@ class _SideNav extends StatelessWidget {
                           const SizedBox(width: 12),
                           Expanded(child: Text(d.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: selected ? Theme.of(context).colorScheme.primary : context.textMutedColor, fontWeight: selected ? FontWeight.w700 : FontWeight.w400))),
                         ],
+                        if (_isDestLockedStatic(d.id, context.watch<SubscriptionService>().currentTier))
+                          Icon(Icons.lock_outline, size: 14, color: context.textMutedColor),
                       ],
                     ),
                   ),
@@ -633,4 +674,12 @@ class _StatusBadge extends StatelessWidget {
       ),
     );
   }
+}
+
+bool _isDestLockedStatic(String destId, UserTier tier) {
+  if (tier == UserTier.enterprise) return false;
+  if (tier == UserTier.pro) {
+    return destId == 'opd_queue' || destId == 'patients' || destId == 'opd_report' || destId == 'audit_logs';
+  }
+  return destId == 'analysis' || destId == 'opd_queue' || destId == 'patients' || destId == 'opd_report' || destId == 'audit_logs';
 }
