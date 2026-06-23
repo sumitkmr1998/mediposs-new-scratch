@@ -1390,7 +1390,7 @@ class _MedicinesGridState extends State<_MedicinesGrid> {
 
     final isClinical = widget.cart.isClinicalDispense;
     final medicines = widget.inv.rawMedicines
-        .where((m) => isClinical ? m.mainStock > 0 : m.storeStock > 0)
+        .where((m) => isClinical ? m.getNonExpiredMainStock() > 0 : m.getNonExpiredStoreStock() > 0)
         .where(
           (m) =>
               query.isEmpty ||
@@ -1869,7 +1869,7 @@ class _ProductCard extends StatelessWidget {
                         ),
                       ),
                       child: Text(
-                        '${cart.isClinicalDispense ? item.mainStock : item.storeStock}',
+                        '${cart.isClinicalDispense ? item.getNonExpiredMainStock() : item.getNonExpiredStoreStock()}',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
@@ -2250,7 +2250,7 @@ class _CartPanel extends StatelessWidget {
                               final newQty = int.tryParse(val);
                               if (newQty != null && newQty > 0) {
                                 int finalQty = newQty;
-                                final maxStock = cart.isClinicalDispense ? item.medicine!.mainStock : item.medicine!.storeStock;
+                                final maxStock = cart.isClinicalDispense ? item.medicine!.getNonExpiredMainStock() : item.medicine!.getNonExpiredStoreStock();
                                 if (!item.isProcedure &&
                                     !cart.isReturnMode &&
                                     finalQty > maxStock) {

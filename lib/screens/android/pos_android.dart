@@ -958,7 +958,7 @@ class _PosAndroidState extends State<PosAndroid> {
                     final q = val.text.toLowerCase();
                     final isClinical = cart.isClinicalDispense;
                     final meds = inv.rawMedicines.where((m) =>
-                        (isClinical ? m.mainStock > 0 : m.storeStock > 0) &&
+                        (isClinical ? m.getNonExpiredMainStock() > 0 : m.getNonExpiredStoreStock() > 0) &&
                         (m.name.toLowerCase().contains(q) ||
                             m.barcode.contains(val.text)));
                     final procs = context
@@ -1076,8 +1076,8 @@ class _PosAndroidState extends State<PosAndroid> {
                                     if (!isProc) ...[
                                       Builder(builder: (ctx) {
                                         final isClinical = cart.isClinicalDispense;
-                                        final stock = isClinical ? (item as Medicine).mainStock : (item as Medicine).storeStock;
-                                        final isLow = isClinical ? stock <= (item as Medicine).lowStockThreshold : (item as Medicine).isLowStock;
+                                         final stock = isClinical ? (item as Medicine).getNonExpiredMainStock() : (item as Medicine).getNonExpiredStoreStock();
+                                         final isLow = isClinical ? stock <= (item as Medicine).lowStockThreshold : (item as Medicine).isLowStock;
                                         return Text('Stock: $stock',
                                             style: TextStyle(
                                                 fontSize: 11,
@@ -1336,7 +1336,7 @@ class _CartItemTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cart = context.watch<CartProvider>();
-    final maxStock = item.isProcedure ? 9999 : (cart.isClinicalDispense ? item.medicine!.mainStock : item.medicine!.storeStock);
+    final maxStock = item.isProcedure ? 9999 : (cart.isClinicalDispense ? item.medicine!.getNonExpiredMainStock() : item.medicine!.getNonExpiredStoreStock());
 
     return GestureDetector(
       onLongPress: onLongPress,

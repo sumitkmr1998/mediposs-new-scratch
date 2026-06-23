@@ -728,8 +728,9 @@ class LocalServerService {
             int remaining = qty;
             final batches = m.batches.toList();
             batches.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
-            for (var b in batches) {
+             for (var b in batches) {
               if (remaining <= 0) break;
+              if (b.expiryDate.isBefore(DateTime.now())) continue;
               if (sale.isClinicalDispense) {
                 if (b.mainStock > 0) {
                   final d = remaining > b.mainStock ? b.mainStock : remaining;

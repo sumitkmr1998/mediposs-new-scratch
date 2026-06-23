@@ -276,6 +276,7 @@ class InventoryProvider extends ChangeNotifier {
 
         for (var batch in batches) {
           if (remainingToDeduct <= 0) break;
+          if (batch.expiryDate.isBefore(DateTime.now())) continue;
 
           if (batch.storeStock > 0) {
             final deduction = remainingToDeduct > batch.storeStock
@@ -356,6 +357,7 @@ class InventoryProvider extends ChangeNotifier {
 
         for (var batch in batches) {
           if (remainingToDeduct <= 0) break;
+          if (batch.expiryDate.isBefore(DateTime.now())) continue;
 
           if (batch.mainStock > 0) {
             final deduction = remainingToDeduct > batch.mainStock
