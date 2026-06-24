@@ -6,7 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';

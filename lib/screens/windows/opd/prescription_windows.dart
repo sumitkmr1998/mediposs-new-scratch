@@ -20,7 +20,7 @@ import '../../../widgets/phone_camera_dialog.dart';
 import '../../../shared/services/local_server_service.dart';
 import '../../../shared/services/objectbox_service.dart';
 import '../../../../shared/models/patient.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class PrescriptionWindows extends StatefulWidget {
   final Appointment appointment;
