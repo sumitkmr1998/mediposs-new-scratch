@@ -10,6 +10,7 @@ import '../../shared/services/sync_service.dart';
 import '../../theme/app_theme.dart';
 import 'package:intl/intl.dart';
 import '../../widgets/android/medicine_dialog_android.dart';
+import '../../widgets/android/bulk_purchase_dialog_android.dart';
 import '../../shared/widgets/app_status_badge.dart';
 import '../../shared/widgets/app_empty_state.dart';
 
@@ -48,7 +49,7 @@ class _WarehouseAndroidState extends State<WarehouseAndroid>
     final auth = context.watch<AuthProvider>();
     return Scaffold(
       backgroundColor: context.surfaceColor,
-      floatingActionButton: auth.hasInventoryWriteAccess
+      floatingActionButton: (auth.hasInventoryWriteAccess || auth.canAddStock)
           ? FloatingActionButton.extended(
               onPressed: () =>
                   AndroidMedicineDialog.show(context, medicine: null),
@@ -71,6 +72,22 @@ class _WarehouseAndroidState extends State<WarehouseAndroid>
             floating: true,
             forceElevated: innerBoxIsScrolled,
             elevation: innerBoxIsScrolled ? 2 : 0,
+            actions: [
+              if (auth.hasInventoryWriteAccess || auth.canAddStock)
+                Padding(
+                  padding: const EdgeInsets.only(right: 16.0),
+                  child: FilledButton.icon(
+                    onPressed: () => AndroidBulkPurchaseDialog.show(context),
+                    icon: const Icon(Icons.inventory_2_outlined, size: 18),
+                    label: const Text('BULK ENTRY'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppTheme.primaryLight.withValues(alpha: 0.1),
+                      foregroundColor: AppTheme.primary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+            ],
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(64),
               child: Container(
@@ -292,30 +309,30 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
               children: [
                 Expanded(
                   child: _CompactStockFlow(
+                    title: 'STORE STOCK',
+                    bulkLabel: 'BULK',
+                    activeLabel: 'ACTIVE',
+                    bulkValue: widget.medicine.bulkStoreStock,
+                    activeValue: widget.medicine.storeStock,
+                    color: const Color(0xFF14B8A6),
+                    bulkColor: Colors.teal,
+                    isLow: widget.medicine.isLowStock,
+                    onTransfer: () => _showTransferDialog(
+                        context, widget.medicine, 'bulkStore', 'store', widget.wh),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _CompactStockFlow(
                     title: 'CLINIC STOCK',
                     bulkLabel: 'BULK',
                     activeLabel: 'ACTIVE',
                     bulkValue: widget.medicine.bulkClinicStock,
                     activeValue: widget.medicine.mainStock,
                     color: AppTheme.indigo,
-                    bulkColor: Colors.blueGrey,
+                    bulkColor: Colors.deepPurple,
                     onTransfer: () => _showTransferDialog(
                         context, widget.medicine, 'bulkClinic', 'clinic', widget.wh),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _CompactStockFlow(
-                    title: 'STORE STOCK',
-                    bulkLabel: 'BULK',
-                    activeLabel: 'ACTIVE',
-                    bulkValue: widget.medicine.bulkStoreStock,
-                    activeValue: widget.medicine.storeStock,
-                    color: AppTheme.success,
-                    bulkColor: Colors.brown,
-                    isLow: widget.medicine.isLowStock,
-                    onTransfer: () => _showTransferDialog(
-                        context, widget.medicine, 'bulkStore', 'store', widget.wh),
                   ),
                 ),
               ],
@@ -372,7 +389,7 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
                   ),
                   ...widget.medicine.batches
                       .map((b) => _SimpleBatchRow(batch: b)),
-                  if (widget.auth.hasInventoryWriteAccess) ...[
+                  if (widget.auth.hasInventoryWriteAccess || widget.auth.canAddStock) ...[
                     const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,

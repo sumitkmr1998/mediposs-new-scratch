@@ -22,6 +22,7 @@ class AppUser {
   // Inventory
   bool canViewInventory;
   bool canEditInventory;
+  bool canAddStock;              // NEW: Register new batches/purchases
   bool canOverrideStock;         // Manual inventory adjustments
   bool canDeleteInventory;       // NEW: Separate delete right
 
@@ -70,6 +71,7 @@ class AppUser {
     this.canViewAnalytics = false,
     this.canViewInventory = false,
     this.canEditInventory = false,
+    this.canAddStock = false,
     this.canOverrideStock = false,
     this.canDeleteInventory = false,
     this.canViewWarehouse = false,
@@ -113,6 +115,7 @@ class AppUser {
         canViewAnalytics = true;
         canViewInventory = true;
         canEditInventory = true;
+        canAddStock = true;
         canDeleteInventory = true;
         canViewWarehouse = true;
         canTransferStock = true;
@@ -141,6 +144,7 @@ class AppUser {
       case 'pharmacist':
         canViewInventory = true;
         canEditInventory = true;
+        canAddStock = true;
         canViewWarehouse = true;
         canTransferStock = true;
         canAccessPOS = true;
@@ -211,6 +215,7 @@ class AppUser {
     canViewAnalytics = val;
     canViewInventory = val;
     canEditInventory = val;
+    canAddStock = val;
     canOverrideStock = val;
     canDeleteInventory = val;
     canViewWarehouse = val;
@@ -250,6 +255,7 @@ class AppUser {
         'canViewAnalytics': canViewAnalytics,
         'canViewInventory': canViewInventory,
         'canEditInventory': canEditInventory,
+        'canAddStock': canAddStock,
         'canOverrideStock': canOverrideStock,
         'canDeleteInventory': canDeleteInventory,
         'canViewWarehouse': canViewWarehouse,
@@ -289,6 +295,7 @@ class AppUser {
         canViewAnalytics: json['canViewAnalytics'] ?? false,
         canViewInventory: json['canViewInventory'] ?? false,
         canEditInventory: json['canEditInventory'] ?? false,
+        canAddStock: json['canAddStock'] ?? false,
         canOverrideStock: json['canOverrideStock'] ?? false,
         canDeleteInventory: json['canDeleteInventory'] ?? false,
         canViewWarehouse: json['canViewWarehouse'] ?? false,

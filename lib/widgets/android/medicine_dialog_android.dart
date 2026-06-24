@@ -89,11 +89,13 @@ class _MedicineRegistrationSheetState
   Widget _field(TextEditingController ctrl, String label,
       {TextInputType? keyboardType,
       String? Function(String?)? validator,
-      IconData? prefixIcon}) {
+      IconData? prefixIcon,
+      bool readOnly = false}) {
     return TextFormField(
       controller: ctrl,
       keyboardType: keyboardType,
       validator: validator,
+      readOnly: readOnly,
       textInputAction: TextInputAction.next,
       decoration: InputDecoration(
         labelText: label,
@@ -113,7 +115,7 @@ class _MedicineRegistrationSheetState
             borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: AppTheme.primary, width: 2)),
         filled: true,
-        fillColor: Theme.of(context).scaffoldBackgroundColor,
+        fillColor: readOnly ? context.textMutedColor.withValues(alpha: 0.05) : Theme.of(context).scaffoldBackgroundColor,
         isDense: true,
       ),
     );
@@ -206,6 +208,8 @@ class _MedicineRegistrationSheetState
   Widget build(BuildContext context) {
     final isEdit = widget.medicine != null;
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
+    final currentUser = context.watch<AuthProvider>().currentUser;
+    final canEditFull = currentUser?.role.toLowerCase() == 'admin' || (currentUser?.canEditInventory ?? false) || !isEdit;
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottomPadding),
@@ -245,21 +249,21 @@ class _MedicineRegistrationSheetState
                       _buildFormSection(
                         title: 'SPECIFICATIONS',
                         children: [
-                          _field(_nameCtrl, 'MEDICINE NAME', prefixIcon: Icons.medication_outlined, validator: (v) => v!.isEmpty ? 'Name required' : null),
+                          _field(_nameCtrl, 'MEDICINE NAME', prefixIcon: Icons.medication_outlined, validator: (v) => v!.isEmpty ? 'Name required' : null, readOnly: !canEditFull),
                           const SizedBox(height: 12),
                           Row(
                             children: [
-                              Expanded(child: _field(_barcodeCtrl, 'BARCODE', prefixIcon: Icons.qr_code_rounded)),
+                              Expanded(child: _field(_barcodeCtrl, 'BARCODE', prefixIcon: Icons.qr_code_rounded, readOnly: !canEditFull)),
                               const SizedBox(width: 8),
-                              Expanded(child: _field(_categoryCtrl, 'CATEGORY', prefixIcon: Icons.category_rounded)),
+                              Expanded(child: _field(_categoryCtrl, 'CATEGORY', prefixIcon: Icons.category_rounded, readOnly: !canEditFull)),
                             ],
                           ),
                           const SizedBox(height: 12),
                           Row(
                             children: [
-                              Expanded(child: _field(_unitCtrl, 'UNIT', prefixIcon: Icons.scale_rounded)),
+                              Expanded(child: _field(_unitCtrl, 'UNIT', prefixIcon: Icons.scale_rounded, readOnly: !canEditFull)),
                               const SizedBox(width: 8),
-                              Expanded(child: _field(_thresholdCtrl, 'LOW STOCK ALERT', keyboardType: TextInputType.number, prefixIcon: Icons.warning_amber_rounded)),
+                              Expanded(child: _field(_thresholdCtrl, 'LOW STOCK ALERT', keyboardType: TextInputType.number, prefixIcon: Icons.warning_amber_rounded, readOnly: !canEditFull)),
                             ],
                           ),
                           const SizedBox(height: 12),
@@ -268,11 +272,11 @@ class _MedicineRegistrationSheetState
                             subtitle: const Text('Prescription & special reporting compliance mandatory', style: TextStyle(fontSize: 10)),
                             value: _isScheduleH1,
                             activeColor: AppTheme.danger,
-                            onChanged: (val) {
+                            onChanged: canEditFull ? (val) {
                               setState(() {
                                 _isScheduleH1 = val ?? false;
                               });
-                            },
+                            } : null,
                             controlAffinity: ListTileControlAffinity.leading,
                             contentPadding: EdgeInsets.zero,
                           ),
@@ -284,9 +288,10 @@ class _MedicineRegistrationSheetState
                         children: [
                           Row(
                             children: [
-                              Expanded(child: _field(_purchaseCtrl, 'PURCHASE PRICE (₹)', keyboardType: TextInputType.number, prefixIcon: Icons.currency_rupee_rounded)),
+                              Expanded(child: _field(_purchaseCtrl, 'PURCHASE PRICE (₹)', keyboardType: TextInputType.number, prefixIcon: Icons.currency_rupee_rounded, readOnly: !canEditFull)),
                               const SizedBox(width: 8),
                               Expanded(child: _field(_sellCtrl, 'SELLING PRICE (₹)', keyboardType: TextInputType.number, prefixIcon: Icons.sell_rounded,
+                                readOnly: !canEditFull,
                                 validator: (v) => double.tryParse(v ?? '') == null ? 'Invalid price' : null)),
                             ],
                           ),
@@ -458,8 +463,8 @@ class _BatchItem extends StatelessWidget {
             children: [
               Text('${batch.mainStock + batch.storeStock + batch.bulkClinicStock + batch.bulkStoreStock} PCS', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
               const SizedBox(height: 2),
-              Text('CLINIC:${batch.mainStock} | STORE:${batch.storeStock}', style: TextStyle(fontSize: 10, color: context.textMutedColor, fontWeight: FontWeight.w700)),
-              Text('C.BULK:${batch.bulkClinicStock} | S.BULK:${batch.bulkStoreStock}', style: TextStyle(fontSize: 9, color: context.textMutedColor, fontWeight: FontWeight.w700)),
+              Text('STORE:${batch.storeStock} | CLINIC:${batch.mainStock}', style: TextStyle(fontSize: 10, color: context.textMutedColor, fontWeight: FontWeight.w700)),
+              Text('S.BULK:${batch.bulkStoreStock} | C.BULK:${batch.bulkClinicStock}', style: TextStyle(fontSize: 9, color: context.textMutedColor, fontWeight: FontWeight.w700)),
             ],
           ),
           const SizedBox(width: 8),
@@ -569,17 +574,17 @@ class _BatchDialogState extends State<_BatchDialog> {
             const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(child: _field(_bulkClinicCtrl, 'CLINIC BULK', keyboardType: TextInputType.number)),
-                const SizedBox(width: 12),
                 Expanded(child: _field(_bulkStoreCtrl, 'STORE BULK', keyboardType: TextInputType.number)),
+                const SizedBox(width: 12),
+                Expanded(child: _field(_bulkClinicCtrl, 'CLINIC BULK', keyboardType: TextInputType.number)),
               ],
             ),
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(child: _field(_hubCtrl, 'CLINIC DISP', keyboardType: TextInputType.number)),
-                const SizedBox(width: 12),
                 Expanded(child: _field(_posCtrl, 'STORE POS', keyboardType: TextInputType.number)),
+                const SizedBox(width: 12),
+                Expanded(child: _field(_hubCtrl, 'CLINIC DISP', keyboardType: TextInputType.number)),
               ],
             ),
           ],

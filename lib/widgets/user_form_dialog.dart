@@ -35,6 +35,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
   // Inventory
   bool _canViewInventory = false;
   bool _canEditInventory = false;
+  bool _canAddStock = false;
+  bool _canOverrideStock = false;
 
   // Warehouse
   bool _canViewWarehouse = false;
@@ -60,7 +62,6 @@ class _UserFormDialogState extends State<UserFormDialog> {
   // Security & Data
   bool _canViewPurchasePrice = false;
   bool _canExportData = false;
-  bool _canOverrideStock = false;
   bool _canOverridePrice = false;
   bool _canBulkDiscount = false;
   bool _canViewHistoricalData = true;
@@ -89,7 +90,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
 
       _canViewInventory = u.canViewInventory;
       _canEditInventory = u.canEditInventory;
-
+      _canAddStock = u.canAddStock;
+      _canOverrideStock = u.canOverrideStock;
       _canViewWarehouse = u.canViewWarehouse;
       _canTransferStock = u.canTransferStock;
 
@@ -109,7 +111,6 @@ class _UserFormDialogState extends State<UserFormDialog> {
 
       _canViewPurchasePrice = u.canViewPurchasePrice;
       _canExportData = u.canExportData;
-      _canOverrideStock = u.canOverrideStock;
       _canOverridePrice = u.canOverridePrice;
       _canBulkDiscount = u.canBulkDiscount;
       _canViewHistoricalData = u.canViewHistoricalData;
@@ -132,6 +133,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
       _canViewAnalytics = tempUser.canViewAnalytics;
       _canViewInventory = tempUser.canViewInventory;
       _canEditInventory = tempUser.canEditInventory;
+      _canAddStock = tempUser.canAddStock;
+      _canOverrideStock = tempUser.canOverrideStock;
       _canViewWarehouse = tempUser.canViewWarehouse;
       _canTransferStock = tempUser.canTransferStock;
       _canAccessPOS = tempUser.canAccessPOS;
@@ -147,7 +150,6 @@ class _UserFormDialogState extends State<UserFormDialog> {
       _canDispenseMedicines = tempUser.canDispenseMedicines;
       _canViewPurchasePrice = tempUser.canViewPurchasePrice;
       _canExportData = tempUser.canExportData;
-      _canOverrideStock = tempUser.canOverrideStock;
       _canOverridePrice = tempUser.canOverridePrice;
       _canBulkDiscount = tempUser.canBulkDiscount;
       _canViewHistoricalData = tempUser.canViewHistoricalData;
@@ -192,8 +194,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
 
     u.canViewInventory = _canViewInventory;
     u.canEditInventory = _canEditInventory;
-
-    u.canViewWarehouse = _canViewWarehouse;
+    u.canAddStock = _canAddStock;
+    u.canOverrideStock = _canOverrideStock;
     u.canTransferStock = _canTransferStock;
 
     u.canAccessPOS = _canAccessPOS;
@@ -212,7 +214,6 @@ class _UserFormDialogState extends State<UserFormDialog> {
 
     u.canViewPurchasePrice = _canViewPurchasePrice;
     u.canExportData = _canExportData;
-    u.canOverrideStock = _canOverrideStock;
     u.canOverridePrice = _canOverridePrice;
     u.canBulkDiscount = _canBulkDiscount;
     u.canViewHistoricalData = _canViewHistoricalData;
@@ -462,6 +463,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
                                             _canViewInventory = v;
                                             if (!v) {
                                               _canEditInventory = false;
+                                              _canAddStock = false;
                                               _canDeleteInventory = false;
                                               _canOverrideStock = false;
                                             }
@@ -469,7 +471,14 @@ class _UserFormDialogState extends State<UserFormDialog> {
                                           _PermTile('Modify Items', 'Edit medicine details/pricing', _canEditInventory, (v) => setState(() {
                                             _canEditInventory = v;
                                             if (v) _canViewInventory = true;
-                                            if (!v) _canDeleteInventory = false;
+                                          })),
+                                          _PermTile('Add Stock & Purchases', 'Register new batches and bulk purchases', _canAddStock, (v) => setState(() {
+                                            _canAddStock = v;
+                                            if (v) _canViewInventory = true;
+                                          })),
+                                          _PermTile('Stock Corrections', 'Manually override stock counts', _canOverrideStock, (v) => setState(() {
+                                            _canOverrideStock = v;
+                                            if (v) _canViewInventory = true;
                                           })),
                                           _PermTile('Delete Items (Danger)', 'Permanently remove medicines', _canDeleteInventory, (v) => setState(() {
                                             _canDeleteInventory = v;

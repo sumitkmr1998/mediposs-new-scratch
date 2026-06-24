@@ -46,7 +46,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
 
   Future<void> _importExcel(BuildContext context) async {
     final auth = context.read<AuthProvider>();
-    if (!auth.hasInventoryWriteAccess) return;
+    if (!auth.hasInventoryWriteAccess && !auth.canAddStock) return;
 
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -419,6 +419,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final wh = context.watch<WarehouseProvider>();
     return Scaffold(
       backgroundColor: context.bgColor,
       appBar: AppBar(
@@ -426,7 +427,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
         elevation: 0,
         backgroundColor: context.surfaceColor,
         actions: [
-          if (auth.hasInventoryWriteAccess) ...[
+          if (auth.hasInventoryWriteAccess || auth.canAddStock)
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: FilledButton.icon(
@@ -443,6 +444,27 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
                 label: const Text('Import Excel'),
               ),
             ),
+          if (auth.hasWarehouseWriteAccess)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.indigo,
+                  foregroundColor: Colors.white,
+                  elevation: 2,
+                  shadowColor: AppTheme.indigo.withValues(alpha: 0.3),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () => showDialog(
+                  context: context,
+                  builder: (ctx) => _BulkTransferDialog(wh: wh),
+                ),
+                icon: const Icon(Icons.swap_horiz, size: 18),
+                label: const Text('Bulk Transfer'),
+              ),
+            ),
+          if (auth.hasInventoryWriteAccess || auth.canAddStock)
             Padding(
               padding: const EdgeInsets.only(right: 16),
               child: FilledButton.icon(
@@ -462,7 +484,6 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
                 label: const Text('Bulk Purchase Entry'),
               ),
             ),
-          ]
         ],
         bottom: TabBar(
           controller: _tabs,
@@ -477,14 +498,14 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
           ],
         ),
       ),
-      floatingActionButton: auth.hasInventoryWriteAccess
+      floatingActionButton: (auth.hasInventoryWriteAccess || auth.canAddStock)
           ? FloatingActionButton.extended(
               onPressed: () {
                 MedicineDialog.show(context, medicine: null);
               },
               backgroundColor: AppTheme.primary,
               icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('New Medicine',
+              label: const Text('Add Medicine / Stock',
                   style: TextStyle(color: Colors.white)),
             )
           : null,
@@ -615,18 +636,6 @@ class _StockLevelsTabState extends State<_StockLevelsTab> {
                       );
                     },
                   ),
-                  if (auth.hasWarehouseWriteAccess) ...[
-                    const SizedBox(width: 8),
-                    IconButton(
-                      tooltip: 'Bulk Transfer Clinic Stock to Store',
-                      icon:
-                          const Icon(Icons.swap_horiz, color: AppTheme.success),
-                      onPressed: () => showDialog(
-                        context: context,
-                        builder: (ctx) => _BulkTransferDialog(wh: wh),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ],
@@ -758,53 +767,10 @@ class _ModernMedicineCardWindowsState
                     child: Column(
                       children: [
                         _MetricBlock(
-                          label: 'Clinic Bulk',
-                          value: widget.medicine.bulkClinicStock,
-                          icon: Icons.warehouse,
-                          color: Colors.blueGrey,
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Tooltip(
-                            message: 'Transfer Clinic Bulk to Dispensing',
-                            child: InkWell(
-                              onTap: () => _showTransferDialog(
-                                  context,
-                                  widget.medicine,
-                                  'bulkClinic',
-                                  'clinic',
-                                  widget.wh),
-                              borderRadius: BorderRadius.circular(20),
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: AppTheme.indigo.withValues(alpha: 0.1),
-                                ),
-                                child: const Icon(Icons.arrow_downward_rounded,
-                                    size: 16, color: AppTheme.indigo),
-                              ),
-                            ),
-                          ),
-                        ),
-                        _MetricBlock(
-                          label: 'Clinic',
-                          value: widget.medicine.mainStock,
-                          icon: Icons.medical_services,
-                          color: AppTheme.indigo,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        _MetricBlock(
                           label: 'Store Bulk',
                           value: widget.medicine.bulkStoreStock,
                           icon: Icons.warehouse_outlined,
-                          color: Colors.brown,
+                          color: Colors.teal,
                         ),
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 4),
@@ -837,6 +803,49 @@ class _ModernMedicineCardWindowsState
                           icon: Icons.storefront,
                           color: const Color(0xFF14B8A6),
                           isWarning: widget.medicine.isLowStock,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        _MetricBlock(
+                          label: 'Clinic Bulk',
+                          value: widget.medicine.bulkClinicStock,
+                          icon: Icons.warehouse,
+                          color: Colors.deepPurple,
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Tooltip(
+                            message: 'Transfer Clinic Bulk to Dispensing',
+                            child: InkWell(
+                              onTap: () => _showTransferDialog(
+                                  context,
+                                  widget.medicine,
+                                  'bulkClinic',
+                                  'clinic',
+                                  widget.wh),
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: AppTheme.indigo.withValues(alpha: 0.1),
+                                ),
+                                child: const Icon(Icons.arrow_downward_rounded,
+                                    size: 16, color: AppTheme.indigo),
+                              ),
+                            ),
+                          ),
+                        ),
+                        _MetricBlock(
+                          label: 'Clinic',
+                          value: widget.medicine.mainStock,
+                          icon: Icons.medical_services,
+                          color: AppTheme.indigo,
                         ),
                       ],
                     ),
@@ -1050,20 +1059,6 @@ class _BatchDetailsDialog extends StatelessWidget {
                               Expanded(
                                 child: Column(
                                   children: [
-                                    const Text('CLINIC BULK',
-                                        style: TextStyle(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.bold)),
-                                    Text('${b.bulkClinicStock}',
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.w900,
-                                            fontSize: 14)),
-                                  ],
-                                ),
-                              ),
-                              Expanded(
-                                child: Column(
-                                  children: [
                                     const Text('STORE BULK',
                                         style: TextStyle(
                                             fontSize: 9,
@@ -1078,11 +1073,11 @@ class _BatchDetailsDialog extends StatelessWidget {
                               Expanded(
                                 child: Column(
                                   children: [
-                                    const Text('CLINIC',
+                                    const Text('CLINIC BULK',
                                         style: TextStyle(
                                             fontSize: 9,
                                             fontWeight: FontWeight.bold)),
-                                    Text('${b.mainStock}',
+                                    Text('${b.bulkClinicStock}',
                                         style: const TextStyle(
                                             fontWeight: FontWeight.w900,
                                             fontSize: 14)),
@@ -1097,6 +1092,20 @@ class _BatchDetailsDialog extends StatelessWidget {
                                             fontSize: 9,
                                             fontWeight: FontWeight.bold)),
                                     Text('${b.storeStock}',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 14)),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    const Text('CLINIC',
+                                        style: TextStyle(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold)),
+                                    Text('${b.mainStock}',
                                         style: const TextStyle(
                                             fontWeight: FontWeight.w900,
                                             fontSize: 14)),
@@ -1264,18 +1273,18 @@ class _EditBatchDialogState extends State<_EditBatchDialog> {
             children: [
               Expanded(
                 child: TextField(
-                  controller: _bulkClinicCtrl,
+                  controller: _bulkStoreCtrl,
                   decoration: const InputDecoration(
-                      labelText: 'Clinic Bulk', isDense: true),
+                      labelText: 'Store Bulk', isDense: true),
                   keyboardType: TextInputType.number,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: TextField(
-                  controller: _bulkStoreCtrl,
+                  controller: _bulkClinicCtrl,
                   decoration: const InputDecoration(
-                      labelText: 'Store Bulk', isDense: true),
+                      labelText: 'Clinic Bulk', isDense: true),
                   keyboardType: TextInputType.number,
                 ),
               ),
@@ -1286,18 +1295,18 @@ class _EditBatchDialogState extends State<_EditBatchDialog> {
             children: [
               Expanded(
                 child: TextField(
-                  controller: _hubStockCtrl,
+                  controller: _storeStockCtrl,
                   decoration:
-                      const InputDecoration(labelText: 'Clinic', isDense: true),
+                      const InputDecoration(labelText: 'Store', isDense: true),
                   keyboardType: TextInputType.number,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: TextField(
-                  controller: _storeStockCtrl,
+                  controller: _hubStockCtrl,
                   decoration:
-                      const InputDecoration(labelText: 'Store', isDense: true),
+                      const InputDecoration(labelText: 'Clinic', isDense: true),
                   keyboardType: TextInputType.number,
                 ),
               ),
@@ -1971,28 +1980,65 @@ class _BulkStockEntryDialog extends StatefulWidget {
   State<_BulkStockEntryDialog> createState() => _BulkStockEntryDialogState();
 }
 
+class _BulkItem {
+  int clinicQty;
+  int storeQty;
+  int bulkClinicQty;
+  int bulkStoreQty;
+  String batchNo;
+  DateTime expiryDate;
+  
+  _BulkItem({
+    this.clinicQty = 0,
+    this.storeQty = 0,
+    this.bulkClinicQty = 0,
+    this.bulkStoreQty = 0,
+    this.batchNo = '',
+    required this.expiryDate,
+  });
+
+  int get totalQty => clinicQty + storeQty + bulkClinicQty + bulkStoreQty;
+}
+
 class _BulkStockEntryDialogState extends State<_BulkStockEntryDialog> {
-  final Map<int, int> _selectedItems = {}; // medicineId -> qty
+  final Map<int, _BulkItem> _selectedItems = {}; // medicineId -> item
   final TextEditingController _searchCtrl = TextEditingController();
   final TextEditingController _noteCtrl = TextEditingController();
   final TextEditingController _supplierCtrl = TextEditingController();
-  final TextEditingController _batchNoCtrl = TextEditingController();
-  DateTime _expiryDate = DateTime.now().add(const Duration(days: 365));
+  final FocusNode _searchFocusNode = FocusNode();
+  int _highlightedIndex = 0;
   List<Medicine> _searchResults = [];
-  String _destinationWarehouse =
-      'bulkClinic'; // Default to Clinic Bulk Warehouse
 
   void _onSearch(String q, List<Medicine> all) {
     if (q.isEmpty) {
-      setState(() => _searchResults = []);
+      setState(() {
+        _searchResults = [];
+        _highlightedIndex = 0;
+      });
       return;
     }
     setState(() {
+      _highlightedIndex = 0;
       _searchResults = all.where((m) {
         return m.name.toLowerCase().contains(q.toLowerCase()) ||
             m.barcode.contains(q);
       }).toList();
     });
+  }
+
+  void _selectMedicine(Medicine m) {
+    setState(() {
+      final activeBatch = m.batches.isNotEmpty ? m.batches.last : null;
+      _selectedItems[m.id] = _BulkItem(
+        bulkClinicQty: 1,
+        batchNo: activeBatch?.batchNo ?? '',
+        expiryDate: activeBatch?.expiryDate ?? DateTime.now().add(const Duration(days: 365)),
+      );
+      _searchCtrl.clear();
+      _searchResults.clear();
+      _highlightedIndex = 0;
+    });
+    _searchFocusNode.requestFocus();
   }
 
   @override
@@ -2024,83 +2070,59 @@ class _BulkStockEntryDialogState extends State<_BulkStockEntryDialog> {
       content: SizedBox(
         width: 1000,
         height: 700,
-        child: Column(
+        child: Stack(
+          clipBehavior: Clip.none,
           children: [
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Left Side: Search & Add
-                  Expanded(
-                    flex: 4,
-                    child: Column(
-                      children: [
-                        TextField(
-                          controller: _searchCtrl,
-                          onChanged: (q) => _onSearch(q, inv.medicines),
-                          decoration: InputDecoration(
-                            prefixIcon: const Icon(Icons.search),
-                            hintText: 'Search medicine to add...',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Expanded(
-                          child: _searchResults.isEmpty &&
-                                  _searchCtrl.text.isNotEmpty
-                              ? const Center(child: Text('No medicines found'))
-                              : ListView.builder(
-                                  itemCount: _searchResults.length,
-                                  itemBuilder: (ctx, i) {
-                                    final m = _searchResults[i];
-                                    final isAdded =
-                                        _selectedItems.containsKey(m.id);
-                                    return ListTile(
-                                      leading:
-                                          const Icon(Icons.vaccines, size: 20),
-                                      title: Text(m.name),
-                                      subtitle: Text(m.barcode),
-                                      trailing: isAdded
-                                          ? const Icon(Icons.check_circle,
-                                              color: AppTheme.success)
-                                          : IconButton(
-                                              icon: const Icon(
-                                                  Icons.add_circle_outline),
-                                              onPressed: () {
-                                                setState(() =>
-                                                    _selectedItems[m.id] = 1);
-                                              },
-                                            ),
-                                    );
-                                  },
-                                ),
-                        ),
-                      ],
+            Column(
+              children: [
+                // Top Search Bar
+                Focus(
+                  onKeyEvent: (node, event) {
+                    if (event is KeyDownEvent) {
+                      if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                        setState(() => _highlightedIndex = (_highlightedIndex + 1).clamp(0, _searchResults.length - 1));
+                        return KeyEventResult.handled;
+                      } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                        setState(() => _highlightedIndex = (_highlightedIndex - 1).clamp(0, _searchResults.length - 1));
+                        return KeyEventResult.handled;
+                      } else if (event.logicalKey == LogicalKeyboardKey.enter) {
+                        if (_searchResults.isNotEmpty && _highlightedIndex < _searchResults.length) {
+                          _selectMedicine(_searchResults[_highlightedIndex]);
+                          return KeyEventResult.handled;
+                        }
+                      }
+                    }
+                    return KeyEventResult.ignored;
+                  },
+                  child: TextField(
+                    controller: _searchCtrl,
+                    focusNode: _searchFocusNode,
+                    autofocus: true,
+                    onChanged: (q) => _onSearch(q, inv.medicines),
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.search),
+                      hintText: 'Search medicine to add (Arrows to navigate, Enter to choose)...',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
-                  const VerticalDivider(width: 40),
-                  // Right Side: Quantities & Summary
-                  Expanded(
-                    flex: 5,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Selected Items (${_selectedItems.length})',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 24),
-                        Expanded(
-                          child: _selectedItems.isEmpty
-                              ? Center(
-                                  child: Text(
-                                    'Add medicines from the left to start',
-                                    style: TextStyle(
-                                        color: context.textMutedColor),
-                                  ),
-                                )
+                ),
+                const SizedBox(height: 16),
+                
+                // Selected Items list
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Selected Items (${_selectedItems.length})',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: _selectedItems.isEmpty
+                            ? Center(
+                                child: Text('Search and add medicines above to start', style: TextStyle(color: context.textMutedColor)),
+                              )
                               : ListView.builder(
                                   itemCount: _selectedItems.length,
                                   itemBuilder: (ctx, i) {
@@ -2117,48 +2139,84 @@ class _BulkStockEntryDialogState extends State<_BulkStockEntryDialog> {
                                       ),
                                       child: Row(
                                         children: [
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(m.name,
-                                                    style: const TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.w600)),
-                                                Text(
-                                                    'Current Hub: ${m.mainStock}',
-                                                    style: TextStyle(
-                                                        fontSize: 11,
-                                                        color: context
-                                                            .textMutedColor)),
-                                              ],
-                                            ),
-                                          ),
-                                          SizedBox(
-                                            width: 100,
-                                            child: TextField(
-                                              keyboardType:
-                                                  TextInputType.number,
-                                              textAlign: TextAlign.center,
-                                              decoration: InputDecoration(
-                                                isDense: true,
-                                                contentPadding:
-                                                    const EdgeInsets.all(8),
-                                                suffixText: m.unit,
-                                                border:
-                                                    const OutlineInputBorder(),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(m.name,
+                                                        style: const TextStyle(
+                                                            fontWeight:
+                                                                FontWeight.w600)),
+                                                    Text(
+                                                        'Current Hub: ${m.mainStock}',
+                                                        style: TextStyle(
+                                                            fontSize: 11,
+                                                            color: context
+                                                                .textMutedColor)),
+                                                  ],
+                                                ),
                                               ),
-                                              onChanged: (v) {
-                                                final qty =
-                                                    int.tryParse(v) ?? 0;
-                                                _selectedItems[id] = qty;
-                                              },
-                                              controller: TextEditingController(
-                                                  text:
-                                                      '${_selectedItems[id]}'),
-                                            ),
-                                          ),
+                                              Expanded(
+                                                child: Padding(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                                  child: TextField(
+                                                    style: const TextStyle(fontSize: 13),
+                                                    decoration: const InputDecoration(labelText: 'Batch No', labelStyle: TextStyle(fontSize: 12), isDense: true, contentPadding: EdgeInsets.all(12), border: OutlineInputBorder()),
+                                                    onChanged: (v) => _selectedItems[id]!.batchNo = v,
+                                                    controller: TextEditingController(text: _selectedItems[id]!.batchNo),
+                                                  ),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                child: Padding(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                                  child: InkWell(
+                                                    onTap: () async {
+                                                      final picked = await showDatePicker(
+                                                        context: context,
+                                                        initialDate: _selectedItems[id]!.expiryDate,
+                                                        firstDate: DateTime.now(),
+                                                        lastDate: DateTime.now().add(const Duration(days: 3650)),
+                                                      );
+                                                      if (picked != null) {
+                                                        setState(() => _selectedItems[id]!.expiryDate = picked);
+                                                      }
+                                                    },
+                                                    child: InputDecorator(
+                                                      decoration: const InputDecoration(labelText: 'Expiry', labelStyle: TextStyle(fontSize: 12), isDense: true, contentPadding: EdgeInsets.all(12), border: OutlineInputBorder()),
+                                                      child: Text('${_selectedItems[id]!.expiryDate.day}/${_selectedItems[id]!.expiryDate.month}/${_selectedItems[id]!.expiryDate.year}', style: const TextStyle(fontSize: 13)),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Padding(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                                  child: Column(
+                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    children: [
+                                                      Row(
+                                                        children: [
+                                                          Expanded(child: _buildQtyField('B.Store', _selectedItems[id]!.bulkStoreQty, (v) => _selectedItems[id]!.bulkStoreQty = v)),
+                                                          const SizedBox(width: 4),
+                                                          Expanded(child: _buildQtyField('B.Clinic', _selectedItems[id]!.bulkClinicQty, (v) => _selectedItems[id]!.bulkClinicQty = v)),
+                                                        ],
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      Row(
+                                                        children: [
+                                                          Expanded(child: _buildQtyField('Store', _selectedItems[id]!.storeQty, (v) => _selectedItems[id]!.storeQty = v)),
+                                                          const SizedBox(width: 4),
+                                                          Expanded(child: _buildQtyField('Clinic', _selectedItems[id]!.clinicQty, (v) => _selectedItems[id]!.clinicQty = v)),
+                                                        ],
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
                                           IconButton(
                                             icon: const Icon(
                                                 Icons.remove_circle_outline,
@@ -2175,103 +2233,100 @@ class _BulkStockEntryDialogState extends State<_BulkStockEntryDialog> {
                                   },
                                 ),
                         ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 40),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _supplierCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Supplier Name',
-                      prefixIcon: const Icon(Icons.business),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: _destinationWarehouse,
-                    decoration: InputDecoration(
-                      labelText: 'Destination Warehouse / Entity',
-                      prefixIcon: const Icon(Icons.warehouse),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                const Divider(height: 40),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _supplierCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Supplier Name',
+                          prefixIcon: const Icon(Icons.business),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
                       ),
                     ),
-                    items: const [
-                      DropdownMenuItem(
-                          value: 'bulkClinic', child: Text('Clinic Bulk')),
-                      DropdownMenuItem(
-                          value: 'bulkStore', child: Text('Store Bulk')),
-                      DropdownMenuItem(value: 'clinic', child: Text('Clinic')),
-                      DropdownMenuItem(value: 'store', child: Text('Store')),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: TextField(
+                        controller: _noteCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Order Notes / Reference',
+                          prefixIcon: const Icon(Icons.note_alt_outlined),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            
+            // Dropdown overlay results
+            if (_searchCtrl.text.isNotEmpty && _searchResults.isNotEmpty)
+              Positioned(
+                top: 65, // Positioned under the search input
+                left: 0,
+                right: 0, 
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 250),
+                  decoration: BoxDecoration(
+                    color: context.surfaceColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: context.borderColor, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.15),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      )
                     ],
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() => _destinationWarehouse = val);
-                      }
+                  ),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _searchResults.length,
+                    itemBuilder: (context, idx) {
+                      final m = _searchResults[idx];
+                      final isHighlighted = _highlightedIndex == idx;
+                      final isAdded = _selectedItems.containsKey(m.id);
+
+                      return InkWell(
+                        onTap: () => _selectMedicine(m),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          color: isHighlighted
+                              ? AppTheme.primaryLight.withValues(alpha: 0.08)
+                              : null,
+                          child: Row(
+                            children: [
+                              const Icon(Icons.vaccines, size: 20),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(m.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    Text(m.barcode, style: TextStyle(fontSize: 11, color: context.textMutedColor)),
+                                  ],
+                                ),
+                              ),
+                              Text('Hub Stock: ${m.mainStock}', style: TextStyle(color: context.textMutedColor)),
+                              const SizedBox(width: 16),
+                              if (isAdded)
+                                const Icon(Icons.check_circle, color: AppTheme.success, size: 20)
+                              else
+                                const Icon(Icons.add_circle_outline, color: AppTheme.primaryLight, size: 20),
+                            ],
+                          ),
+                        ),
+                      );
                     },
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _noteCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Order Notes / Reference',
-                      prefixIcon: const Icon(Icons.note_alt_outlined),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: TextField(
-                    controller: _batchNoCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Batch Number',
-                      prefixIcon: const Icon(Icons.layers),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: InkWell(
-                    onTap: _pickExpiry,
-                    child: InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: 'Expiry Date',
-                        prefixIcon: const Icon(Icons.event),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        '${_expiryDate.day}/${_expiryDate.month}/${_expiryDate.year}',
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
           ],
         ),
       ),
@@ -2286,22 +2341,23 @@ class _BulkStockEntryDialogState extends State<_BulkStockEntryDialog> {
           onPressed: _selectedItems.isEmpty
               ? null
               : () {
-                  inv.addBatchStock(
-                    _destinationWarehouse == 'main' || _destinationWarehouse == 'clinic' ? _selectedItems : {},
-                    storeUpdates:
-                        _destinationWarehouse == 'store' ? _selectedItems : {},
-                    bulkClinicUpdates: _destinationWarehouse == 'bulkClinic'
-                        ? _selectedItems
-                        : {},
-                    bulkStoreUpdates: _destinationWarehouse == 'bulkStore'
-                        ? _selectedItems
-                        : {},
-                    note: _noteCtrl.text,
-                    supplier: _supplierCtrl.text,
-                    batchNo: _batchNoCtrl.text.trim(),
-                    expiryDate: _expiryDate,
-                    actor: context.read<AuthProvider>().currentUser,
-                  );
+                  final actor = context.read<AuthProvider>().currentUser;
+                  for (final entry in _selectedItems.entries) {
+                    final mId = entry.key;
+                    final item = entry.value;
+                    if (item.totalQty <= 0) continue;
+                    inv.addBatchStock(
+                      {mId: item.clinicQty},
+                      storeUpdates: {mId: item.storeQty},
+                      bulkClinicUpdates: {mId: item.bulkClinicQty},
+                      bulkStoreUpdates: {mId: item.bulkStoreQty},
+                      note: _noteCtrl.text,
+                      supplier: _supplierCtrl.text,
+                      batchNo: item.batchNo.trim(),
+                      expiryDate: item.expiryDate,
+                      actor: actor,
+                    );
+                  }
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                     content: Text('Purchase record created successfully'),
@@ -2320,28 +2376,60 @@ class _BulkStockEntryDialogState extends State<_BulkStockEntryDialog> {
     );
   }
 
-  Future<void> _pickExpiry() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _expiryDate,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 3650)),
-      locale: const Locale('en', 'GB'),
-      initialEntryMode: DatePickerEntryMode.input,
+  Widget _buildQtyField(String label, int val, Function(int) onChanged) {
+    return TextField(
+      keyboardType: TextInputType.number,
+      textAlign: TextAlign.center,
+      style: const TextStyle(fontSize: 13),
+      decoration: InputDecoration(
+        isDense: true, 
+        contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12), 
+        labelText: label, 
+        labelStyle: const TextStyle(fontSize: 11), 
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      onChanged: (v) {
+        final qty = int.tryParse(v) ?? 0;
+        onChanged(qty);
+      },
+      controller: TextEditingController(text: val == 0 ? '' : '$val'),
     );
-    if (picked != null) {
-      setState(() => _expiryDate = picked);
-    }
   }
 }
 
-class _PurchaseHistoryTab extends StatelessWidget {
+class _PurchaseHistoryTab extends StatefulWidget {
   const _PurchaseHistoryTab();
+
+  @override
+  State<_PurchaseHistoryTab> createState() => _PurchaseHistoryTabState();
+}
+
+class _PurchaseHistoryTabState extends State<_PurchaseHistoryTab> {
+  String _searchQuery = '';
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   @override
   Widget build(BuildContext context) {
     final inv = context.watch<InventoryProvider>();
-    final history = inv.purchaseHistory;
+    
+    var history = inv.purchaseHistory;
+    
+    // Apply search filter
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      history = history.where((p) => p.medicineName.toLowerCase().contains(q) || p.supplier.toLowerCase().contains(q)).toList();
+    }
+    
+    // Apply date filter
+    if (_startDate != null) {
+      history = history.where((p) => p.purchasedAt.isAfter(_startDate!) || p.purchasedAt.isAtSameMomentAs(_startDate!)).toList();
+    }
+    if (_endDate != null) {
+      // add 1 day to include the entire end date
+      final end = _endDate!.add(const Duration(days: 1));
+      history = history.where((p) => p.purchasedAt.isBefore(end)).toList();
+    }
 
     return Column(
       children: [
@@ -2359,11 +2447,121 @@ class _PurchaseHistoryTab extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('Inventory Purchase History',
-                      style:
-                          TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
                   Text('${history.length} records found',
                       style: TextStyle(color: context.textMutedColor)),
                 ],
+              ),
+              const Spacer(),
+              
+              // Date Filter
+              Container(
+                decoration: BoxDecoration(
+                  color: context.bgColor.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: _startDate == null ? context.textMutedColor : AppTheme.primary,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                      icon: const Icon(Icons.calendar_month, size: 20),
+                      label: Text(
+                        _startDate == null 
+                            ? 'Filter by Date' 
+                            : '${_startDate!.day}/${_startDate!.month}/${_startDate!.year} - ${_endDate?.day ?? ''}/${_endDate?.month ?? ''}/${_endDate?.year ?? ''}',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      onPressed: () async {
+                        final picked = await showDateRangePicker(
+                          context: context,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now(),
+                          initialDateRange: _startDate != null && _endDate != null ? DateTimeRange(start: _startDate!, end: _endDate!) : null,
+                          builder: (context, child) {
+                            return Theme(
+                              data: Theme.of(context).copyWith(
+                                colorScheme: const ColorScheme.light(
+                                  primary: AppTheme.primary,
+                                  onPrimary: Colors.white,
+                                  onSurface: Colors.black,
+                                ),
+                              ),
+                              child: child!,
+                            );
+                          },
+                        );
+                        if (picked != null) {
+                          setState(() {
+                            _startDate = picked.start;
+                            _endDate = picked.end;
+                          });
+                        }
+                      },
+                    ),
+                    if (_startDate != null)
+                      IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        color: AppTheme.danger,
+                        tooltip: 'Clear Date Filter',
+                        onPressed: () => setState(() { _startDate = null; _endDate = null; }),
+                      ),
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.arrow_drop_down, size: 20, color: AppTheme.primary),
+                      tooltip: 'Date Presets',
+                      onSelected: (value) {
+                        final now = DateTime.now();
+                        setState(() {
+                          if (value == 'today') {
+                            _startDate = DateTime(now.year, now.month, now.day);
+                            _endDate = _startDate;
+                          } else if (value == 'yesterday') {
+                            _startDate = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1));
+                            _endDate = _startDate;
+                          } else if (value == 'this_week') {
+                            _startDate = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+                            _endDate = _startDate!.add(const Duration(days: 6));
+                          } else if (value == 'this_month') {
+                            _startDate = DateTime(now.year, now.month, 1);
+                            // Set to last day of month
+                            _endDate = DateTime(now.year, now.month + 1, 0);
+                          }
+                        });
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(value: 'today', child: Text('Today')),
+                        const PopupMenuItem(value: 'yesterday', child: Text('Yesterday')),
+                        const PopupMenuItem(value: 'this_week', child: Text('This Week')),
+                        const PopupMenuItem(value: 'this_month', child: Text('This Month')),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              
+              // Search Bar
+              SizedBox(
+                width: 280,
+                child: TextField(
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                  decoration: InputDecoration(
+                    hintText: 'Search medicine or supplier...',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    filled: true,
+                    fillColor: context.bgColor.withValues(alpha: 0.5),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -2374,115 +2572,95 @@ class _PurchaseHistoryTab extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.inventory_2_outlined,
-                          size: 64, color: context.textMutedColor),
+                      Icon(Icons.inventory_2_outlined, size: 64, color: context.textMutedColor),
                       const SizedBox(height: 24),
-                      Text('No purchase records yet',
-                          style: TextStyle(
-                              color: context.textMutedColor, fontSize: 16)),
+                      Text('No purchase records found', style: TextStyle(color: context.textMutedColor, fontSize: 16)),
                     ],
                   ),
                 )
-              : ListView.builder(
+              : SingleChildScrollView(
+                  scrollDirection: Axis.vertical,
                   padding: const EdgeInsets.all(20),
-                  itemCount: history.length,
-                  itemBuilder: (context, index) {
-                    final p = history[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                        side: BorderSide(
-                            color: context.borderColor.withValues(alpha: 0.5)),
-                      ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 12),
-                        leading: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(Icons.shopping_bag,
-                              color: AppTheme.primary),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 300),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: context.cardColor,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: context.borderColor),
                         ),
-                        title: Row(
-                          children: [
-                            Text(p.medicineName,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w700, fontSize: 16)),
-                            const Spacer(),
-                            Text(
-                              '+${p.qty} Units',
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  color: AppTheme.success),
-                            ),
-                          ],
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit_outlined, size: 20),
-                              onPressed: () => showDialog(
-                                context: context,
-                                builder: (ctx) =>
-                                    _EditPurchaseDialog(purchase: p),
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline,
-                                  color: AppTheme.danger, size: 20),
-                              onPressed: () =>
-                                  _showDeleteConfirm(context, inv, p),
-                            ),
-                          ],
-                        ),
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  if (p.supplier.isNotEmpty) ...[
-                                    Icon(Icons.business,
-                                        size: 14,
-                                        color: context.textMutedColor),
-                                    const SizedBox(width: 4),
-                                    Text(p.supplier,
-                                        style: TextStyle(
-                                            color: context.textColor,
-                                            fontWeight: FontWeight.w600)),
-                                    const SizedBox(width: 16),
-                                  ],
-                                  Icon(Icons.calendar_today,
-                                      size: 14, color: context.textMutedColor),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${p.purchasedAt.day}/${p.purchasedAt.month}/${p.purchasedAt.year}',
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        color: context.textMutedColor),
-                                  ),
-                                ],
-                              ),
-                              if (p.note.isNotEmpty) ...[
-                                const SizedBox(height: 4),
-                                Text(p.note,
-                                    style: TextStyle(
-                                        fontStyle: FontStyle.italic,
-                                        color: context.textMutedColor,
-                                        fontSize: 13)),
-                              ],
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: DataTable(
+                            headingRowColor: WidgetStateProperty.all(context.bgColor.withValues(alpha: 0.5)),
+                            headingTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary),
+                            dataRowMinHeight: 60,
+                            dataRowMaxHeight: 60,
+                            dividerThickness: 1,
+                            columns: const [
+                              DataColumn(label: Text('Date & Time')),
+                              DataColumn(label: Text('Medicine Name')),
+                              DataColumn(label: Text('Supplier')),
+                              DataColumn(label: Text('Purchase Price'), numeric: true),
+                              DataColumn(label: Text('Qty'), numeric: true),
+                              DataColumn(label: Text('Notes')),
+                              DataColumn(label: Text('Actions')),
                             ],
+                            rows: history.map((p) {
+                              final dateStr = '${p.purchasedAt.day.toString().padLeft(2,'0')}/${p.purchasedAt.month.toString().padLeft(2,'0')}/${p.purchasedAt.year} ${p.purchasedAt.hour.toString().padLeft(2,'0')}:${p.purchasedAt.minute.toString().padLeft(2,'0')}';
+                              return DataRow(
+                                cells: [
+                                  DataCell(Text(dateStr, style: const TextStyle(fontSize: 13))),
+                                  DataCell(Text(p.medicineName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14))),
+                                  DataCell(
+                                    p.supplier.isEmpty 
+                                        ? Text('-', style: TextStyle(color: context.textMutedColor))
+                                        : Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.business, size: 14, color: context.textMutedColor),
+                                              const SizedBox(width: 6),
+                                              Text(p.supplier, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                            ],
+                                          )
+                                  ),
+                                  DataCell(Text('₹${p.purchasePrice.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600, color: AppTheme.success))),
+                                  DataCell(Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(color: AppTheme.indigo.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+                                    child: Text('+${p.qty}', style: const TextStyle(color: AppTheme.indigo, fontWeight: FontWeight.bold)),
+                                  )),
+                                  DataCell(SizedBox(
+                                    width: 150,
+                                    child: Text(p.note.isEmpty ? '-' : p.note, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: context.textMutedColor, fontStyle: FontStyle.italic)),
+                                  )),
+                                  DataCell(Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_outlined, size: 18),
+                                        color: AppTheme.primary,
+                                        tooltip: 'Edit Record',
+                                        onPressed: () => showDialog(context: context, builder: (ctx) => _EditPurchaseDialog(purchase: p)),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline, size: 18),
+                                        color: AppTheme.danger,
+                                        tooltip: 'Delete Record',
+                                        onPressed: () => _showDeleteConfirm(context, inv, p),
+                                      ),
+                                    ],
+                                  )),
+                                ]
+                              );
+                            }).toList(),
                           ),
                         ),
                       ),
-                    );
-                  },
+                    ),
+                  ),
                 ),
         ),
       ],
@@ -3543,7 +3721,7 @@ class _StockReportRowState extends State<_StockReportRow> {
                     ),
                   ),
                   Text(
-                    'Clinic: ${m.bulkClinicStock} | Store: ${m.bulkStoreStock}',
+                    'Store: ${m.bulkStoreStock} | Clinic: ${m.bulkClinicStock}',
                     style: TextStyle(fontSize: 9, color: context.textMutedColor),
                   ),
                 ],
@@ -3574,7 +3752,7 @@ class _StockReportRowState extends State<_StockReportRow> {
                     ),
                   ),
                   Text(
-                    'Clinic: ${m.mainStock} | Store: ${m.storeStock}',
+                    'Store: ${m.storeStock} | Clinic: ${m.mainStock}',
                     style: TextStyle(fontSize: 9, color: context.textMutedColor),
                   ),
                 ],

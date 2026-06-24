@@ -259,7 +259,7 @@
     },
     {
       "id": "2:1561353773588181738",
-      "lastPropertyId": "38:3749317672120738414",
+      "lastPropertyId": "39:3143693917650965998",
       "name": "AppUser",
       "properties": [
         {
@@ -441,6 +441,11 @@
         {
           "id": "38:3749317672120738414",
           "name": "canDispenseMedicines",
+          "type": 1
+        },
+        {
+          "id": "39:3143693917650965998",
+          "name": "canAddStock",
           "type": 1
         }
       ],
