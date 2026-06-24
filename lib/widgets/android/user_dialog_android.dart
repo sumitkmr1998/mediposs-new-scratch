@@ -50,6 +50,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
   // Inventory
   bool _canViewInventory = false;
   bool _canEditInventory = false;
+  bool _canAddStock = false;
   bool _canOverrideStock = false;
 
   // Warehouse
@@ -105,6 +106,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
 
       _canViewInventory = u.canViewInventory;
       _canEditInventory = u.canEditInventory;
+      _canAddStock = u.canAddStock;
       _canOverrideStock = u.canOverrideStock;
 
       _canViewWarehouse = u.canViewWarehouse;
@@ -148,6 +150,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
       _canViewAnalytics = tempUser.canViewAnalytics;
       _canViewInventory = tempUser.canViewInventory;
       _canEditInventory = tempUser.canEditInventory;
+      _canAddStock = tempUser.canAddStock;
       _canOverrideStock = tempUser.canOverrideStock;
       _canViewWarehouse = tempUser.canViewWarehouse;
       _canTransferStock = tempUser.canTransferStock;
@@ -211,6 +214,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
 
     u.canViewInventory = _canViewInventory;
     u.canEditInventory = _canEditInventory;
+    u.canAddStock = _canAddStock;
     u.canOverrideStock = _canOverrideStock;
 
     u.canViewWarehouse = _canViewWarehouse;
@@ -529,6 +533,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                                     _canViewInventory = v;
                                     if (!v) {
                                       _canEditInventory = false;
+                                      _canAddStock = false;
                                       _canDeleteInventory = false;
                                       _canOverrideStock = false;
                                     }
@@ -540,7 +545,14 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                               (v) => setState(() {
                                     _canEditInventory = v;
                                     if (v) _canViewInventory = true;
-                                    if (!v) _canDeleteInventory = false;
+                                  })),
+                          _buildPermToggle(
+                              'Add Stock & Purchases',
+                              'Register new batches and bulk purchases',
+                              _canAddStock,
+                              (v) => setState(() {
+                                    _canAddStock = v;
+                                    if (v) _canViewInventory = true;
                                   })),
                           _buildPermToggle(
                               'Override Stock',

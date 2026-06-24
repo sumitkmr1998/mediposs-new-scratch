@@ -60,12 +60,20 @@ class _MedicineDialogState extends State<MedicineDialog> {
       _bulkClinicCtrl.text = '${widget.medicine!.bulkClinicStock}';
       _bulkStoreCtrl.text = '${widget.medicine!.bulkStoreStock}';
       _isScheduleH1 = widget.medicine!.isScheduleH1;
+
+      if (widget.medicine!.batches.isNotEmpty) {
+        final latestBatch = widget.medicine!.batches.reduce((a, b) => a.expiryDate.compareTo(b.expiryDate) > 0 ? a : b);
+        _batchNoCtrl.text = latestBatch.batchNo;
+        _expiryDate = latestBatch.expiryDate;
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.medicine != null || _selectedExisting != null;
+    final currentUser = context.watch<AuthProvider>().currentUser;
+    final canEditFull = currentUser?.role.toLowerCase() == 'admin' || (currentUser?.canEditInventory ?? false) || !isEdit;
 
     return AlertDialog(
       title: Text(isEdit ? 'Update Medicine / Add Batch' : 'Add Medicine'),
@@ -77,30 +85,31 @@ class _MedicineDialogState extends State<MedicineDialog> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _autocompleteNameField(),
+                _autocompleteNameField(canEditFull),
                 const SizedBox(height: 12),
                 Row(children: [
-                  Expanded(child: _field(_barcodeCtrl, 'Barcode')),
+                  Expanded(child: _field(_barcodeCtrl, 'Barcode', readOnly: !canEditFull)),
                   const SizedBox(width: 12),
-                  Expanded(child: _field(_categoryCtrl, 'Category')),
+                  Expanded(child: _field(_categoryCtrl, 'Category', readOnly: !canEditFull)),
                 ]),
                 const SizedBox(height: 12),
                 Row(children: [
-                  Expanded(child: _field(_unitCtrl, 'Unit (Pcs/ml/mg)')),
+                  Expanded(child: _field(_unitCtrl, 'Unit (Pcs/ml/mg)', readOnly: !canEditFull)),
                   const SizedBox(width: 12),
                   Expanded(
                       child: _field(_thresholdCtrl, 'Low Stock Alert',
-                          keyboardType: TextInputType.number)),
+                          keyboardType: TextInputType.number, readOnly: !canEditFull)),
                 ]),
                 const SizedBox(height: 12),
                 Row(children: [
                   Expanded(
                       child: _field(_purchaseCtrl, 'Purchase Price ₹',
-                          keyboardType: TextInputType.number)),
+                          keyboardType: TextInputType.number, readOnly: !canEditFull)),
                   const SizedBox(width: 12),
                   Expanded(
                       child: _field(_sellCtrl, 'Selling Price ₹ *',
                           keyboardType: TextInputType.number,
+                          readOnly: !canEditFull,
                           validator: (v) => double.tryParse(v ?? '') == null
                               ? 'Invalid price'
                               : null)),
@@ -134,11 +143,11 @@ class _MedicineDialogState extends State<MedicineDialog> {
                   title: const Text('Schedule H1 Drug (Requires prescription & special logs)'),
                   value: _isScheduleH1,
                   activeColor: AppTheme.danger,
-                  onChanged: (val) {
+                  onChanged: canEditFull ? (val) {
                     setState(() {
                       _isScheduleH1 = val ?? false;
                     });
-                  },
+                  } : null,
                   controlAffinity: ListTileControlAffinity.leading,
                   contentPadding: EdgeInsets.zero,
                 ),
@@ -228,7 +237,7 @@ class _MedicineDialogState extends State<MedicineDialog> {
     );
   }
 
-  Widget _autocompleteNameField() {
+  Widget _autocompleteNameField(bool canEditFull) {
     final inv = context.read<InventoryProvider>();
     return Autocomplete<Medicine>(
       initialValue: TextEditingValue(text: _nameCtrl.text),
@@ -251,6 +260,14 @@ class _MedicineDialogState extends State<MedicineDialog> {
           _thresholdCtrl.text = selection.lowStockThreshold.toString();
           _isScheduleH1 = selection.isScheduleH1;
           // Quantities stay 0 for new batch entry unless editing established medicine
+          if (selection.batches.isNotEmpty) {
+            final latestBatch = selection.batches.reduce((a, b) => a.expiryDate.compareTo(b.expiryDate) > 0 ? a : b);
+            _batchNoCtrl.text = latestBatch.batchNo;
+            _expiryDate = latestBatch.expiryDate;
+          } else {
+            _batchNoCtrl.text = '';
+            _expiryDate = DateTime.now().add(const Duration(days: 365));
+          }
         });
       },
       fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
@@ -260,10 +277,13 @@ class _MedicineDialogState extends State<MedicineDialog> {
         return TextFormField(
           controller: controller,
           focusNode: focusNode,
+          readOnly: !canEditFull,
           onFieldSubmitted: (v) => onFieldSubmitted(),
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Medicine Name *',
             isDense: true,
+            filled: !canEditFull,
+            fillColor: !canEditFull ? Colors.grey.shade100 : null,
           ),
           onChanged: (val) {
             _nameCtrl.text = val;
