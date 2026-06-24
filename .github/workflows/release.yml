@@ -1,0 +1,92 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Determine Version and Flavor
+        id: prep
+        shell: bash
+        run: |
+          # Extract version from pubspec.yaml
+          VERSION=$(grep 'version: ' pubspec.yaml | sed 's/version: //')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
+          # Check branch to determine if it is Pro or Normal
+          BRANCH_NAME="${GITHUB_REF##*/}"
+          # If triggered by a tag, check which branch the tag is on
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            # Get the branch name from git
+            BRANCH_NAME=$(git branch -r --contains "$GITHUB_REF" | head -n 1 | sed 's/^[[:space:]]*//' | sed 's/origin\///')
+          fi
+          
+          echo "Detected branch: $BRANCH_NAME"
+          
+          if [[ "$BRANCH_NAME" == *"FIRESTORE"* ]]; then
+            echo "flavor=pro" >> $GITHUB_OUTPUT
+            echo "app_name=Mediposs Pro" >> $GITHUB_OUTPUT
+            echo "file_prefix=mediposs-pro" >> $GITHUB_OUTPUT
+          else
+            echo "flavor=normal" >> $GITHUB_OUTPUT
+            echo "app_name=Mediposs" >> $GITHUB_OUTPUT
+            echo "file_prefix=mediposs" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build Android APK
+        run: flutter build apk --release --split-per-abi
+
+      - name: Build Windows
+        run: flutter build windows --release
+
+      - name: Package Windows Build
+        shell: pwsh
+        run: |
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath build/${{ steps.prep.outputs.file_prefix }}-windows-v${{ steps.prep.outputs.version }}.zip
+
+      - name: Rename APKs for Release
+        shell: pwsh
+        run: |
+          Move-Item -Path build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk -Destination build/${{ steps.prep.outputs.file_prefix }}-companion-v${{ steps.prep.outputs.version }}-armv7.apk
+          Move-Item -Path build/app/outputs/flutter-apk/app-arm64-v8a-release.apk -Destination build/${{ steps.prep.outputs.file_prefix }}-companion-v${{ steps.prep.outputs.version }}-arm64.apk
+          Move-Item -Path build/app/outputs/flutter-apk/app-x86_64-release.apk -Destination build/${{ steps.prep.outputs.file_prefix }}-companion-v${{ steps.prep.outputs.version }}-x86_64.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "${{ steps.prep.outputs.app_name }} v${{ steps.prep.outputs.version }}"
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            build/${{ steps.prep.outputs.file_prefix }}-windows-v${{ steps.prep.outputs.version }}.zip
+            build/${{ steps.prep.outputs.file_prefix }}-companion-v${{ steps.prep.outputs.version }}-armv7.apk
+            build/${{ steps.prep.outputs.file_prefix }}-companion-v${{ steps.prep.outputs.version }}-arm64.apk
+            build/${{ steps.prep.outputs.file_prefix }}-companion-v${{ steps.prep.outputs.version }}-x86_64.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

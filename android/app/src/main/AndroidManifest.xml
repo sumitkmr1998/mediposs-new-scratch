@@ -13,7 +13,7 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <application
         android:usesCleartextTraffic="true"
-        android:label="medipos"
+        android:label="Mediposs Pro"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
         <activity

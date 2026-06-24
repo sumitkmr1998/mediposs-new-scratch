@@ -1,7 +1,7 @@
 name: medipos
 description: MediPoss - Medical Store POS with Dual Warehouse & Real-time Sync
 publish_to: 'none'
-version: 2.0.3
+version: 2.0.5
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -91,11 +91,11 @@ dev_dependencies:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: false
-  image_path: "assets/icon/app_icon.png"
+  image_path: "assets/icon/app_icon_pro.png"
   min_sdk_android: 21 # android min sdk min:16, default:21
   windows:
     generate: true
-    image_path: "assets/icon/app_icon.png"
+    image_path: "assets/icon/app_icon_pro.png"
     icon_size: 256 # min:48, max:256, default:256
 
 flutter:
