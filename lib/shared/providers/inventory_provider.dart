@@ -13,12 +13,10 @@ import '../services/local_server_service.dart';
 import '../../objectbox.g.dart';
 
 class InventoryProvider extends ChangeNotifier {
-  final Box<Medicine> _box = ObjectBoxService.instance.medicineBox;
-  final Box<PurchaseRecord> _purchaseBox =
-      ObjectBoxService.instance.purchaseBox;
-  final Box<MedicineBatch> _batchBox = ObjectBoxService.instance.batchBox;
-  final Box<RestockRequest> _restockBox =
-      ObjectBoxService.instance.restockRequestBox;
+  Box<Medicine> get _box => ObjectBoxService.instance.medicineBox;
+  Box<PurchaseRecord> get _purchaseBox => ObjectBoxService.instance.purchaseBox;
+  Box<MedicineBatch> get _batchBox => ObjectBoxService.instance.batchBox;
+  Box<RestockRequest> get _restockBox => ObjectBoxService.instance.restockRequestBox;
 
   List<Medicine> _medicines = [];
   List<PurchaseRecord> _purchaseHistory = [];

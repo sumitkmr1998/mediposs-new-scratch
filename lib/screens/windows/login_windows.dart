@@ -10,6 +10,9 @@ import '../../shared/providers/patient_provider.dart';
 import '../../shared/providers/opd_provider.dart';
 import '../../shared/providers/sales_provider.dart';
 import '../../theme/app_theme.dart';
+import 'dart:io';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../shared/providers/settings_provider.dart';
 
 import '../../shared/models/app_user.dart';
 
@@ -269,6 +272,34 @@ class _LoginWindowsState extends State<LoginWindows> {
                         label: const Text('Change Hub'),
                         style: TextButton.styleFrom(
                           foregroundColor: AppTheme.danger,
+                        ),
+                      ),
+                    if (Platform.isWindows && !context.read<SettingsProvider>().settings.isWindowsClient)
+                      TextButton.icon(
+                        onPressed: () async {
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setBool('hub_always_ask_startup', true);
+                          if (mounted) {
+                            showDialog(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Switch Shop / Database'),
+                                content: const Text('The app will now restart to let you select or create a database partition.'),
+                                actions: [
+                                  ElevatedButton(
+                                    onPressed: () => exit(0),
+                                    child: const Text('Restart Now'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.store),
+                        label: const Text('Switch Shop / Partition'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppTheme.primaryLight,
                         ),
                       ),
                   ] else ...[

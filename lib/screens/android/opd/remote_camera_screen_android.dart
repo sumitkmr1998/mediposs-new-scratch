@@ -5,7 +5,11 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../../shared/services/sync_service.dart';
+import '../../../shared/services/sync_queue_service.dart';
+import '../../../shared/services/objectbox_service.dart';
 import '../../../shared/models/patient_image.dart';
+import '../../../shared/models/patient.dart';
+import '../../../objectbox.g.dart';
 import '../../../theme/app_theme.dart';
 import 'package:intl/intl.dart';
 
@@ -93,29 +97,75 @@ class _RemoteCameraScreenAndroidState extends State<RemoteCameraScreenAndroid> {
         await sync.connect(widget.hubIp!);
       }
 
+      // Query local patient ID from local ObjectBox database by UHID
+      final patientBox = ObjectBoxService.instance.patientBox;
+      final localPatient = patientBox.query(Patient_.uhid.equals(widget.patientUhid)).build().findFirst();
+      final patientId = localPatient?.id ?? 0;
+
+      // Copy image to a permanent local directory
+      final appDocDir = await getApplicationDocumentsDirectory();
+      final photoDir = Directory(patientId > 0
+          ? '${appDocDir.path}/patient_photos/$patientId'
+          : '${appDocDir.path}/patient_photos/temp_${widget.patientUhid}');
+      if (!await photoDir.exists()) {
+        await photoDir.create(recursive: true);
+      }
+
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_captured.jpg';
+      final savedPath = '${photoDir.path}/$fileName';
+      await File(_capturedFile!.path).copy(savedPath);
+
       final photo = PatientImage(
-        patientId: 0, // Server will resolve via UHID
-        imagePath: _capturedFile!.path,
+        patientId: patientId,
+        imagePath: savedPath,
         category: 'Prescription Capture',
         date: DateTime.now(),
       );
 
-      final ok = await sync.pushPatientPhoto(photo, widget.patientUhid);
+      // Save PatientImage to local database
+      ObjectBoxService.instance.patientImageBox.put(photo);
 
-      if (ok) {
+      // Attempt immediate upload
+      bool uploadOk = false;
+      try {
+        uploadOk = await sync.pushPatientPhoto(photo, widget.patientUhid);
+      } catch (e) {
+        debugPrint('SyncService: Immediate photo upload failed, will queue: $e');
+      }
+
+      if (uploadOk) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Upload successful! Window updated.')),
+            const SnackBar(content: Text('Upload successful! Hub updated.')),
           );
           Navigator.pop(context);
         }
       } else {
-        throw 'Server rejected the upload.';
+        // Network failed or was slow - add to sync queue for background retry
+        SyncQueueService.instance.addToQueue(
+          entity: 'photo',
+          action: 'create',
+          data: {
+            'id': photo.id,
+            'patientId': patientId,
+            'uhid': widget.patientUhid,
+          },
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Saved locally! Photo will sync automatically when network is available.'),
+              duration: Duration(seconds: 4),
+            ),
+          );
+          Navigator.pop(context);
+        }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: $e')),
+          SnackBar(content: Text('Error saving photo: $e')),
         );
       }
     } finally {

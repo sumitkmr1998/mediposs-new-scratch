@@ -12,6 +12,14 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import '../../shared/services/firebase_sync_service.dart';
 import '../../shared/providers/settings_provider.dart';
+import '../../shared/models/shop_profile.dart';
+import '../../shared/services/objectbox_service.dart';
+import '../../shared/providers/inventory_provider.dart';
+import '../../shared/providers/sales_provider.dart';
+import '../../shared/providers/patient_provider.dart';
+import '../../shared/providers/opd_provider.dart';
+import '../../shared/providers/prescription_provider.dart';
+import '../../shared/providers/template_provider.dart';
 import 'package:battery_optimization_helper/battery_optimization_helper.dart';
 
 class ConnectionAndroid extends StatefulWidget {
@@ -32,6 +40,95 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
   Timer? _hubCheckTimer;
   bool _isHubBackOnline = false;
 
+  List<ShopProfile> _savedShops = [];
+  bool _showManualSetup = false;
+  bool _isLoadingShops = true;
+  String _isConnectingProfileId = '';
+
+  Future<void> _connectShopProfile(ShopProfile profile) async {
+    setState(() {
+      _isConnecting = true;
+      _errorMsg = null;
+      _isConnectingProfileId = profile.shopId;
+    });
+
+    final sync = context.read<SyncService>();
+    bool success = false;
+
+    // Try Local IP first
+    if (profile.localIp.isNotEmpty) {
+      final err = await sync.connect(profile.localIp);
+      if (err == null) {
+        success = true;
+      }
+    }
+
+    // Try Cloud URL second
+    if (!success && profile.cloudflareUrl.isNotEmpty) {
+      final err = await sync.connect(profile.cloudflareUrl);
+      if (err == null) {
+        success = true;
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _isConnecting = false;
+        _isConnectingProfileId = '';
+      });
+      if (success) {
+        // Start WebSocket for real-time triggers/sync
+        final wsService = context.read<WebSocketService>();
+        wsService.connect(sync.hubIp!, sync.secret);
+        await sync.pullUsers();
+        
+        // Reload all providers!
+        if (mounted) {
+          context.read<SettingsProvider>().load();
+          context.read<InventoryProvider>().load();
+          context.read<SalesProvider>().load();
+          context.read<PatientProvider>().load();
+          context.read<OpdProvider>().loadAll();
+          context.read<PrescriptionProvider>().load();
+          context.read<TemplateProvider>().load();
+        }
+      } else {
+        // Show offline override dialog
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Connection Failed'),
+            content: Text('Cannot connect to Hub for "${profile.shopName}" (${profile.shopId}) locally or via cloud. Would you like to work offline?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await ObjectBoxService.init(shopId: profile.shopId);
+                  await ShopProfileManager.setActiveShopId(profile.shopId);
+                  sync.enterCloudMode(profile.shopId);
+                  if (mounted) {
+                    context.read<SettingsProvider>().load();
+                    context.read<InventoryProvider>().load();
+                    context.read<SalesProvider>().load();
+                    context.read<PatientProvider>().load();
+                    context.read<OpdProvider>().loadAll();
+                    context.read<PrescriptionProvider>().load();
+                    context.read<TemplateProvider>().load();
+                  }
+                },
+                child: const Text('Work Offline (Cloud Mode)'),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
   @override
   void dispose() {
     _hubCheckTimer?.cancel();
@@ -41,14 +138,14 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
   @override
   void initState() {
     super.initState();
+    _loadSavedShops();
+    
     final s = context.read<SettingsProvider>().settings;
     _ipCtrl.text = s.hubIp ?? '';
     _connectionMode = s.connectionMode;
     _cloudflareUrl = s.cloudflareUrl;
     _fetchCloudflareUrl();
     _checkBatteryOptimization();
-
-    // Start periodic Hub availability check for Cloud Mode
     _hubCheckTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
       final sync = context.read<SyncService>();
       if (sync.isCloudMode && sync.hubIp != null) {
@@ -58,6 +155,20 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
         }
       }
     });
+  }
+
+  Future<void> _loadSavedShops() async {
+    setState(() => _isLoadingShops = true);
+    final shops = await ShopProfileManager.getSavedShops();
+    if (mounted) {
+      setState(() {
+        _savedShops = shops;
+        _isLoadingShops = false;
+        if (shops.isEmpty) {
+          _showManualSetup = true;
+        }
+      });
+    }
   }
 
   Future<void> _checkBatteryOptimization() async {
@@ -387,8 +498,129 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
   Widget build(BuildContext context) {
     final sync = context.watch<SyncService>();
 
+    if (_isLoadingShops) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (!_showManualSetup && _savedShops.isNotEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Select Clinic / Shop')),
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 450),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Choose a clinic partition to connect to:',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: _savedShops.length,
+                      itemBuilder: (context, index) {
+                        final shop = _savedShops[index];
+                        final isConnectingThis = _isConnecting && _isConnectingProfileId == shop.shopId;
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: context.borderColor.withValues(alpha: 0.5)),
+                          ),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            leading: CircleAvatar(
+                              backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                              child: const Icon(Icons.storefront, color: AppTheme.primary),
+                            ),
+                            title: Text(
+                              shop.shopName,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('ID: ${shop.shopId}', style: TextStyle(color: context.textMutedColor, fontSize: 12)),
+                                if (shop.localIp.isNotEmpty)
+                                  Text('IP: ${shop.localIp}', style: TextStyle(color: context.textMutedColor, fontSize: 12)),
+                              ],
+                            ),
+                            trailing: isConnectingThis
+                                ? const SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline, color: AppTheme.danger),
+                                        onPressed: () async {
+                                          final confirm = await showDialog<bool>(
+                                            context: context,
+                                            builder: (ctx) => AlertDialog(
+                                              title: const Text('Unpair Clinic'),
+                                              content: Text('Are you sure you want to unpair "${shop.shopName}"? This will not delete the database partition file, but will remove it from this list.'),
+                                              actions: [
+                                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                                                TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Unpair', style: TextStyle(color: AppTheme.danger))),
+                                              ],
+                                            ),
+                                          );
+                                          if (confirm == true) {
+                                            await ShopProfileManager.removeProfile(shop.shopId);
+                                            _loadSavedShops();
+                                          }
+                                        },
+                                      ),
+                                      const Icon(Icons.chevron_right, color: Colors.grey),
+                                    ],
+                                  ),
+                            onTap: _isConnecting ? null : () => _connectShopProfile(shop),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () => setState(() => _showManualSetup = true),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Pair with New Clinic'),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 50),
+                      backgroundColor: AppTheme.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Connect to Hub')),
+      appBar: AppBar(
+        title: const Text('Connect to Hub'),
+        leading: _savedShops.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => setState(() => _showManualSetup = false),
+              )
+            : null,
+      ),
       body: Center(
         child: SingleChildScrollView(
           child: SizedBox(

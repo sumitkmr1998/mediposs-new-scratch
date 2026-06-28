@@ -246,58 +246,64 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
       // Listen to WebSocket events for real-time sync
       context.read<WebSocketService>().eventStream.listen((msg) async {
         if (!mounted) return;
-        debugPrint('AppShellAndroid: Event received: ${msg['event']}');
-        
-        // Show a visual Toast/SnackBar on the Android screen to prove we received it!
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Received Hub Event: ${msg['event']}'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-
         final sync = context.read<SyncService>();
-        if (msg['event'] == 'new_patient' ||
-            msg['event'] == 'sync_received' ||
-            msg['event'] == 'medicines_updated') {
-          debugPrint('AppShellAndroid: Triggering pull cascade...');
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('🔄 Syncing changes from Hub...'),
-              duration: Duration(seconds: 1),
-            ),
-          );
+        final event = msg['event'] as String? ?? '';
+        if (event == 'new_patient' ||
+            event == 'sync_received' ||
+            event == 'medicines_updated' ||
+            event == 'appointments_updated' ||
+            event == 'patients_updated' ||
+            event == 'sales_updated' ||
+            event == 'sales_deleted' ||
+            event == 'patient_deleted') {
+          debugPrint('AppShellAndroid: Triggering pull cascade for $event...');
 
           try {
-            await sync.syncAll(); // syncAll() is more robust and uses the 'since' logic
-            
-            if (mounted) {
-              context.read<PatientProvider>().load();
-              context.read<OpdProvider>().loadAll();
-              context.read<SalesProvider>().load();
-              context.read<InventoryProvider>().load();
-              context.read<PrescriptionProvider>().load();
-              context.read<TemplateProvider>().load();
-              context.read<WarehouseProvider>().loadTransfers();
-              
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('✅ Sync Complete'),
-                  backgroundColor: Color(0xFF4CAF50),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+            final settings = ObjectBoxService.instance.settings;
+            String? sinceStr;
+            if (settings.lastGlobalSync != null) {
+              sinceStr = DateTime.fromMillisecondsSinceEpoch(settings.lastGlobalSync!)
+                  .subtract(const Duration(minutes: 1))
+                  .toIso8601String();
+            }
+
+            if (event == 'medicines_updated') {
+              await sync.pullMedicines(since: sinceStr);
+              if (mounted) {
+                context.read<InventoryProvider>().load();
+              }
+            } else if (event == 'appointments_updated') {
+              await sync.pullAppointments();
+              if (mounted) {
+                context.read<OpdProvider>().loadAll();
+              }
+            } else if (event == 'patients_updated' || event == 'new_patient' || event == 'patient_deleted') {
+              await sync.pullPatients(since: sinceStr);
+              if (mounted) {
+                context.read<PatientProvider>().load();
+              }
+            } else if (event == 'sales_updated' || event == 'sales_deleted') {
+              await sync.pullSales(since: sinceStr);
+              await sync.pullMedicines(since: sinceStr);
+              if (mounted) {
+                context.read<SalesProvider>().load();
+                context.read<InventoryProvider>().load();
+              }
+            } else if (event == 'sync_received') {
+              // Generic fallback (e.g. prescription updates)
+              await sync.pullPrescriptions(since: sinceStr);
+              await sync.pullAppointments();
+              await sync.pullPatients(since: sinceStr);
+              await sync.pullSales(since: sinceStr);
+              if (mounted) {
+                context.read<PrescriptionProvider>().load();
+                context.read<OpdProvider>().loadAll();
+                context.read<PatientProvider>().load();
+                context.read<SalesProvider>().load();
+              }
             }
           } catch (e) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('❌ Sync Failed: $e'),
-                  backgroundColor: Color(0xFFF44336),
-                ),
-              );
-            }
+            debugPrint('AppShellAndroid: Sync failed: $e');
           }
         }
       });

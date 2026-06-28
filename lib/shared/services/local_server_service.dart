@@ -194,11 +194,18 @@ class LocalServerService {
 
   // ---- Handlers ----
 
-  Response _healthHandler(Request req) => Response.ok(
-        jsonEncode(
-            {'status': 'ok', 'timestamp': DateTime.now().toIso8601String()}),
-        headers: {'content-type': 'application/json'},
-      );
+  Response _healthHandler(Request req) {
+    final settings = ObjectBoxService.instance.settings;
+    return Response.ok(
+      jsonEncode({
+        'status': 'ok',
+        'timestamp': DateTime.now().toIso8601String(),
+        'shopId': settings.shopId,
+        'shopName': (settings.clinicName != null && settings.clinicName!.isNotEmpty) ? settings.clinicName : settings.storeName,
+      }),
+      headers: {'content-type': 'application/json'},
+    );
+  }
 
   Future<Response> _loginHandler(Request req) async {
     final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
@@ -435,6 +442,8 @@ class LocalServerService {
               'sellingPrice': m.sellingPrice,
               'mainStock': m.mainStock,
               'storeStock': m.storeStock,
+              'bulkClinicStock': m.bulkClinicStock,
+              'bulkStoreStock': m.bulkStoreStock,
               'lowStockThreshold': m.lowStockThreshold,
               'isScheduleH1': m.isScheduleH1,
               'createdAt': m.createdAt.toIso8601String(),
@@ -446,6 +455,8 @@ class LocalServerService {
                         'expiryDate': b.expiryDate.toIso8601String(),
                         'mainStock': b.mainStock,
                         'storeStock': b.storeStock,
+                        'bulkClinicStock': b.bulkClinicStock,
+                        'bulkStoreStock': b.bulkStoreStock,
                       })
                   .toList(),
             })
@@ -484,6 +495,8 @@ class LocalServerService {
             ..sellingPrice = (item['sellingPrice'] as num).toDouble()
             ..mainStock = item['mainStock']
             ..storeStock = item['storeStock']
+            ..bulkClinicStock = item['bulkClinicStock'] ?? 0
+            ..bulkStoreStock = item['bulkStoreStock'] ?? 0
             ..isScheduleH1 = item['isScheduleH1'] ?? false;
 
           // Sync batches
@@ -496,6 +509,8 @@ class LocalServerService {
                 expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now(),
                 mainStock: bItem['mainStock'] ?? 0,
                 storeStock: bItem['storeStock'] ?? 0,
+                bulkClinicStock: bItem['bulkClinicStock'] ?? 0,
+                bulkStoreStock: bItem['bulkStoreStock'] ?? 0,
               ));
             }
           }
@@ -513,6 +528,8 @@ class LocalServerService {
           sellingPrice: (item['sellingPrice'] as num).toDouble(),
           mainStock: item['mainStock'] ?? 0,
           storeStock: item['storeStock'] ?? 0,
+          bulkClinicStock: item['bulkClinicStock'] ?? 0,
+          bulkStoreStock: item['bulkStoreStock'] ?? 0,
           isScheduleH1: item['isScheduleH1'] ?? false,
           updatedAt: DateTime.tryParse(item['updatedAt'] ?? ''),
         );
@@ -524,6 +541,8 @@ class LocalServerService {
               expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now(),
               mainStock: bItem['mainStock'] ?? 0,
               storeStock: bItem['storeStock'] ?? 0,
+              bulkClinicStock: bItem['bulkClinicStock'] ?? 0,
+              bulkStoreStock: bItem['bulkStoreStock'] ?? 0,
             ));
           }
         }
@@ -563,6 +582,8 @@ class LocalServerService {
           ..sellingPrice = (item['sellingPrice'] as num).toDouble()
           ..mainStock = item['mainStock'] ?? 0
           ..storeStock = item['storeStock'] ?? 0
+          ..bulkClinicStock = item['bulkClinicStock'] ?? 0
+          ..bulkStoreStock = item['bulkStoreStock'] ?? 0
           ..lowStockThreshold = item['lowStockThreshold'] ?? 5
           ..isScheduleH1 = item['isScheduleH1'] ?? false
           ..updatedAt = DateTime.now();
@@ -576,6 +597,8 @@ class LocalServerService {
               expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now(),
               mainStock: bItem['mainStock'] ?? 0,
               storeStock: bItem['storeStock'] ?? 0,
+              bulkClinicStock: bItem['bulkClinicStock'] ?? 0,
+              bulkStoreStock: bItem['bulkStoreStock'] ?? 0,
             ));
           }
         }
@@ -590,6 +613,8 @@ class LocalServerService {
           sellingPrice: (item['sellingPrice'] as num).toDouble(),
           mainStock: item['mainStock'] ?? 0,
           storeStock: item['storeStock'] ?? 0,
+          bulkClinicStock: item['bulkClinicStock'] ?? 0,
+          bulkStoreStock: item['bulkStoreStock'] ?? 0,
           lowStockThreshold: item['lowStockThreshold'] ?? 5,
           isScheduleH1: item['isScheduleH1'] ?? false,
         );
@@ -601,6 +626,8 @@ class LocalServerService {
               expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now(),
               mainStock: bItem['mainStock'] ?? 0,
               storeStock: bItem['storeStock'] ?? 0,
+              bulkClinicStock: bItem['bulkClinicStock'] ?? 0,
+              bulkStoreStock: bItem['bulkStoreStock'] ?? 0,
             ));
           }
         }

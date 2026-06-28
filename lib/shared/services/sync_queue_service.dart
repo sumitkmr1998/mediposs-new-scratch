@@ -76,6 +76,10 @@ class SyncQueueService extends ChangeNotifier {
             box.put(item);
             debugPrint('SyncQueueService: Successfully synced ${item.entity} (${item.action})');
           } else {
+            if (item.entity == 'photo') {
+              debugPrint('SyncQueueService: Failed to sync photo. Skipping to next item to avoid blocking queue.');
+              continue;
+            }
             debugPrint('SyncQueueService: Failed to sync ${item.entity}. Pausing queue.');
             hasFailed = true;
             break; // Stop on first failure to maintain order
@@ -149,7 +153,7 @@ class SyncQueueService extends ChangeNotifier {
         case 'photo':
           if (item.action == 'delete') return await syncService.pushPatientPhotoDelete(data['uhid'], data['fileName']);
           final patient = ObjectBoxService.instance.patientBox.get(data['patientId']);
-          final uhid = patient?.uhid ?? '';
+          final uhid = data['uhid'] as String? ?? patient?.uhid ?? '';
           if (uhid.isEmpty) return true;
           final photo = ObjectBoxService.instance.patientImageBox.get(data['id']);
           if (photo == null) return true;
