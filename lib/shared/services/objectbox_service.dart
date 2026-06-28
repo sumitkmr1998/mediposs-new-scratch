@@ -114,6 +114,9 @@ class ObjectBoxService {
     // Target partitioned path
     svc._dbDirectory = p.join(oldBasePath, resolvedShopId);
 
+    // Ensure the directory exists recursively before initializing ObjectBox
+    Directory(svc._dbDirectory).createSync(recursive: true);
+
     debugPrint('ObjectBoxService.init: isTerminalMode=$isTerminalMode, shopId=$resolvedShopId, dbDirectory=${svc._dbDirectory}');
     
     svc._store = await openStore(directory: svc._dbDirectory);
