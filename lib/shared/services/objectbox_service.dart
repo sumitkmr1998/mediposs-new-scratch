@@ -51,73 +51,23 @@ class ObjectBoxService {
 
   ObjectBoxService._();
 
-  static Future<ObjectBoxService> init({bool forceTerminal = false, String? shopId}) async {
-    final prefs = await SharedPreferences.getInstance();
-    final isTerminalMode = forceTerminal || (prefs.getBool('isTerminalMode') ?? false);
-    
+  static Future<ObjectBoxService> init({bool forceTerminal = false}) async {
+    if (_instance != null) return _instance!;
+
 
     final svc = ObjectBoxService._();
+    
+    // Explicitly set directory for desktop consistency
     final appSupportDir = await getApplicationSupportDirectory();
+    final prefs = await SharedPreferences.getInstance();
+    final isTerminalMode = forceTerminal || (prefs.getBool('isTerminalMode') ?? false);
 
-    // Partition base path based on terminal/hub mode
-    final String basePathName = isTerminalMode ? 'mediposs_terminal_db' : 'mediposs_db';
-    final String oldBasePath = p.join(appSupportDir.path, basePathName);
-
-    // Perform database migration check for legacy undivided databases
-    try {
-      final oldObjectBoxDir = Directory(p.join(oldBasePath, 'objectbox'));
-      if (oldObjectBoxDir.existsSync()) {
-        debugPrint('ObjectBoxService: Legacy undivided database detected at ${oldObjectBoxDir.path}. Querying original shop ID...');
-        String originalShopId = 'default_shop';
-        if (Platform.isWindows && !isTerminalMode) {
-          try {
-            final tempStore = await openStore(directory: oldBasePath);
-            final box = tempStore.box<AppSettings>();
-            final settingsList = box.getAll();
-            if (settingsList.isNotEmpty && settingsList.first.shopId.isNotEmpty) {
-              originalShopId = settingsList.first.shopId.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9_-]'), '');
-            }
-            tempStore.close();
-          } catch (tempErr) {
-            debugPrint('ObjectBoxService: Error reading original shopId from temp store: $tempErr');
-          }
-        }
-
-        if (originalShopId.isEmpty) originalShopId = 'default_shop';
-
-        final targetDbDir = Directory(p.join(oldBasePath, originalShopId, 'objectbox'));
-        if (!targetDbDir.existsSync()) {
-          targetDbDir.parent.createSync(recursive: true);
-          oldObjectBoxDir.renameSync(targetDbDir.path);
-          debugPrint('ObjectBoxService: Migrated legacy database folder to partitioned path: ${targetDbDir.path}');
-        }
-
-        await prefs.setString('mediposs_active_shop_id', originalShopId);
-        return init(forceTerminal: forceTerminal, shopId: originalShopId);
-      }
-    } catch (e) {
-      debugPrint('ObjectBoxService: Migration check error: $e');
+    if (isTerminalMode) {
+      svc._dbDirectory = p.join(appSupportDir.path, 'mediposs_terminal_db');
+    } else {
+      svc._dbDirectory = p.join(appSupportDir.path, 'mediposs_db');
     }
-
-    // Resolve active shop ID (fallback to default_shop if none)
-    final resolvedShopId = shopId ?? prefs.getString('mediposs_active_shop_id') ?? 'default_shop';
-
-    if (_instance != null) {
-      if (_instance!._dbDirectory.endsWith(resolvedShopId)) {
-        return _instance!;
-      }
-      debugPrint('ObjectBoxService: Re-initializing store for shopId: $resolvedShopId');
-      _instance!._store.close();
-      _instance = null;
-    }
-
-    // Target partitioned path
-    svc._dbDirectory = p.join(oldBasePath, resolvedShopId);
-
-    // Ensure the directory exists recursively before initializing ObjectBox
-    Directory(svc._dbDirectory).createSync(recursive: true);
-
-    debugPrint('ObjectBoxService.init: isTerminalMode=$isTerminalMode, shopId=$resolvedShopId, dbDirectory=${svc._dbDirectory}');
+    debugPrint('ObjectBoxService.init: isTerminalMode=$isTerminalMode, dbDirectory=${svc._dbDirectory}');
     
     svc._store = await openStore(directory: svc._dbDirectory);
 

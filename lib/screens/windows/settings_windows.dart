@@ -24,6 +24,7 @@ import '../../shared/services/local_server_service.dart';
 import '../../shared/services/printing_service.dart';
 import '../../shared/models/doctor.dart';
 import '../../shared/services/objectbox_service.dart';
+import '../../shared/services/firebase_sync_service.dart';
 import '../../objectbox.g.dart';
 import 'package:printing/printing.dart';
 import 'package:excel/excel.dart' as excel_pkg;
@@ -79,6 +80,8 @@ class _SettingsWindowsState extends State<SettingsWindows> {
   bool _showBatchExpiryClinical = true;
   bool _showOpdIdInPrint = true;
   bool _firebaseEnabled = true;
+  bool _firebaseMirrorEnabled = false;
+  bool _firebaseSummaryEnabled = false;
   bool _googleDriveSyncEnabled = true;
   int _auditRetentionDays = 90;
   List<Doctor> _doctors = [];
@@ -123,6 +126,8 @@ class _SettingsWindowsState extends State<SettingsWindows> {
     _showBatchExpiryClinical = s.showBatchExpiryInClinicalPrint;
     _showOpdIdInPrint = s.showOpdIdInPrint;
     _firebaseEnabled = s.firebaseEnabled;
+    _firebaseMirrorEnabled = s.connectionMode == 'firebase';
+    _firebaseSummaryEnabled = s.connectionMode == 'summary';
     _googleDriveSyncEnabled = s.googleDriveSyncEnabled;
     _auditRetentionDays = s.auditRetentionDays;
     _selectedDefaultDoctorId = s.defaultDoctorId;
@@ -194,6 +199,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       ..showBatchExpiryInClinicalPrint = _showBatchExpiryClinical
       ..showOpdIdInPrint = _showOpdIdInPrint
       ..firebaseEnabled = _firebaseEnabled
+      ..connectionMode = _firebaseMirrorEnabled ? 'firebase' : (_firebaseSummaryEnabled ? 'summary' : 'auto')
       ..googleDriveSyncEnabled = _googleDriveSyncEnabled
       ..auditRetentionDays = _auditRetentionDays
       ..defaultDoctorId = _selectedDefaultDoctorId;
@@ -796,12 +802,40 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                   icon: LucideIcons.database,
                   children: [
                     SettingsSwitch(
-                      title: 'Enable Firebase Sync',
-                      subtitle: 'Mirror local database changes to Firestore in real-time',
+                      title: 'Enable Firebase Integration',
+                      subtitle: 'Enables status discovery and sync features',
                       value: _firebaseEnabled,
                       icon: LucideIcons.database,
                       onChanged: (val) => setState(() => _firebaseEnabled = val),
                     ),
+                    if (_firebaseEnabled) ...[
+                      const SizedBox(height: 16),
+                      SettingsSwitch(
+                        title: 'Enable Cloud Database Mirroring',
+                        subtitle: 'Uploads all sales, medicines, and patients to Firestore (high quota usage)',
+                        value: _firebaseMirrorEnabled,
+                        icon: LucideIcons.cloud,
+                        onChanged: (val) {
+                          setState(() {
+                            _firebaseMirrorEnabled = val;
+                            if (val) _firebaseSummaryEnabled = false;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      SettingsSwitch(
+                        title: 'Enable Daily Cloud Summary Upload',
+                        subtitle: "Uploads today's sales, prescriptions, and patients daily at scheduled time",
+                        value: _firebaseSummaryEnabled,
+                        icon: LucideIcons.calendar,
+                        onChanged: (val) {
+                          setState(() {
+                            _firebaseSummaryEnabled = val;
+                            if (val) _firebaseMirrorEnabled = false;
+                          });
+                        },
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     SettingsField(
                       controller: _shopIdCtrl, 
@@ -816,6 +850,30 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                         style: TextStyle(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.w500),
                       ),
                     ),
+                    if (_firebaseEnabled) ...[
+                      const SizedBox(height: 16),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text("Syncing today's data to cloud..."), duration: Duration(seconds: 2)),
+                              );
+                              await FirebaseSyncService.instance.uploadTodaysDataToCloud();
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text("Today's data synced successfully!"), backgroundColor: AppTheme.success),
+                                );
+                              }
+                            },
+                            icon: const Icon(LucideIcons.cloud, size: 16),
+                            label: const Text("Sync Today's Data Now"),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ],

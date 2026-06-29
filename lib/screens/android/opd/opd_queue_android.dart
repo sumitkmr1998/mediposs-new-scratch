@@ -64,9 +64,19 @@ class _OpdQueueAndroidState extends State<OpdQueueAndroid>
         foregroundColor: Colors.white,
         elevation: 4,
       ),
-      body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) => [
-          SliverAppBar(
+      body: RefreshIndicator(
+        onRefresh: () async {
+          final sync = context.read<SyncService>();
+          await sync.syncAll();
+          if (mounted) {
+            context.read<OpdProvider>().loadAll();
+            context.read<PatientProvider>().load();
+            context.read<PrescriptionProvider>().load();
+          }
+        },
+        child: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) => [
+            SliverAppBar(
             title: const Text('OPD Queue'),
             pinned: true,
             floating: true,
@@ -155,7 +165,8 @@ class _OpdQueueAndroidState extends State<OpdQueueAndroid>
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 
   void _showAddPatientOptions(BuildContext context) {

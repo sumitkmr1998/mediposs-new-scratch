@@ -125,10 +125,25 @@ class LocalServerService {
     if (ObjectBoxService.instance.settings.firebaseEnabled) {
       broadcastAllToCloud();
     }
-    // Periodic refresh every 10 minutes to keep Cloud collections fresh
-    Timer.periodic(const Duration(minutes: 10), (_) {
-      if (ObjectBoxService.instance.settings.firebaseEnabled) {
-        broadcastAllToCloud();
+    
+    // Scheduled daily cloud summary sync at autoBackupTime
+    int? lastSyncDay;
+    Timer.periodic(const Duration(seconds: 30), (_) async {
+      final settings = ObjectBoxService.instance.settings;
+      if (!settings.firebaseEnabled) return;
+
+      if (settings.connectionMode == 'summary' && settings.autoBackupTime != null) {
+        final now = DateTime.now();
+        final parts = settings.autoBackupTime!.split(':');
+        if (parts.length == 2) {
+          final targetHour = int.tryParse(parts[0]);
+          final targetMinute = int.tryParse(parts[1]);
+          if (targetHour == now.hour && targetMinute == now.minute && lastSyncDay != now.day) {
+            lastSyncDay = now.day;
+            debugPrint('LocalServerService: Scheduled Daily Cloud Summary Upload triggered at ${settings.autoBackupTime}.');
+            await FirebaseSyncService.instance.uploadTodaysDataToCloud();
+          }
+        }
       }
     });
   }
@@ -194,18 +209,11 @@ class LocalServerService {
 
   // ---- Handlers ----
 
-  Response _healthHandler(Request req) {
-    final settings = ObjectBoxService.instance.settings;
-    return Response.ok(
-      jsonEncode({
-        'status': 'ok',
-        'timestamp': DateTime.now().toIso8601String(),
-        'shopId': settings.shopId,
-        'shopName': (settings.clinicName != null && settings.clinicName!.isNotEmpty) ? settings.clinicName : settings.storeName,
-      }),
-      headers: {'content-type': 'application/json'},
-    );
-  }
+  Response _healthHandler(Request req) => Response.ok(
+        jsonEncode(
+            {'status': 'ok', 'timestamp': DateTime.now().toIso8601String()}),
+        headers: {'content-type': 'application/json'},
+      );
 
   Future<Response> _loginHandler(Request req) async {
     final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
@@ -1049,6 +1057,7 @@ class LocalServerService {
               x.scheduledAt.day == scheduledAt.day)
           .firstOrNull;
 
+      final isNew = existing == null;
       if (existing != null) {
         a.id = existing.id;
       } else {
@@ -1058,6 +1067,24 @@ class LocalServerService {
       ObjectBoxService.instance.appointmentBox.put(a);
       broadcast({'event': 'sync_received'});
       _incomingDataController.add('appointments');
+
+      if (isNew) {
+        final today = DateTime.now();
+        final activeCount = ObjectBoxService.instance.appointmentBox
+            .getAll()
+            .where((x) =>
+                x.scheduledAt.year == today.year &&
+                x.scheduledAt.month == today.month &&
+                x.scheduledAt.day == today.day &&
+                x.status != 'done' &&
+                x.status != 'cancelled')
+            .length;
+        broadcast({
+          'event': 'new_patient',
+          'patientName': a.patientName,
+          'activeQueueCount': activeCount,
+        });
+      }
 
       return Response.ok(
         jsonEncode({'status': 'success', 'appointmentId': a.id}),
@@ -2159,8 +2186,13 @@ class LocalServerService {
   /// Hub-side: Broadcasts all critical data to Firebase for companion apps' offline consumption.
   /// Now performs "Mirroring" - deletes items from Cloud that no longer exist locally.
   Future<void> broadcastAllToCloud() async {
-    if (!ObjectBoxService.instance.settings.firebaseEnabled) {
+    final settings = ObjectBoxService.instance.settings;
+    if (!settings.firebaseEnabled) {
       debugPrint('Hub: Firebase Sync is disabled. Skipping broadcastAllToCloud.');
+      return;
+    }
+    if (settings.connectionMode != 'firebase') {
+      debugPrint('Hub: Connection mode is not Firebase (mode=${settings.connectionMode}). Skipping database mirror upload to conserve quota.');
       return;
     }
     debugPrint('Hub: Starting full Cloud Mirror Sync...');

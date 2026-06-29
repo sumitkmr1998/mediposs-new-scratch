@@ -761,94 +761,164 @@ class _ModernMedicineCardWindowsState
                 ],
               ),
               const Spacer(),
-              Row(
+              Column(
                 children: [
-                  Expanded(
-                    child: Column(
-                      children: [
-                        _MetricBlock(
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _MetricBlock(
                           label: 'Store Bulk',
                           value: widget.medicine.bulkStoreStock,
                           icon: Icons.warehouse_outlined,
                           color: Colors.teal,
                         ),
-                        Padding(
+                      ),
+                      const SizedBox(width: 58),
+                      Expanded(
+                        child: _MetricBlock(
+                          label: 'Clinic Bulk',
+                          value: widget.medicine.bulkClinicStock,
+                          icon: Icons.warehouse,
+                          color: Colors.deepPurple,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Tooltip(
-                            message: 'Transfer Store Bulk to POS',
-                            child: InkWell(
-                              onTap: () => _showTransferDialog(
-                                  context,
-                                  widget.medicine,
-                                  'bulkStore',
-                                  'store',
-                                  widget.wh),
-                              borderRadius: BorderRadius.circular(20),
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: const Color(0xFF14B8A6)
-                                      .withValues(alpha: 0.1),
+                          child: Center(
+                            child: Tooltip(
+                              message: 'Transfer Store Bulk to POS',
+                              child: InkWell(
+                                onTap: () => _showTransferDialog(
+                                    context,
+                                    widget.medicine,
+                                    'bulkStore',
+                                    'store',
+                                    widget.wh),
+                                borderRadius: BorderRadius.circular(20),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: const Color(0xFF14B8A6)
+                                        .withValues(alpha: 0.1),
+                                  ),
+                                  child: const Icon(Icons.arrow_downward_rounded,
+                                      size: 16, color: Color(0xFF14B8A6)),
                                 ),
-                                child: const Icon(Icons.arrow_downward_rounded,
-                                    size: 16, color: Color(0xFF14B8A6)),
                               ),
                             ),
                           ),
                         ),
-                        _MetricBlock(
+                      ),
+                      const SizedBox(width: 58),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Center(
+                            child: Tooltip(
+                              message: 'Transfer Clinic Bulk to Dispensing',
+                              child: InkWell(
+                                onTap: () => _showTransferDialog(
+                                    context,
+                                    widget.medicine,
+                                    'bulkClinic',
+                                    'clinic',
+                                    widget.wh),
+                                borderRadius: BorderRadius.circular(20),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: AppTheme.indigo.withValues(alpha: 0.1),
+                                  ),
+                                  child: const Icon(Icons.arrow_downward_rounded,
+                                      size: 16, color: AppTheme.indigo),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _MetricBlock(
                           label: 'Store',
                           value: widget.medicine.storeStock,
                           icon: Icons.storefront,
                           color: const Color(0xFF14B8A6),
                           isWarning: widget.medicine.isLowStock,
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        _MetricBlock(
-                          label: 'Clinic Bulk',
-                          value: widget.medicine.bulkClinicStock,
-                          icon: Icons.warehouse,
-                          color: Colors.deepPurple,
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Tooltip(
-                            message: 'Transfer Clinic Bulk to Dispensing',
+                      ),
+                      const SizedBox(width: 8),
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Tooltip(
+                            message: 'Transfer Store to Clinic',
                             child: InkWell(
                               onTap: () => _showTransferDialog(
                                   context,
                                   widget.medicine,
-                                  'bulkClinic',
+                                  'store',
                                   'clinic',
                                   widget.wh),
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: BorderRadius.circular(8),
                               child: Container(
-                                padding: const EdgeInsets.all(4),
+                                width: 42,
+                                height: 28,
                                 decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: const Color(0xFF14B8A6)
+                                      .withValues(alpha: 0.1),
+                                ),
+                                child: const Icon(Icons.arrow_forward_rounded,
+                                    size: 16, color: Color(0xFF14B8A6)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Tooltip(
+                            message: 'Transfer Clinic to Store',
+                            child: InkWell(
+                              onTap: () => _showTransferDialog(
+                                  context,
+                                  widget.medicine,
+                                  'clinic',
+                                  'store',
+                                  widget.wh),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                width: 42,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
                                   color: AppTheme.indigo.withValues(alpha: 0.1),
                                 ),
-                                child: const Icon(Icons.arrow_downward_rounded,
+                                child: const Icon(Icons.arrow_back_rounded,
                                     size: 16, color: AppTheme.indigo),
                               ),
                             ),
                           ),
-                        ),
-                        _MetricBlock(
+                        ],
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _MetricBlock(
                           label: 'Clinic',
                           value: widget.medicine.mainStock,
                           icon: Icons.medical_services,
                           color: AppTheme.indigo,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ],
               ),

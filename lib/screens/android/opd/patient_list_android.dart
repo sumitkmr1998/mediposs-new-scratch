@@ -39,9 +39,17 @@ class _PatientListAndroidState extends State<PatientListAndroid> {
 
     return Scaffold(
       backgroundColor: context.surfaceColor,
-      body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) => [
-          SliverAppBar(
+      body: RefreshIndicator(
+        onRefresh: () async {
+          final sync = context.read<SyncService>();
+          await sync.syncAll();
+          if (mounted) {
+            context.read<PatientProvider>().load();
+          }
+        },
+        child: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) => [
+            SliverAppBar(
             title: const Text('Patients'),
             pinned: true,
             floating: true,
@@ -111,6 +119,7 @@ class _PatientListAndroidState extends State<PatientListAndroid> {
                 },
               ),
       ),
+    ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showPatientDialog(context),
         backgroundColor: AppTheme.primary,

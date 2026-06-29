@@ -1,0 +1,3 @@
+2026-06-28T21:23:20.447992: checkAndPerformAutoBackup called with trigger: At Startup
+2026-06-28T21:23:20.449993: autoBackupFrequency: Never
+2026-06-28T21:23:20.459723: autoBackupLogic: On Close

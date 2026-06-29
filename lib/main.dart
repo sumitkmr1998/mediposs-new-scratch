@@ -22,6 +22,7 @@ import 'screens/login_screen.dart';
 import 'screens/app_shell.dart';
 import 'screens/connection_screen.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:io';
 import 'shared/services/local_server_service.dart';
 import 'shared/services/discovery_service.dart';
 import 'shared/services/global_navigation_service.dart';
@@ -37,13 +38,10 @@ import 'package:firebase_core/firebase_core.dart';
 import 'shared/services/firebase_sync_service.dart';
 import 'shared/services/cloudflare_service.dart';
 import 'firebase_options.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
-import 'screens/windows/hub_launcher.dart';
 
 import 'shared/services/background_sync_service.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
+import 'shared/services/firebase_notification_service.dart';
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,12 +49,14 @@ void main(List<String> args) async {
   final forceTerminal = args.contains('--terminal') || const bool.fromEnvironment('terminal', defaultValue: false);
   
   // 0. On Android, if background service is already running, we MUST stop it 
+  // to release the ObjectBox lock before the main isolate can open it.
   if (defaultTargetPlatform == TargetPlatform.android) {
     try {
       final service = FlutterBackgroundService();
       if (await service.isRunning()) {
         debugPrint('Main: Background service is already running. Stopping to release DB lock...');
         service.invoke('stopService');
+        // Give it time to close the store
         await Future.delayed(const Duration(milliseconds: 1500));
       }
     } catch (e) {
@@ -64,53 +64,17 @@ void main(List<String> args) async {
     }
   }
 
-  final prefs = await SharedPreferences.getInstance();
-  final isTerminalMode = forceTerminal || (prefs.getBool('isTerminalMode') ?? false);
-  final isWindowsHub = defaultTargetPlatform == TargetPlatform.windows && !isTerminalMode;
-
-  if (isWindowsHub) {
-    final appSupportDir = await getApplicationSupportDirectory();
-    final hubDbDir = Directory(p.join(appSupportDir.path, 'mediposs_db'));
-    final List<String> foundPartitions = [];
-    if (hubDbDir.existsSync()) {
-      final entities = hubDbDir.listSync();
-      for (final entity in entities) {
-        if (entity is Directory) {
-          final folderName = p.basename(entity.path);
-          if (folderName != 'objectbox') {
-            foundPartitions.add(folderName);
-          }
-        }
-      }
-    }
-
-    final alwaysAsk = prefs.getBool('hub_always_ask_startup') ?? false;
-    final activeShopId = prefs.getString('mediposs_active_shop_id') ?? 'default_shop';
-
-    if (alwaysAsk || !foundPartitions.contains(activeShopId) || foundPartitions.isEmpty) {
-      runApp(HubLauncherApp(onSelected: (shopId) async {
-        await _initializeAppAndRun(forceTerminal, shopId: shopId);
-      }));
-      return;
-    } else {
-      await _initializeAppAndRun(forceTerminal, shopId: activeShopId);
-    }
-  } else {
-    await _initializeAppAndRun(forceTerminal);
-  }
-}
-
-Future<void> _initializeAppAndRun(bool forceTerminal, {String? shopId}) async {
   // 1. Initialize DB FIRST - Most critical for both UI and background
   try {
-    debugPrint('Main: Initializing ObjectBox (forceTerminal=$forceTerminal, shopId=$shopId)...');
-    await ObjectBoxService.init(forceTerminal: forceTerminal, shopId: shopId);
+    debugPrint('Main: Initializing ObjectBox (forceTerminal=$forceTerminal)...');
+    await ObjectBoxService.init(forceTerminal: forceTerminal);
     debugPrint('Main: ObjectBox initialized.');
   } catch (e) {
     debugPrint('Main: ObjectBox initialization failed: $e');
   }
 
   // 2. Initialize Background Service (Android)
+  // We start this AFTER DB init so main isolate has the handle
   if (defaultTargetPlatform == TargetPlatform.android) {
     debugPrint('Main: Initializing Background Service...');
     await initializeBackgroundService();
@@ -124,6 +88,9 @@ Future<void> _initializeAppAndRun(bool forceTerminal, {String? shopId}) async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
     await FirebaseSyncService.init();
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      await FirebaseNotificationService.instance.init();
+    }
   } catch (e) {
     debugPrint('Firebase Initialization Failed: $e');
     await FirebaseSyncService.init();
@@ -250,6 +217,7 @@ Future<void> _initializeAppAndRun(bool forceTerminal, {String? shopId}) async {
     }
   });
 
+  // Try to auto-connect to a saved Hub IP so companion app skips connection screen
   final isMobile = !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
@@ -261,12 +229,15 @@ Future<void> _initializeAppAndRun(bool forceTerminal, {String? shopId}) async {
       wsService.connect(syncService.hubIp!, syncService.secret);
     }
   } else if (Platform.isWindows) {
+    // Start Hub server immediately on Windows launch
     await LocalServerService.instance.start();
     await DiscoveryService.startAdvertising(
         ObjectBoxService.instance.settings.serverPort);
     
+    // Start Cloudflare Tunnel if enabled or always for remote discovery
     await CloudflareService.instance.start();
 
+    // Start Firebase Sync Listener (Tier 3 fallback)
     FirebaseSyncService.instance.startQueueListener((delta) {
       LocalServerService.instance.handleExternalDelta(delta);
     });
@@ -313,7 +284,6 @@ class MediPossApp extends StatefulWidget {
 }
 
 class _MediPossAppState extends State<MediPossApp> with WidgetsBindingObserver {
-  bool _isExiting = false;
 
   @override
   void initState() {
@@ -350,64 +320,7 @@ class _MediPossAppState extends State<MediPossApp> with WidgetsBindingObserver {
     }
   }
 
-  @override
-  Future<AppExitResponse> didRequestAppExit() async {
-    final isWindowsClient = defaultTargetPlatform == TargetPlatform.windows && ObjectBoxService.instance.settings.isWindowsClient;
-    if (defaultTargetPlatform == TargetPlatform.windows && !isWindowsClient && !_isExiting) {
-      final s = ObjectBoxService.instance.settings;
-      if (!s.firebaseEnabled) {
-        return AppExitResponse.exit;
-      }
-      _isExiting = true;
-      
-      // Show "Syncing" dialog using GlobalNavigationService
-      final context = GlobalNavigationService.navigatorKey.currentContext;
-      if (context != null) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (ctx) => AlertDialog(
-            backgroundColor: Theme.of(ctx).colorScheme.surface,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            content: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 20),
-                  Text(
-                    'Syncing Data to Cloud...',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Please do not close the window.',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      }
 
-      try {
-        // Perform final cloud broadcast with a timeout to prevent hanging on exit
-        await LocalServerService.instance.broadcastAllToCloud().timeout(
-          const Duration(seconds: 5),
-          onTimeout: () {
-            debugPrint('Final Cloud Sync timed out on exit.');
-          },
-        );
-      } catch (e) {
-        debugPrint('Final Sync Failed: $e');
-      }
-
-      return AppExitResponse.exit;
-    }
-    return AppExitResponse.exit;
-  }
 
   @override
   Widget build(BuildContext context) {

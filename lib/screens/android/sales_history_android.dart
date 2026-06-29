@@ -46,8 +46,17 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
       appBar: AppBar(
         title: const Text('Verified Audit Log'),
       ),
-      body: CustomScrollView(
-        slivers: [
+      body: RefreshIndicator(
+        onRefresh: () async {
+          final sync = context.read<SyncService>();
+          await sync.syncAll();
+          if (mounted) {
+            context.read<SalesProvider>().load();
+            context.read<InventoryProvider>().load();
+          }
+        },
+        child: CustomScrollView(
+          slivers: [
           // 1. High-Density Financial Summary (Glassmorphic) - Horizontal Scrollable
           SliverToBoxAdapter(
             child: Container(
@@ -381,7 +390,8 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
                 ),
         ],
       ),
-    );
+    ),
+  );
   }
 
   bool _isToday(DateTime dt) {

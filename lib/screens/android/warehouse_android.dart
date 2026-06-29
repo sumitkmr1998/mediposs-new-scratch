@@ -64,9 +64,18 @@ class _WarehouseAndroidState extends State<WarehouseAndroid>
                   borderRadius: BorderRadius.circular(16)),
             )
           : null,
-      body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) => [
-          SliverAppBar(
+      body: RefreshIndicator(
+        onRefresh: () async {
+          final sync = context.read<SyncService>();
+          await sync.syncAll();
+          if (mounted) {
+            context.read<InventoryProvider>().load();
+            context.read<WarehouseProvider>().loadTransfers();
+          }
+        },
+        child: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) => [
+            SliverAppBar(
             title: const Text('Stock Control'),
             pinned: true,
             floating: true,
@@ -133,7 +142,8 @@ class _WarehouseAndroidState extends State<WarehouseAndroid>
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 }
 
@@ -321,7 +331,57 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
                         context, widget.medicine, 'bulkStore', 'store', widget.wh),
                   ),
                 ),
-                const SizedBox(width: 12),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Tooltip(
+                      message: 'Transfer Store to Clinic',
+                      child: InkWell(
+                        onTap: () => _showTransferDialog(
+                            context,
+                            widget.medicine,
+                            'store',
+                            'clinic',
+                            widget.wh),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          width: 32,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(6),
+                            color: const Color(0xFF14B8A6).withValues(alpha: 0.1),
+                          ),
+                          child: const Icon(Icons.arrow_forward_rounded,
+                              size: 14, color: Color(0xFF14B8A6)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Tooltip(
+                      message: 'Transfer Clinic to Store',
+                      child: InkWell(
+                        onTap: () => _showTransferDialog(
+                            context,
+                            widget.medicine,
+                            'clinic',
+                            'store',
+                            widget.wh),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          width: 32,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(6),
+                            color: AppTheme.indigo.withValues(alpha: 0.1),
+                          ),
+                          child: const Icon(Icons.arrow_back_rounded,
+                              size: 14, color: AppTheme.indigo),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: _CompactStockFlow(
                     title: 'CLINIC STOCK',

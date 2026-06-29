@@ -3,6 +3,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/app_user.dart';
+import '../models/patient.dart';
+import '../models/appointment.dart';
+import '../models/prescription.dart';
+import '../models/sale.dart';
+import '../../objectbox.g.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../../firebase_options.dart';
@@ -386,10 +391,17 @@ class FirebaseSyncService {
 
   /// Hub-side: Broadcasts an update to all devices via Firestore.
   /// Used for "after sync, hub should also post updated data to all other devices"
-  Future<void> broadcastUpdate(String entity, Map<String, dynamic> data) async {
+  Future<void> broadcastUpdate(String entity, Map<String, dynamic> data, {bool force = false}) async {
     if (!_isEnabled) return;
+    
+    // Check connection mode: Only sync/mirror database to Firebase if connectionMode is explicitly 'firebase' or if force=true
+    final connectionMode = ObjectBoxService.instance.settings.connectionMode;
+    if (connectionMode != 'firebase' && !force) {
+      return;
+    }
+
     if (defaultTargetPlatform == TargetPlatform.windows) {
-      await _broadcastUpdateREST(entity, data);
+      await _broadcastUpdateREST(entity, data, force: force);
       return;
     }
 
@@ -412,7 +424,7 @@ class FirebaseSyncService {
     });
   }
 
-  Future<void> _broadcastUpdateREST(String entity, Map<String, dynamic> data) async {
+  Future<void> _broadcastUpdateREST(String entity, Map<String, dynamic> data, {bool force = false}) async {
     if (!_isEnabled) return;
     try {
       final projectId = DefaultFirebaseOptions.windows.projectId;
@@ -466,8 +478,15 @@ class FirebaseSyncService {
   }
 
   /// Hub-side: Deletes a document from Firebase REST.
-  Future<void> deleteDocument(String entity, String docId) async {
+  Future<void> deleteDocument(String entity, String docId, {bool force = false}) async {
     if (!_isEnabled) return;
+    
+    // Only perform deletes if mirroring is enabled via connectionMode == 'firebase' or if force=true
+    final connectionMode = ObjectBoxService.instance.settings.connectionMode;
+    if (connectionMode != 'firebase' && !force) {
+      return;
+    }
+
     if (defaultTargetPlatform == TargetPlatform.windows) {
       try {
         final projectId = DefaultFirebaseOptions.windows.projectId;
@@ -668,6 +687,69 @@ class FirebaseSyncService {
     } catch (e) {
       debugPrint('Firebase fetchShopIds failed: $e');
       return [];
+    }
+  }
+
+  /// Uploads only today's records (sales, appointments, prescriptions, patients) to Firestore.
+  /// Used for daily summary cloud uploads.
+  Future<void> uploadTodaysDataToCloud() async {
+    if (!_isEnabled) return;
+    debugPrint('FirebaseSyncService: Starting daily summary cloud upload...');
+    
+    try {
+      final now = DateTime.now();
+      final startOfToday = DateTime(now.year, now.month, now.day);
+      final startMs = startOfToday.millisecondsSinceEpoch;
+      
+      final db = ObjectBoxService.instance;
+      
+      // 1. Fetch today's patients
+      final patients = db.patientBox
+          .query(Patient_.createdAt.greaterThan(startMs - 1)
+              .or(Patient_.updatedAt.greaterThan(startMs - 1)))
+          .build()
+          .find();
+          
+      // 2. Fetch today's appointments
+      final appointments = db.appointmentBox
+          .query(Appointment_.scheduledAt.greaterThan(startMs - 1))
+          .build()
+          .find();
+          
+      // 3. Fetch today's prescriptions
+      final prescriptions = db.prescriptionBox
+          .query(Prescription_.createdAt.greaterThan(startMs - 1))
+          .build()
+          .find();
+          
+      // 4. Fetch today's sales
+      final sales = db.saleBox
+          .query(Sale_.createdAt.greaterThan(startMs - 1))
+          .build()
+          .find();
+
+      debugPrint('FirebaseSyncService: Found ${patients.length} patients, ${appointments.length} appointments, ${prescriptions.length} prescriptions, ${sales.length} sales created/updated today.');
+
+      // Upload patients
+      for (final p in patients) {
+        await broadcastUpdate('patients', p.toJson(), force: true);
+      }
+      // Upload appointments
+      for (final a in appointments) {
+        await broadcastUpdate('appointments', a.toJson(), force: true);
+      }
+      // Upload prescriptions
+      for (final pr in prescriptions) {
+        await broadcastUpdate('prescriptions', pr.toJson(), force: true);
+      }
+      // Upload sales
+      for (final s in sales) {
+        await broadcastUpdate('sales', s.toJson(), force: true);
+      }
+
+      debugPrint('FirebaseSyncService: Daily summary cloud upload completed successfully.');
+    } catch (e) {
+      debugPrint('FirebaseSyncService: Daily summary cloud upload failed: $e');
     }
   }
 }

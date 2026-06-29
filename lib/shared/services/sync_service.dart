@@ -22,7 +22,6 @@ import '../models/schedule_h1_record.dart';
 import '../services/objectbox_service.dart';
 import '../services/notification_service.dart';
 import '../services/firebase_sync_service.dart';
-import '../models/shop_profile.dart';
 import 'sync_queue_service.dart';
 import '../../objectbox.g.dart';
 
@@ -92,31 +91,8 @@ class SyncService extends ChangeNotifier {
   Future<String?> connect(String address) async {
     try {
       final isUrl = address.startsWith('http');
-      final healthUrl = isUrl ? Uri.parse('$address/health') : Uri.parse('http://$address:8080/health');
-      final res = await http.get(healthUrl, headers: _authHeaders()).timeout(const Duration(seconds: 4));
-      
-      if (res.statusCode == 200) {
-        final body = jsonDecode(res.body) as Map<String, dynamic>;
-        final hubShopId = body['shopId'] as String? ?? '';
-        
-        final hubShopName = body['shopName'] as String? ?? 'MediPoss Clinic';
-
-        // 1. Build and save the Shop Connection Profile
-        if (hubShopId.isNotEmpty) {
-          final existingProfiles = await ShopProfileManager.getSavedShops();
-          final existing = existingProfiles.where((p) => p.shopId == hubShopId).firstOrNull;
-
-          final profile = ShopProfile(
-            shopId: hubShopId,
-            shopName: hubShopName,
-            localIp: isUrl ? (existing?.localIp ?? '') : address,
-            cloudflareUrl: isUrl ? address : (existing?.cloudflareUrl ?? ''),
-          );
-
-          await ShopProfileManager.saveProfile(profile);
-          await ShopProfileManager.setActiveShopId(hubShopId);
-        }
-        
+      final ok = await testConnection(address);
+      if (ok) {
         _hubIp = address;
         
         // On Windows, if we are currently not in terminal mode, we need to transition!
@@ -140,48 +116,21 @@ class SyncService extends ChangeNotifier {
           }
         }
 
-        // 2. Re-initialize ObjectBox to the correct shop partition if it changed
-        if (hubShopId.isNotEmpty) {
-          await ObjectBoxService.init(shopId: hubShopId);
-        }
-
         _isConnected = true;
-        // Persist the address (IP or URL) in the newly active settings database
+        // Persist the address (IP or URL)
         final settings = ObjectBoxService.instance.settings;
-        final oldIp = settings.hubIp;
-        final oldUrl = settings.cloudflareUrl;
-        final oldShopId = settings.shopId;
-
         if (isUrl) {
           settings.cloudflareUrl = address;
         } else {
           settings.hubIp = address;
         }
-
-        if (hubShopId.isNotEmpty) {
-          if (oldShopId.isNotEmpty && oldShopId != hubShopId) {
-            debugPrint('SyncService: Connect - Shop ID changed from $oldShopId to $hubShopId. Wiping lastGlobalSync.');
-            settings.lastGlobalSync = null; // Reset sync marker ONLY if pairing with a completely different hub/shop
-          }
-          settings.shopId = hubShopId; // Persist the connected shop ID
-        } else {
-          // Fallback to IP address check if Hub doesn't supply shopId (backwards compatibility)
-          if (isUrl) {
-            if (oldUrl != address) {
-              settings.lastGlobalSync = null;
-            }
-          } else {
-            if (oldIp != address) {
-              settings.lastGlobalSync = null;
-            }
-          }
-        }
+        settings.lastGlobalSync = null; // Reset sync marker to trigger fresh pull on login!
         ObjectBoxService.instance.settingsBox.put(settings);
 
         notifyListeners();
         return null;
       } else {
-        return 'Cannot verify Hub health at $address (Status ${res.statusCode}).';
+        return 'Cannot verify Hub health at $address.';
       }
     } catch (e) {
       return 'Cannot reach hub: $e';
@@ -288,51 +237,30 @@ class SyncService extends ChangeNotifier {
   }
 
   Future<bool> tryAutoConnect() async {
-    // 1. Resolve the active shop ID first from global shared preferences
-    final activeShopId = await ShopProfileManager.getActiveShopId();
-    if (activeShopId == null || activeShopId.isEmpty) {
-      debugPrint('SyncService: tryAutoConnect - No active shop paired. Showing selection UI.');
+    if (!ObjectBoxService.isInitialized) {
+      debugPrint('SyncService: tryAutoConnect ABORTED - ObjectBox not initialized.');
       return false;
     }
-
-    // 2. Initialize ObjectBox dynamically for this shop ID
-    await ObjectBoxService.init(shopId: activeShopId);
-
     final settings = ObjectBoxService.instance.settings;
-    final savedShops = await ShopProfileManager.getSavedShops();
-    final profile = savedShops.where((p) => p.shopId == activeShopId).firstOrNull;
-
+    final savedIp = settings.hubIp;
     bool success = false;
 
-    // 3. Try Local Hub IP first
-    final localIp = profile?.localIp ?? settings.hubIp;
-    if (localIp != null && localIp.isNotEmpty) {
-      debugPrint('SyncService: Attempting auto-connect to Local IP: $localIp');
-      final errorMsg = await connect(localIp);
+    // 1. Try Local Hub IP first
+    if (savedIp != null && savedIp.isNotEmpty) {
+      debugPrint('SyncService: Attempting auto-connect to Local IP: $savedIp');
+      final errorMsg = await connect(savedIp);
       if (errorMsg == null) {
         success = true;
       }
     }
 
-    // 4. Try Cloud Tunnel URL from profile
-    if (!success) {
-      final cloudUrl = profile?.cloudflareUrl ?? settings.cloudflareUrl;
-      if (cloudUrl != null && cloudUrl.isNotEmpty) {
-        debugPrint('SyncService: Local IP unreachable. Attempting Cloud Tunnel: $cloudUrl');
-        final errorMsg = await connect(cloudUrl);
-        if (errorMsg == null) {
-          success = true;
-        }
-      }
-    }
-
-    // 5. Fallback: Check Firebase status for latest Cloud Tunnel URL
+    // 2. Fallback: Check Firebase for latest Cloudflare Tunnel URL
     if (!success && (settings.connectionMode == 'auto' || settings.connectionMode == 'cloudflare')) {
-      debugPrint('SyncService: Local & Cloud Tunnel unreachable. Checking Firebase for updated Cloud Tunnel URL...');
+      debugPrint('SyncService: Local Hub unreachable. Checking Firebase for Cloud Tunnel URL...');
       final status = await FirebaseSyncService.instance.getHubStatus();
       final cloudUrl = status?['cloudflareUrl'] as String?;
       if (cloudUrl != null && cloudUrl.isNotEmpty) {
-        debugPrint('SyncService: Found Firebase Cloud Tunnel URL: $cloudUrl. Attempting connection...');
+        debugPrint('SyncService: Found Cloud Tunnel URL: $cloudUrl. Attempting connection...');
         final errorMsg = await connect(cloudUrl);
         if (errorMsg == null) {
           success = true;
@@ -2058,10 +1986,13 @@ class WebSocketService extends ChangeNotifier {
 
               // Notification logic
               if (msg['event'] == 'new_patient') {
+                final activeCount = msg['activeQueueCount'] ?? 0;
                 NotificationService.instance.showNotification(
                   id: DateTime.now().millisecond,
                   title: 'New Patient in Queue',
-                  body: msg['patientName'] ?? 'A new patient has been added.',
+                  body: activeCount > 0
+                      ? '${msg['patientName'] ?? 'A new patient'} has been added. Active Queue: $activeCount'
+                      : msg['patientName'] ?? 'A new patient has been added.',
                 );
               } else if (msg['event'] == 'low_stock') {
                 NotificationService.instance.showNotification(

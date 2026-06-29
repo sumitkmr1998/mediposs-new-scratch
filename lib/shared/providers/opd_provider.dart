@@ -348,6 +348,23 @@ class OpdProvider extends ChangeNotifier {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
         LocalServerService.instance
             .broadcast({'event': 'appointments_updated'});
+        
+        final today = DateTime.now();
+        final activeCount = ObjectBoxService.instance.appointmentBox
+            .getAll()
+            .where((x) =>
+                x.scheduledAt.year == today.year &&
+                x.scheduledAt.month == today.month &&
+                x.scheduledAt.day == today.day &&
+                x.status != 'done' &&
+                x.status != 'cancelled')
+            .length;
+
+        LocalServerService.instance.broadcast({
+          'event': 'new_patient',
+          'patientName': appt.patientName,
+          'activeQueueCount': activeCount,
+        });
       }
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(

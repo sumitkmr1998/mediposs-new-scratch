@@ -62,7 +62,7 @@ class _AppShellWindowsState extends State<AppShellWindows> {
   @override
   void initState() {
     super.initState();
-    
+
     // Start periodic Hub availability check for Cloud Mode
     _hubCheckTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
       final sync = context.read<SyncService>();
@@ -171,7 +171,9 @@ class _AppShellWindowsState extends State<AppShellWindows> {
     final s = context.read<SettingsProvider>().settings;
     final futures = <Future>[];
     if (s.googleDriveSyncEnabled) {
-      futures.add(context.read<SettingsProvider>().checkAndPerformAutoBackup('On Close'));
+      futures.add(context
+          .read<SettingsProvider>()
+          .checkAndPerformAutoBackup('On Close'));
     }
     if (s.firebaseEnabled) {
       futures.add(
@@ -197,55 +199,112 @@ class _AppShellWindowsState extends State<AppShellWindows> {
     final List<_Dest> dests = [];
 
     if (auth.canViewDashboard) {
-      dests.add(const _Dest(id: 'dashboard', icon: Icons.dashboard_outlined, selectedIcon: Icons.dashboard, label: 'Dashboard'));
+      dests.add(const _Dest(
+          id: 'dashboard',
+          icon: Icons.dashboard_outlined,
+          selectedIcon: Icons.dashboard,
+          label: 'Dashboard'));
     }
     if (auth.canViewAnalytics) {
-      dests.add(const _Dest(id: 'analysis', icon: Icons.analytics_outlined, selectedIcon: Icons.analytics, label: 'Analysis'));
+      dests.add(const _Dest(
+          id: 'analysis',
+          icon: Icons.analytics_outlined,
+          selectedIcon: Icons.analytics,
+          label: 'Analysis'));
     }
     if (auth.canAccessPOS) {
-      dests.add(const _Dest(id: 'pos', icon: Icons.point_of_sale_outlined, selectedIcon: Icons.point_of_sale, label: 'POS'));
+      dests.add(const _Dest(
+          id: 'pos',
+          icon: Icons.point_of_sale_outlined,
+          selectedIcon: Icons.point_of_sale,
+          label: 'POS'));
     }
     if (auth.canViewWarehouse) {
-      dests.add(const _Dest(id: 'warehouse', icon: Icons.warehouse_outlined, selectedIcon: Icons.warehouse, label: 'Warehouse'));
+      dests.add(const _Dest(
+          id: 'warehouse',
+          icon: Icons.warehouse_outlined,
+          selectedIcon: Icons.warehouse,
+          label: 'Warehouse'));
     }
     if (auth.canViewSalesHistory) {
-      dests.add(const _Dest(id: 'sales', icon: Icons.receipt_long_outlined, selectedIcon: Icons.receipt_long, label: 'Sales'));
+      dests.add(const _Dest(
+          id: 'sales',
+          icon: Icons.receipt_long_outlined,
+          selectedIcon: Icons.receipt_long,
+          label: 'Sales'));
     }
     if (auth.canAccessOPD) {
-      dests.add(const _Dest(id: 'opd_queue', icon: Icons.queue_outlined, selectedIcon: Icons.queue, label: 'OPD Queue'));
-      dests.add(const _Dest(id: 'patients', icon: Icons.people_alt_outlined, selectedIcon: Icons.people_alt, label: 'Patients'));
+      dests.add(const _Dest(
+          id: 'opd_queue',
+          icon: Icons.queue_outlined,
+          selectedIcon: Icons.queue,
+          label: 'OPD Queue'));
+      dests.add(const _Dest(
+          id: 'patients',
+          icon: Icons.people_alt_outlined,
+          selectedIcon: Icons.people_alt,
+          label: 'Patients'));
     }
     if (auth.canViewOpdReports) {
-      dests.add(const _Dest(id: 'opd_report', icon: Icons.bar_chart_outlined, selectedIcon: Icons.bar_chart, label: 'OPD Report'));
+      dests.add(const _Dest(
+          id: 'opd_report',
+          icon: Icons.bar_chart_outlined,
+          selectedIcon: Icons.bar_chart,
+          label: 'OPD Report'));
     }
     if (auth.isAdmin || auth.currentUser?.role.toLowerCase() == 'manager') {
-      dests.add(const _Dest(id: 'audit_logs', icon: Icons.history_toggle_off_rounded, selectedIcon: Icons.history_rounded, label: 'Audit Logs'));
+      dests.add(const _Dest(
+          id: 'audit_logs',
+          icon: Icons.history_toggle_off_rounded,
+          selectedIcon: Icons.history_rounded,
+          label: 'Audit Logs'));
     }
     if (auth.canAccessSettings) {
-      dests.add(const _Dest(id: 'settings', icon: Icons.settings_outlined, selectedIcon: Icons.settings, label: 'Settings'));
+      dests.add(const _Dest(
+          id: 'settings',
+          icon: Icons.settings_outlined,
+          selectedIcon: Icons.settings,
+          label: 'Settings'));
     }
 
     if (dests.isEmpty) {
-      dests.add(const _Dest(id: 'dashboard', icon: Icons.dashboard_outlined, selectedIcon: Icons.dashboard, label: 'Dashboard'));
+      dests.add(const _Dest(
+          id: 'dashboard',
+          icon: Icons.dashboard_outlined,
+          selectedIcon: Icons.dashboard,
+          label: 'Dashboard'));
     }
     return dests;
   }
 
   Widget _screenForId(String id) {
     switch (id) {
-      case 'dashboard': return const DashboardScreen();
-      case 'analysis': return const AnalysisHubScreen();
-      case 'pos': return const PosScreen();
-      case 'warehouse': return const WarehouseScreen();
-      case 'sales': return const SalesHistoryScreen();
-      case 'staff': return const UserManagementScreen();
-      case 'opd_queue': return const OpdQueueScreen();
-      case 'patients': return const PatientListScreen();
-      case 'doctors': return const DoctorListScreen();
-      case 'opd_report': return const OpdReportScreen();
-      case 'settings': return const SettingsScreen();
-      case 'audit_logs': return const AuditLogsScreen();
-      default: return const DashboardScreen();
+      case 'dashboard':
+        return const DashboardScreen();
+      case 'analysis':
+        return const AnalysisHubScreen();
+      case 'pos':
+        return const PosScreen();
+      case 'warehouse':
+        return const WarehouseScreen();
+      case 'sales':
+        return const SalesHistoryScreen();
+      case 'staff':
+        return const UserManagementScreen();
+      case 'opd_queue':
+        return const OpdQueueScreen();
+      case 'patients':
+        return const PatientListScreen();
+      case 'doctors':
+        return const DoctorListScreen();
+      case 'opd_report':
+        return const OpdReportScreen();
+      case 'settings':
+        return const SettingsScreen();
+      case 'audit_logs':
+        return const AuditLogsScreen();
+      default:
+        return const DashboardScreen();
     }
   }
 
@@ -281,13 +340,18 @@ class _AppShellWindowsState extends State<AppShellWindows> {
               if (isWide)
                 _SideNav(
                   selectedIndex: activeIndex,
-                  onDestinationSelected: (i) => nav.selectDestination(dests[i].id),
+                  onDestinationSelected: (i) =>
+                      nav.selectDestination(dests[i].id),
                   destinations: dests,
                   isWindowsHub: !settings.isWindowsClient,
                   isConnected: wsvc.connected,
                   isCollapsed: settings.navCollapsed,
-                  onToggleCollapse: () => context.read<SettingsProvider>().toggleNavCollapse(),
-                  onConnectTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ConnectionScreen())),
+                  onToggleCollapse: () =>
+                      context.read<SettingsProvider>().toggleNavCollapse(),
+                  onConnectTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const ConnectionScreen())),
                   onCloudSync: _performManualCloudSync,
                   isCloudSyncing: _isCloudSyncing,
                 ),
@@ -296,10 +360,14 @@ class _AppShellWindowsState extends State<AppShellWindows> {
           ),
         ),
         // --- HUB OFFLINE OVERLAY (BLOCKING) ---
-        if (settings.isWindowsClient && !sync.isCloudMode && !wsvc.connected && sync.hubIp != null)
+        if (settings.isWindowsClient &&
+            !sync.isCloudMode &&
+            !wsvc.connected &&
+            sync.hubIp != null)
           ConnectivityOverlay(
             title: 'Hub Connection Lost',
-            message: 'The Windows Hub is offline or unreachable. What would you like to do?',
+            message:
+                'The Windows Hub is offline or unreachable. What would you like to do?',
             actions: [
               ElevatedButton.icon(
                 onPressed: () => showShopSelectionDialog(context),
@@ -330,7 +398,8 @@ class _AppShellWindowsState extends State<AppShellWindows> {
           ConnectivityOverlay(
             isBlocking: false,
             title: 'Hub is Back Online!',
-            message: 'The Windows Hub is now reachable. Would you like to return to Live Mode for faster sync?',
+            message:
+                'The Windows Hub is now reachable. Would you like to return to Live Mode for faster sync?',
             actions: [
               ElevatedButton.icon(
                 onPressed: () {
@@ -392,13 +461,16 @@ class _AppShellWindowsState extends State<AppShellWindows> {
         title: const Text('Logout'),
         content: const Text('Logout from current session?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
               context.read<AuthProvider>().logout();
             },
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.danger,
+                foregroundColor: Colors.white),
             child: const Text('Logout'),
           ),
         ],
@@ -412,7 +484,11 @@ class _Dest {
   final IconData icon;
   final IconData selectedIcon;
   final String label;
-  const _Dest({required this.id, required this.icon, required this.selectedIcon, required this.label});
+  const _Dest(
+      {required this.id,
+      required this.icon,
+      required this.selectedIcon,
+      required this.label});
 }
 
 class _SideNav extends StatelessWidget {
@@ -463,15 +539,33 @@ class _SideNav extends StatelessWidget {
                 Flexible(
                   child: Row(
                     children: [
-                      Icon(Icons.local_pharmacy, color: Theme.of(context).colorScheme.primary, size: 28),
+                      Icon(Icons.local_pharmacy,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 28),
                       if (expanded) ...[
                         const SizedBox(width: 10),
-                        Flexible(child: Text('MediPoss', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Theme.of(context).colorScheme.primary))),
+                        Flexible(
+                            child: Text('MediPoss',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 16,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary))),
                       ],
                     ],
                   ),
                 ),
-                IconButton(onPressed: onToggleCollapse, icon: Icon(isCollapsed ? Icons.menu_open : Icons.menu, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7), size: 20)),
+                IconButton(
+                    onPressed: onToggleCollapse,
+                    icon: Icon(isCollapsed ? Icons.menu_open : Icons.menu,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withValues(alpha: 0.7),
+                        size: 20)),
               ],
             ),
           ),
@@ -486,15 +580,40 @@ class _SideNav extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                   onTap: () => onDestinationSelected(i),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(color: selected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15) : Colors.transparent, borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                    margin:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                        color: selected
+                            ? Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withValues(alpha: 0.15)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10)),
                     child: Row(
                       children: [
-                        Icon(selected ? d.selectedIcon : d.icon, color: selected ? Theme.of(context).colorScheme.primary : context.textMutedColor, size: 20),
+                        Icon(selected ? d.selectedIcon : d.icon,
+                            color: selected
+                                ? Theme.of(context).colorScheme.primary
+                                : context.textMutedColor,
+                            size: 20),
                         if (expanded) ...[
                           const SizedBox(width: 12),
-                          Expanded(child: Text(d.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: selected ? Theme.of(context).colorScheme.primary : context.textMutedColor, fontWeight: selected ? FontWeight.w700 : FontWeight.w400))),
+                          Expanded(
+                              child: Text(d.label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      color: selected
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .primary
+                                          : context.textMutedColor,
+                                      fontWeight: selected
+                                          ? FontWeight.w700
+                                          : FontWeight.w400))),
                         ],
                       ],
                     ),
@@ -565,7 +684,12 @@ class _SideNav extends StatelessWidget {
           child: Row(
             children: [
               const Icon(Icons.logout, color: AppTheme.danger, size: 20),
-              if (expanded) ...[const SizedBox(width: 12), const Text('Logout', style: TextStyle(color: AppTheme.danger, fontWeight: FontWeight.w600))],
+              if (expanded) ...[
+                const SizedBox(width: 12),
+                const Text('Logout',
+                    style: TextStyle(
+                        color: AppTheme.danger, fontWeight: FontWeight.w600))
+              ],
             ],
           ),
         ),
@@ -577,15 +701,21 @@ class _SideNav extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.all(12),
       child: isWindowsHub
-          ? _StatusBadge(label: expanded ? 'Hub Active' : '', color: AppTheme.success, icon: Icons.router)
+          ? _StatusBadge(
+              label: expanded ? 'Hub Active' : '',
+              color: AppTheme.success,
+              icon: Icons.router)
           : InkWell(
               onTap: onConnectTap,
               borderRadius: BorderRadius.circular(8),
               child: _StatusBadge(
-                label: expanded ? (isConnected ? 'Terminal: Connected' : 'Terminal: Offline') : '', 
-                color: isConnected ? AppTheme.success : AppTheme.warning, 
-                icon: isConnected ? Icons.link : Icons.link_off
-              ),
+                  label: expanded
+                      ? (isConnected
+                          ? 'Terminal: Connected'
+                          : 'Terminal: Offline')
+                      : '',
+                  color: isConnected ? AppTheme.success : AppTheme.warning,
+                  icon: isConnected ? Icons.link : Icons.link_off),
             ),
     );
   }
@@ -597,13 +727,16 @@ class _SideNav extends StatelessWidget {
         title: const Text('Logout'),
         content: const Text('Are you sure you want to logout?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
               context.read<AuthProvider>().logout();
             },
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.danger,
+                foregroundColor: Colors.white),
             child: const Text('Logout'),
           ),
         ],
@@ -616,19 +749,33 @@ class _StatusBadge extends StatelessWidget {
   final String label;
   final Color color;
   final IconData icon;
-  const _StatusBadge({required this.label, required this.color, required this.icon});
+  const _StatusBadge(
+      {required this.label, required this.color, required this.icon});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8), border: Border.all(color: color.withValues(alpha: 0.3))),
+      decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withValues(alpha: 0.3))),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, color: color, size: 14),
-          if (label.isNotEmpty) ...[const SizedBox(width: 6), Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)))],
+          if (label.isNotEmpty) ...[
+            const SizedBox(width: 6),
+            Expanded(
+                child: Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: color,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600)))
+          ],
         ],
       ),
     );

@@ -51,8 +51,18 @@ class DashboardAndroid extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      body: CustomScrollView(
-        slivers: [
+      body: RefreshIndicator(
+        onRefresh: () async {
+          final sync = context.read<SyncService>();
+          await sync.syncAll();
+          if (context.mounted) {
+            context.read<SalesProvider>().load();
+            context.read<InventoryProvider>().load();
+            context.read<OpdProvider>().loadAll();
+          }
+        },
+        child: CustomScrollView(
+          slivers: [
           // Modern App Bar
           SliverAppBar(
             expandedHeight: 120,
@@ -218,7 +228,8 @@ class DashboardAndroid extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 }
 

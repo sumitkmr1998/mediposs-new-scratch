@@ -36,13 +36,15 @@ class SettingsProvider extends ChangeNotifier {
 
   Future<void> load() async {
     _settings = ObjectBoxService.instance.settings;
-    
+
     // Attempt silent reconnect if linked
     if (_settings.googleDriveLinked && _settings.googleAuthData != null) {
       try {
-        final success = await _googleDrive.loginWithCredentials(_settings.googleAuthData!);
+        final success =
+            await _googleDrive.loginWithCredentials(_settings.googleAuthData!);
         if (!success) {
-          debugPrint('SettingsProvider: Silent Google login failed. Keeping link for manual retry.');
+          debugPrint(
+              'SettingsProvider: Silent Google login failed. Keeping link for manual retry.');
           // Don't unlink immediately, maybe it's just a network issue
         }
       } catch (e) {
@@ -91,7 +93,7 @@ class SettingsProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    
+
     _isGoogleLoading = true;
     _googleError = null;
     notifyListeners();
@@ -121,15 +123,15 @@ class SettingsProvider extends ChangeNotifier {
       final zipFile = await _googleDrive.generateFullBackupZip();
       if (zipFile == null) return null;
 
-      String? outputPath = Platform.isWindows 
-          ? '${Platform.environment['USERPROFILE']}\\Downloads' 
+      String? outputPath = Platform.isWindows
+          ? '${Platform.environment['USERPROFILE']}\\Downloads'
           : (await getDownloadsDirectory())?.path;
-      
+
       if (outputPath == null) throw Exception('Downloads folder not found');
 
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final targetPath = "$outputPath/mediposs_full_backup_$timestamp.zip";
-      
+
       await zipFile.copy(targetPath);
       await zipFile.delete(); // Clean up temp
 
@@ -147,7 +149,8 @@ class SettingsProvider extends ChangeNotifier {
   /// Triggers auto-backup based on the specified logic ('At Startup', 'On Close', 'Periodic')
   Future<void> checkAndPerformAutoBackup(String trigger) async {
     if (!_settings.googleDriveSyncEnabled) {
-      debugPrint('Auto-Backup: skipped because googleDriveSyncEnabled is false.');
+      debugPrint(
+          'Auto-Backup: skipped because googleDriveSyncEnabled is false.');
       return;
     }
     if (_settings.autoBackupFrequency == 'Never') return;
@@ -155,12 +158,12 @@ class SettingsProvider extends ChangeNotifier {
 
     // Logic for Daily/Weekly/Monthly timing (Simplified for check)
     final now = DateTime.now();
-    final last = _settings.lastBackupMillis != null 
-        ? DateTime.fromMillisecondsSinceEpoch(_settings.lastBackupMillis!) 
+    final last = _settings.lastBackupMillis != null
+        ? DateTime.fromMillisecondsSinceEpoch(_settings.lastBackupMillis!)
         : DateTime(2000);
 
     bool shouldBackup = false;
-    
+
     // Check if we are past the scheduled time today
     bool isPastScheduledTime = true;
     if (_settings.autoBackupTime != null) {
@@ -168,7 +171,8 @@ class SettingsProvider extends ChangeNotifier {
         final parts = _settings.autoBackupTime!.split(':');
         final scheduledHour = int.parse(parts[0]);
         final scheduledMinute = int.parse(parts[1]);
-        if (now.hour < scheduledHour || (now.hour == scheduledHour && now.minute < scheduledMinute)) {
+        if (now.hour < scheduledHour ||
+            (now.hour == scheduledHour && now.minute < scheduledMinute)) {
           isPastScheduledTime = false;
         }
       } catch (_) {}
@@ -187,20 +191,20 @@ class SettingsProvider extends ChangeNotifier {
         shouldBackup = true;
       }
     } else if (_settings.autoBackupFrequency == 'Always') {
-       shouldBackup = true;
+      shouldBackup = true;
     }
 
     if (shouldBackup) {
       try {
         _isAutoBackingUp = true;
         notifyListeners();
-        
+
         debugPrint('Auto-Backup triggered by $trigger');
         await _googleDrive.uploadBackup();
-        
+
         _settings.lastBackupMillis = now.millisecondsSinceEpoch;
         ObjectBoxService.instance.settingsBox.put(_settings);
-        
+
         _isAutoBackingUp = false;
         notifyListeners();
       } catch (e) {
@@ -220,7 +224,7 @@ class SettingsProvider extends ChangeNotifier {
     }
     notifyListeners();
   }
- 
+
   void toggleNavCollapse() {
     _settings.navCollapsed = !_settings.navCollapsed;
     ObjectBoxService.instance.settingsBox.put(_settings);
@@ -236,12 +240,12 @@ class SettingsProvider extends ChangeNotifier {
       return [];
     }
   }
- 
+
   Future<bool> restoreFromCloud(String fileId, {RestoreConfig? config}) async {
     _isGoogleLoading = true;
     _googleError = null;
     notifyListeners();
- 
+
     try {
       await _googleDrive.downloadAndRestore(fileId, config: config);
       _isGoogleLoading = false;
