@@ -1802,6 +1802,7 @@ class _TransferDialogState extends State<_TransferDialog> {
   MedicineBatch? _selectedBatch;
   late String _fromLoc;
   late String _toLoc;
+  bool _isSubmitting = false;
 
   int _getStock(MedicineBatch b, String loc) {
     if (loc == 'main' || loc == 'clinic') return b.mainStock;
@@ -1983,7 +1984,8 @@ class _TransferDialogState extends State<_TransferDialog> {
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
-          onPressed: () async {
+          onPressed: _isSubmitting ? null : () async {
+            setState(() => _isSubmitting = true);
             final qty = int.tryParse(_qtyCtrl.text) ?? 0;
             final sync = context.read<SyncService>();
 
@@ -2005,6 +2007,7 @@ class _TransferDialogState extends State<_TransferDialog> {
                 backgroundColor: AppTheme.danger,
                 behavior: SnackBarBehavior.floating,
               ));
+              setState(() => _isSubmitting = false);
               return;
             }
 
@@ -2026,6 +2029,7 @@ class _TransferDialogState extends State<_TransferDialog> {
                 backgroundColor: AppTheme.danger,
                 behavior: SnackBarBehavior.floating,
               ));
+              setState(() => _isSubmitting = false);
             } else {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -2078,6 +2082,7 @@ class _BulkStockEntryDialogState extends State<_BulkStockEntryDialog> {
   final FocusNode _searchFocusNode = FocusNode();
   int _highlightedIndex = 0;
   List<Medicine> _searchResults = [];
+  bool _isSubmitting = false;
 
   void _onSearch(String q, List<Medicine> all) {
     if (q.isEmpty) {
@@ -2408,9 +2413,10 @@ class _BulkStockEntryDialogState extends State<_BulkStockEntryDialog> {
         ),
         const SizedBox(width: 8),
         FilledButton.icon(
-          onPressed: _selectedItems.isEmpty
+          onPressed: _selectedItems.isEmpty || _isSubmitting
               ? null
               : () {
+                  setState(() => _isSubmitting = true);
                   final actor = context.read<AuthProvider>().currentUser;
                   for (final entry in _selectedItems.entries) {
                     final mId = entry.key;

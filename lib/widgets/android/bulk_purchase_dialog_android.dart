@@ -47,6 +47,7 @@ class _AndroidBulkPurchaseDialogState extends State<AndroidBulkPurchaseDialog> {
   final TextEditingController _noteCtrl = TextEditingController();
   final TextEditingController _supplierCtrl = TextEditingController();
   List<Medicine> _searchResults = [];
+  bool _isSubmitting = false;
 
   void _onSearch(String q, List<Medicine> all) {
     if (q.isEmpty) {
@@ -314,9 +315,10 @@ class _AndroidBulkPurchaseDialogState extends State<AndroidBulkPurchaseDialog> {
                     width: double.infinity,
                     height: 50,
                     child: FilledButton.icon(
-                      onPressed: _selectedItems.isEmpty
+                      onPressed: _selectedItems.isEmpty || _isSubmitting
                           ? null
                           : () {
+                              setState(() => _isSubmitting = true);
                               final actor = context.read<AuthProvider>().currentUser;
                               for (final entry in _selectedItems.entries) {
                                 final mId = entry.key;

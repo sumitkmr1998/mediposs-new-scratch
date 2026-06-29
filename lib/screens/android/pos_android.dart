@@ -35,6 +35,7 @@ class _PosAndroidState extends State<PosAndroid> {
   final _mixCardCtrl = TextEditingController(text: '0');
 
   String _paymentMethod = 'cash';
+  bool _isCheckingOut = false;
 
   // --- Keyboard Workflow Focus Nodes ---
   final _searchFocus = FocusNode();
@@ -276,75 +277,81 @@ class _PosAndroidState extends State<PosAndroid> {
   }
 
   Future<void> _doCheckout(CartProvider cart) async {
-    final pName = _patientCtrl.text.trim();
-    if (cart.isClinicalDispense) {
-      if (cart.patientId == 0 || pName.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('❌ Clinic Dispense requires a registered patient!'),
-            backgroundColor: AppTheme.danger,
-          ),
-        );
-        return;
+    if (_isCheckingOut) return;
+    setState(() => _isCheckingOut = true);
+    try {
+      final pName = _patientCtrl.text.trim();
+      if (cart.isClinicalDispense) {
+        if (cart.patientId == 0 || pName.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ Clinic Dispense requires a registered patient!'),
+              backgroundColor: AppTheme.danger,
+            ),
+          );
+          return;
+        }
       }
-    }
-    
-    if (pName.isEmpty) {
-      cart.setPatient(name: '', phone: '', id: 0, uhid: '');
-    } else {
-      cart.setPatient(name: pName, id: cart.patientId, phone: cart.patientPhone, uhid: cart.patientUhid);
-    }
-    final discount = double.tryParse(_discountCtrl.text) ?? 0;
-    cart.setDiscount(discount);
-    cart.setPaymentMethod(_paymentMethod);
+      
+      if (pName.isEmpty) {
+        cart.setPatient(name: '', phone: '', id: 0, uhid: '');
+      } else {
+        cart.setPatient(name: pName, id: cart.patientId, phone: cart.patientPhone, uhid: cart.patientUhid);
+      }
+      final discount = double.tryParse(_discountCtrl.text) ?? 0;
+      cart.setDiscount(discount);
+      cart.setPaymentMethod(_paymentMethod);
 
-    if (_paymentMethod == 'mixed') {
-      final cash = double.tryParse(_mixCashCtrl.text) ?? 0;
-      final upi = double.tryParse(_mixUpiCtrl.text) ?? 0;
-      final card = double.tryParse(_mixCardCtrl.text) ?? 0;
+      if (_paymentMethod == 'mixed') {
+        final cash = double.tryParse(_mixCashCtrl.text) ?? 0;
+        final upi = double.tryParse(_mixUpiCtrl.text) ?? 0;
+        final card = double.tryParse(_mixCardCtrl.text) ?? 0;
 
-      final sum = cash + upi + card;
-      if ((sum - cart.totalRounded).abs() > 0.01) {
+        final sum = cash + upi + card;
+        if ((sum - cart.totalRounded).abs() > 0.01) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Mixed amounts (₹$sum) must exactly equal total (₹${cart.totalRounded})!',
+              ),
+              backgroundColor: AppTheme.danger,
+            ),
+          );
+          return;
+        }
+        cart.setMixedAmounts(cash, upi, card);
+      }
+
+      final currentUser = context.read<AuthProvider>().currentUser;
+      final sale = await cart.checkout(context.read<SyncService>(), currentUser);
+      if (!context.mounted) return;
+
+      if (sale != null) {
+        _mixCashCtrl.text = '0';
+        _mixUpiCtrl.text = '0';
+        _mixCardCtrl.text = '0';
+        _discountCtrl.clear();
+        _searchCtrl.clear();
+        _patientCtrl.clear();
+
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Mixed amounts (₹$sum) must exactly equal total (₹${cart.totalRounded})!',
+              sale.isReturn
+                  ? '✅ Return ${sale.invoiceNo} processed — Refund ₹${sale.total.abs().toStringAsFixed(2)}'
+                  : '✅ Sale ${sale.invoiceNo} complete — ₹${sale.total.toStringAsFixed(2)}',
             ),
-            backgroundColor: AppTheme.danger,
+            backgroundColor: sale.isReturn ? AppTheme.danger : AppTheme.success,
           ),
         );
-        return;
+
+        await PrintingService.instance.printReceipt(context, sale);
+        _showPatientProactiveSearch();
+        _currentSearchFocusNode?.requestFocus();
       }
-      cart.setMixedAmounts(cash, upi, card);
-    }
-
-    final currentUser = context.read<AuthProvider>().currentUser;
-    final sale = await cart.checkout(context.read<SyncService>(), currentUser);
-    if (!context.mounted) return;
-
-    if (sale != null) {
-      _mixCashCtrl.text = '0';
-      _mixUpiCtrl.text = '0';
-      _mixCardCtrl.text = '0';
-      _discountCtrl.clear();
-      _searchCtrl.clear();
-      _patientCtrl.clear();
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            sale.isReturn
-                ? '✅ Return ${sale.invoiceNo} processed — Refund ₹${sale.total.abs().toStringAsFixed(2)}'
-                : '✅ Sale ${sale.invoiceNo} complete — ₹${sale.total.toStringAsFixed(2)}',
-          ),
-          backgroundColor: sale.isReturn ? AppTheme.danger : AppTheme.success,
-        ),
-      );
-
-      await PrintingService.instance.printReceipt(context, sale);
-      _showPatientProactiveSearch();
-      _currentSearchFocusNode?.requestFocus();
+    } finally {
+      setState(() => _isCheckingOut = false);
     }
   }
 
@@ -605,10 +612,17 @@ class _PosAndroidState extends State<PosAndroid> {
                   SizedBox(
                     height: 52,
                     child: ElevatedButton(
-                      onPressed: () async {
-                        Navigator.pop(ctx);
-                        await _doCheckout(cart);
-                      },
+                      onPressed: _isCheckingOut
+                          ? null
+                          : () async {
+                              setState(() => _isCheckingOut = true);
+                              try {
+                                Navigator.pop(ctx);
+                                await _doCheckout(cart);
+                              } finally {
+                                setState(() => _isCheckingOut = false);
+                              }
+                            },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.transparent,
                         shadowColor: Colors.transparent,

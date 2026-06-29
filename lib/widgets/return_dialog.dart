@@ -22,6 +22,7 @@ class ReturnDialog extends StatefulWidget {
 class _ReturnDialogState extends State<ReturnDialog> {
   late final List<SaleItem> _items;
   late final Map<int, int> _returnQuantities;
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -127,7 +128,12 @@ class _ReturnDialogState extends State<ReturnDialog> {
         ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
-          onPressed: _returnTotal > 0 ? _processReturn : null,
+          onPressed: _returnTotal > 0 && !_isSubmitting
+              ? () {
+                  setState(() => _isSubmitting = true);
+                  _processReturn();
+                }
+              : null,
           child: const Text('Confirm Return',
               style: TextStyle(color: Colors.white)),
         ),
@@ -163,51 +169,64 @@ class _ReturnDialogState extends State<ReturnDialog> {
       }
     }
 
-    if (returnedItems.isEmpty) return;
-
-    // Generate Return Sale Record
-    final now = await TimeService.getRobustTime();
-    final count = db.saleBox.count();
-    final invoiceNo =
-        'RET-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${(count + 1).toString().padLeft(4, '0')}';
-
-    final returnSale = Sale(
-      invoiceNo: invoiceNo,
-      patientName: widget.originalSale.patientName,
-      patientPhone: widget.originalSale.patientPhone,
-      subtotal: -_returnTotal,
-      discount: 0,
-      taxRate: 0,
-      taxAmount: 0,
-      total: -_returnTotal,
-      paymentMethod: widget.originalSale.paymentMethod,
-      isReturn: true, // Mark as return
-      isClinicalDispense: widget.originalSale.isClinicalDispense,
-      itemsJson: "[]", // Encode list below
-      createdAt: now,
-    );
-
-    returnSale.itemsJson = jsonEncode(returnedItems.map((i) => i.toJson()).toList());
-
-    db.saleBox.put(returnSale);
-    salesProvider.load(); // Refresh sales history
-
-    // SYNC: Push return record to Hub if client
-    final isClient = Platform.isAndroid || (Platform.isWindows && db.settings.isWindowsClient);
-    if (isClient) {
-      SyncQueueService.instance.addToQueue(
-        entity: 'sale',
-        action: 'create',
-        data: returnSale.toJson(),
-      );
+    if (returnedItems.isEmpty) {
+      setState(() => _isSubmitting = false);
+      return;
     }
 
-    if (!mounted) return;
-    Navigator.pop(context);
+    try {
+      // Generate Return Sale Record
+      final now = await TimeService.getRobustTime();
+      final count = db.saleBox.count();
+      final invoiceNo =
+          'RET-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${(count + 1).toString().padLeft(4, '0')}';
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('Refund processed for $invoiceNo'),
-      backgroundColor: AppTheme.success,
-    ));
+      final returnSale = Sale(
+        invoiceNo: invoiceNo,
+        patientName: widget.originalSale.patientName,
+        patientPhone: widget.originalSale.patientPhone,
+        subtotal: -_returnTotal,
+        discount: 0,
+        taxRate: 0,
+        taxAmount: 0,
+        total: -_returnTotal,
+        paymentMethod: widget.originalSale.paymentMethod,
+        isReturn: true, // Mark as return
+        isClinicalDispense: widget.originalSale.isClinicalDispense,
+        itemsJson: "[]", // Encode list below
+        createdAt: now,
+      );
+
+      returnSale.itemsJson = jsonEncode(returnedItems.map((i) => i.toJson()).toList());
+
+      db.saleBox.put(returnSale);
+      salesProvider.load(); // Refresh sales history
+
+      // SYNC: Push return record to Hub if client
+      final isClient = Platform.isAndroid || (Platform.isWindows && db.settings.isWindowsClient);
+      if (isClient) {
+        SyncQueueService.instance.addToQueue(
+          entity: 'sale',
+          action: 'create',
+          data: returnSale.toJson(),
+        );
+      }
+
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Refund processed for $invoiceNo'),
+        backgroundColor: AppTheme.success,
+      ));
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('❌ Return processing failed: $e'),
+          backgroundColor: AppTheme.danger,
+        ));
+      }
+    }
   }
 }

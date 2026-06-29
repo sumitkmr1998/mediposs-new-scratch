@@ -40,6 +40,7 @@ class _PosWindowsState extends State<PosWindows> {
   final _searchCtrl = TextEditingController();
   final _discountCtrl = TextEditingController();
   final _patientCtrl = TextEditingController();
+  bool _isCheckingOut = false;
 
   final _mixCashCtrl = TextEditingController(text: '0');
   final _mixUpiCtrl = TextEditingController(text: '0');
@@ -497,7 +498,7 @@ class _PosWindowsState extends State<PosWindows> {
                                     _showPrescriptionLoader(context),
                                 onImportPreviousSales: () =>
                                     _showImportPreviousSalesDialog(context, cart),
-                                onCheckout: () => _doCheckout(cart),
+                                onCheckout: _isCheckingOut ? null : () => _doCheckout(cart),
                               ),
                             ),
                           ],
@@ -554,7 +555,7 @@ class _PosWindowsState extends State<PosWindows> {
                                     _showPrescriptionLoader(context),
                                 onImportPreviousSales: () =>
                                     _showImportPreviousSalesDialog(context, cart),
-                                onCheckout: () => _doCheckout(cart),
+                                onCheckout: _isCheckingOut ? null : () => _doCheckout(cart),
                               ),
                             ),
                           ],
@@ -755,112 +756,118 @@ class _PosWindowsState extends State<PosWindows> {
   }
 
   Future<void> _doCheckout(CartProvider cart) async {
-    String pName = _patientCtrl.text.trim();
-    if (cart.isClinicalDispense) {
-      if (cart.patientId == 0 || pName.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('❌ Registered patient is strictly required for Clinical Dispense Mode!'),
-            backgroundColor: AppTheme.danger,
-          ),
-        );
-        return;
+    if (_isCheckingOut) return;
+    setState(() => _isCheckingOut = true);
+    try {
+      String pName = _patientCtrl.text.trim();
+      if (cart.isClinicalDispense) {
+        if (cart.patientId == 0 || pName.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ Registered patient is strictly required for Clinical Dispense Mode!'),
+              backgroundColor: AppTheme.danger,
+            ),
+          );
+          return;
+        }
       }
-    }
 
-    if (cart.hasScheduleH1Items && !cart.isReturnMode) {
-      final h1Details = await _showH1DetailsDialog(context, cart);
-      if (h1Details == null) {
-        // User cancelled
-        return;
+      if (cart.hasScheduleH1Items && !cart.isReturnMode) {
+        final h1Details = await _showH1DetailsDialog(context, cart);
+        if (h1Details == null) {
+          // User cancelled
+          return;
+        }
+        cart.setH1PrescriptionDetails(
+          doctorName: h1Details['doctorName']!,
+          doctorAddress: h1Details['doctorAddress']!,
+          doctorRegistrationNo: h1Details['doctorRegistrationNo']!,
+          patientAddress: h1Details['patientAddress']!,
+        );
+        if (h1Details['patientName']!.isNotEmpty) {
+          _patientCtrl.text = h1Details['patientName']!;
+          pName = h1Details['patientName']!;
+          cart.setPatient(
+            name: pName,
+            id: cart.patientId,
+            phone: cart.patientPhone,
+            uhid: cart.patientUhid,
+            address: h1Details['patientAddress']!,
+          );
+        }
       }
-      cart.setH1PrescriptionDetails(
-        doctorName: h1Details['doctorName']!,
-        doctorAddress: h1Details['doctorAddress']!,
-        doctorRegistrationNo: h1Details['doctorRegistrationNo']!,
-        patientAddress: h1Details['patientAddress']!,
-      );
-      if (h1Details['patientName']!.isNotEmpty) {
-        _patientCtrl.text = h1Details['patientName']!;
-        pName = h1Details['patientName']!;
+      
+      if (pName.isEmpty) {
+        cart.setPatient(name: '', phone: '', id: 0, uhid: '', address: '');
+      } else {
         cart.setPatient(
-          name: pName,
-          id: cart.patientId,
-          phone: cart.patientPhone,
-          uhid: cart.patientUhid,
-          address: h1Details['patientAddress']!,
+          name: pName, 
+          id: cart.patientId, 
+          phone: cart.patientPhone, 
+          uhid: cart.patientUhid, 
+          address: cart.patientAddress,
         );
       }
-    }
-    
-    if (pName.isEmpty) {
-      cart.setPatient(name: '', phone: '', id: 0, uhid: '', address: '');
-    } else {
-      cart.setPatient(
-        name: pName, 
-        id: cart.patientId, 
-        phone: cart.patientPhone, 
-        uhid: cart.patientUhid, 
-        address: cart.patientAddress,
-      );
-    }
-    final discount = double.tryParse(_discountCtrl.text) ?? 0;
-    cart.setDiscount(discount);
-    cart.setPaymentMethod(_paymentMethod);
+      final discount = double.tryParse(_discountCtrl.text) ?? 0;
+      cart.setDiscount(discount);
+      cart.setPaymentMethod(_paymentMethod);
 
-    if (_paymentMethod == 'mixed') {
-      final cash = double.tryParse(_mixCashCtrl.text) ?? 0;
-      final upi = double.tryParse(_mixUpiCtrl.text) ?? 0;
-      final card = double.tryParse(_mixCardCtrl.text) ?? 0;
+      if (_paymentMethod == 'mixed') {
+        final cash = double.tryParse(_mixCashCtrl.text) ?? 0;
+        final upi = double.tryParse(_mixUpiCtrl.text) ?? 0;
+        final card = double.tryParse(_mixCardCtrl.text) ?? 0;
 
-      final sum = cash + upi + card;
-      if ((sum - cart.totalRounded).abs() > 0.01) {
+        final sum = cash + upi + card;
+        if ((sum - cart.totalRounded).abs() > 0.01) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Mixed amounts (₹$sum) must exactly equal total (₹${cart.totalRounded})!',
+              ),
+              backgroundColor: AppTheme.danger,
+            ),
+          );
+          return;
+        }
+        cart.setMixedAmounts(cash, upi, card);
+      }
+
+      final currentUser = context.read<AuthProvider>().currentUser;
+      final sale = await cart.checkout(context.read<SyncService>(), currentUser);
+      if (!context.mounted) return;
+
+      if (sale != null) {
+        // Reset mixed controllers
+        _mixCashCtrl.text = '0';
+        _mixUpiCtrl.text = '0';
+        _mixCardCtrl.text = '0';
+        _discountCtrl.clear();
+        _searchCtrl.clear();
+        _patientCtrl.clear();
+
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Mixed amounts (₹$sum) must exactly equal total (₹${cart.totalRounded})!',
+              sale.isReturn
+                  ? '✅ Return ${sale.invoiceNo} processed — Refund ₹${sale.total.abs().toStringAsFixed(2)}'
+                  : '✅ Sale ${sale.invoiceNo} complete — ₹${sale.total.toStringAsFixed(2)}',
             ),
-            backgroundColor: AppTheme.danger,
+            backgroundColor: sale.isReturn ? AppTheme.danger : AppTheme.success,
           ),
         );
-        return;
+
+        // Trigger Print Preview (Wait for it to close)
+        await PrintingService.instance.printSaleAsInvoice(context, sale);
+
+        // Proactive Search for next sale
+        _showPatientProactiveSearch();
+
+        // Return focus to search for the next rapid transaction
+        _searchFocus.requestFocus();
       }
-      cart.setMixedAmounts(cash, upi, card);
-    }
-
-    final currentUser = context.read<AuthProvider>().currentUser;
-    final sale = await cart.checkout(context.read<SyncService>(), currentUser);
-    if (!context.mounted) return;
-
-    if (sale != null) {
-      // Reset mixed controllers
-      _mixCashCtrl.text = '0';
-      _mixUpiCtrl.text = '0';
-      _mixCardCtrl.text = '0';
-      _discountCtrl.clear();
-      _searchCtrl.clear();
-      _patientCtrl.clear();
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            sale.isReturn
-                ? '✅ Return ${sale.invoiceNo} processed — Refund ₹${sale.total.abs().toStringAsFixed(2)}'
-                : '✅ Sale ${sale.invoiceNo} complete — ₹${sale.total.toStringAsFixed(2)}',
-          ),
-          backgroundColor: sale.isReturn ? AppTheme.danger : AppTheme.success,
-        ),
-      );
-
-      // Trigger Print Preview (Wait for it to close)
-      await PrintingService.instance.printSaleAsInvoice(context, sale);
-
-      // Proactive Search for next sale
-      _showPatientProactiveSearch();
-
-      // Return focus to search for the next rapid transaction
-      _searchFocus.requestFocus();
+    } finally {
+      setState(() => _isCheckingOut = false);
     }
   }
 
@@ -1920,7 +1927,7 @@ class _CartPanel extends StatelessWidget {
   final ValueChanged<String> onPaymentMethodChanged;
   final VoidCallback onLoadPrescription;
   final VoidCallback onImportPreviousSales;
-  final VoidCallback onCheckout;
+  final VoidCallback? onCheckout;
 
   const _CartPanel({
     required this.cart,
@@ -2420,7 +2427,7 @@ class _CartPanel extends StatelessWidget {
                           label: 'Card',
                           controller: mixCardCtrl,
                           focusNode: mixCardFocus,
-                          onSubmitted: () => onCheckout(),
+                          onSubmitted: () => onCheckout?.call(),
                         ),
                       ),
                     ],

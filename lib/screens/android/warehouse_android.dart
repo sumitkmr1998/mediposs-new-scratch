@@ -681,6 +681,7 @@ class _TransferDialogState extends State<_TransferDialog> {
   MedicineBatch? _selectedBatch;
   late String _fromLoc;
   late String _toLoc;
+  bool _isSubmitting = false;
 
   int _getStock(MedicineBatch b, String loc) {
     if (loc == 'main' || loc == 'clinic') return b.mainStock;
@@ -947,34 +948,43 @@ class _TransferDialogState extends State<_TransferDialog> {
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
-          onPressed: () async {
-            if (availableBatches.isNotEmpty && _selectedBatch == null) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('Please select a batch to transfer'),
-                backgroundColor: AppTheme.danger,
-              ));
-              return;
-            }
-            final qty = int.tryParse(_qtyCtrl.text) ?? 0;
-            final err = await widget.wh.transfer(
-              medicine: widget.medicine,
-              qty: qty,
-              from: _fromLoc,
-              to: _toLoc,
-              batchNo: _selectedBatch?.batchNo,
-              expiryDate: _selectedBatch?.expiryDate,
-              note: _noteCtrl.text,
-              syncService: context.read<SyncService>(),
-              actor: context.read<AuthProvider>().currentUser,
-            );
-            if (!context.mounted) return;
-            if (err == null)
-              Navigator.pop(context);
-            else {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(err), backgroundColor: AppTheme.danger));
-            }
-          },
+          onPressed: _isSubmitting
+              ? null
+              : () async {
+                  if (availableBatches.isNotEmpty && _selectedBatch == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Please select a batch to transfer'),
+                      backgroundColor: AppTheme.danger,
+                    ));
+                    return;
+                  }
+                  setState(() => _isSubmitting = true);
+                  try {
+                    final qty = int.tryParse(_qtyCtrl.text) ?? 0;
+                    final err = await widget.wh.transfer(
+                      medicine: widget.medicine,
+                      qty: qty,
+                      from: _fromLoc,
+                      to: _toLoc,
+                      batchNo: _selectedBatch?.batchNo,
+                      expiryDate: _selectedBatch?.expiryDate,
+                      note: _noteCtrl.text,
+                      syncService: context.read<SyncService>(),
+                      actor: context.read<AuthProvider>().currentUser,
+                    );
+                    if (!context.mounted) return;
+                    if (err == null) {
+                      Navigator.pop(context);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(err), backgroundColor: AppTheme.danger));
+                    }
+                  } finally {
+                    if (mounted) {
+                      setState(() => _isSubmitting = false);
+                    }
+                  }
+                },
           child: const Text('CONFIRM',
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
         ),
