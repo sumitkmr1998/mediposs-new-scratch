@@ -23,6 +23,7 @@ import '../services/objectbox_service.dart';
 import '../services/notification_service.dart';
 import '../services/firebase_sync_service.dart';
 import 'sync_queue_service.dart';
+import 'discovery_service.dart';
 import '../../objectbox.g.dart';
 
 class SyncService extends ChangeNotifier {
@@ -251,6 +252,23 @@ class SyncService extends ChangeNotifier {
       final errorMsg = await connect(savedIp);
       if (errorMsg == null) {
         success = true;
+      }
+    }
+
+    // 1.5 Try UDP Auto-Discovery if saved IP fails (LAN fallback)
+    if (!success && !kIsWeb && defaultTargetPlatform != TargetPlatform.windows) {
+      debugPrint('SyncService: Local IP failed. Blasting UDP subnet search for Hub...');
+      try {
+        final discoveredIp = await DiscoveryService.discoverHub().timeout(const Duration(seconds: 3));
+        if (discoveredIp != null && discoveredIp.isNotEmpty) {
+          debugPrint('SyncService: UDP discovered Hub IP: $discoveredIp');
+          final errorMsg = await connect(discoveredIp);
+          if (errorMsg == null) {
+            success = true;
+          }
+        }
+      } catch (e) {
+        debugPrint('SyncService: UDP discovery failed: $e');
       }
     }
 
@@ -1929,7 +1947,7 @@ class WebSocketService extends ChangeNotifier {
     });
   }
 
-  void _doConnect(String ip, String secret) {
+  Future<void> _doConnect(String ip, String secret) async {
     if (_connected) return;
     try {
       Uri uri;
@@ -1946,7 +1964,10 @@ class WebSocketService extends ChangeNotifier {
       }
       
       debugPrint('WebSocketService: Connecting to $uri');
-      _channel = WebSocketChannel.connect(uri);
+      final channel = WebSocketChannel.connect(uri);
+      await channel.ready;
+      
+      _channel = channel;
       _connected = true;
       _reconnectAttempts = 0; // Reset on successful connect
       debugPrint('WebSocketService: Connected to $ip');

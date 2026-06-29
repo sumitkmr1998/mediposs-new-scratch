@@ -92,19 +92,32 @@ class DiscoveryService {
         }
       });
 
-      // Blast to specific subnet broadcast
+      // Blast to specific calculated subnet broadcast
       socket.send(
         utf8.encode(_magicPing),
         InternetAddress(broadcastAddr),
         _udpPort,
       );
 
-      // Blast to global broadcast just in case
-      socket.send(
-        utf8.encode(_magicPing),
-        InternetAddress('255.255.255.255'),
-        _udpPort,
-      );
+      // List of fallback subnet broadcasts to try in case wifiIP is null or inaccurate
+      final fallbacks = [
+        '255.255.255.255',
+        '192.168.1.255',
+        '192.168.0.255',
+        '192.168.43.255',
+        '192.168.8.255',
+        '10.0.2.255',
+      ];
+
+      for (final addr in fallbacks) {
+        if (addr != broadcastAddr) {
+          socket.send(
+            utf8.encode(_magicPing),
+            InternetAddress(addr),
+            _udpPort,
+          );
+        }
+      }
 
       // Timeout after 2.5 seconds
       return await completer.future.timeout(

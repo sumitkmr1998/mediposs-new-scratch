@@ -1084,6 +1084,14 @@ class LocalServerService {
           'patientName': a.patientName,
           'activeQueueCount': activeCount,
         });
+
+        FirebaseSyncService.instance.pushNotification(
+          event: 'new_patient',
+          data: {
+            'patientName': a.patientName,
+            'activeQueueCount': activeCount,
+          },
+        );
       }
 
       return Response.ok(

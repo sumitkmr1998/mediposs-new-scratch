@@ -55,20 +55,21 @@ class FirebaseSyncService {
     if (_instance != null) return;
     _instance = FirebaseSyncService._();
     try {
-      // Check if Firebase is initialized by accessing the app name
       Firebase.app();
       _instance!._isInitialized = true;
 
-      if (defaultTargetPlatform != TargetPlatform.windows) {
+      if (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS) {
         debugPrint('FirebaseSyncService: Triggering anonymous sign-in on mobile...');
-        FirebaseAuth.instance.signInAnonymously().then((credential) {
-          debugPrint('FirebaseSyncService: Anonymous sign-in successful: ${credential.user?.uid}');
-        }).catchError((error) {
-          debugPrint('FirebaseSyncService: Anonymous sign-in failed: $error');
-        });
+        final user = FirebaseAuth.instance.currentUser;
+        if (user == null) {
+          await FirebaseAuth.instance.signInAnonymously();
+          debugPrint('FirebaseSyncService: Anonymous sign-in successful.');
+        } else {
+          debugPrint('FirebaseSyncService: Already authenticated anonymously: ${user.uid}');
+        }
       }
-    } catch (_) {
-      debugPrint('FirebaseSyncService: Firebase core not initialized. Some features will be disabled.');
+    } catch (e) {
+      debugPrint('FirebaseSyncService: Firebase initialization or authentication failed: $e');
     }
   }
 
@@ -226,7 +227,7 @@ class FirebaseSyncService {
           'deviceId': {'stringValue': settings.deviceId ?? 'unknown'},
           'entity': {'stringValue': entity},
           'action': {'stringValue': action},
-          'data': {'mapValue': _convertToFirestoreMap(data)},
+          'data': {'mapValue': {'fields': _convertToFirestoreMap(data)}},
           'timestamp': {'timestampValue': DateTime.now().toUtc().toIso8601String()},
           'processed': {'booleanValue': false},
         }
@@ -750,6 +751,71 @@ class FirebaseSyncService {
       debugPrint('FirebaseSyncService: Daily summary cloud upload completed successfully.');
     } catch (e) {
       debugPrint('FirebaseSyncService: Daily summary cloud upload failed: $e');
+    }
+  }
+
+  /// Push a real-time notification document to Firestore.
+  Future<bool> pushNotification({
+    required String event,
+    required Map<String, dynamic> data,
+  }) async {
+    if (!_isEnabled) return false;
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      return await _pushNotificationREST(event: event, data: data);
+    }
+
+    if (!_isInitialized) return false;
+    try {
+      final settings = ObjectBoxService.instance.settings;
+      await _db.collection('shops').doc(_shopId).collection('notifications').add({
+        'deviceId': settings.deviceId ?? 'unknown',
+        'event': event,
+        'data': data,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      debugPrint('Firebase pushNotification error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> _pushNotificationREST({
+    required String event,
+    required Map<String, dynamic> data,
+  }) async {
+    if (!_isEnabled) return false;
+    try {
+      final projectId = DefaultFirebaseOptions.windows.projectId;
+      final apiKey = DefaultFirebaseOptions.windows.apiKey;
+      final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops/$_shopId/notifications?key=$apiKey');
+      
+      final settings = ObjectBoxService.instance.settings;
+      final body = jsonEncode({
+        'fields': {
+          'deviceId': {'stringValue': settings.deviceId ?? 'unknown'},
+          'event': {'stringValue': event},
+          'data': {'mapValue': {'fields': _convertToFirestoreMap(data)}},
+          'timestamp': {'timestampValue': DateTime.now().toUtc().toIso8601String()},
+        }
+      });
+
+      final token = await _getIdToken();
+      final res = await http.post(
+        url, 
+        headers: token != null ? {'Authorization': 'Bearer $token'} : {},
+        body: body
+      );
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        debugPrint('Firebase [REST]: Notification pushed successfully.');
+        return true;
+      } else {
+        debugPrint('Firebase [REST]: Notification push failed with ${res.statusCode}: ${res.body}');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Firebase [REST]: Error pushing notification: $e');
+      return false;
     }
   }
 }

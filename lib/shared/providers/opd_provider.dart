@@ -9,6 +9,7 @@ import '../services/time_service.dart';
 import '../services/local_server_service.dart';
 import '../services/sync_service.dart';
 import '../services/sync_queue_service.dart';
+import '../services/firebase_sync_service.dart';
 import '../services/audit_service.dart';
 import 'dart:io';
 import 'dart:convert';
@@ -365,6 +366,14 @@ class OpdProvider extends ChangeNotifier {
           'patientName': appt.patientName,
           'activeQueueCount': activeCount,
         });
+
+        FirebaseSyncService.instance.pushNotification(
+          event: 'new_patient',
+          data: {
+            'patientName': appt.patientName,
+            'activeQueueCount': activeCount,
+          },
+        );
       }
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(
