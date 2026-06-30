@@ -225,7 +225,27 @@ class SyncService extends ChangeNotifier {
       debugPrint('SyncService: Testing connection to $url...');
       final res = await http.get(url, headers: _authHeaders()).timeout(const Duration(seconds: 4));
       debugPrint('SyncService: Connection test result: ${res.statusCode}');
-      return res.statusCode == 200;
+      if (res.statusCode == 200) {
+        if (ObjectBoxService.isInitialized) {
+          final settings = ObjectBoxService.instance.settings;
+          final localShopId = settings.shopId;
+          if (localShopId.isNotEmpty) {
+            try {
+              final payload = jsonDecode(res.body);
+              final hubShopId = payload['shopId'] as String? ?? '';
+              if (hubShopId.isNotEmpty &&
+                  localShopId.trim().toLowerCase() != hubShopId.trim().toLowerCase()) {
+                debugPrint('SyncService: Health check mismatch. Local shopId: $localShopId, Hub shopId: $hubShopId');
+                return false;
+              }
+            } catch (e) {
+              debugPrint('SyncService: Error parsing health response: $e');
+            }
+          }
+        }
+        return true;
+      }
+      return false;
     } on SocketException catch (e) {
       debugPrint('SyncService: Connection test FAILED (SocketException): $e');
       return false;
@@ -260,7 +280,7 @@ class SyncService extends ChangeNotifier {
     if (!success && !kIsWeb && defaultTargetPlatform != TargetPlatform.windows) {
       debugPrint('SyncService: Local IP failed. Blasting UDP subnet search for Hub...');
       try {
-        final discoveredIp = await DiscoveryService.discoverHub().timeout(const Duration(seconds: 3));
+        final discoveredIp = await DiscoveryService.discoverHub(targetShopId: settings.shopId).timeout(const Duration(seconds: 3));
         if (discoveredIp != null && discoveredIp.isNotEmpty) {
           debugPrint('SyncService: UDP discovered Hub IP: $discoveredIp');
           final errorMsg = await connect(discoveredIp);

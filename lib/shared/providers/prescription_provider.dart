@@ -167,6 +167,7 @@ class PrescriptionProvider extends ChangeNotifier {
     final appt = ObjectBoxService.instance.appointmentBox.get(appointmentId);
     if (appt != null && (appt.status == kStatusWithDoctor || appt.status == kStatusWaiting)) {
       appt.status = kStatusPharmacy;
+      appt.updatedAt = DateTime.now();
       ObjectBoxService.instance.appointmentBox.put(appt);
       // Notify OpdProvider to refresh its state
       if (context != null && context.mounted) {

@@ -41,6 +41,9 @@ class Appointment {
   @Property(type: PropertyType.date)
   DateTime createdAt;
 
+  @Property(type: PropertyType.date)
+  DateTime updatedAt;
+
   bool isWalkIn; // Walk-in vs advance booking
   bool consultationBilled; // Whether fee was added to POS
   String paymentMethod; // cash / upi / card / pending
@@ -58,10 +61,12 @@ class Appointment {
     this.notes = '',
     required this.scheduledAt,
     DateTime? createdAt,
+    DateTime? updatedAt,
     this.isWalkIn = true,
     this.consultationBilled = false,
     this.paymentMethod = 'cash',
-  }) : createdAt = createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -79,6 +84,7 @@ class Appointment {
         'pharmacyAt': pharmacyAt?.toIso8601String(),
         'completedAt': completedAt?.toIso8601String(),
         'createdAt': createdAt.toIso8601String(),
+        'updatedAt': updatedAt.toIso8601String(),
         'isWalkIn': isWalkIn,
         'consultationBilled': consultationBilled,
         'paymentMethod': paymentMethod,
@@ -103,5 +109,8 @@ class Appointment {
       )
         ..calledAt = DateHelper.parseDateTime(json['calledAt'])
         ..pharmacyAt = DateHelper.parseDateTime(json['pharmacyAt'])
-        ..completedAt = DateHelper.parseDateTime(json['completedAt']);
+        ..completedAt = DateHelper.parseDateTime(json['completedAt'])
+        ..updatedAt = DateHelper.parseDateTime(json['updatedAt']) ??
+            DateHelper.parseDateTime(json['createdAt']) ??
+            DateTime.now();
 }

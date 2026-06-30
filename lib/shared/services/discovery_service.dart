@@ -11,7 +11,7 @@ class DiscoveryService {
 
   /// Starts listening for UDP broadcasts on Windows.
   /// When a ping is received, it replies directly back to the Android client.
-  static Future<void> startAdvertising(int apiPort) async {
+  static Future<void> startAdvertising(int apiPort, String shopId) async {
     if (!Platform.isWindows) return;
 
     try {
@@ -26,10 +26,11 @@ class DiscoveryService {
           if (datagram != null) {
             final msg = utf8.decode(datagram.data);
             if (msg == _magicPing) {
-              // Valid ping received, send back our Hub IP
+              // Valid ping received, send back our Hub IP and shopId
               final replyPayload = jsonEncode({
                 'id': 'MediPoss_Hub',
                 'apiPort': apiPort,
+                'shopId': shopId,
               });
               _udpServer!.send(
                 utf8.encode(replyPayload),
@@ -37,7 +38,7 @@ class DiscoveryService {
                 datagram.port,
               );
               debugPrint(
-                  'UDP Server: Responded to discovery ping from ${datagram.address.address}');
+                  'UDP Server: Responded to discovery ping from ${datagram.address.address} (Shop: $shopId)');
             }
           }
         }
@@ -56,12 +57,12 @@ class DiscoveryService {
   }
 
   /// Blasts a magic UDP packet across the subnet and waits up to 2 seconds for a reply.
-  static Future<String?> discoverHub() async {
+  static Future<String?> discoverHub({String? targetShopId}) async {
     RawDatagramSocket? socket;
     try {
       final info = NetworkInfo();
       final wifiIP = await info.getWifiIP();
-      debugPrint('DiscoveryService: My Android IP is $wifiIP');
+      debugPrint('DiscoveryService: My Android IP is $wifiIP, targetShopId: $targetShopId');
 
       String? broadcastAddr = '255.255.255.255'; // Global broadcast fallback
       if (wifiIP != null) {
@@ -83,8 +84,15 @@ class DiscoveryService {
             try {
               final payload = jsonDecode(utf8.decode(datagram.data));
               if (payload['id'] == 'MediPoss_Hub') {
-                if (!completer.isCompleted) {
-                  completer.complete(datagram.address.address);
+                final hubShopId = payload['shopId'] as String? ?? '';
+                if (targetShopId == null ||
+                    targetShopId.isEmpty ||
+                    hubShopId.trim().toLowerCase() == targetShopId.trim().toLowerCase()) {
+                  if (!completer.isCompleted) {
+                    completer.complete(datagram.address.address);
+                  }
+                } else {
+                  debugPrint('DiscoveryService: Discovered Hub (Shop: $hubShopId) does not match target ($targetShopId). Skipping.');
                 }
               }
             } catch (_) {}

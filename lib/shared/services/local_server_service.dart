@@ -210,8 +210,11 @@ class LocalServerService {
   // ---- Handlers ----
 
   Response _healthHandler(Request req) => Response.ok(
-        jsonEncode(
-            {'status': 'ok', 'timestamp': DateTime.now().toIso8601String()}),
+        jsonEncode({
+          'status': 'ok',
+          'timestamp': DateTime.now().toIso8601String(),
+          'shopId': ObjectBoxService.instance.settings.shopId,
+        }),
         headers: {'content-type': 'application/json'},
       );
 
@@ -305,6 +308,10 @@ class LocalServerService {
 
       final p = Procedure.fromJson(data);
       if (existing != null) {
+        if (existing.updatedAt.isAfter(p.updatedAt)) {
+          debugPrint('Hub: Procedure sync conflict skipped (existing is newer)');
+          return Response.ok(jsonEncode({'success': true, 'reason': 'Existing record is newer'}));
+        }
         p.id = existing.id;
       } else {
         p.id = 0;
@@ -584,6 +591,11 @@ class LocalServerService {
       var existing = box.query(cond).build().findFirst();
 
       if (existing != null) {
+        final incomingUpdatedAt = DateTime.tryParse(item['updatedAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        if (existing.updatedAt.isAfter(incomingUpdatedAt)) {
+          debugPrint('Hub: Medicines sync conflict skipped (existing is newer)');
+          return Response.ok(jsonEncode({'success': true, 'reason': 'Existing record is newer'}));
+        }
         existing
           ..name = item['name']
           ..barcode = item['barcode'] ?? ''
@@ -962,6 +974,10 @@ class LocalServerService {
           .findFirst();
 
       if (existing != null) {
+        if (existing.updatedAt.isAfter(p.updatedAt)) {
+          debugPrint('Hub: Patient sync conflict skipped (existing is newer)');
+          return Response.ok(jsonEncode({'success': true, 'reason': 'Existing record is newer'}));
+        }
         // Only merge if the name matches (or is very similar)
         // This prevents overwriting ABC with XYZ if they happen to get the same UHID (collision)
         final nameMatches = existing.name.trim().toLowerCase() == p.name.trim().toLowerCase();
@@ -1062,6 +1078,11 @@ class LocalServerService {
 
       final isNew = existing == null;
       if (existing != null) {
+        final incomingUpdatedAt = DateTime.tryParse(body['updatedAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        if (existing.updatedAt.isAfter(incomingUpdatedAt)) {
+          debugPrint('Hub: Appointment sync conflict skipped (existing is newer)');
+          return Response.ok(jsonEncode({'success': true, 'reason': 'Existing record is newer'}));
+        }
         a.id = existing.id;
       } else {
         a.id = 0; // Force ObjectBox to generate a clean Hub ID
@@ -1326,6 +1347,11 @@ class LocalServerService {
           .firstOrNull;
 
       if (existing != null) {
+        final incomingUpdatedAt = DateTime.tryParse(body['updatedAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        if (existing.updatedAt.isAfter(incomingUpdatedAt)) {
+          debugPrint('Hub: Prescription sync conflict skipped (existing is newer)');
+          return Response.ok(jsonEncode({'success': true, 'reason': 'Existing record is newer'}));
+        }
         p.id = existing.id;
       }
       
@@ -2376,7 +2402,17 @@ class LocalServerService {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
       final log = AuditLog.fromJson(body);
       
-      ObjectBoxService.instance.store.box<AuditLog>().put(log);
+      final box = ObjectBoxService.instance.store.box<AuditLog>();
+      final existing = box.query(
+        AuditLog_.deviceId.equals(log.deviceId)
+        .and(AuditLog_.timestamp.equals(log.timestamp.millisecondsSinceEpoch))
+      ).build().findFirst();
+
+      if (existing == null) {
+        log.id = 0; // Force insertion as a new log
+        log.isSynced = true;
+        box.put(log);
+      }
       
       broadcast({'event': 'audit_logs_updated'});
       _incomingDataController.add('audit_logs');

@@ -61,8 +61,9 @@ class _ConnectionWindowsState extends State<ConnectionWindows> {
   Future<void> _autoDetect() async {
     setState(() => _testing = true);
     
+    final settings = context.read<SettingsProvider>().settings;
     // 1. Try Local Network Discovery (UDP)
-    String? ip = await DiscoveryService.discoverHub();
+    String? ip = await DiscoveryService.discoverHub(targetShopId: settings.shopId);
     
     // 2. If local fails, try Cloud Discovery (Firebase)
     if (ip == null) {

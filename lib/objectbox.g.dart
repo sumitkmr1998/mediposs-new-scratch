@@ -485,7 +485,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(3, 1105416590503540471),
       name: 'Appointment',
-      lastPropertyId: const obx_int.IdUid(18, 8524286873790907940),
+      lastPropertyId: const obx_int.IdUid(19, 9147873054577178076),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -576,6 +576,11 @@ final _entities = <obx_int.ModelEntity>[
         obx_int.ModelProperty(
             id: const obx_int.IdUid(18, 8524286873790907940),
             name: 'completedAt',
+            type: 10,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(19, 9147873054577178076),
+            name: 'updatedAt',
             type: 10,
             flags: 0)
       ],
@@ -2159,7 +2164,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final statusOffset = fbb.writeString(object.status);
           final notesOffset = fbb.writeString(object.notes);
           final paymentMethodOffset = fbb.writeString(object.paymentMethod);
-          fbb.startTable(19);
+          fbb.startTable(20);
           fbb.addInt64(0, object.id);
           fbb.addInt64(1, object.patientId);
           fbb.addOffset(2, patientNameOffset);
@@ -2178,6 +2183,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addInt64(15, object.calledAt?.millisecondsSinceEpoch);
           fbb.addInt64(16, object.pharmacyAt?.millisecondsSinceEpoch);
           fbb.addInt64(17, object.completedAt?.millisecondsSinceEpoch);
+          fbb.addInt64(18, object.updatedAt.millisecondsSinceEpoch);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -2216,6 +2222,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 24, 0));
           final createdAtParam = DateTime.fromMillisecondsSinceEpoch(
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 26, 0));
+          final updatedAtParam = DateTime.fromMillisecondsSinceEpoch(
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 40, 0));
           final isWalkInParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 28, false);
           final consultationBilledParam =
@@ -2236,6 +2244,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
               notes: notesParam,
               scheduledAt: scheduledAtParam,
               createdAt: createdAtParam,
+              updatedAt: updatedAtParam,
               isWalkIn: isWalkInParam,
               consultationBilled: consultationBilledParam,
               paymentMethod: paymentMethodParam)
@@ -3852,6 +3861,10 @@ class Appointment_ {
   /// See [Appointment.completedAt].
   static final completedAt =
       obx.QueryDateProperty<Appointment>(_entities[2].properties[17]);
+
+  /// See [Appointment.updatedAt].
+  static final updatedAt =
+      obx.QueryDateProperty<Appointment>(_entities[2].properties[18]);
 }
 
 /// [Doctor] entity fields to define ObjectBox queries.

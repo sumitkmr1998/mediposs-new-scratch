@@ -6,6 +6,7 @@ import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/sales_provider.dart';
 import '../../shared/models/medicine.dart';
 import '../../shared/models/stock_transfer.dart';
+import '../../shared/models/purchase_record.dart';
 import '../../shared/services/sync_service.dart';
 import '../../theme/app_theme.dart';
 import 'package:intl/intl.dart';
@@ -1163,9 +1164,11 @@ class _TransferHistoryTab extends StatelessWidget {
                                         letterSpacing: 0.5)),
                               ],
                             ),
-                          ),
+                          ],
                         ),
-                      );
+                      ),
+                    ),
+                  );
                     },
                     childCount: wh.transfers.length,
                   ),

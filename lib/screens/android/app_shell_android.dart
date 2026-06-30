@@ -210,7 +210,8 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
       if (Platform.isWindows) {
         await LocalServerService.instance.start();
         await DiscoveryService.startAdvertising(
-            ObjectBoxService.instance.settings.serverPort);
+            ObjectBoxService.instance.settings.serverPort,
+            ObjectBoxService.instance.settings.shopId);
 
         // Bug 4 Fix: Listen to incoming data pushes from Android and reload Windows providers
         LocalServerService.instance.incomingDataStream.listen((entityType) {

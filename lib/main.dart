@@ -232,7 +232,8 @@ void main(List<String> args) async {
     // Start Hub server immediately on Windows launch
     await LocalServerService.instance.start();
     await DiscoveryService.startAdvertising(
-        ObjectBoxService.instance.settings.serverPort);
+        ObjectBoxService.instance.settings.serverPort,
+        ObjectBoxService.instance.settings.shopId);
     
     // Start Cloudflare Tunnel if enabled or always for remote discovery
     await CloudflareService.instance.start();

@@ -832,6 +832,7 @@ class CartProvider extends ChangeNotifier {
 
         if (!appt.consultationBilled) {
           appt.consultationBilled = true;
+          appt.updatedAt = DateTime.now();
           db.appointmentBox.put(appt);
 
           // Find and remove the initial advance OPD consultation fee sale to prevent double counting.

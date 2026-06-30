@@ -415,6 +415,7 @@ class OpdProvider extends ChangeNotifier {
     } else if (newStatus == kStatusDone) {
       appt.completedAt = await TimeService.getRobustTime();
     }
+    appt.updatedAt = DateTime.now();
     ObjectBoxService.instance.appointmentBox.put(appt);
     loadAll();
 
@@ -438,6 +439,7 @@ class OpdProvider extends ChangeNotifier {
     final appt = ObjectBoxService.instance.appointmentBox.get(appointmentId);
     if (appt == null) return;
     appt.status = kStatusCancelled;
+    appt.updatedAt = DateTime.now();
     ObjectBoxService.instance.appointmentBox.put(appt);
 
     // Log appointment cancellation
@@ -527,6 +529,7 @@ class OpdProvider extends ChangeNotifier {
     } else if (newStatus == kStatusDone) {
       appt.completedAt = await TimeService.getRobustTime();
     }
+    appt.updatedAt = DateTime.now();
     ObjectBoxService.instance.appointmentBox.put(appt);
     loadAll();
 

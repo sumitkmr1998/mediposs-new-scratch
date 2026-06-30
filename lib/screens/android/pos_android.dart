@@ -276,8 +276,8 @@ class _PosAndroidState extends State<PosAndroid> {
     );
   }
 
-  Future<void> _doCheckout(CartProvider cart) async {
-    if (_isCheckingOut) return;
+  Future<bool> _doCheckout(CartProvider cart) async {
+    if (_isCheckingOut) return false;
     setState(() => _isCheckingOut = true);
     try {
       final pName = _patientCtrl.text.trim();
@@ -289,7 +289,7 @@ class _PosAndroidState extends State<PosAndroid> {
               backgroundColor: AppTheme.danger,
             ),
           );
-          return;
+          return false;
         }
       }
       
@@ -317,14 +317,14 @@ class _PosAndroidState extends State<PosAndroid> {
               backgroundColor: AppTheme.danger,
             ),
           );
-          return;
+          return false;
         }
         cart.setMixedAmounts(cash, upi, card);
       }
 
       final currentUser = context.read<AuthProvider>().currentUser;
       final sale = await cart.checkout(context.read<SyncService>(), currentUser);
-      if (!context.mounted) return;
+      if (!context.mounted) return false;
 
       if (sale != null) {
         _mixCashCtrl.text = '0';
@@ -334,7 +334,7 @@ class _PosAndroidState extends State<PosAndroid> {
         _searchCtrl.clear();
         _patientCtrl.clear();
 
-        if (!mounted) return;
+        if (!mounted) return false;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -349,7 +349,9 @@ class _PosAndroidState extends State<PosAndroid> {
         await PrintingService.instance.printReceipt(context, sale);
         _showPatientProactiveSearch();
         _currentSearchFocusNode?.requestFocus();
+        return true;
       }
+      return false;
     } finally {
       setState(() => _isCheckingOut = false);
     }
@@ -615,12 +617,9 @@ class _PosAndroidState extends State<PosAndroid> {
                       onPressed: _isCheckingOut
                           ? null
                           : () async {
-                              setState(() => _isCheckingOut = true);
-                              try {
+                              final success = await _doCheckout(cart);
+                              if (success) {
                                 Navigator.pop(ctx);
-                                await _doCheckout(cart);
-                              } finally {
-                                setState(() => _isCheckingOut = false);
                               }
                             },
                       style: ElevatedButton.styleFrom(
