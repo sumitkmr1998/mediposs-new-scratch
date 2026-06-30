@@ -135,26 +135,25 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
   void initState() {
     super.initState();
     final auth = context.read<AuthProvider>();
-    final user = auth.currentUser;
     _allowedTabTitles = [];
-    if (user != null) {
-      if (user.canViewFinancialAnalytics) {
+    if (auth.currentUser != null) {
+      if (auth.canViewFinancialAnalytics) {
         _allowedTabTitles.add('Trends');
         _allowedTabTitles.add('Categories');
       }
-      if (user.canViewAnalytics) {
+      if (auth.canViewAnalytics) {
         _allowedTabTitles.add('Explorer');
       }
-      if (user.canEditInventory) {
+      if (auth.hasInventoryWriteAccess) {
         _allowedTabTitles.add('Reorder');
       }
-      if (user.canAccessOPD) {
+      if (auth.canAccessOPD) {
         _allowedTabTitles.add('Patients');
       }
-      if (user.canViewFinancialAnalytics) {
+      if (auth.canViewFinancialAnalytics) {
         _allowedTabTitles.add('Reconcile');
       }
-      if (user.canViewOpdReports) {
+      if (auth.canViewOpdReports) {
         _allowedTabTitles.add('H1 Compliance');
       }
     }

@@ -389,6 +389,22 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
                     floatingActionButton: null,
                   ),
           ),
+          if (sync.isSyncing)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                bottom: false,
+                child: SizedBox(
+                  height: 3,
+                  child: LinearProgressIndicator(
+                    backgroundColor: Colors.transparent,
+                    valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primary),
+                  ),
+                ),
+              ),
+            ),
           
           // --- HUB OFFLINE OVERLAY (BLOCKING) ---
           if (!sync.isCloudMode && !wsvc.connected && sync.hubIp != null)

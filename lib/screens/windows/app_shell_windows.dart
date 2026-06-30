@@ -359,6 +359,19 @@ class _AppShellWindowsState extends State<AppShellWindows> {
             ],
           ),
         ),
+        if (sync.isSyncing)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SizedBox(
+              height: 3,
+              child: LinearProgressIndicator(
+                backgroundColor: Colors.transparent,
+                valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primary),
+              ),
+            ),
+          ),
         // --- HUB OFFLINE OVERLAY (BLOCKING) ---
         if (settings.isWindowsClient &&
             !sync.isCloudMode &&

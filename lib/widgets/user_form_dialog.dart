@@ -65,6 +65,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
   bool _canOverridePrice = false;
   bool _canBulkDiscount = false;
   bool _canViewHistoricalData = true;
+  bool _canViewFinancialAnalytics = false;
 
   // Deletion Rights
   bool _canDeleteInventory = false;
@@ -114,6 +115,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
       _canOverridePrice = u.canOverridePrice;
       _canBulkDiscount = u.canBulkDiscount;
       _canViewHistoricalData = u.canViewHistoricalData;
+      _canViewFinancialAnalytics = u.canViewFinancialAnalytics;
       _canDeleteInventory = u.canDeleteInventory;
       _canDeletePatients = u.canDeletePatients;
       _canDeleteAppointments = u.canDeleteAppointments;
@@ -153,6 +155,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
       _canOverridePrice = tempUser.canOverridePrice;
       _canBulkDiscount = tempUser.canBulkDiscount;
       _canViewHistoricalData = tempUser.canViewHistoricalData;
+      _canViewFinancialAnalytics = tempUser.canViewFinancialAnalytics;
       _canDeleteInventory = tempUser.canDeleteInventory;
       _canDeletePatients = tempUser.canDeletePatients;
       _canDeleteAppointments = tempUser.canDeleteAppointments;
@@ -218,6 +221,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
     u.canOverridePrice = _canOverridePrice;
     u.canBulkDiscount = _canBulkDiscount;
     u.canViewHistoricalData = _canViewHistoricalData;
+    u.canViewFinancialAnalytics = _canViewFinancialAnalytics;
     u.canDeleteInventory = _canDeleteInventory;
     u.canDeletePatients = _canDeletePatients;
     u.canDeleteAppointments = _canDeleteAppointments;
@@ -564,6 +568,9 @@ class _UserFormDialogState extends State<UserFormDialog> {
                                           _PermTile('View Analytics', 'Access advanced business analytics hub', _canViewAnalytics, (v) => setState(() {
                                             _canViewAnalytics = v;
                                             if (v) _canViewDashboard = true;
+                                          })),
+                                          _PermTile('Financial Analytics', 'Access Trends & Categories financial charts', _canViewFinancialAnalytics, (v) => setState(() {
+                                            _canViewFinancialAnalytics = v;
                                           })),
                                           _PermTile('Sale Auditing', 'View history of past receipts', _canViewSalesHistory, (v) => setState(() {
                                             _canViewSalesHistory = v;
