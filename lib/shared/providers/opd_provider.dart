@@ -37,11 +37,13 @@ class OpdProvider extends ChangeNotifier {
   List<Appointment> get todayQueue {
     final today = DateTime.now();
     return _appointments
-        .where((a) =>
-            a.scheduledAt.year == today.year &&
-            a.scheduledAt.month == today.month &&
-            a.scheduledAt.day == today.day &&
-            a.status != kStatusCancelled)
+        .where((a) {
+          final localSched = a.scheduledAt.toLocal();
+          return localSched.year == today.year &&
+              localSched.month == today.month &&
+              localSched.day == today.day &&
+              a.status != kStatusCancelled;
+        })
         .toList()
       ..sort((a, b) => a.tokenNumber.compareTo(b.tokenNumber));
   }

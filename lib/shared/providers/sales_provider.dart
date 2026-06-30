@@ -248,10 +248,11 @@ class SalesProvider extends ChangeNotifier {
   }
 
   bool _isToday(DateTime dt) {
+    final localDt = dt.toLocal();
     final today = DateTime.now();
-    return dt.year == today.year &&
-        dt.month == today.month &&
-        dt.day == today.day;
+    return localDt.year == today.year &&
+        localDt.month == today.month &&
+        localDt.day == today.day;
   }
 
   int get todaySalesCount {

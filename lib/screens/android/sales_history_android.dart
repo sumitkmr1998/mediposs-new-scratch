@@ -395,8 +395,11 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
   }
 
   bool _isToday(DateTime dt) {
-    final now = DateTime.now();
-    return dt.year == now.year && dt.month == now.month && dt.day == now.day;
+    final localDt = dt.toLocal();
+    final today = DateTime.now();
+    return localDt.year == today.year &&
+        localDt.month == today.month &&
+        localDt.day == today.day;
   }
 }
 

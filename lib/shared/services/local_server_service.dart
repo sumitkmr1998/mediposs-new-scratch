@@ -379,6 +379,9 @@ class LocalServerService {
       if (existing != null) {
         final u = AppUser.fromJson(item);
         u.id = existing.id;
+        if (item['pin'] == 'xxxx') {
+          u.pin = existing.pin;
+        }
         box.put(u);
       } else {
         final u = AppUser.fromJson(item);

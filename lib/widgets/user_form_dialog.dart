@@ -196,6 +196,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
     u.canEditInventory = _canEditInventory;
     u.canAddStock = _canAddStock;
     u.canOverrideStock = _canOverrideStock;
+    u.canViewWarehouse = _canViewWarehouse;
     u.canTransferStock = _canTransferStock;
 
     u.canAccessPOS = _canAccessPOS;
@@ -355,7 +356,14 @@ class _UserFormDialogState extends State<UserFormDialog> {
                               _pinCtrl,
                               'Login PIN',
                               Icons.key_outlined,
-                              (v) => v!.length < 4 ? 'Min 4 digits' : null,
+                              (v) {
+                                if (v == null || v.isEmpty) return 'Required';
+                                if (v == 'xxxx') return null;
+                                if (v.length != 4 || int.tryParse(v) == null) {
+                                  return 'PIN must be exactly 4 digits';
+                                }
+                                return null;
+                              },
                               isObscure: true,
                             ),
                             const Spacer(),

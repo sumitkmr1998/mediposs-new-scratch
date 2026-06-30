@@ -264,6 +264,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
     String? suffixText,
     bool autofocus = false,
     int maxLines = 1,
+    bool obscureText = false,
     TextInputAction textInputAction = TextInputAction.next,
     String? Function(String?)? validator,
   }) {
@@ -272,6 +273,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
       autofocus: autofocus,
       keyboardType: keyboardType,
       maxLines: maxLines,
+      obscureText: obscureText,
       textInputAction: textInputAction,
       validator: validator,
       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
@@ -443,13 +445,20 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                           Expanded(
                             flex: 3,
                             child: _buildField(
-                              controller: _pinCtrl,
-                              labelText: 'Login PIN',
-                              prefixIcon: Icons.password_rounded,
-                              keyboardType: TextInputType.number,
-                              validator: (v) =>
-                                  v!.length < 4 ? 'Min 4 chars' : null,
-                            ),
+                            controller: _pinCtrl,
+                            labelText: 'Login PIN',
+                            prefixIcon: Icons.password_rounded,
+                            keyboardType: TextInputType.number,
+                            obscureText: true,
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return 'Required';
+                              if (v == 'xxxx') return null;
+                              if (v.length != 4 || int.tryParse(v) == null) {
+                                return 'PIN must be exactly 4 digits';
+                              }
+                              return null;
+                            },
+                          ),
                           ),
                           const SizedBox(width: 16),
                           Expanded(

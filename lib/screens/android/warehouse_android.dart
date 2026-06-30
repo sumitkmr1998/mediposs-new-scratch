@@ -11,6 +11,7 @@ import '../../theme/app_theme.dart';
 import 'package:intl/intl.dart';
 import '../../widgets/android/medicine_dialog_android.dart';
 import '../../widgets/android/bulk_purchase_dialog_android.dart';
+import '../../widgets/android/bulk_transfer_dialog_android.dart';
 import '../../shared/widgets/app_status_badge.dart';
 import '../../shared/widgets/app_empty_state.dart';
 
@@ -84,7 +85,7 @@ class _WarehouseAndroidState extends State<WarehouseAndroid>
             actions: [
               if (auth.hasInventoryWriteAccess || auth.canAddStock)
                 Padding(
-                  padding: const EdgeInsets.only(right: 16.0),
+                  padding: const EdgeInsets.only(right: 8.0),
                   child: FilledButton.icon(
                     onPressed: () => AndroidBulkPurchaseDialog.show(context),
                     icon: const Icon(Icons.inventory_2_outlined, size: 18),
@@ -92,6 +93,20 @@ class _WarehouseAndroidState extends State<WarehouseAndroid>
                     style: FilledButton.styleFrom(
                       backgroundColor: AppTheme.primaryLight.withValues(alpha: 0.1),
                       foregroundColor: AppTheme.primary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              if (auth.hasWarehouseWriteAccess)
+                Padding(
+                  padding: const EdgeInsets.only(right: 16.0),
+                  child: FilledButton.icon(
+                    onPressed: () => AndroidBulkTransferDialog.show(context),
+                    icon: const Icon(Icons.swap_horiz, size: 18),
+                    label: const Text('BULK TRANSFER'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppTheme.indigo.withValues(alpha: 0.1),
+                      foregroundColor: AppTheme.indigo,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),

@@ -20,6 +20,7 @@ import '../models/stock_transfer.dart';
 import '../models/procedure.dart';
 import '../models/schedule_h1_record.dart';
 import '../services/objectbox_service.dart';
+import '../utils/date_helper.dart';
 import '../services/notification_service.dart';
 import '../services/firebase_sync_service.dart';
 import 'sync_queue_service.dart';
@@ -682,7 +683,7 @@ class SyncService extends ChangeNotifier {
           hubNames.add(name);
 
           final updatedAt =
-              DateTime.tryParse(item['updatedAt'] ?? '') ?? DateTime.now();
+              DateHelper.parseDateTime(item['updatedAt']) ?? DateTime.now();
 
           // Find existing entries using normalized natural keys
           // We use list find to identify ALL matches so we can deduplicate if needed
@@ -721,7 +722,7 @@ class SyncService extends ChangeNotifier {
                 existing.batches.add(MedicineBatch(
                   id: 0,
                   batchNo: bItem['batchNo'] ?? '',
-                  expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now(),
+                  expiryDate: DateHelper.parseDateTime(bItem['expiryDate']) ?? DateTime.now(),
                   mainStock: bItem['mainStock'] ?? 0,
                   storeStock: bItem['storeStock'] ?? 0,
                   bulkClinicStock: bItem['bulkClinicStock'] ?? 0,
@@ -763,7 +764,7 @@ class SyncService extends ChangeNotifier {
                 m.batches.add(MedicineBatch(
                   id: 0,
                   batchNo: bItem['batchNo'] ?? '',
-                  expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now(),
+                  expiryDate: DateHelper.parseDateTime(bItem['expiryDate']) ?? DateTime.now(),
                   mainStock: bItem['mainStock'] ?? 0,
                   storeStock: bItem['storeStock'] ?? 0,
                   bulkClinicStock: bItem['bulkClinicStock'] ?? 0,
@@ -830,7 +831,7 @@ class SyncService extends ChangeNotifier {
           final uhid = item['uhid'] as String? ?? '';
           if (uhid.isNotEmpty) hubUhids.add(uhid);
           final serverTime =
-              DateTime.tryParse(item['createdAt'] ?? '') ?? DateTime.now();
+              DateHelper.parseDateTime(item['createdAt']) ?? DateTime.now();
 
           final existing = allLocal.where((p) => p.uhid == uhid).firstOrNull;
           if (existing != null) {
@@ -896,8 +897,8 @@ class SyncService extends ChangeNotifier {
         final hubKeys = <String>{};
         for (final item in data) {
           final uhid = item['patientUhid'] as String? ?? '';
-          final scheduledAt = DateTime.tryParse(item['scheduledAt'] ?? '') ?? DateTime.now();
-          final createdAt = DateTime.tryParse(item['createdAt'] ?? '') ?? DateTime.now();
+          final scheduledAt = DateHelper.parseDateTime(item['scheduledAt']) ?? DateTime.now();
+          final createdAt = DateHelper.parseDateTime(item['createdAt']) ?? DateTime.now();
           final token = item['tokenNumber'] as int? ?? 0;
 
           // Resolve local patient ID using UHID
@@ -934,9 +935,9 @@ class SyncService extends ChangeNotifier {
               ..notes = item['notes'] ?? ''
               ..isWalkIn = item['isWalkIn'] ?? true
               ..consultationBilled = item['consultationBilled'] ?? false
-              ..calledAt = item['calledAt'] != null ? DateTime.tryParse(item['calledAt'].toString()) : null
-              ..pharmacyAt = item['pharmacyAt'] != null ? DateTime.tryParse(item['pharmacyAt'].toString()) : null
-              ..completedAt = item['completedAt'] != null ? DateTime.tryParse(item['completedAt'].toString()) : null;
+              ..calledAt = DateHelper.parseDateTime(item['calledAt'])
+              ..pharmacyAt = DateHelper.parseDateTime(item['pharmacyAt'])
+              ..completedAt = DateHelper.parseDateTime(item['completedAt']);
             box.put(existing);
           } else {
             box.put(Appointment(
@@ -955,9 +956,9 @@ class SyncService extends ChangeNotifier {
               isWalkIn: item['isWalkIn'] ?? true,
               consultationBilled: item['consultationBilled'] ?? false,
             )
-              ..calledAt = item['calledAt'] != null ? DateTime.tryParse(item['calledAt'].toString()) : null
-              ..pharmacyAt = item['pharmacyAt'] != null ? DateTime.tryParse(item['pharmacyAt'].toString()) : null
-              ..completedAt = item['completedAt'] != null ? DateTime.tryParse(item['completedAt'].toString()) : null);
+              ..calledAt = DateHelper.parseDateTime(item['calledAt'])
+              ..pharmacyAt = DateHelper.parseDateTime(item['pharmacyAt'])
+              ..completedAt = DateHelper.parseDateTime(item['completedAt']));
           }
         }
         // Remove appointments deleted on Hub
@@ -997,7 +998,7 @@ class SyncService extends ChangeNotifier {
           final name = item['name'] as String? ?? '';
           hubNames.add(name);
           final createdAt =
-              DateTime.tryParse(item['createdAt'] ?? '') ?? DateTime.now();
+              DateHelper.parseDateTime(item['createdAt']) ?? DateTime.now();
 
           final existing = allLocal.where((d) => d.name == name).firstOrNull;
           if (existing != null) {
@@ -1100,7 +1101,7 @@ class SyncService extends ChangeNotifier {
         for (final item in data) {
           final uhid = item['patientUhid'] as String? ?? '';
           final token = item['tokenNumber'] as int? ?? 0;
-          final createdAt = DateTime.tryParse(item['createdAt'] ?? '') ?? DateTime.now();
+          final createdAt = DateHelper.parseDateTime(item['createdAt']) ?? DateTime.now();
           final patientName = item['patientName'] ?? '';
 
           // Resolve local patient ID using UHID
@@ -1223,7 +1224,7 @@ class SyncService extends ChangeNotifier {
           if (invoiceNo.isEmpty) continue;
           hubInvoiceNos.add(invoiceNo);
           final createdAt =
-              DateTime.tryParse(item['createdAt'] ?? '') ?? DateTime.now();
+              DateHelper.parseDateTime(item['createdAt']) ?? DateTime.now();
 
           final existing = allLocal
               .where((s) =>
@@ -1273,7 +1274,7 @@ class SyncService extends ChangeNotifier {
               ..upiAmount = (item['upiAmount'] as num?)?.toDouble() ?? 0
               ..cardAmount = (item['cardAmount'] as num?)?.toDouble() ?? 0
               ..createdAt = createdAt
-              ..updatedAt = DateTime.tryParse(item['updatedAt'] ?? '') ?? createdAt
+              ..updatedAt = DateHelper.parseDateTime(item['updatedAt']) ?? createdAt
               ..synced = true
               ..isReturn = item['isReturn'] ?? false
               ..isClinicalDispense = item['isClinicalDispense'] ?? false
@@ -1299,7 +1300,7 @@ class SyncService extends ChangeNotifier {
               upiAmount: (item['upiAmount'] as num?)?.toDouble() ?? 0,
               cardAmount: (item['cardAmount'] as num?)?.toDouble() ?? 0,
               createdAt: createdAt,
-              updatedAt: DateTime.tryParse(item['updatedAt'] ?? '') ?? createdAt,
+              updatedAt: DateHelper.parseDateTime(item['updatedAt']) ?? createdAt,
               synced: true,
               isReturn: item['isReturn'] ?? false,
               isClinicalDispense: item['isClinicalDispense'] ?? false,
@@ -1386,7 +1387,7 @@ class SyncService extends ChangeNotifier {
         for (final item in data) {
           final existing = box.get(item['id'] ?? 0);
           final serverTime =
-              DateTime.tryParse(item['transferredAt'] ?? '') ?? DateTime.now();
+              DateHelper.parseDateTime(item['transferredAt']) ?? DateTime.now();
           if (existing == null) {
             box.put(StockTransfer(
               medicineId: item['medicineId'],
@@ -1425,7 +1426,7 @@ class SyncService extends ChangeNotifier {
           if (name.isEmpty) continue;
           hubNames.add(name);
           final createdAt =
-              DateTime.tryParse(item['createdAt'] ?? '') ?? DateTime.now();
+              DateHelper.parseDateTime(item['createdAt']) ?? DateTime.now();
 
           final existing = allLocal.where((t) => t.name == name).firstOrNull;
           if (existing != null) {
@@ -1495,7 +1496,7 @@ class SyncService extends ChangeNotifier {
         for (final item in data) {
           final filename = item['filename'] as String? ?? '';
           final category = item['category'] as String? ?? 'General';
-          final date = DateTime.tryParse(item['date'] ?? '') ?? DateTime.now();
+          final date = DateHelper.parseDateTime(item['date']) ?? DateTime.now();
           final imageData = item['imageData'] as String? ?? '';
           if (filename.isEmpty || imageData.isEmpty) continue;
 
