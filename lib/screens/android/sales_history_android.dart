@@ -49,7 +49,12 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
       body: RefreshIndicator(
         onRefresh: () async {
           final sync = context.read<SyncService>();
-          await sync.syncAll();
+          if (sync.isCloudMode) {
+            await sync.syncAllFromCloud();
+          } else {
+            final isTodaySelected = sales.activeFilter == SalesFilter.today;
+            await sync.syncAll(isTodayOnly: isTodaySelected);
+          }
           if (mounted) {
             context.read<SalesProvider>().load();
             context.read<InventoryProvider>().load();

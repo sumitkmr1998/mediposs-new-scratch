@@ -51,7 +51,11 @@ class _PatientListAndroidState extends State<PatientListAndroid> {
       body: RefreshIndicator(
         onRefresh: () async {
           final sync = context.read<SyncService>();
-          await sync.syncAll();
+          if (sync.isCloudMode) {
+            await sync.syncAllFromCloud();
+          } else {
+            await sync.syncAll();
+          }
           if (mounted) {
             context.read<PatientProvider>().load();
           }

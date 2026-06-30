@@ -126,7 +126,7 @@ class SyncService extends ChangeNotifier {
         } else {
           settings.hubIp = address;
         }
-        settings.lastGlobalSync = null; // Reset sync marker to trigger fresh pull on login!
+        // Retain settings.lastGlobalSync to use the local cache and perform fast incremental syncs
         ObjectBoxService.instance.settingsBox.put(settings);
 
         notifyListeners();
@@ -366,9 +366,13 @@ class SyncService extends ChangeNotifier {
     notifyListeners();
     debugPrint('SyncService: syncAllFromCloud starting...');
     try {
+      final settings = ObjectBoxService.instance.settings;
+      final int? lastSync = settings.lastFirebaseSync;
+      debugPrint('SyncService [Cloud]: Incremental sync starting since: $lastSync');
+
       // 1. Pull Users (CRITICAL for login while offline)
       try {
-        final fbUsers = await FirebaseSyncService.instance.fetchCollection('users');
+        final fbUsers = await FirebaseSyncService.instance.fetchCollection('users', since: lastSync);
         if (fbUsers.isNotEmpty) {
           final box = ObjectBoxService.instance.userBox;
           final allLocal = box.getAll();
@@ -391,7 +395,7 @@ class SyncService extends ChangeNotifier {
 
       // 2. Pull Medicines/Inventory
       try {
-        final fbMeds = await FirebaseSyncService.instance.fetchCollection('medicines');
+        final fbMeds = await FirebaseSyncService.instance.fetchCollection('medicines', since: lastSync);
         if (fbMeds.isNotEmpty) {
           final box = ObjectBoxService.instance.medicineBox;
           final allLocal = box.getAll();
@@ -418,7 +422,7 @@ class SyncService extends ChangeNotifier {
 
       // 3. Pull Patients
       try {
-        final fbPatients = await FirebaseSyncService.instance.fetchCollection('patients');
+        final fbPatients = await FirebaseSyncService.instance.fetchCollection('patients', since: lastSync);
         if (fbPatients.isNotEmpty) {
           final box = ObjectBoxService.instance.patientBox;
           final allLocal = box.getAll();
@@ -440,7 +444,7 @@ class SyncService extends ChangeNotifier {
 
       // 4. Pull Doctors
       try {
-        final fbDoctors = await FirebaseSyncService.instance.fetchCollection('doctors');
+        final fbDoctors = await FirebaseSyncService.instance.fetchCollection('doctors', since: lastSync);
         if (fbDoctors.isNotEmpty) {
           final box = ObjectBoxService.instance.doctorBox;
           final allLocal = box.getAll();
@@ -463,7 +467,7 @@ class SyncService extends ChangeNotifier {
       // 5. Pull Procedures
       try {
         final fbProcs =
-            await FirebaseSyncService.instance.fetchCollection('procedures');
+            await FirebaseSyncService.instance.fetchCollection('procedures', since: lastSync);
         if (fbProcs.isNotEmpty) {
           final box = ObjectBoxService.instance.procedureBox;
           final allLocal = box.getAll();
@@ -485,7 +489,7 @@ class SyncService extends ChangeNotifier {
 
       // 5. Pull Appointments
       try {
-        final fbAppts = await FirebaseSyncService.instance.fetchCollection('appointments');
+        final fbAppts = await FirebaseSyncService.instance.fetchCollection('appointments', since: lastSync);
         if (fbAppts.isNotEmpty) {
           final box = ObjectBoxService.instance.appointmentBox;
           final allLocal = box.getAll();
@@ -507,7 +511,7 @@ class SyncService extends ChangeNotifier {
 
       // 6. Pull Recent Sales
       try {
-        final fbSales = await FirebaseSyncService.instance.fetchCollection('sales');
+        final fbSales = await FirebaseSyncService.instance.fetchCollection('sales', since: lastSync);
         if (fbSales.isNotEmpty) {
           final box = ObjectBoxService.instance.saleBox;
           final allLocal = box.getAll();
@@ -529,7 +533,7 @@ class SyncService extends ChangeNotifier {
 
       // 7. Pull Prescriptions
       try {
-        final fbScripts = await FirebaseSyncService.instance.fetchCollection('prescriptions');
+        final fbScripts = await FirebaseSyncService.instance.fetchCollection('prescriptions', since: lastSync);
         if (fbScripts.isNotEmpty) {
           final box = ObjectBoxService.instance.prescriptionBox;
           final allLocal = box.getAll();
@@ -549,7 +553,10 @@ class SyncService extends ChangeNotifier {
         debugPrint('SyncService [Cloud]: Error syncing prescriptions: $e');
       }
 
-      debugPrint('SyncService: syncAllFromCloud completed.');
+      // Save last successful sync timestamp
+      settings.lastFirebaseSync = DateTime.now().millisecondsSinceEpoch;
+      ObjectBoxService.instance.settingsBox.put(settings);
+      debugPrint('SyncService: syncAllFromCloud completed successfully. Saved lastFirebaseSync: ${settings.lastFirebaseSync}');
     } catch (e) {
       debugPrint('SyncService: syncAllFromCloud global error - $e');
     } finally {
@@ -558,8 +565,7 @@ class SyncService extends ChangeNotifier {
     }
   }
 
-  /// Pulls all relevant data from Hub to ensure Android parity
-  Future<void> syncAll({bool isFullSync = false}) async {
+  Future<void> syncAll({bool isFullSync = false, bool isTodayOnly = false}) async {
     if (!_isConnected || _jwtToken == null) return;
     if (_isSyncing) {
       debugPrint('SyncService: syncAll already in progress, skipping.');
@@ -567,7 +573,7 @@ class SyncService extends ChangeNotifier {
     }
     _isSyncing = true;
     notifyListeners();
-    debugPrint('SyncService: syncAll starting (isFullSync=$isFullSync)...');
+    debugPrint('SyncService: syncAll starting (isFullSync=$isFullSync, isTodayOnly=$isTodayOnly)...');
 
     final settings = ObjectBoxService.instance.settings;
     String? sinceStr;
@@ -575,6 +581,11 @@ class SyncService extends ChangeNotifier {
     if (isFullSync) {
       sinceStr = null;
       debugPrint('SyncService: Performing FULL sync (all data).');
+    } else if (isTodayOnly) {
+      final now = DateTime.now();
+      final startOfToday = DateTime(now.year, now.month, now.day);
+      sinceStr = startOfToday.toIso8601String();
+      debugPrint('SyncService: Incremental sync for TODAY ONLY from $sinceStr');
     } else if (settings.lastGlobalSync == null) {
       if (!isHub) {
         debugPrint('SyncService: Initial client sync. Wiping local database for a fresh start...');
@@ -2149,6 +2160,11 @@ class SyncService extends ChangeNotifier {
         updated.defaultPrinterName = current.defaultPrinterName;
         updated.autoPrintReceipt = current.autoPrintReceipt;
         updated.receiptPaperSize = current.receiptPaperSize;
+
+        // Preserve client-side sync timestamps
+        updated.lastGlobalSync = current.lastGlobalSync;
+        updated.lastFirebaseSync = current.lastFirebaseSync;
+        updated.lastCloudflareSync = current.lastCloudflareSync;
 
         box.put(updated);
         notifyListeners();

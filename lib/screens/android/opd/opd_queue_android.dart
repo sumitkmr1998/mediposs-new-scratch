@@ -67,7 +67,11 @@ class _OpdQueueAndroidState extends State<OpdQueueAndroid>
       body: RefreshIndicator(
         onRefresh: () async {
           final sync = context.read<SyncService>();
-          await sync.syncAll();
+          if (sync.isCloudMode) {
+            await sync.syncAllFromCloud();
+          } else {
+            await sync.syncAll();
+          }
           if (mounted) {
             context.read<OpdProvider>().loadAll();
             context.read<PatientProvider>().load();

@@ -8,6 +8,7 @@ import '../../shared/models/sale.dart';
 import '../../shared/models/stock_transfer.dart';
 import '../../shared/models/patient.dart';
 import '../../shared/services/objectbox_service.dart';
+import '../../shared/services/sync_service.dart';
 import '../../shared/providers/inventory_provider.dart';
 import '../../shared/providers/sales_provider.dart';
 import '../../shared/providers/patient_provider.dart';
@@ -293,9 +294,26 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
           ),
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: tabViews,
+      body: RefreshIndicator(
+        onRefresh: () async {
+          final sync = context.read<SyncService>();
+          if (sync.isCloudMode) {
+            await sync.syncAllFromCloud();
+          } else {
+            await sync.syncAll();
+          }
+          if (mounted) {
+            context.read<SalesProvider>().load();
+            context.read<InventoryProvider>().load();
+            context.read<PatientProvider>().load();
+            context.read<ProcedureProvider>().loadProcedures();
+            context.read<ProcedureProvider>().loadRecords();
+          }
+        },
+        child: TabBarView(
+          controller: _tabController,
+          children: tabViews,
+        ),
       ),
     );
   }

@@ -413,7 +413,14 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
               message: 'The Windows Hub is offline or unreachable. What would you like to do?',
               actions: [
                 ElevatedButton.icon(
-                  onPressed: () => showShopSelectionDialog(context),
+                  onPressed: () {
+                    final savedId = ObjectBoxService.instance.settings.shopId;
+                    if (savedId.isNotEmpty) {
+                      sync.enterCloudMode(savedId);
+                    } else {
+                      showShopSelectionDialog(context);
+                    }
+                  },
                   icon: const Icon(Icons.cloud_sync),
                   label: const Text('Enter Cloud Mode (Firebase)'),
                   style: ElevatedButton.styleFrom(

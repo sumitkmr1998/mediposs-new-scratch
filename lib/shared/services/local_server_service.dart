@@ -2267,20 +2267,32 @@ class LocalServerService {
       debugPrint('Hub: Connection mode is not Firebase (mode=${settings.connectionMode}). Skipping database mirror upload to conserve quota.');
       return;
     }
-    debugPrint('Hub: Starting full Cloud Mirror Sync...');
+
+    final bool isInitialSync = settings.lastCloudflareSync == null;
+    if (isInitialSync) {
+      // Start tracking updates from this exact moment onwards to avoid uploading historical database
+      settings.lastCloudflareSync = DateTime.now().millisecondsSinceEpoch;
+      ObjectBoxService.instance.settingsBox.put(settings);
+      debugPrint('Hub: Initialized lastCloudflareSync to NOW (${settings.lastCloudflareSync}) to skip historical database upload.');
+    }
+
+    final lastSync = settings.lastCloudflareSync!;
+    debugPrint('Hub: Starting incremental Cloud Mirror Sync since $lastSync...');
     int pushCount = 0;
     int pruneCount = 0;
     
     try {
       // --- 1. Mirror Users ---
       final users = ObjectBoxService.instance.userBox.getAll();
-      final localUserNames = users.map((u) => u.name).toSet();
-      final cloudUsers = await FirebaseSyncService.instance.fetchCollection('users');
-      for (var cu in cloudUsers) {
-        final name = cu['name']?.toString();
-        if (name != null && !localUserNames.contains(name)) {
-          await FirebaseSyncService.instance.deleteDocument('users', name);
-          pruneCount++;
+      if (isInitialSync) {
+        final localUserNames = users.map((u) => u.name).toSet();
+        final cloudUsers = await FirebaseSyncService.instance.fetchCollection('users');
+        for (var cu in cloudUsers) {
+          final name = cu['name']?.toString();
+          if (name != null && !localUserNames.contains(name)) {
+            await FirebaseSyncService.instance.deleteDocument('users', name);
+            pruneCount++;
+          }
         }
       }
       for (var u in users) {
@@ -2289,15 +2301,20 @@ class LocalServerService {
       }
 
       // --- 2. Mirror Medicines ---
-      final meds = ObjectBoxService.instance.medicineBox.getAll();
-      // Barcode is our docId for medicines
-      final localBarcodes = meds.map((m) => m.barcode.isEmpty ? m.id.toString() : m.barcode).toSet();
-      final cloudMeds = await FirebaseSyncService.instance.fetchCollection('medicines');
-      for (var cm in cloudMeds) {
-        final cloudId = cm['cloudId']?.toString();
-        if (cloudId != null && !localBarcodes.contains(cloudId)) {
-          await FirebaseSyncService.instance.deleteDocument('medicines', cloudId);
-          pruneCount++;
+      // Filter: Only upload medicines updated/added since the last sync
+      final meds = ObjectBoxService.instance.medicineBox.getAll()
+          .where((m) => m.updatedAt.millisecondsSinceEpoch > lastSync)
+          .toList();
+      
+      if (isInitialSync && meds.isNotEmpty) {
+        final localBarcodes = meds.map((m) => m.barcode.isEmpty ? m.id.toString() : m.barcode).toSet();
+        final cloudMeds = await FirebaseSyncService.instance.fetchCollection('medicines');
+        for (var cm in cloudMeds) {
+          final cloudId = cm['cloudId']?.toString();
+          if (cloudId != null && !localBarcodes.contains(cloudId)) {
+            await FirebaseSyncService.instance.deleteDocument('medicines', cloudId);
+            pruneCount++;
+          }
         }
       }
       for (var m in meds) {
@@ -2306,14 +2323,20 @@ class LocalServerService {
       }
 
       // --- 3. Mirror Patients ---
-      final patients = ObjectBoxService.instance.patientBox.getAll();
-      final localUhids = patients.map((p) => p.uhid.isEmpty ? p.id.toString() : p.uhid).toSet();
-      final cloudPatients = await FirebaseSyncService.instance.fetchCollection('patients');
-      for (var cp in cloudPatients) {
-        final cloudId = cp['cloudId']?.toString();
-        if (cloudId != null && !localUhids.contains(cloudId)) {
-          await FirebaseSyncService.instance.deleteDocument('patients', cloudId);
-          pruneCount++;
+      // Filter: Only upload patients updated since last sync
+      final patients = ObjectBoxService.instance.patientBox.getAll()
+          .where((p) => p.updatedAt.millisecondsSinceEpoch > lastSync)
+          .toList();
+
+      if (isInitialSync && patients.isNotEmpty) {
+        final localUhids = patients.map((p) => p.uhid.isEmpty ? p.id.toString() : p.uhid).toSet();
+        final cloudPatients = await FirebaseSyncService.instance.fetchCollection('patients');
+        for (var cp in cloudPatients) {
+          final cloudId = cp['cloudId']?.toString();
+          if (cloudId != null && !localUhids.contains(cloudId)) {
+            await FirebaseSyncService.instance.deleteDocument('patients', cloudId);
+            pruneCount++;
+          }
         }
       }
       for (var p in patients) {
@@ -2321,53 +2344,63 @@ class LocalServerService {
         pushCount++;
       }
 
-      // --- 4. Mirror Sales (Limited to recent) ---
-      final sales = ObjectBoxService.instance.saleBox.query().order(Sale_.id, flags: Order.descending).build().find();
-      final limitedSales = sales.length > 50 ? sales.sublist(0, 50) : sales;
-      final localInvoices = limitedSales.map((s) => s.invoiceNo).toSet();
-      final cloudSales = await FirebaseSyncService.instance.fetchCollection('sales');
-      for (var cs in cloudSales) {
-        final cloudId = cs['cloudId']?.toString();
-        if (cloudId != null && !localInvoices.contains(cloudId)) {
-          await FirebaseSyncService.instance.deleteDocument('sales', cloudId);
-          pruneCount++;
+      // --- 4. Mirror Sales ---
+      // Filter: Only upload sales created/updated since last sync
+      final sales = ObjectBoxService.instance.saleBox.getAll()
+          .where((s) => s.updatedAt.millisecondsSinceEpoch > lastSync)
+          .toList();
+
+      if (isInitialSync && sales.isNotEmpty) {
+        final localInvoices = sales.map((s) => s.invoiceNo).toSet();
+        final cloudSales = await FirebaseSyncService.instance.fetchCollection('sales');
+        for (var cs in cloudSales) {
+          final cloudId = cs['cloudId']?.toString();
+          if (cloudId != null && !localInvoices.contains(cloudId)) {
+            await FirebaseSyncService.instance.deleteDocument('sales', cloudId);
+            pruneCount++;
+          }
         }
       }
-      for (var s in limitedSales) {
+      for (var s in sales) {
         await FirebaseSyncService.instance.broadcastUpdate('sales', s.toJson());
         pushCount++;
       }
 
       // --- 5. Mirror Procedures ---
-      final procs = ObjectBoxService.instance.procedureBox.getAll();
-      final localProcNames = procs.map((p) => p.name).toSet();
-      final cloudProcs =
-          await FirebaseSyncService.instance.fetchCollection('procedures');
-      for (var cp in cloudProcs) {
-        final cloudId = cp['cloudId']?.toString();
-        final name = cp['name']?.toString();
-        if (cloudId != null && name != null && !localProcNames.contains(name)) {
-          await FirebaseSyncService.instance.deleteDocument(
-              'procedures', cloudId);
-          pruneCount++;
+      // Filter: Only upload procedures updated since last sync
+      final procs = ObjectBoxService.instance.procedureBox.getAll()
+          .where((p) => p.updatedAt.millisecondsSinceEpoch > lastSync)
+          .toList();
+
+      if (isInitialSync && procs.isNotEmpty) {
+        final localProcNames = procs.map((p) => p.name).toSet();
+        final cloudProcs = await FirebaseSyncService.instance.fetchCollection('procedures');
+        for (var cp in cloudProcs) {
+          final cloudId = cp['cloudId']?.toString();
+          final name = cp['name']?.toString();
+          if (cloudId != null && name != null && !localProcNames.contains(name)) {
+            await FirebaseSyncService.instance.deleteDocument('procedures', cloudId);
+            pruneCount++;
+          }
         }
       }
       for (var p in procs) {
-        await FirebaseSyncService.instance.broadcastUpdate(
-            'procedures', p.toJson());
+        await FirebaseSyncService.instance.broadcastUpdate('procedures', p.toJson());
         pushCount++;
       }
 
       // --- 6. Mirror Doctors ---
       final doctors = ObjectBoxService.instance.doctorBox.getAll();
-      final localDoctorNames = doctors.map((d) => d.name).toSet();
-      final cloudDoctors = await FirebaseSyncService.instance.fetchCollection('doctors');
-      for (var cd in cloudDoctors) {
-        final cloudId = cd['cloudId']?.toString();
-        final name = cd['name']?.toString();
-        if (cloudId != null && name != null && !localDoctorNames.contains(name)) {
-          await FirebaseSyncService.instance.deleteDocument('doctors', cloudId);
-          pruneCount++;
+      if (isInitialSync) {
+        final localDoctorNames = doctors.map((d) => d.name).toSet();
+        final cloudDoctors = await FirebaseSyncService.instance.fetchCollection('doctors');
+        for (var cd in cloudDoctors) {
+          final cloudId = cd['cloudId']?.toString();
+          final name = cd['name']?.toString();
+          if (cloudId != null && name != null && !localDoctorNames.contains(name)) {
+            await FirebaseSyncService.instance.deleteDocument('doctors', cloudId);
+            pruneCount++;
+          }
         }
       }
       for (var d in doctors) {
@@ -2376,15 +2409,21 @@ class LocalServerService {
       }
 
       // --- 7. Mirror Appointments ---
-      final appointments = ObjectBoxService.instance.appointmentBox.getAll();
-      final localAppts = appointments.map((a) => a.id.toString()).toSet();
-      final cloudAppts = await FirebaseSyncService.instance.fetchCollection('appointments');
-      for (var ca in cloudAppts) {
-        final cloudId = ca['cloudId']?.toString();
-        final localId = ca['id']?.toString();
-        if (cloudId != null && localId != null && !localAppts.contains(localId)) {
-          await FirebaseSyncService.instance.deleteDocument('appointments', cloudId);
-          pruneCount++;
+      // Filter: Only upload appointments updated since last sync
+      final appointments = ObjectBoxService.instance.appointmentBox.getAll()
+          .where((a) => a.updatedAt.millisecondsSinceEpoch > lastSync)
+          .toList();
+
+      if (isInitialSync && appointments.isNotEmpty) {
+        final localAppts = appointments.map((a) => a.id.toString()).toSet();
+        final cloudAppts = await FirebaseSyncService.instance.fetchCollection('appointments');
+        for (var ca in cloudAppts) {
+          final cloudId = ca['cloudId']?.toString();
+          final localId = ca['id']?.toString();
+          if (cloudId != null && localId != null && !localAppts.contains(localId)) {
+            await FirebaseSyncService.instance.deleteDocument('appointments', cloudId);
+            pruneCount++;
+          }
         }
       }
       for (var a in appointments) {
@@ -2393,15 +2432,21 @@ class LocalServerService {
       }
 
       // --- 8. Mirror Prescriptions ---
-      final prescriptions = ObjectBoxService.instance.prescriptionBox.getAll();
-      final localScripts = prescriptions.map((p) => p.id.toString()).toSet();
-      final cloudScripts = await FirebaseSyncService.instance.fetchCollection('prescriptions');
-      for (var cs in cloudScripts) {
-        final cloudId = cs['cloudId']?.toString();
-        final localId = cs['id']?.toString();
-        if (cloudId != null && localId != null && !localScripts.contains(localId)) {
-          await FirebaseSyncService.instance.deleteDocument('prescriptions', cloudId);
-          pruneCount++;
+      // Filter: Only upload prescriptions updated since last sync
+      final prescriptions = ObjectBoxService.instance.prescriptionBox.getAll()
+          .where((pr) => pr.updatedAt.millisecondsSinceEpoch > lastSync)
+          .toList();
+
+      if (isInitialSync && prescriptions.isNotEmpty) {
+        final localScripts = prescriptions.map((p) => p.id.toString()).toSet();
+        final cloudScripts = await FirebaseSyncService.instance.fetchCollection('prescriptions');
+        for (var cs in cloudScripts) {
+          final cloudId = cs['cloudId']?.toString();
+          final localId = cs['id']?.toString();
+          if (cloudId != null && localId != null && !localScripts.contains(localId)) {
+            await FirebaseSyncService.instance.deleteDocument('prescriptions', cloudId);
+            pruneCount++;
+          }
         }
       }
       for (var p in prescriptions) {
@@ -2411,14 +2456,16 @@ class LocalServerService {
 
       // --- 9. Mirror Templates ---
       final templates = ObjectBoxService.instance.templateBox.getAll();
-      final localTemplates = templates.map((t) => t.name).toSet();
-      final cloudTemplates = await FirebaseSyncService.instance.fetchCollection('templates');
-      for (var ct in cloudTemplates) {
-        final cloudId = ct['cloudId']?.toString();
-        final name = ct['name']?.toString();
-        if (cloudId != null && name != null && !localTemplates.contains(name)) {
-          await FirebaseSyncService.instance.deleteDocument('templates', cloudId);
-          pruneCount++;
+      if (isInitialSync) {
+        final localTemplates = templates.map((t) => t.name).toSet();
+        final cloudTemplates = await FirebaseSyncService.instance.fetchCollection('templates');
+        for (var ct in cloudTemplates) {
+          final cloudId = ct['cloudId']?.toString();
+          final name = ct['name']?.toString();
+          if (cloudId != null && name != null && !localTemplates.contains(name)) {
+            await FirebaseSyncService.instance.deleteDocument('templates', cloudId);
+            pruneCount++;
+          }
         }
       }
       for (var t in templates) {
@@ -2426,7 +2473,10 @@ class LocalServerService {
         pushCount++;
       }
 
-      debugPrint('Hub: Mirror Sync Complete. Pushed: $pushCount, Pruned: $pruneCount');
+      // Update sync marker to current time
+      settings.lastCloudflareSync = DateTime.now().millisecondsSinceEpoch;
+      ObjectBoxService.instance.settingsBox.put(settings);
+      debugPrint('Hub: Mirror Sync Complete. Pushed: $pushCount, Pruned: $pruneCount. Saved lastCloudflareSync: ${settings.lastCloudflareSync}');
     } catch (e) {
       debugPrint('Hub: Mirror Sync error: $e');
     }

@@ -7,7 +7,7 @@ import '../models/patient.dart';
 import '../models/appointment.dart';
 import '../models/prescription.dart';
 import '../models/sale.dart';
-import '../../objectbox.g.dart';
+import '../../objectbox.g.dart' hide Query;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../../firebase_options.dart';
@@ -521,10 +521,10 @@ class FirebaseSyncService {
   /// Pulls an entire collection from Firebase.
   /// Hub-side: Uses REST to see what needs to be pruned.
   /// Companion-side: Uses Native SDK.
-  Future<List<Map<String, dynamic>>> fetchCollection(String entity) async {
+  Future<List<Map<String, dynamic>>> fetchCollection(String entity, {int? since}) async {
     if (!_isEnabled) return [];
     if (defaultTargetPlatform == TargetPlatform.windows) {
-      return await _fetchCollectionREST(entity);
+      return await _fetchCollectionREST(entity, since: since);
     }
 
     if (!_isInitialized) {
@@ -532,12 +532,20 @@ class FirebaseSyncService {
       return [];
     }
     try {
-      debugPrint('Firebase: Fetching collection "$entity" (Cloud Mode)...');
-      // Primary: Only items synced from Hub
-      var snapshot = await _db.collection('shops').doc(_shopId).collection(entity).where('syncedFrom', isEqualTo: 'hub').get();
+      debugPrint('Firebase: Fetching collection "$entity" (Cloud Mode, since=$since)...');
+      Query<Map<String, dynamic>> query = _db.collection('shops').doc(_shopId).collection(entity);
       
-      // Fallback: If no hub-synced items found, try fetching entire collection
-      if (snapshot.docs.isEmpty) {
+      if (since != null) {
+        query = query.where('updatedAt', isGreaterThan: Timestamp.fromMillisecondsSinceEpoch(since));
+      } else {
+        // Primary: Only items synced from Hub
+        query = query.where('syncedFrom', isEqualTo: 'hub');
+      }
+
+      var snapshot = await query.get();
+      
+      // Fallback: If no hub-synced items found, try fetching entire collection (only for initial load)
+      if (snapshot.docs.isEmpty && since == null) {
         debugPrint('Firebase: No "hub-synced" items found in "$entity", trying full fetch...');
         snapshot = await _db.collection('shops').doc(_shopId).collection(entity).get();
       }
@@ -553,7 +561,7 @@ class FirebaseSyncService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> _fetchCollectionREST(String entity) async {
+  Future<List<Map<String, dynamic>>> _fetchCollectionREST(String entity, {int? since}) async {
     if (!_isEnabled) return [];
     try {
       final projectId = DefaultFirebaseOptions.windows.projectId;
@@ -564,7 +572,7 @@ class FirebaseSyncService {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final List docs = data['documents'] ?? [];
-        return docs.map((doc) {
+        final List<Map<String, dynamic>> results = docs.map((doc) {
           final fields = doc['fields'] as Map<String, dynamic>? ?? {};
           final name = doc['name'] as String;
           final docId = name.split('/').last;
@@ -573,6 +581,24 @@ class FirebaseSyncService {
             'cloudId': docId,
           };
         }).toList();
+
+        if (since != null) {
+          return results.where((item) {
+            final updatedAtVal = item['updatedAt'];
+            if (updatedAtVal == null) return false;
+            
+            DateTime? dt;
+            if (updatedAtVal is String) {
+              dt = DateTime.tryParse(updatedAtVal);
+            } else if (updatedAtVal is int) {
+              dt = DateTime.fromMillisecondsSinceEpoch(updatedAtVal);
+            }
+            
+            if (dt == null) return false;
+            return dt.millisecondsSinceEpoch > since;
+          }).toList();
+        }
+        return results;
       }
     } catch (e) {
       debugPrint('Firebase [_fetchCollectionREST] Error: $e');

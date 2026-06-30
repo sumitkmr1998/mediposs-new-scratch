@@ -813,7 +813,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                       const SizedBox(height: 16),
                       SettingsSwitch(
                         title: 'Enable Cloud Database Mirroring',
-                        subtitle: 'Uploads all sales, medicines, and patients to Firestore (high quota usage)',
+                        subtitle: 'Uploads new/updated sales, medicines, and patients incrementally from now onwards (conserves quota)',
                         value: _firebaseMirrorEnabled,
                         icon: LucideIcons.cloud,
                         onChanged: (val) {

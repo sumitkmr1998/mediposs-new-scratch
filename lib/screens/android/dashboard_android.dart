@@ -54,7 +54,13 @@ class DashboardAndroid extends StatelessWidget {
       body: RefreshIndicator(
         onRefresh: () async {
           final sync = context.read<SyncService>();
-          await sync.syncAll();
+          if (sync.isCloudMode) {
+            await sync.syncAllFromCloud();
+          } else {
+            final sales = context.read<SalesProvider>();
+            final isTodaySelected = sales.activeFilter == SalesFilter.today;
+            await sync.syncAll(isTodayOnly: isTodaySelected);
+          }
           if (context.mounted) {
             context.read<SalesProvider>().load();
             context.read<InventoryProvider>().load();
