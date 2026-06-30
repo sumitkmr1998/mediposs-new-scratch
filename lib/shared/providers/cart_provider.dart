@@ -693,22 +693,24 @@ class CartProvider extends ChangeNotifier {
         final apptDate = appt.scheduledAt;
         final apptPhone = appt.patientPhone;
         final apptName = appt.patientName;
-        final existingOpdSale = db.saleBox
+        Sale? existingOpdSale = db.saleBox
             .query(Sale_.linkedAppointmentId.equals(appt.id)
                 .and(Sale_.invoiceNo.startsWith('OPD-')))
             .build()
-            .findFirst() ??
-            db.saleBox.getAll().where((sale) {
-              if (!sale.invoiceNo.startsWith('OPD-')) return false;
-              final sameDay = sale.createdAt.year == apptDate.year &&
-                  sale.createdAt.month == apptDate.month &&
-                  sale.createdAt.day == apptDate.day;
-              if (!sameDay) return false;
-
-              if (apptPhone.isNotEmpty && sale.patientPhone == apptPhone) return true;
-              if (apptName.toLowerCase().trim() == sale.patientName.toLowerCase().trim()) return true;
-              return false;
-            }).firstOrNull;
+            .findFirst();
+        if (existingOpdSale == null) {
+          final startOfDay = DateTime(apptDate.year, apptDate.month, apptDate.day);
+          final endOfDay = DateTime(apptDate.year, apptDate.month, apptDate.day, 23, 59, 59);
+          final candidateSales = db.saleBox
+              .query(Sale_.invoiceNo.startsWith('OPD-').and(Sale_.createdAt.between(startOfDay.millisecondsSinceEpoch, endOfDay.millisecondsSinceEpoch)))
+              .build()
+              .find();
+          existingOpdSale = candidateSales.where((sale) {
+            if (apptPhone.isNotEmpty && sale.patientPhone == apptPhone) return true;
+            if (apptName.toLowerCase().trim() == sale.patientName.toLowerCase().trim()) return true;
+            return false;
+          }).firstOrNull;
+        }
         if (existingOpdSale != null) {
           resolvedOpdInvoiceNo = existingOpdSale.invoiceNo;
         }
@@ -837,22 +839,24 @@ class CartProvider extends ChangeNotifier {
           final apptDate = appt.scheduledAt;
           final apptPhone = appt.patientPhone;
           final apptName = appt.patientName;
-          final existingOpdSale = db.saleBox
+          Sale? existingOpdSale = db.saleBox
               .query(Sale_.linkedAppointmentId.equals(appt.id)
                   .and(Sale_.invoiceNo.startsWith('OPD-')))
               .build()
-              .findFirst() ??
-              db.saleBox.getAll().where((sale) {
-                if (!sale.invoiceNo.startsWith('OPD-')) return false;
-                final sameDay = sale.createdAt.year == apptDate.year &&
-                    sale.createdAt.month == apptDate.month &&
-                    sale.createdAt.day == apptDate.day;
-                if (!sameDay) return false;
-
-                if (apptPhone.isNotEmpty && sale.patientPhone == apptPhone) return true;
-                if (apptName.toLowerCase().trim() == sale.patientName.toLowerCase().trim()) return true;
-                return false;
-              }).firstOrNull;
+              .findFirst();
+          if (existingOpdSale == null) {
+            final startOfDay = DateTime(apptDate.year, apptDate.month, apptDate.day);
+            final endOfDay = DateTime(apptDate.year, apptDate.month, apptDate.day, 23, 59, 59);
+            final candidateSales = db.saleBox
+                .query(Sale_.invoiceNo.startsWith('OPD-').and(Sale_.createdAt.between(startOfDay.millisecondsSinceEpoch, endOfDay.millisecondsSinceEpoch)))
+                .build()
+                .find();
+            existingOpdSale = candidateSales.where((sale) {
+              if (apptPhone.isNotEmpty && sale.patientPhone == apptPhone) return true;
+              if (apptName.toLowerCase().trim() == sale.patientName.toLowerCase().trim()) return true;
+              return false;
+            }).firstOrNull;
+          }
 
           if (existingOpdSale != null) {
             db.saleBox.remove(existingOpdSale.id);
@@ -895,9 +899,9 @@ class CartProvider extends ChangeNotifier {
         for (final item in _items) {
           if (item.isProcedure || item.medicine == null) continue;
           final m = ObjectBoxService.instance.medicineBox
-              .getAll()
-              .where((x) => x.name == item.medicine!.name)
-              .firstOrNull;
+              .query(Medicine_.name.equals(item.medicine!.name))
+              .build()
+              .findFirst();
           if (m != null) {
             FirebaseSyncService.instance
                 .broadcastUpdate('medicines', m.toJson());

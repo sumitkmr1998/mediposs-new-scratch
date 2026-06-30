@@ -13,6 +13,7 @@ class PurchaseRecord {
   @Property(type: PropertyType.date)
   DateTime purchasedAt;
 
+  String location; // Target warehouse/location ('clinic', 'store', 'bulkClinic', 'bulkStore')
   String note;
   String supplier;
 
@@ -23,6 +24,7 @@ class PurchaseRecord {
     required this.qty,
     required this.purchasePrice,
     DateTime? purchasedAt,
+    this.location = '',
     this.note = '',
     this.supplier = '',
   }) : purchasedAt = purchasedAt ?? DateTime.now();
@@ -34,6 +36,7 @@ class PurchaseRecord {
         'qty': qty,
         'purchasePrice': purchasePrice,
         'purchasedAt': purchasedAt.toIso8601String(),
+        'location': location,
         'note': note,
         'supplier': supplier,
       };
@@ -45,6 +48,7 @@ class PurchaseRecord {
         qty: json['qty'],
         purchasePrice: (json['purchasePrice'] as num).toDouble(),
         purchasedAt: DateTime.tryParse(json['purchasedAt'] ?? ''),
+        location: json['location'] ?? '',
         note: json['note'] ?? '',
         supplier: json['supplier'] ?? '',
       );

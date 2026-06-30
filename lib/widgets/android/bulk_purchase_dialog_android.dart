@@ -6,6 +6,7 @@ import '../../shared/models/medicine.dart';
 import '../../theme/app_theme.dart';
 
 class _BulkItem {
+  final Medicine medicine;
   int clinicQty;
   int storeQty;
   int bulkClinicQty;
@@ -14,6 +15,7 @@ class _BulkItem {
   DateTime expiryDate;
   
   _BulkItem({
+    required this.medicine,
     this.clinicQty = 0,
     this.storeQty = 0,
     this.bulkClinicQty = 0,
@@ -152,6 +154,7 @@ class _AndroidBulkPurchaseDialogState extends State<AndroidBulkPurchaseDialog> {
                                       setState(() {
                                         final activeBatch = m.batches.isNotEmpty ? m.batches.last : null;
                                         _selectedItems[m.id] = _BulkItem(
+                                          medicine: m,
                                           bulkClinicQty: 1,
                                           batchNo: activeBatch?.batchNo ?? '',
                                           expiryDate: activeBatch?.expiryDate ?? DateTime.now().add(const Duration(days: 365)),
@@ -185,8 +188,8 @@ class _AndroidBulkPurchaseDialogState extends State<AndroidBulkPurchaseDialog> {
                       itemCount: _selectedItems.length,
                       itemBuilder: (ctx, i) {
                         final id = _selectedItems.keys.elementAt(i);
-                        final m = inv.medicines.firstWhere((e) => e.id == id);
                         final item = _selectedItems[id]!;
+                        final m = item.medicine;
                         return Card(
                           margin: const EdgeInsets.only(bottom: 16),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: context.borderColor)),

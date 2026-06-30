@@ -662,15 +662,54 @@ class InventoryProvider extends ChangeNotifier {
         finalUpdates.add(m);
 
         // Create history record
-        purchaseRecords.add(PurchaseRecord(
-          medicineId: m.id,
-          medicineName: m.name,
-          qty: mainQty + storeQty + bulkClinicQty + bulkStoreQty,
-          purchasePrice: m.purchasePrice,
-          purchasedAt: now,
-          note: note,
-          supplier: supplier,
-        ));
+        if (mainQty > 0) {
+          purchaseRecords.add(PurchaseRecord(
+            medicineId: m.id,
+            medicineName: m.name,
+            qty: mainQty,
+            purchasePrice: m.purchasePrice,
+            purchasedAt: now,
+            location: 'clinic',
+            note: note,
+            supplier: supplier,
+          ));
+        }
+        if (storeQty > 0) {
+          purchaseRecords.add(PurchaseRecord(
+            medicineId: m.id,
+            medicineName: m.name,
+            qty: storeQty,
+            purchasePrice: m.purchasePrice,
+            purchasedAt: now,
+            location: 'store',
+            note: note,
+            supplier: supplier,
+          ));
+        }
+        if (bulkClinicQty > 0) {
+          purchaseRecords.add(PurchaseRecord(
+            medicineId: m.id,
+            medicineName: m.name,
+            qty: bulkClinicQty,
+            purchasePrice: m.purchasePrice,
+            purchasedAt: now,
+            location: 'bulkClinic',
+            note: note,
+            supplier: supplier,
+          ));
+        }
+        if (bulkStoreQty > 0) {
+          purchaseRecords.add(PurchaseRecord(
+            medicineId: m.id,
+            medicineName: m.name,
+            qty: bulkStoreQty,
+            purchasePrice: m.purchasePrice,
+            purchasedAt: now,
+            location: 'bulkStore',
+            note: note,
+            supplier: supplier,
+          ));
+        }
 
         final isClient = Platform.isAndroid ||
             (Platform.isWindows &&
@@ -720,27 +759,62 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   void updatePurchase(PurchaseRecord p, int newQty,
-      {SyncService? syncService}) {
+      {SyncService? syncService, AppUser? actor}) {
     final m = _box.get(p.medicineId);
     if (m != null) {
       // Adjust stock by the difference
       final diff = newQty - p.qty;
-      m.mainStock += diff;
+      if (p.location == 'store') {
+        m.storeStock += diff;
+      } else if (p.location == 'bulkClinic') {
+        m.bulkClinicStock += diff;
+      } else if (p.location == 'bulkStore') {
+        m.bulkStoreStock += diff;
+      } else {
+        m.mainStock += diff;
+      }
       m.updatedAt = DateTime.now();
 
       // Also try to adjust a batch to keep them in sync
       if (m.batches.isNotEmpty) {
         final latest = m.batches.toList()..sort((a, b) => b.id.compareTo(a.id));
         final batch = latest.first;
-        batch.mainStock += diff;
+        if (p.location == 'store') {
+          batch.storeStock += diff;
+        } else if (p.location == 'bulkClinic') {
+          batch.bulkClinicStock += diff;
+        } else if (p.location == 'bulkStore') {
+          batch.bulkStoreStock += diff;
+        } else {
+          batch.mainStock += diff;
+        }
         _batchBox.put(batch);
       }
 
       _box.put(m);
 
       // Update purchase record
+      final oldQty = p.qty;
       p.qty = newQty;
       _purchaseBox.put(p);
+
+      // Log purchase update
+      AuditService.instance.log(
+        action: 'UPDATE',
+        entityType: 'PurchaseRecord',
+        entityId: p.id.toString(),
+        description: 'Updated purchase quantity for ${p.medicineName}: $oldQty -> $newQty',
+        details: {
+          'medicineId': p.medicineId,
+          'medicineName': p.medicineName,
+          'oldQty': oldQty,
+          'newQty': newQty,
+          'location': p.location,
+          'supplier': p.supplier,
+        },
+        actor: actor,
+      );
+
       load();
 
       final isClient = Platform.isAndroid ||
@@ -757,25 +831,58 @@ class InventoryProvider extends ChangeNotifier {
     }
   }
 
-  void deletePurchase(PurchaseRecord p, {SyncService? syncService}) {
+  void deletePurchase(PurchaseRecord p, {SyncService? syncService, AppUser? actor}) {
     final m = _box.get(p.medicineId);
     if (m != null) {
       // Revert stock
       final diff = -p.qty;
-      m.mainStock = (m.mainStock + diff).clamp(0, 999999);
+      if (p.location == 'store') {
+        m.storeStock = (m.storeStock + diff).clamp(0, 999999);
+      } else if (p.location == 'bulkClinic') {
+        m.bulkClinicStock = (m.bulkClinicStock + diff).clamp(0, 999999);
+      } else if (p.location == 'bulkStore') {
+        m.bulkStoreStock = (m.bulkStoreStock + diff).clamp(0, 999999);
+      } else {
+        m.mainStock = (m.mainStock + diff).clamp(0, 999999);
+      }
       m.updatedAt = DateTime.now();
 
       // Also adjust batch
       if (m.batches.isNotEmpty) {
         final latest = m.batches.toList()..sort((a, b) => b.id.compareTo(a.id));
         final batch = latest.first;
-        batch.mainStock = (batch.mainStock + diff).clamp(0, 999999);
+        if (p.location == 'store') {
+          batch.storeStock = (batch.storeStock + diff).clamp(0, 999999);
+        } else if (p.location == 'bulkClinic') {
+          batch.bulkClinicStock = (batch.bulkClinicStock + diff).clamp(0, 999999);
+        } else if (p.location == 'bulkStore') {
+          batch.bulkStoreStock = (batch.bulkStoreStock + diff).clamp(0, 999999);
+        } else {
+          batch.mainStock = (batch.mainStock + diff).clamp(0, 999999);
+        }
         _batchBox.put(batch);
       }
 
       _box.put(m);
 
       _purchaseBox.remove(p.id);
+
+      // Log purchase deletion
+      AuditService.instance.log(
+        action: 'DELETE',
+        entityType: 'PurchaseRecord',
+        entityId: p.id.toString(),
+        description: 'Deleted purchase record for ${p.medicineName} (-${p.qty} units)',
+        details: {
+          'medicineId': p.medicineId,
+          'medicineName': p.medicineName,
+          'qty': p.qty,
+          'location': p.location,
+          'supplier': p.supplier,
+        },
+        actor: actor,
+      );
+
       load();
 
       final isClient = Platform.isAndroid ||
@@ -897,8 +1004,11 @@ class InventoryProvider extends ChangeNotifier {
     AppUser? actor,
   }) {
     final oldBatchNo = batch.batchNo;
+    final oldExpiryDate = batch.expiryDate;
     final oldMainStock = batch.mainStock;
     final oldStoreStock = batch.storeStock;
+    final oldBulkClinicStock = batch.bulkClinicStock;
+    final oldBulkStoreStock = batch.bulkStoreStock;
 
     batch.batchNo = batchNo;
     batch.expiryDate = expiryDate;
@@ -924,10 +1034,16 @@ class InventoryProvider extends ChangeNotifier {
         'medicineName': m.name,
         'oldBatchNo': oldBatchNo,
         'newBatchNo': batchNo,
+        'oldExpiryDate': oldExpiryDate.toIso8601String(),
+        'newExpiryDate': expiryDate.toIso8601String(),
         'oldMainStock': oldMainStock,
         'newMainStock': mainStock,
         'oldStoreStock': oldStoreStock,
         'newStoreStock': storeStock,
+        'oldBulkClinicStock': oldBulkClinicStock,
+        'newBulkClinicStock': bulkClinicStock,
+        'oldBulkStoreStock': oldBulkStoreStock,
+        'newBulkStoreStock': bulkStoreStock,
       },
       actor: actor,
     );

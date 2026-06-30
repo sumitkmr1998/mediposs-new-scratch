@@ -1955,6 +1955,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       
       if (!context.mounted) return;
       final inv = context.read<InventoryProvider>();
+      final actor = context.read<AuthProvider>().currentUser;
       int added = 0; int updated = 0;
 
       bool isTally = false;
@@ -2007,7 +2008,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                 ..purchasePrice = purchasePrice > 0 ? purchasePrice : existing.purchasePrice
                 ..sellingPrice = sellingPrice > 0 ? sellingPrice : existing.sellingPrice;
 
-              inv.updateMedicine(existing);
+              inv.updateMedicine(existing, actor: actor);
 
               if (mainStock > 0) {
                 inv.addBatchStock(
@@ -2016,6 +2017,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                   batchNo: 'IMPORT-${DateTime.now().millisecondsSinceEpoch}',
                   expiryDate: DateTime.now().add(const Duration(days: 365 * 2)),
                   note: 'Imported from Excel (Tally)',
+                  actor: actor,
                 );
               }
               updated++;
@@ -2031,7 +2033,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                 storeStock: 0,
                 lowStockThreshold: 10,
               );
-              inv.addMedicine(newMed);
+              inv.addMedicine(newMed, actor: actor);
 
               if (mainStock > 0) {
                 inv.addBatchStock(
@@ -2040,6 +2042,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                   batchNo: 'IMPORT-${DateTime.now().millisecondsSinceEpoch}',
                   expiryDate: DateTime.now().add(const Duration(days: 365 * 2)),
                   note: 'Imported from Excel (Tally)',
+                  actor: actor,
                 );
               }
               added++;
@@ -2173,7 +2176,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                     sellingPrice > 0 ? sellingPrice : existing.sellingPrice
                 ..lowStockThreshold = lowStock;
 
-              inv.updateMedicine(existing);
+              inv.updateMedicine(existing, actor: actor);
 
               // If stock is provided in Excel, add it as a new batch to avoid total drift
               if (mainStock > 0 || storeStock > 0) {
@@ -2184,6 +2187,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                   expiryDate: DateTime.now()
                       .add(const Duration(days: 365 * 2)), // 2 year default
                   note: 'Imported from Excel',
+                  actor: actor,
                 );
               }
               updated++;
@@ -2200,7 +2204,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                 storeStock: 0,
                 lowStockThreshold: lowStock,
               );
-              inv.addMedicine(newMed);
+              inv.addMedicine(newMed, actor: actor);
 
               if (mainStock > 0 || storeStock > 0) {
                 inv.addBatchStock(
@@ -2209,6 +2213,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                   batchNo: 'IMPORT-${DateTime.now().millisecondsSinceEpoch}',
                   expiryDate: DateTime.now().add(const Duration(days: 365 * 2)),
                   note: 'Imported from Excel',
+                  actor: actor,
                 );
               }
               added++;

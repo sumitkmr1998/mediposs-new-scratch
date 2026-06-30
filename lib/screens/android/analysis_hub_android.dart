@@ -13,6 +13,7 @@ import '../../shared/providers/sales_provider.dart';
 import '../../shared/providers/patient_provider.dart';
 import '../../shared/providers/procedure_provider.dart';
 import '../../shared/utils/analytics_helper.dart';
+import '../../shared/providers/auth_provider.dart';
 import '../../theme/app_theme.dart';
 import 'package:excel/excel.dart' as excel_pkg;
 import '../../shared/models/schedule_h1_record.dart';
@@ -54,11 +55,14 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
   int _reorderTargetDays = 365;
 
   List<Sale> _getFilteredSalesForPerf(List<Sale> sales) {
+    final auth = context.read<AuthProvider>();
+    final isStaffOnly = !auth.isAdmin || !(auth.currentUser?.canViewHistoricalData ?? true);
+
     final now = DateTime.now();
     DateTime start;
     DateTime end = DateTime(now.year, now.month, now.day, 23, 59, 59);
 
-    if (_perfPeriod == 'Today') {
+    if (isStaffOnly || _perfPeriod == 'Today') {
       start = DateTime(now.year, now.month, now.day);
     } else if (_perfPeriod == 'Yesterday') {
       final yest = now.subtract(const Duration(days: 1));
@@ -142,11 +146,22 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
     final salesProvider = context.watch<SalesProvider>();
     final patientProvider = context.watch<PatientProvider>();
     final procedureProvider = context.watch<ProcedureProvider>();
+    final auth = context.watch<AuthProvider>();
+
+    final isStaffOnly = !auth.isAdmin || !(auth.currentUser?.canViewHistoricalData ?? true);
 
     final allMedicines = inventory.rawMedicines;
-    final allSales = salesProvider.rawSales;
+    var allSales = salesProvider.rawSales;
     final allPatients = patientProvider.patients;
     final allProcedures = procedureProvider.procedures;
+
+    if (isStaffOnly) {
+      final today = DateTime.now();
+      allSales = allSales.where((s) =>
+          s.createdAt.year == today.year &&
+          s.createdAt.month == today.month &&
+          s.createdAt.day == today.day).toList();
+    }
 
     return Scaffold(
       backgroundColor: context.bgColor,
@@ -234,6 +249,8 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
   // 1. SALES TRENDS TAB (Optimized for Mobile)
   // ==========================================
   Widget _buildSalesTrendsTab(List<Sale> sales, List<Medicine> medicines) {
+    final auth = context.read<AuthProvider>();
+    final isStaffOnly = !auth.isAdmin || !(auth.currentUser?.canViewHistoricalData ?? true);
     final now = DateTime.now();
     late DateTime start;
 
@@ -298,11 +315,12 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
                 'Financial Overview',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
-              _buildPeriodSelector(
-                selectedPeriod: _period,
-                periods: const ['This Week', 'This Month', 'Last 3 Months'],
-                onPeriodSelected: (p) => setState(() => _period = p),
-              ),
+              if (!isStaffOnly)
+                _buildPeriodSelector(
+                  selectedPeriod: _period,
+                  periods: const ['This Week', 'This Month', 'Last 3 Months'],
+                  onPeriodSelected: (p) => setState(() => _period = p),
+                ),
             ],
           ),
           const SizedBox(height: 16),
@@ -751,6 +769,8 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
   // 3. PERFORMANCE EXPLORER TAB (Optimized for Mobile)
   // ==========================================
   Widget _buildProductPerformanceTab(List<Sale> sales, List<Medicine> medicines, List<Procedure> procedures) {
+    final auth = context.read<AuthProvider>();
+    final isStaffOnly = !auth.isAdmin || !(auth.currentUser?.canViewHistoricalData ?? true);
     if (_selectedMedicine != null || _selectedProcedure != null) {
       return _buildDetailView(
         sales: sales,
@@ -882,45 +902,47 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
                   onSelected: (Medicine m) => setState(() => _selectedMedicine = m),
                 ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _buildPeriodSelector(
-                  selectedPeriod: _perfPeriod,
-                  periods: const ['Today', 'Yesterday', 'This Week', 'This Month', 'Custom Range'],
-                  onPeriodSelected: (p) async {
-                    if (p == 'Custom Range') {
-                      final range = await showDateRangePicker(
-                        context: context,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime.now(),
-                        initialDateRange: _perfCustomRange,
-                      );
-                      if (range != null) {
+          if (!isStaffOnly) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: _buildPeriodSelector(
+                    selectedPeriod: _perfPeriod,
+                    periods: const ['Today', 'Yesterday', 'This Week', 'This Month', 'Custom Range'],
+                    onPeriodSelected: (p) async {
+                      if (p == 'Custom Range') {
+                        final range = await showDateRangePicker(
+                          context: context,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now(),
+                          initialDateRange: _perfCustomRange,
+                        );
+                        if (range != null) {
+                          setState(() {
+                            _perfPeriod = p;
+                            _perfCustomRange = range;
+                          });
+                        }
+                      } else {
                         setState(() {
                           _perfPeriod = p;
-                          _perfCustomRange = range;
+                          _perfCustomRange = null;
                         });
                       }
-                    } else {
-                      setState(() {
-                        _perfPeriod = p;
-                        _perfCustomRange = null;
-                      });
-                    }
-                  },
+                    },
+                  ),
                 ),
+              ],
+            ),
+            if (_perfPeriod == 'Custom Range' && _perfCustomRange != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                '(${DateFormat('dd/MM/yyyy').format(_perfCustomRange!.start)} - ${DateFormat('dd/MM/yyyy').format(_perfCustomRange!.end)})',
+                style: TextStyle(color: context.textMutedColor, fontSize: 11),
               ),
             ],
-          ),
-          if (_perfPeriod == 'Custom Range' && _perfCustomRange != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              '(${DateFormat('dd/MM/yyyy').format(_perfCustomRange!.start)} - ${DateFormat('dd/MM/yyyy').format(_perfCustomRange!.end)})',
-              style: TextStyle(color: context.textMutedColor, fontSize: 11),
-            ),
+            const SizedBox(height: 12),
           ],
-          const SizedBox(height: 12),
           Expanded(
             child: Card(
               margin: EdgeInsets.zero,
@@ -1673,13 +1695,16 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
   // 7. SCHEDULE H1 COMPLIANCE (Optimized for Mobile)
   // ==========================================
   Widget _buildScheduleH1RegisterTab() {
+    final auth = context.read<AuthProvider>();
+    final isStaffOnly = !auth.isAdmin || !(auth.currentUser?.canViewHistoricalData ?? true);
+
     final h1Box = ObjectBoxService.instance.store.box<ScheduleH1Record>();
     
     final now = DateTime.now();
     DateTime start;
     DateTime end = DateTime(now.year, now.month, now.day, 23, 59, 59);
 
-    if (_h1Period == 'Today') {
+    if (isStaffOnly || _h1Period == 'Today') {
       start = DateTime(now.year, now.month, now.day);
     } else if (_h1Period == 'Yesterday') {
       final yest = now.subtract(const Duration(days: 1));
@@ -1741,38 +1766,40 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
             onChanged: (val) => setState(() => _h1SearchQuery = val),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _buildPeriodSelector(
-                  selectedPeriod: _h1Period,
-                  periods: const ['Today', 'Yesterday', 'This Week', 'This Month', 'Custom Range'],
-                  onPeriodSelected: (p) async {
-                    if (p == 'Custom Range') {
-                      final range = await showDateRangePicker(
-                        context: context,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime.now(),
-                        initialDateRange: _h1CustomRange,
-                      );
-                      if (range != null) {
+          if (!isStaffOnly) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: _buildPeriodSelector(
+                    selectedPeriod: _h1Period,
+                    periods: const ['Today', 'Yesterday', 'This Week', 'This Month', 'Custom Range'],
+                    onPeriodSelected: (p) async {
+                      if (p == 'Custom Range') {
+                        final range = await showDateRangePicker(
+                          context: context,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now(),
+                          initialDateRange: _h1CustomRange,
+                        );
+                        if (range != null) {
+                          setState(() {
+                            _h1Period = p;
+                            _h1CustomRange = range;
+                          });
+                        }
+                      } else {
                         setState(() {
                           _h1Period = p;
-                          _h1CustomRange = range;
+                          _h1CustomRange = null;
                         });
                       }
-                    } else {
-                      setState(() {
-                        _h1Period = p;
-                        _h1CustomRange = null;
-                      });
-                    }
-                  },
+                    },
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
           Expanded(
             child: filteredRecords.isEmpty
                 ? const Center(child: Text('No compliance logs found.'))
@@ -1911,9 +1938,14 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
     final name = medicine != null ? medicine.name : procedure!.name;
     final isClinical = procedure != null;
 
+    final auth = context.read<AuthProvider>();
+    final isStaffOnly = !auth.isAdmin || !(auth.currentUser?.canViewHistoricalData ?? true);
+
     final now = DateTime.now();
     DateTime start;
-    if (_detailPeriod == 'Last 30 Days') {
+    if (isStaffOnly) {
+      start = DateTime(now.year, now.month, now.day);
+    } else if (_detailPeriod == 'Last 30 Days') {
       start = now.subtract(const Duration(days: 30));
     } else if (_detailPeriod == 'Last 90 Days') {
       start = now.subtract(const Duration(days: 90));
@@ -1974,38 +2006,40 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _buildPeriodSelector(
-                    selectedPeriod: _detailPeriod,
-                    periods: const ['Last 30 Days', 'Last 90 Days', 'Custom Range'],
-                    onPeriodSelected: (p) async {
-                      if (p == 'Custom Range') {
-                        final range = await showDateRangePicker(
-                          context: context,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime.now(),
-                          initialDateRange: _detailCustomRange,
-                        );
-                        if (range != null) {
+            if (!isStaffOnly) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildPeriodSelector(
+                      selectedPeriod: _detailPeriod,
+                      periods: const ['Last 30 Days', 'Last 90 Days', 'Custom Range'],
+                      onPeriodSelected: (p) async {
+                        if (p == 'Custom Range') {
+                          final range = await showDateRangePicker(
+                            context: context,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime.now(),
+                            initialDateRange: _detailCustomRange,
+                          );
+                          if (range != null) {
+                            setState(() {
+                              _detailPeriod = p;
+                              _detailCustomRange = range;
+                            });
+                          }
+                        } else {
                           setState(() {
                             _detailPeriod = p;
-                            _detailCustomRange = range;
+                            _detailCustomRange = null;
                           });
                         }
-                      } else {
-                        setState(() {
-                          _detailPeriod = p;
-                          _detailCustomRange = null;
-                        });
-                      }
-                    },
+                      },
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
             Row(
               children: [
                 Expanded(child: _buildMetricCard('Total Volume', '$totalQty units', Icons.inventory_2_rounded, isClinical ? AppTheme.indigo : AppTheme.primary)),

@@ -21,6 +21,11 @@ enum OpdFilter { today, yesterday, last7Days, allTime, custom }
 class OpdProvider extends ChangeNotifier {
   List<Appointment> _appointments = [];
   List<Doctor> _doctors = [];
+  List<Appointment> _todayQueue = [];
+  double _todayCollectedRevenue = 0.0;
+  double _todayCashRevenue = 0.0;
+  double _todayUpiRevenue = 0.0;
+  double _todayCardRevenue = 0.0;
 
   OpdFilter _activeFilter = OpdFilter.today;
   DateTime? _customStart;
@@ -34,19 +39,7 @@ class OpdProvider extends ChangeNotifier {
   DateTime? get customStart => _customStart;
   DateTime? get customEnd => _customEnd;
 
-  List<Appointment> get todayQueue {
-    final today = DateTime.now();
-    return _appointments
-        .where((a) {
-          final localSched = a.scheduledAt.toLocal();
-          return localSched.year == today.year &&
-              localSched.month == today.month &&
-              localSched.day == today.day &&
-              a.status != kStatusCancelled;
-        })
-        .toList()
-      ..sort((a, b) => a.tokenNumber.compareTo(b.tokenNumber));
-  }
+  List<Appointment> get todayQueue => _todayQueue;
 
   List<Appointment> get filteredQueue {
     return _appointments.where((a) {
@@ -108,23 +101,11 @@ class OpdProvider extends ChangeNotifier {
       .fold(0.0, (sum, a) => sum + a.consultationFee);
 
   // Today-specific totals for restricted Dashboard views
-  double get todayCollectedRevenue => todayQueue
-      .where((a) => a.paymentMethod != 'pending')
-      .fold(0.0, (sum, a) => sum + a.consultationFee);
-
-  double get todayCashRevenue => todayQueue
-      .where((a) => a.paymentMethod.toLowerCase() == 'cash')
-      .fold(0.0, (sum, a) => sum + a.consultationFee);
-
-  double get todayUpiRevenue => todayQueue
-      .where((a) => a.paymentMethod.toLowerCase() == 'upi')
-      .fold(0.0, (sum, a) => sum + a.consultationFee);
-
-  double get todayCardRevenue => todayQueue
-      .where((a) => a.paymentMethod.toLowerCase() == 'card')
-      .fold(0.0, (sum, a) => sum + a.consultationFee);
-
-  int get todayPatientCount => todayQueue.length;
+  double get todayCollectedRevenue => _todayCollectedRevenue;
+  double get todayCashRevenue => _todayCashRevenue;
+  double get todayUpiRevenue => _todayUpiRevenue;
+  double get todayCardRevenue => _todayCardRevenue;
+  int get todayPatientCount => _todayQueue.length;
 
   static const int pageSize = 30;
   int _loadedCount = 30;
@@ -189,12 +170,46 @@ class OpdProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _recalculateTotals() {
+    final today = DateTime.now();
+    _todayQueue = _appointments
+        .where((a) {
+          final localSched = a.scheduledAt.toLocal();
+          return localSched.year == today.year &&
+              localSched.month == today.month &&
+              localSched.day == today.day &&
+              a.status != kStatusCancelled;
+        })
+        .toList()
+      ..sort((a, b) => a.tokenNumber.compareTo(b.tokenNumber));
+
+    _todayCollectedRevenue = 0.0;
+    _todayCashRevenue = 0.0;
+    _todayUpiRevenue = 0.0;
+    _todayCardRevenue = 0.0;
+
+    for (final a in _todayQueue) {
+      if (a.paymentMethod != 'pending') {
+        _todayCollectedRevenue += a.consultationFee;
+      }
+      final method = a.paymentMethod.toLowerCase();
+      if (method == 'cash') {
+        _todayCashRevenue += a.consultationFee;
+      } else if (method == 'upi') {
+        _todayUpiRevenue += a.consultationFee;
+      } else if (method == 'card') {
+        _todayCardRevenue += a.consultationFee;
+      }
+    }
+  }
+
   void loadAll() {
     final db = ObjectBoxService.instance;
     _appointments = db.appointmentBox.getAll()
       ..sort((a, b) => b.scheduledAt.compareTo(a.scheduledAt));
     _doctors = db.doctorBox.getAll()..sort((a, b) => a.name.compareTo(b.name));
     _loadedCount = pageSize;
+    _recalculateTotals();
     notifyListeners();
   }
 

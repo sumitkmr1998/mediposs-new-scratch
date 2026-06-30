@@ -1383,18 +1383,37 @@ class SyncService extends ChangeNotifier {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body)['data'] as List;
         final box = ObjectBoxService.instance.transferBox;
+        final allLocal = box.getAll();
 
         for (final item in data) {
-          final existing = box.get(item['id'] ?? 0);
           final serverTime =
               DateHelper.parseDateTime(item['transferredAt']) ?? DateTime.now();
+          final medicineName = item['medicineName'] as String? ?? '';
+          final qty = item['qty'] as int? ?? 0;
+          final from = item['fromWarehouse'] as String? ?? '';
+          final to = item['toWarehouse'] as String? ?? '';
+          final batch = item['batchNo'] as String?;
+
+          final existing = allLocal.where((t) {
+            final nameMatch = t.medicineName.toLowerCase().trim() == medicineName.toLowerCase().trim();
+            final qtyMatch = t.qty == qty;
+            final fromMatch = t.fromWarehouse == from;
+            final toMatch = t.toWarehouse == to;
+            final timeMatch = t.transferredAt.millisecondsSinceEpoch == serverTime.millisecondsSinceEpoch;
+            final batchMatch = t.batchNo == batch;
+            return nameMatch && qtyMatch && fromMatch && toMatch && timeMatch && batchMatch;
+          }).firstOrNull;
+
           if (existing == null) {
             box.put(StockTransfer(
-              medicineId: item['medicineId'],
-              medicineName: item['medicineName'],
-              qty: item['qty'],
-              fromWarehouse: item['fromWarehouse'],
-              toWarehouse: item['toWarehouse'],
+              id: 0,
+              medicineId: item['medicineId'] ?? 0,
+              medicineName: medicineName,
+              qty: qty,
+              fromWarehouse: from,
+              toWarehouse: to,
+              batchNo: batch,
+              expiryDate: item['expiryDate'] != null ? DateTime.tryParse(item['expiryDate']) : null,
               transferredAt: serverTime,
               note: item['note'] ?? '',
               transferredBy: item['transferredBy'] ?? '',

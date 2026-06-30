@@ -29,7 +29,7 @@ class _WarehouseAndroidState extends State<WarehouseAndroid>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<WarehouseProvider>().loadTransfers();
       final inv = context.read<InventoryProvider>();
@@ -143,6 +143,7 @@ class _WarehouseAndroidState extends State<WarehouseAndroid>
                   tabs: const [
                     Tab(text: 'STOCK LEVELS'),
                     Tab(text: 'TRANSFERS'),
+                    Tab(text: 'PURCHASES'),
                   ],
                 ),
               ),
@@ -154,6 +155,7 @@ class _WarehouseAndroidState extends State<WarehouseAndroid>
           children: const [
             _StockLevelsTab(),
             _TransferHistoryTab(),
+            _PurchaseHistoryTabAndroid(),
           ],
         ),
       ),
@@ -1088,7 +1090,6 @@ class _TransferHistoryTab extends StatelessWidget {
                           isSendOut ? AppTheme.success : AppTheme.indigo;
                       return Container(
                         margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
                           color: context.surfaceColor,
                           borderRadius: BorderRadius.circular(16),
@@ -1096,8 +1097,13 @@ class _TransferHistoryTab extends StatelessWidget {
                               color:
                                   context.borderColor.withValues(alpha: 0.5)),
                         ),
-                        child: Row(
-                          children: [
+                        child: InkWell(
+                          onTap: () => _showTransferDetailsDialog(context, t),
+                          borderRadius: BorderRadius.circular(16),
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Row(
+                              children: [
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
@@ -1119,12 +1125,25 @@ class _TransferHistoryTab extends StatelessWidget {
                                       style: const TextStyle(
                                           fontWeight: FontWeight.w800,
                                           fontSize: 14)),
-                                  Text(
-                                      '${t.fromWarehouse.toUpperCase()} → ${t.toWarehouse.toUpperCase()} • ${t.transferredAt.day}/${t.transferredAt.month}',
-                                      style: TextStyle(
-                                          fontSize: 11,
-                                          color: context.textMutedColor,
-                                          fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      _buildLocationBadge(context, t.fromWarehouse),
+                                      const Padding(
+                                        padding: EdgeInsets.symmetric(horizontal: 4),
+                                        child: Icon(Icons.arrow_forward_rounded, size: 12, color: Colors.grey),
+                                      ),
+                                      _buildLocationBadge(context, t.toWarehouse),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                          '• ${t.transferredAt.day}/${t.transferredAt.month}',
+                                          style: TextStyle(
+                                              fontSize: 11,
+                                              color: context.textMutedColor,
+                                              fontWeight: FontWeight.w600)),
+                                    ],
+                                  ),
                                 ],
                               ),
                             ),
@@ -1144,7 +1163,7 @@ class _TransferHistoryTab extends StatelessWidget {
                                         letterSpacing: 0.5)),
                               ],
                             ),
-                          ],
+                          ),
                         ),
                       );
                     },
@@ -1309,6 +1328,365 @@ class _FilterChip extends StatelessWidget {
       showCheckmark: false,
       padding: const EdgeInsets.symmetric(horizontal: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    );
+  }
+}
+
+Widget _buildLocationBadge(BuildContext context, String loc) {
+  final cleanLoc = loc.trim().toLowerCase();
+  String text = loc;
+  Color bg = Colors.grey.withValues(alpha: 0.1);
+  Color fg = Colors.grey;
+
+  if (cleanLoc == 'clinic' || cleanLoc == 'main' || cleanLoc == 'hub' || cleanLoc == 'clinic dispense') {
+    text = 'Clinic Dispense';
+    bg = AppTheme.indigo.withValues(alpha: 0.1);
+    fg = AppTheme.indigo;
+  } else if (cleanLoc == 'store' || cleanLoc == 'store pos') {
+    text = 'Store POS';
+    bg = const Color(0xFF14B8A6).withValues(alpha: 0.1);
+    fg = const Color(0xFF14B8A6);
+  } else if (cleanLoc == 'bulkclinic' || cleanLoc == 'clinic bulk') {
+    text = 'Clinic Bulk';
+    bg = Colors.deepPurple.withValues(alpha: 0.1);
+    fg = Colors.deepPurple;
+  } else if (cleanLoc == 'bulkstore' || cleanLoc == 'store bulk') {
+    text = 'Store Bulk';
+    bg = Colors.teal.withValues(alpha: 0.1);
+    fg = Colors.teal;
+  } else if (cleanLoc.isEmpty) {
+    text = 'Hub/Clinic';
+    bg = AppTheme.indigo.withValues(alpha: 0.1);
+    fg = AppTheme.indigo;
+  }
+
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: bg,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: fg.withValues(alpha: 0.3), width: 1),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(
+        color: fg,
+        fontWeight: FontWeight.bold,
+        fontSize: 10,
+      ),
+    ),
+  );
+}
+
+void _showTransferDetailsDialog(BuildContext context, StockTransfer t) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => Container(
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.swap_horiz_rounded, color: AppTheme.primary, size: 24),
+              const SizedBox(width: 12),
+              const Text('Transfer Details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(context),
+              )
+            ],
+          ),
+          const Divider(),
+          const SizedBox(height: 16),
+          _detailItem(context, 'Medicine', t.medicineName, isBold: true),
+          _detailItem(context, 'Quantity Transferred', '${t.qty} units'),
+          Row(
+            children: [
+              Expanded(child: _detailItem(context, 'From Location', '')),
+              _buildLocationBadge(context, t.fromWarehouse),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _detailItem(context, 'To Location', '')),
+              _buildLocationBadge(context, t.toWarehouse),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _detailItem(context, 'Batch Number', t.batchNo ?? '-'),
+          _detailItem(context, 'Expiry Date', t.expiryDate != null ? '${t.expiryDate!.day}/${t.expiryDate!.month}/${t.expiryDate!.year}' : '-'),
+          _detailItem(context, 'Transferred At', '${t.transferredAt.day}/${t.transferredAt.month}/${t.transferredAt.year} ${t.transferredAt.hour.toString().padLeft(2, '0')}:${t.transferredAt.minute.toString().padLeft(2, '0')}'),
+          _detailItem(context, 'Transferred By', t.transferredBy.isEmpty ? 'System' : t.transferredBy),
+          _detailItem(context, 'Notes', t.note.isEmpty ? '-' : t.note, isItalic: true),
+        ],
+      ),
+    ),
+  );
+}
+
+void _showPurchaseDetailsDialog(BuildContext context, PurchaseRecord p) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => Container(
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.shopping_bag_outlined, color: Colors.teal, size: 24),
+              const SizedBox(width: 12),
+              const Text('Purchase Record', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(context),
+              )
+            ],
+          ),
+          const Divider(),
+          const SizedBox(height: 16),
+          _detailItem(context, 'Medicine', p.medicineName, isBold: true),
+          _detailItem(context, 'Quantity Purchased', '${p.qty} units'),
+          _detailItem(context, 'Purchase Price (per unit)', '₹${p.purchasePrice.toStringAsFixed(2)}'),
+          _detailItem(context, 'Total Amount', '₹${(p.qty * p.purchasePrice).toStringAsFixed(2)}', isBold: true),
+          Row(
+            children: [
+              Expanded(child: _detailItem(context, 'Target Location', '')),
+              _buildLocationBadge(context, p.location),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _detailItem(context, 'Supplier', p.supplier.isEmpty ? '-' : p.supplier),
+          _detailItem(context, 'Purchased At', '${p.purchasedAt.day}/${p.purchasedAt.month}/${p.purchasedAt.year} ${p.purchasedAt.hour.toString().padLeft(2, '0')}:${p.purchasedAt.minute.toString().padLeft(2, '0')}'),
+          _detailItem(context, 'Notes', p.note.isEmpty ? '-' : p.note, isItalic: true),
+        ],
+      ),
+    ),
+  );
+}
+
+Widget _detailItem(BuildContext context, String label, String value, {bool isBold = false, bool isItalic = false}) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 12.0),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label.toUpperCase(), style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 0.5)),
+        if (value.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
+              fontStyle: isItalic ? FontStyle.italic : FontStyle.normal,
+              color: context.textColor,
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+class _PurchaseHistoryTabAndroid extends StatefulWidget {
+  const _PurchaseHistoryTabAndroid();
+
+  @override
+  State<_PurchaseHistoryTabAndroid> createState() => _PurchaseHistoryTabAndroidState();
+}
+
+class _PurchaseHistoryTabAndroidState extends State<_PurchaseHistoryTabAndroid> {
+  String _search = '';
+  SalesFilter _activeFilter = SalesFilter.last7Days;
+
+  @override
+  Widget build(BuildContext context) {
+    final inv = context.watch<InventoryProvider>();
+    final allPurchases = inv.purchaseHistory;
+    final now = DateTime.now();
+
+    final filtered = allPurchases.where((p) {
+      final matchesSearch = p.medicineName.toLowerCase().contains(_search.toLowerCase()) ||
+          p.supplier.toLowerCase().contains(_search.toLowerCase());
+      if (!matchesSearch) return false;
+
+      final diff = now.difference(p.purchasedAt);
+      if (_activeFilter == SalesFilter.today) {
+        return diff.inDays == 0 && p.purchasedAt.day == now.day;
+      } else if (_activeFilter == SalesFilter.yesterday) {
+        final yesterday = now.subtract(const Duration(days: 1));
+        return p.purchasedAt.year == yesterday.year &&
+            p.purchasedAt.month == yesterday.month &&
+            p.purchasedAt.day == yesterday.day;
+      } else if (_activeFilter == SalesFilter.last7Days) {
+        return diff.inDays <= 7;
+      }
+      return true;
+    }).toList();
+
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: TextField(
+              onChanged: (v) => setState(() => _search = v),
+              decoration: InputDecoration(
+                hintText: 'Search purchase logs...',
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: context.bgColor.withValues(alpha: 0.5),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                _FilterChip(
+                  label: 'Today',
+                  isSelected: _activeFilter == SalesFilter.today,
+                  onSelected: () => setState(() => _activeFilter = SalesFilter.today),
+                ),
+                const SizedBox(width: 8),
+                _FilterChip(
+                  label: 'Yesterday',
+                  isSelected: _activeFilter == SalesFilter.yesterday,
+                  onSelected: () => setState(() => _activeFilter = SalesFilter.yesterday),
+                ),
+                const SizedBox(width: 8),
+                _FilterChip(
+                  label: 'Past Week',
+                  isSelected: _activeFilter == SalesFilter.last7Days,
+                  onSelected: () => setState(() => _activeFilter = SalesFilter.last7Days),
+                ),
+                const SizedBox(width: 8),
+                _FilterChip(
+                  label: 'All Time',
+                  isSelected: _activeFilter == SalesFilter.custom,
+                  onSelected: () => setState(() => _activeFilter = SalesFilter.custom),
+                ),
+              ],
+            ),
+          ),
+        ),
+        filtered.isEmpty
+            ? const SliverFillRemaining(
+                child: AppEmptyState(
+                  icon: Icons.shopping_bag_outlined,
+                  title: 'No purchase records found',
+                ),
+              )
+            : SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, i) {
+                      final p = filtered[i];
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        decoration: BoxDecoration(
+                          color: context.surfaceColor,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                              color: context.borderColor.withValues(alpha: 0.5)),
+                        ),
+                        child: InkWell(
+                          onTap: () => _showPurchaseDetailsDialog(context, p),
+                          borderRadius: BorderRadius.circular(16),
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                      color: Colors.teal.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(12)),
+                                  child: const Icon(
+                                      Icons.shopping_bag_outlined,
+                                      color: Colors.teal,
+                                      size: 20),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(p.medicineName,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 14)),
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        children: [
+                                          _buildLocationBadge(context, p.location),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                              '• ${p.purchasedAt.day}/${p.purchasedAt.month}',
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: context.textMutedColor,
+                                                  fontWeight: FontWeight.w600)),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text('+${p.qty}',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            color: Colors.teal,
+                                            fontSize: 16)),
+                                    Text('₹${(p.qty * p.purchasePrice).toStringAsFixed(0)}',
+                                        style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: context.textColor,
+                                            letterSpacing: 0.5)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                    childCount: filtered.length,
+                  ),
+                ),
+              ),
+        const SliverToBoxAdapter(child: SizedBox(height: 32)),
+      ],
     );
   }
 }

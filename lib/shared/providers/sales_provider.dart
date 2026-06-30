@@ -20,6 +20,22 @@ class SalesProvider extends ChangeNotifier {
   List<Sale> get sales => List.unmodifiable(_sales);
   List<Sale> get rawSales => List.unmodifiable(_rawSales);
 
+  double _todayRevenue = 0.0;
+  double _filteredRevenue = 0.0;
+  double _todayProcedureRevenue = 0.0;
+  double _filteredProcedureRevenue = 0.0;
+  double _todayConsultationRevenue = 0.0;
+  double _filteredConsultationRevenue = 0.0;
+  double _filteredCashRevenue = 0.0;
+  double _filteredUpiRevenue = 0.0;
+  double _filteredCardRevenue = 0.0;
+  double _todayCashRevenue = 0.0;
+  double _todayUpiRevenue = 0.0;
+  double _todayCardRevenue = 0.0;
+  int _todaySalesCount = 0;
+  double _totalRevenue = 0.0;
+  double _totalDiscount = 0.0;
+
   static const int pageSize = 30;
   int _loadedCount = 30;
 
@@ -117,135 +133,26 @@ class SalesProvider extends ChangeNotifier {
     load();
   }
 
-  double getConsultationTotal(Sale sale) {
-    try {
-      final list = jsonDecode(sale.itemsJson) as List;
-      return list
-          .map((e) => SaleItem.fromJson(e as Map<String, dynamic>))
-          .where((item) => item.isProcedure && item.medicineName.startsWith('Consultation Fee'))
-          .fold(0.0, (sum, item) => sum + item.lineTotal);
-    } catch (_) {
-      return 0.0;
-    }
-  }
+  double getConsultationTotal(Sale sale) => sale.consultationTotal;
+  double getProcedureTotal(Sale sale) => sale.procedureTotal;
+  double getMedicineTotal(Sale sale) => sale.medicineTotal;
 
-  double getProcedureTotal(Sale sale) {
-    try {
-      final list = jsonDecode(sale.itemsJson) as List;
-      return list
-          .map((e) => SaleItem.fromJson(e as Map<String, dynamic>))
-          .where((item) => item.isProcedure && !item.medicineName.startsWith('Consultation Fee'))
-          .fold(0.0, (sum, item) => sum + item.lineTotal);
-    } catch (_) {
-      return 0.0;
-    }
-  }
-
-  double getMedicineTotal(Sale sale) {
-    return sale.total - getConsultationTotal(sale) - getProcedureTotal(sale);
-  }
-
-  double get todayRevenue {
-    final today = DateTime.now();
-    return _sales
-        .where(
-          (s) =>
-              s.createdAt.year == today.year &&
-              s.createdAt.month == today.month &&
-              s.createdAt.day == today.day,
-        )
-        .fold(0.0, (sum, s) => sum + getMedicineTotal(s));
-  }
-
-  double get filteredRevenue => _sales.fold(0.0, (sum, s) => sum + getMedicineTotal(s));
-
-  double get todayProcedureRevenue {
-    final today = DateTime.now();
-    return _sales
-        .where(
-          (s) =>
-              s.createdAt.year == today.year &&
-              s.createdAt.month == today.month &&
-              s.createdAt.day == today.day &&
-              !s.isReturn,
-        )
-        .fold(0.0, (sum, s) => sum + getProcedureTotal(s));
-  }
-
-  double get filteredProcedureRevenue {
-    return _sales
-        .where((s) => !s.isReturn)
-        .fold(0.0, (sum, s) => sum + getProcedureTotal(s));
-  }
-
-  double get todayConsultationRevenue {
-    final today = DateTime.now();
-    return _sales
-        .where(
-          (s) =>
-              s.createdAt.year == today.year &&
-              s.createdAt.month == today.month &&
-              s.createdAt.day == today.day &&
-              !s.isReturn,
-        )
-        .fold(0.0, (sum, s) => sum + getConsultationTotal(s));
-  }
-
-  double get filteredConsultationRevenue {
-    return _sales
-        .where((s) => !s.isReturn)
-        .fold(0.0, (sum, s) => sum + getConsultationTotal(s));
-  }
-
-  double get filteredCashRevenue {
-    return _sales.fold(0.0, (sum, s) {
-      if (s.paymentMethod == 'mixed') return sum + s.cashAmount;
-      if (s.paymentMethod == 'cash') return sum + s.total;
-      return sum;
-    });
-  }
-
-  double get filteredUpiRevenue {
-    return _sales.fold(0.0, (sum, s) {
-      if (s.paymentMethod == 'mixed') return sum + s.upiAmount;
-      if (s.paymentMethod == 'upi') return sum + s.total;
-      return sum;
-    });
-  }
-
-  double get filteredCardRevenue {
-    return _sales.fold(0.0, (sum, s) {
-      if (s.paymentMethod == 'mixed') return sum + s.cardAmount;
-      if (s.paymentMethod == 'card') return sum + s.total;
-      return sum;
-    });
-  }
-
+  double get todayRevenue => _todayRevenue;
+  double get filteredRevenue => _filteredRevenue;
+  double get todayProcedureRevenue => _todayProcedureRevenue;
+  double get filteredProcedureRevenue => _filteredProcedureRevenue;
+  double get todayConsultationRevenue => _todayConsultationRevenue;
+  double get filteredConsultationRevenue => _filteredConsultationRevenue;
+  double get filteredCashRevenue => _filteredCashRevenue;
+  double get filteredUpiRevenue => _filteredUpiRevenue;
+  double get filteredCardRevenue => _filteredCardRevenue;
+  double get todayCashRevenue => _todayCashRevenue;
+  double get todayUpiRevenue => _todayUpiRevenue;
+  double get todayCardRevenue => _todayCardRevenue;
+  int get todaySalesCount => _todaySalesCount;
+  double get totalRevenue => _totalRevenue;
+  double get totalDiscount => _totalDiscount;
   int get filteredSalesCount => _sales.length;
-
-  double get todayCashRevenue {
-    return _sales.where((s) => _isToday(s.createdAt)).fold(0.0, (sum, s) {
-      if (s.paymentMethod == 'mixed') return sum + s.cashAmount;
-      if (s.paymentMethod == 'cash') return sum + s.total;
-      return sum;
-    });
-  }
-
-  double get todayUpiRevenue {
-    return _sales.where((s) => _isToday(s.createdAt)).fold(0.0, (sum, s) {
-      if (s.paymentMethod == 'mixed') return sum + s.upiAmount;
-      if (s.paymentMethod == 'upi') return sum + s.total;
-      return sum;
-    });
-  }
-
-  double get todayCardRevenue {
-    return _sales.where((s) => _isToday(s.createdAt)).fold(0.0, (sum, s) {
-      if (s.paymentMethod == 'mixed') return sum + s.cardAmount;
-      if (s.paymentMethod == 'card') return sum + s.total;
-      return sum;
-    });
-  }
 
   bool _isToday(DateTime dt) {
     final localDt = dt.toLocal();
@@ -255,20 +162,79 @@ class SalesProvider extends ChangeNotifier {
         localDt.day == today.day;
   }
 
-  int get todaySalesCount {
+  void _recalculateTotals() {
     final today = DateTime.now();
-    return _sales
-        .where(
-          (s) =>
-              s.createdAt.year == today.year &&
-              s.createdAt.month == today.month &&
-              s.createdAt.day == today.day,
-        )
-        .length;
-  }
+    
+    _todayRevenue = 0.0;
+    _filteredRevenue = 0.0;
+    _todayProcedureRevenue = 0.0;
+    _filteredProcedureRevenue = 0.0;
+    _todayConsultationRevenue = 0.0;
+    _filteredConsultationRevenue = 0.0;
+    _filteredCashRevenue = 0.0;
+    _filteredUpiRevenue = 0.0;
+    _filteredCardRevenue = 0.0;
+    _todayCashRevenue = 0.0;
+    _todayUpiRevenue = 0.0;
+    _todayCardRevenue = 0.0;
+    _todaySalesCount = 0;
+    _totalRevenue = 0.0;
+    _totalDiscount = 0.0;
 
-  double get totalRevenue => _sales.fold(0.0, (sum, s) => sum + getMedicineTotal(s));
-  double get totalDiscount => _sales.fold(0.0, (sum, s) => sum + s.discount);
+    for (final s in _sales) {
+      final isTodaySale = _isToday(s.createdAt);
+      
+      final med = s.medicineTotal;
+      final cons = s.consultationTotal;
+      final proc = s.procedureTotal;
+
+      _totalDiscount += s.discount;
+
+      if (isTodaySale) {
+        _todayRevenue += med;
+        _todaySalesCount++;
+        
+        if (!s.isReturn) {
+          _todayProcedureRevenue += proc;
+          _todayConsultationRevenue += cons;
+        }
+
+        // Today payment method breakdown
+        if (s.paymentMethod == 'mixed') {
+          _todayCashRevenue += s.cashAmount;
+          _todayUpiRevenue += s.upiAmount;
+          _todayCardRevenue += s.cardAmount;
+        } else if (s.paymentMethod == 'cash') {
+          _todayCashRevenue += s.total;
+        } else if (s.paymentMethod == 'upi') {
+          _todayUpiRevenue += s.total;
+        } else if (s.paymentMethod == 'card') {
+          _todayCardRevenue += s.total;
+        }
+      }
+
+      _filteredRevenue += med;
+      _totalRevenue += med;
+      
+      if (!s.isReturn) {
+        _filteredProcedureRevenue += proc;
+        _filteredConsultationRevenue += cons;
+      }
+
+      // Filtered payment method breakdown
+      if (s.paymentMethod == 'mixed') {
+        _filteredCashRevenue += s.cashAmount;
+        _filteredUpiRevenue += s.upiAmount;
+        _filteredCardRevenue += s.cardAmount;
+      } else if (s.paymentMethod == 'cash') {
+        _filteredCashRevenue += s.total;
+      } else if (s.paymentMethod == 'upi') {
+        _filteredUpiRevenue += s.total;
+      } else if (s.paymentMethod == 'card') {
+        _filteredCardRevenue += s.total;
+      }
+    }
+  }
 
   void load() {
     final box = ObjectBoxService.instance.saleBox;
@@ -296,6 +262,7 @@ class SalesProvider extends ChangeNotifier {
     _sales = query.find();
     _loadedCount = pageSize;
     query.close();
+    _recalculateTotals();
     
     // Debug log to compare sales details between Hub and Client
     final details = _sales.map((s) => '${s.invoiceNo}:total=${s.total}:isReturn=${s.isReturn}:isDispense=${s.isClinicalDispense}').toList();
@@ -328,6 +295,7 @@ class SalesProvider extends ChangeNotifier {
     _sales = query.find();
     _loadedCount = pageSize;
     query.close();
+    _recalculateTotals();
     notifyListeners();
   }
 
@@ -408,7 +376,8 @@ class SalesProvider extends ChangeNotifier {
   }
 
   List<Sale> getSalesForPatient(Patient patient) {
-    if (patient.id == 0 && patient.name.isEmpty) return [];
+    final name = patient.name.trim();
+    if (name.isEmpty) return [];
 
     // Robust matching using local ID, UHID, Phone, and Name:
     // Any strong matching signal is accepted:
@@ -417,9 +386,12 @@ class SalesProvider extends ChangeNotifier {
     // 3. OR same Phone number (when both have non-empty Phone)
     // 4. OR same Name, provided that there is no conflict on UHID or Phone
     
-    final allSales = ObjectBoxService.instance.saleBox.getAll();
-    return allSales.where((s) {
-      final nameMatch = s.patientName.trim().toLowerCase() == patient.name.trim().toLowerCase();
+    final matchingSales = ObjectBoxService.instance.saleBox
+        .query(Sale_.patientName.equals(name, caseSensitive: false))
+        .build()
+        .find();
+    return matchingSales.where((s) {
+      final nameMatch = s.patientName.trim().toLowerCase() == name.toLowerCase();
       if (!nameMatch) return false; // Name must always match to prevent collision
 
       final idMatch = s.patientId == patient.id;

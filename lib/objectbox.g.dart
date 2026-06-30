@@ -983,7 +983,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(10, 8864801482337884747),
       name: 'PurchaseRecord',
-      lastPropertyId: const obx_int.IdUid(8, 6654847863707300662),
+      lastPropertyId: const obx_int.IdUid(9, 7026462213810189379),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -1024,6 +1024,11 @@ final _entities = <obx_int.ModelEntity>[
         obx_int.ModelProperty(
             id: const obx_int.IdUid(8, 6654847863707300662),
             name: 'supplier',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(9, 7026462213810189379),
+            name: 'location',
             type: 9,
             flags: 0)
       ],
@@ -2693,7 +2698,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final medicineNameOffset = fbb.writeString(object.medicineName);
           final noteOffset = fbb.writeString(object.note);
           final supplierOffset = fbb.writeString(object.supplier);
-          fbb.startTable(9);
+          final locationOffset = fbb.writeString(object.location);
+          fbb.startTable(10);
           fbb.addInt64(0, object.id);
           fbb.addInt64(1, object.medicineId);
           fbb.addOffset(2, medicineNameOffset);
@@ -2702,6 +2708,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addInt64(5, object.purchasedAt.millisecondsSinceEpoch);
           fbb.addOffset(6, noteOffset);
           fbb.addOffset(7, supplierOffset);
+          fbb.addOffset(8, locationOffset);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -2721,6 +2728,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.Float64Reader().vTableGet(buffer, rootOffset, 12, 0);
           final purchasedAtParam = DateTime.fromMillisecondsSinceEpoch(
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 14, 0));
+          final locationParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 20, '');
           final noteParam = const fb.StringReader(asciiOptimization: true)
               .vTableGet(buffer, rootOffset, 16, '');
           final supplierParam = const fb.StringReader(asciiOptimization: true)
@@ -2732,6 +2741,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
               qty: qtyParam,
               purchasePrice: purchasePriceParam,
               purchasedAt: purchasedAtParam,
+              location: locationParam,
               note: noteParam,
               supplier: supplierParam);
 
@@ -4171,6 +4181,10 @@ class PurchaseRecord_ {
   /// See [PurchaseRecord.supplier].
   static final supplier =
       obx.QueryStringProperty<PurchaseRecord>(_entities[9].properties[7]);
+
+  /// See [PurchaseRecord.location].
+  static final location =
+      obx.QueryStringProperty<PurchaseRecord>(_entities[9].properties[8]);
 }
 
 /// [Sale] entity fields to define ObjectBox queries.

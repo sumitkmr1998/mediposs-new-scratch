@@ -1229,8 +1229,10 @@ class _BatchDetailsDialog extends StatelessWidget {
                                                     .read<InventoryProvider>();
                                                 final sync =
                                                     context.read<SyncService>();
+                                                final actor = context.read<AuthProvider>().currentUser;
                                                 inv.deleteBatch(m, b,
-                                                    syncService: sync);
+                                                    syncService: sync,
+                                                    actor: actor);
                                                 Navigator.pop(ctx);
                                               },
                                               child: const Text('Delete'),
@@ -1421,8 +1423,9 @@ class _EditBatchDialogState extends State<_EditBatchDialog> {
             onPressed: () {
               final inv = context.read<InventoryProvider>();
               final sync = context.read<SyncService>();
+              final actor = context.read<AuthProvider>().currentUser;
               inv.deleteBatch(widget.medicine, widget.batch!,
-                  syncService: sync);
+                  syncService: sync, actor: actor);
               Navigator.pop(ctx); // Close confirmation dialog
               Navigator.pop(context); // Close edit batch dialog
             },
@@ -1461,6 +1464,7 @@ class _EditBatchDialogState extends State<_EditBatchDialog> {
     final bulkClinicStock = int.tryParse(_bulkClinicCtrl.text) ?? 0;
     final bulkStoreStock = int.tryParse(_bulkStoreCtrl.text) ?? 0;
 
+    final actor = context.read<AuthProvider>().currentUser;
     if (widget.batch != null) {
       inv.updateBatchDetail(
         widget.medicine,
@@ -1472,6 +1476,7 @@ class _EditBatchDialogState extends State<_EditBatchDialog> {
         bulkClinicStock: bulkClinicStock,
         bulkStoreStock: bulkStoreStock,
         syncService: sync,
+        actor: actor,
       );
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Batch details updated')),
@@ -1485,6 +1490,7 @@ class _EditBatchDialogState extends State<_EditBatchDialog> {
         batchNo: batchNo,
         expiryDate: _expiryDate,
         syncService: sync,
+        actor: actor,
       );
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('New batch added successfully')),
@@ -1815,8 +1821,8 @@ class _TransferHistoryTabState extends State<_TransferHistoryTab> {
                                 cells: [
                                   DataCell(Text(dateStr, style: const TextStyle(fontSize: 13))),
                                   DataCell(Text(t.medicineName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14))),
-                                  DataCell(Text(getLocName(t.fromWarehouse), style: const TextStyle(fontSize: 13))),
-                                  DataCell(Text(getLocName(t.toWarehouse), style: const TextStyle(fontSize: 13))),
+                                  DataCell(_buildLocationBadge(context, t.fromWarehouse)),
+                                  DataCell(_buildLocationBadge(context, t.toWarehouse)),
                                   DataCell(Text(t.batchNo ?? '-', style: TextStyle(fontSize: 13, color: t.batchNo == null ? context.textMutedColor : null))),
                                   DataCell(Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -2744,6 +2750,7 @@ class _PurchaseHistoryTabState extends State<_PurchaseHistoryTab> {
                               DataColumn(label: Text('Supplier')),
                               DataColumn(label: Text('Purchase Price'), numeric: true),
                               DataColumn(label: Text('Qty'), numeric: true),
+                              DataColumn(label: Text('Target Location')),
                               DataColumn(label: Text('Notes')),
                               DataColumn(label: Text('Actions')),
                             ],
@@ -2771,6 +2778,7 @@ class _PurchaseHistoryTabState extends State<_PurchaseHistoryTab> {
                                     decoration: BoxDecoration(color: AppTheme.indigo.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
                                     child: Text('+${p.qty}', style: const TextStyle(color: AppTheme.indigo, fontWeight: FontWeight.bold)),
                                   )),
+                                  DataCell(_buildLocationBadge(context, p.location)),
                                   DataCell(SizedBox(
                                     width: 150,
                                     child: Text(p.note.isEmpty ? '-' : p.note, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: context.textMutedColor, fontStyle: FontStyle.italic)),
@@ -2807,14 +2815,65 @@ class _PurchaseHistoryTabState extends State<_PurchaseHistoryTab> {
   }
 }
 
+Widget _buildLocationBadge(BuildContext context, String loc) {
+  final cleanLoc = loc.trim().toLowerCase();
+  String text = loc;
+  Color bg = Colors.grey.withValues(alpha: 0.1);
+  Color fg = Colors.grey;
+
+  if (cleanLoc == 'clinic' || cleanLoc == 'main' || cleanLoc == 'hub' || cleanLoc == 'clinic dispense') {
+    text = 'Clinic Dispense';
+    bg = AppTheme.indigo.withValues(alpha: 0.1);
+    fg = AppTheme.indigo;
+  } else if (cleanLoc == 'store' || cleanLoc == 'store pos') {
+    text = 'Store POS';
+    bg = const Color(0xFF14B8A6).withValues(alpha: 0.1);
+    fg = const Color(0xFF14B8A6);
+  } else if (cleanLoc == 'bulkclinic' || cleanLoc == 'clinic bulk') {
+    text = 'Clinic Bulk';
+    bg = Colors.deepPurple.withValues(alpha: 0.1);
+    fg = Colors.deepPurple;
+  } else if (cleanLoc == 'bulkstore' || cleanLoc == 'store bulk') {
+    text = 'Store Bulk';
+    bg = Colors.teal.withValues(alpha: 0.1);
+    fg = Colors.teal;
+  } else if (cleanLoc.isEmpty) {
+    text = 'Hub/Clinic';
+    bg = AppTheme.indigo.withValues(alpha: 0.1);
+    fg = AppTheme.indigo;
+  }
+
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: bg,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: fg.withValues(alpha: 0.3), width: 1),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(
+        color: fg,
+        fontWeight: FontWeight.bold,
+        fontSize: 12,
+      ),
+    ),
+  );
+}
+
 void _showDeleteConfirm(
     BuildContext context, InventoryProvider inv, PurchaseRecord p) {
+  final loc = p.location;
+  final locationName = loc == 'store' ? 'Store POS' :
+                       loc == 'bulkClinic' ? 'Bulk Clinic' :
+                       loc == 'bulkStore' ? 'Bulk Store' :
+                       loc == 'clinic' ? 'Clinic Dispense' : 'Hub/Clinic';
   showDialog(
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text('Delete Purchase Record?'),
       content: Text(
-          'This will also deduct ${p.qty} from the Hub stock for ${p.medicineName}. Are you sure?'),
+          'This will also deduct ${p.qty} from the $locationName stock for ${p.medicineName}. Are you sure?'),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx),
@@ -2823,7 +2882,8 @@ void _showDeleteConfirm(
         FilledButton(
           style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
           onPressed: () {
-            inv.deletePurchase(p, syncService: context.read<SyncService>());
+            final actor = context.read<AuthProvider>().currentUser;
+            inv.deletePurchase(p, syncService: context.read<SyncService>(), actor: actor);
             Navigator.pop(ctx);
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text('Record deleted and stock reverted'),
@@ -2858,13 +2918,18 @@ class _EditPurchaseDialogState extends State<_EditPurchaseDialog> {
   @override
   Widget build(BuildContext context) {
     final inv = context.watch<InventoryProvider>();
+    final loc = widget.purchase.location;
+    final locationName = loc == 'store' ? 'Store POS' :
+                         loc == 'bulkClinic' ? 'Bulk Clinic' :
+                         loc == 'bulkStore' ? 'Bulk Store' :
+                         loc == 'clinic' ? 'Clinic Dispense' : 'Hub/Clinic';
     return AlertDialog(
       title: Text('Edit Purchase: ${widget.purchase.medicineName}'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
-              'Updating the quantity will automatically adjust the Hub stock level by the difference.'),
+          Text(
+              'Updating the quantity will automatically adjust the $locationName stock level by the difference.'),
           const SizedBox(height: 20),
           TextField(
             controller: _qtyCtrl,
@@ -2886,8 +2951,9 @@ class _EditPurchaseDialogState extends State<_EditPurchaseDialog> {
           onPressed: () {
             final qty = int.tryParse(_qtyCtrl.text) ?? 0;
             if (qty > 0) {
+              final actor = context.read<AuthProvider>().currentUser;
               inv.updatePurchase(widget.purchase, qty,
-                  syncService: context.read<SyncService>());
+                  syncService: context.read<SyncService>(), actor: actor);
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                 content: Text('Record updated and stock adjusted'),
@@ -3776,15 +3842,71 @@ class _StockReportRow extends StatefulWidget {
 class _StockReportRowState extends State<_StockReportRow> {
   bool _isHovered = false;
 
+  void _showContextMenu(
+    BuildContext context,
+    TapDownDetails details,
+    Medicine m,
+    WarehouseProvider wh,
+    AuthProvider auth,
+  ) {
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+    showMenu(
+      context: context,
+      position: RelativeRect.fromRect(
+        details.globalPosition & const Size(40, 40),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        PopupMenuItem(
+          child: const ListTile(
+            leading: Icon(Icons.edit, color: AppTheme.primary),
+            title: Text('Edit Medicine'),
+          ),
+          onTap: () {
+            Future.delayed(Duration.zero, () {
+              MedicineDialog.show(context, medicine: m);
+            });
+          },
+        ),
+        PopupMenuItem(
+          child: const ListTile(
+            leading: Icon(Icons.info_outline, color: AppTheme.primary),
+            title: Text('Batch Details'),
+          ),
+          onTap: () {
+            Future.delayed(Duration.zero, () {
+              showDialog(
+                context: context,
+                builder: (_) => _BatchDetailsDialog(
+                  medicine: m,
+                  wh: wh,
+                  canTransfer: auth.hasWarehouseWriteAccess,
+                ),
+              );
+            });
+          },
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final m = widget.medicine;
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        curve: Curves.easeInOut,
+    final wh = context.read<WarehouseProvider>();
+    final auth = context.watch<AuthProvider>();
+
+    return GestureDetector(
+      onSecondaryTapDown: (details) {
+        _showContextMenu(context, details, m, wh, auth);
+      },
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeInOut,
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
@@ -3832,6 +3954,42 @@ class _StockReportRowState extends State<_StockReportRow> {
                     m.category.isEmpty ? 'General' : m.category,
                     style: TextStyle(color: context.textMutedColor, fontSize: 11),
                   ),
+                  if (m.batches.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: m.batches.map((b) {
+                        final bNo = b.batchNo ?? 'No Batch';
+                        final totalBatchStock = b.mainStock + b.storeStock + b.bulkClinicStock + b.bulkStoreStock;
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: context.borderColor.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            '$bNo (Exp: ${b.expiryDate.day}/${b.expiryDate.month}/${b.expiryDate.year}) ($totalBatchStock)',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                              color: context.textColor.withValues(alpha: 0.8),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'No Batches',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontStyle: FontStyle.italic,
+                        color: context.textMutedColor,
+                      ),
+                    ),
+                  ]
                 ],
               ),
             ),
@@ -3856,7 +4014,7 @@ class _StockReportRowState extends State<_StockReportRow> {
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
-                      color: AppTheme.indigo,
+                      color: Colors.deepPurple,
                     ),
                   ),
                   Text(
@@ -3897,9 +4055,37 @@ class _StockReportRowState extends State<_StockReportRow> {
                 ],
               ),
             ),
+            const SizedBox(width: 12),
+            // Total Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    'TOTAL STOCK',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      color: context.textMutedColor,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${m.totalStock} ${m.unit}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      color: context.textColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

@@ -86,12 +86,8 @@ class _LoginWindowsState extends State<LoginWindows> {
         final errorMsg = await sync.login(_selectedUser!.name, _pin);
 
         if (errorMsg == null && mounted) {
-          // Auth passed on Hub, now pull the full universe of data!
-          await sync.pullMedicines();
-          await sync.pullPatients();
-          await sync.pullDoctors();
-          await sync.pullAppointments();
-          await sync.pullSales();
+          // Auth passed on Hub, trigger incremental sync
+          await sync.syncAll(isFullSync: false);
 
           if (!mounted) return;
 

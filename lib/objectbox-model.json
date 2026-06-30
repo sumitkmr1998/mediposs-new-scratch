@@ -952,7 +952,7 @@
     },
     {
       "id": "10:8864801482337884747",
-      "lastPropertyId": "8:6654847863707300662",
+      "lastPropertyId": "9:7026462213810189379",
       "name": "PurchaseRecord",
       "properties": [
         {
@@ -994,6 +994,11 @@
         {
           "id": "8:6654847863707300662",
           "name": "supplier",
+          "type": 9
+        },
+        {
+          "id": "9:7026462213810189379",
+          "name": "location",
           "type": 9
         }
       ],

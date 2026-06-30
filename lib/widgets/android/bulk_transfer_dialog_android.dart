@@ -8,11 +8,13 @@ import '../../shared/services/sync_service.dart';
 import '../../theme/app_theme.dart';
 
 class _BulkTransferItem {
+  final Medicine medicine;
   int qty;
   MedicineBatch? selectedBatch;
   String note;
   
   _BulkTransferItem({
+    required this.medicine,
     this.qty = 1,
     this.selectedBatch,
     this.note = '',
@@ -77,6 +79,7 @@ class _AndroidBulkTransferDialogState extends State<AndroidBulkTransferDialog> {
       }
       
       _selectedItems[m.id] = _BulkTransferItem(
+        medicine: m,
         qty: 1,
         selectedBatch: batch,
       );
@@ -255,8 +258,8 @@ class _AndroidBulkTransferDialogState extends State<AndroidBulkTransferDialog> {
                       itemCount: _selectedItems.length,
                       itemBuilder: (ctx, i) {
                         final id = _selectedItems.keys.elementAt(i);
-                        final m = inv.medicines.firstWhere((e) => e.id == id);
                         final item = _selectedItems[id]!;
+                        final m = item.medicine;
                         final availableBatches = m.batches.where((b) => _getStock(b, _fromLoc) > 0).toList();
                         
                         final maxQty = item.selectedBatch != null
@@ -381,7 +384,7 @@ class _AndroidBulkTransferDialogState extends State<AndroidBulkTransferDialog> {
                               for (final entry in _selectedItems.entries) {
                                 final mId = entry.key;
                                 final item = entry.value;
-                                final m = inv.medicines.firstWhere((e) => e.id == mId);
+                                final m = item.medicine;
                                 if (item.qty <= 0) continue;
                                 
                                 final maxAvail = item.selectedBatch != null

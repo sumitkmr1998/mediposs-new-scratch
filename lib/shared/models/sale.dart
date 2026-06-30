@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:objectbox/objectbox.dart';
 import '../utils/date_helper.dart';
 
@@ -122,6 +123,47 @@ class Sale {
         opdInvoiceNo: json['opdInvoiceNo'] ?? '',
         itemsJson: json['itemsJson'] ?? '[]',
       );
+
+  @Transient()
+  double? _cachedConsultationTotal;
+  @Transient()
+  double? _cachedProcedureTotal;
+  @Transient()
+  double? _cachedMedicineTotal;
+
+  double get consultationTotal {
+    if (_cachedConsultationTotal != null) return _cachedConsultationTotal!;
+    try {
+      final list = jsonDecode(itemsJson) as List;
+      _cachedConsultationTotal = list
+          .map((e) => SaleItem.fromJson(e as Map<String, dynamic>))
+          .where((item) => item.isProcedure && item.medicineName.startsWith('Consultation Fee'))
+          .fold<double>(0.0, (sum, item) => sum + item.lineTotal);
+    } catch (_) {
+      _cachedConsultationTotal = 0.0;
+    }
+    return _cachedConsultationTotal!;
+  }
+
+  double get procedureTotal {
+    if (_cachedProcedureTotal != null) return _cachedProcedureTotal!;
+    try {
+      final list = jsonDecode(itemsJson) as List;
+      _cachedProcedureTotal = list
+          .map((e) => SaleItem.fromJson(e as Map<String, dynamic>))
+          .where((item) => item.isProcedure && !item.medicineName.startsWith('Consultation Fee'))
+          .fold<double>(0.0, (sum, item) => sum + item.lineTotal);
+    } catch (_) {
+      _cachedProcedureTotal = 0.0;
+    }
+    return _cachedProcedureTotal!;
+  }
+
+  double get medicineTotal {
+    if (_cachedMedicineTotal != null) return _cachedMedicineTotal!;
+    _cachedMedicineTotal = total - consultationTotal - procedureTotal;
+    return _cachedMedicineTotal!;
+  }
 }
 
 // Transient model (not an ObjectBox entity)
