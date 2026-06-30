@@ -16,9 +16,17 @@ enum SalesFilter { today, yesterday, last7Days, allTime, custom }
 
 class SalesProvider extends ChangeNotifier {
   List<Sale> _sales = [];
-  List<Sale> _rawSales = [];
+  List<Sale>? _rawSales;
   List<Sale> get sales => List.unmodifiable(_sales);
-  List<Sale> get rawSales => List.unmodifiable(_rawSales);
+  List<Sale> get rawSales {
+    if (_rawSales == null) {
+      final box = ObjectBoxService.instance.saleBox;
+      final rawQuery = box.query().order(Sale_.createdAt, flags: Order.descending).build();
+      _rawSales = rawQuery.find();
+      rawQuery.close();
+    }
+    return List.unmodifiable(_rawSales!);
+  }
 
   double _todayRevenue = 0.0;
   double _filteredRevenue = 0.0;
@@ -237,11 +245,8 @@ class SalesProvider extends ChangeNotifier {
   }
 
   void load() {
+    _rawSales = null; // Invalidate lazy cache
     final box = ObjectBoxService.instance.saleBox;
-
-    final rawQuery = box.query().order(Sale_.createdAt, flags: Order.descending).build();
-    _rawSales = rawQuery.find();
-    rawQuery.close();
 
     Query<Sale> query;
     if (_customStart != null && _customEnd != null) {
@@ -266,9 +271,7 @@ class SalesProvider extends ChangeNotifier {
     
     // Debug log to compare sales details between Hub and Client
     final details = _sales.map((s) => '${s.invoiceNo}:total=${s.total}:isReturn=${s.isReturn}:isDispense=${s.isClinicalDispense}').toList();
-    final rawDetails = _rawSales.map((s) => '${s.invoiceNo}:total=${s.total}:isReturn=${s.isReturn}:createdAt=${s.createdAt.toIso8601String()}').toList();
     debugPrint('SalesProvider: Loaded ${_sales.length} today sales. Details: $details');
-    debugPrint('SalesProvider: Total raw sales count: ${_rawSales.length}. Raw details: $rawDetails');
     
     notifyListeners();
   }

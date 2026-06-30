@@ -139,7 +139,7 @@ class SyncService extends ChangeNotifier {
     }
   }
 
-  Future<String?> login(String name, String pin) async {
+  Future<String?> login(String name, String pin, {bool isAutoLogin = false}) async {
     // 1. Cloud Mode / Offline Auth
     if (_isCloudMode || _hubIp == null) {
       debugPrint('SyncService: Attempting Cloud/Offline login for $name...');
@@ -203,7 +203,12 @@ class SyncService extends ChangeNotifier {
         // Fetch latest settings and users upon login
         await pullSettings();
         await pullUsers();
-        await syncAll();
+        if (!isAutoLogin) {
+          // Run syncAll asynchronously in the background so the user can log in instantly
+          syncAll().then((_) {
+            debugPrint('SyncService: Background syncAll on login completed.');
+          });
+        }
 
         notifyListeners();
         return null; // success
@@ -313,10 +318,9 @@ class SyncService extends ChangeNotifier {
       final savedPin = settings.autoLoginPin;
       final savedName = settings.autoLoginName;
       if (savedPin != null && savedPin.isNotEmpty && savedName != null) {
-        final loginErr = await login(savedName, savedPin);
+        final loginErr = await login(savedName, savedPin, isAutoLogin: true);
         if (loginErr == null) {
           debugPrint('SyncService: Auto-login JWT obtained successfully.');
-          await syncAll();
         } else {
           debugPrint('SyncService: Auto-login failed: $loginErr');
         }
@@ -680,147 +684,200 @@ class SyncService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      var url = Uri.parse('$_baseUrl/api/medicines');
-      if (since != null) {
-        url = url.replace(queryParameters: {'since': since});
+      final box = ObjectBoxService.instance.medicineBox;
+      final allLocal = box.getAll();
+
+      // Build fast lookup maps
+      final Map<String, List<Medicine>> barcodeMap = {};
+      final Map<String, List<Medicine>> nameMap = {};
+      for (final m in allLocal) {
+        final bc = m.barcode.trim();
+        if (bc.isNotEmpty) {
+          barcodeMap.putIfAbsent(bc, () => []).add(m);
+        }
+        final nm = m.name.trim().toLowerCase();
+        if (nm.isNotEmpty) {
+          nameMap.putIfAbsent(nm, () => []).add(m);
+        }
       }
-      final res = await http.get(url, headers: _authHeaders());
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body)['data'] as List;
-        final box = ObjectBoxService.instance.medicineBox;
-        final allLocal = box.getAll();
 
-        // Natural key: barcode (if non-empty), else name.
-        // This avoids forcing Hub IDs which can exceed ObjectBox sequence counter on Android.
-        final hubBarcodes = <String>{};
-        final hubNames = <String>{};
-        final claimedLocalIds = <int>{};
+      final hubBarcodes = <String>{};
+      final hubNames = <String>{};
+      final claimedLocalIds = <int>{};
+      final List<int> redundantIdsToRemove = [];
 
-        for (final item in data) {
-          final barcode = (item['barcode'] as String? ?? '').trim();
-          final name = (item['name'] as String? ?? '').trim();
-          if (barcode.isNotEmpty) hubBarcodes.add(barcode);
-          hubNames.add(name);
+      int offset = 0;
+      const int limit = 500;
+      bool hasMore = true;
+      int? latestServerTime;
 
-          final updatedAt =
-              DateHelper.parseDateTime(item['updatedAt']) ?? DateTime.now();
+      while (hasMore) {
+        var url = Uri.parse('$_baseUrl/api/medicines').replace(
+          queryParameters: {
+            if (since != null) 'since': since,
+            'limit': '$limit',
+            'offset': '$offset',
+          },
+        );
+        final res = await http.get(url, headers: _authHeaders());
+        if (res.statusCode == 200) {
+          final payload = jsonDecode(res.body);
+          final data = payload['data'] as List;
+          latestServerTime = payload['serverTime'] as int?;
 
-          // Find existing entries using normalized natural keys
-          // We use list find to identify ALL matches so we can deduplicate if needed
-          final matches = allLocal.where((m) {
-            if (claimedLocalIds.contains(m.id)) return false;
-            
-            final matchesBarcode = barcode.isNotEmpty && m.barcode.trim() == barcode;
-            final matchesName = m.name.trim().toLowerCase() == name.toLowerCase();
-            
-            return matchesBarcode || matchesName;
-          }).toList();
+          final List<Medicine> medicinesToPut = [];
 
-          Medicine? existing = matches.firstOrNull;
+          for (final item in data) {
+            final barcode = (item['barcode'] as String? ?? '').trim();
+            final name = (item['name'] as String? ?? '').trim();
+            if (barcode.isNotEmpty) hubBarcodes.add(barcode);
+            hubNames.add(name);
 
-          if (existing != null) {
-            // Update the primary record
-            existing
-              ..name = name
-              ..barcode = barcode
-              ..category = item['category'] ?? 'General'
-              ..unit = item['unit'] ?? 'Pcs'
-              ..purchasePrice = (item['purchasePrice'] as num).toDouble()
-              ..sellingPrice = (item['sellingPrice'] as num).toDouble()
-              ..mainStock = item['mainStock'] ?? 0
-              ..storeStock = item['storeStock'] ?? 0
-              ..bulkClinicStock = item['bulkClinicStock'] ?? 0
-              ..bulkStoreStock = item['bulkStoreStock'] ?? 0
-              ..lowStockThreshold = item['lowStockThreshold'] ?? 10
-              ..isScheduleH1 = item['isScheduleH1'] ?? false
-              ..updatedAt = updatedAt;
+            final updatedAt =
+                DateHelper.parseDateTime(item['updatedAt']) ?? DateTime.now();
 
-            // Update Batches
-            if (item['batches'] != null) {
-              existing.batches.clear();
-              for (var bItem in item['batches']) {
-                existing.batches.add(MedicineBatch(
-                  id: 0,
-                  batchNo: bItem['batchNo'] ?? '',
-                  expiryDate: DateHelper.parseDateTime(bItem['expiryDate']) ?? DateTime.now(),
-                  mainStock: bItem['mainStock'] ?? 0,
-                  storeStock: bItem['storeStock'] ?? 0,
-                  bulkClinicStock: bItem['bulkClinicStock'] ?? 0,
-                  bulkStoreStock: bItem['bulkStoreStock'] ?? 0,
-                ));
+            // Find matches using fast lookup maps
+            final matches = <Medicine>[];
+            if (barcode.isNotEmpty && barcodeMap.containsKey(barcode)) {
+              for (final m in barcodeMap[barcode]!) {
+                if (!claimedLocalIds.contains(m.id)) {
+                  matches.add(m);
+                }
+              }
+            }
+            final nameLower = name.toLowerCase();
+            if (nameLower.isNotEmpty && nameMap.containsKey(nameLower)) {
+              for (final m in nameMap[nameLower]!) {
+                if (!claimedLocalIds.contains(m.id) && !matches.any((em) => em.id == m.id)) {
+                  matches.add(m);
+                }
               }
             }
 
-            box.put(existing);
-            claimedLocalIds.add(existing.id);
+            Medicine? existing = matches.firstOrNull;
 
-            // DELETE Redundant records if multiple found locally
-            if (matches.length > 1) {
-              for (int j = 1; j < matches.length; j++) {
-                final redundant = matches[j];
-                debugPrint('SyncService: Deduplicating redundant locally: ${redundant.name} (ID: ${redundant.id})');
-                box.remove(redundant.id);
+            if (existing != null) {
+              existing
+                ..name = name
+                ..barcode = barcode
+                ..category = item['category'] ?? 'General'
+                ..unit = item['unit'] ?? 'Pcs'
+                ..purchasePrice = (item['purchasePrice'] as num).toDouble()
+                ..sellingPrice = (item['sellingPrice'] as num).toDouble()
+                ..mainStock = item['mainStock'] ?? 0
+                ..storeStock = item['storeStock'] ?? 0
+                ..bulkClinicStock = item['bulkClinicStock'] ?? 0
+                ..bulkStoreStock = item['bulkStoreStock'] ?? 0
+                ..lowStockThreshold = item['lowStockThreshold'] ?? 10
+                ..isScheduleH1 = item['isScheduleH1'] ?? false
+                ..updatedAt = updatedAt;
+
+              if (item['batches'] != null) {
+                existing.batches.clear();
+                for (var bItem in item['batches']) {
+                  existing.batches.add(MedicineBatch(
+                    id: 0,
+                    batchNo: bItem['batchNo'] ?? '',
+                    expiryDate: DateHelper.parseDateTime(bItem['expiryDate']) ?? DateTime.now(),
+                    mainStock: bItem['mainStock'] ?? 0,
+                    storeStock: bItem['storeStock'] ?? 0,
+                    bulkClinicStock: bItem['bulkClinicStock'] ?? 0,
+                    bulkStoreStock: bItem['bulkStoreStock'] ?? 0,
+                  ));
+                }
+              }
+
+              medicinesToPut.add(existing);
+              claimedLocalIds.add(existing.id);
+
+              // Deduplicate redundant local copies
+              if (matches.length > 1) {
+                for (int j = 1; j < matches.length; j++) {
+                  final redundant = matches[j];
+                  debugPrint('SyncService: Deduplicating redundant locally: ${redundant.name} (ID: ${redundant.id})');
+                  redundantIdsToRemove.add(redundant.id);
+                }
+              }
+            } else {
+              final m = Medicine(
+                id: 0,
+                name: name,
+                barcode: barcode,
+                category: item['category'] ?? 'General',
+                unit: item['unit'] ?? 'Pcs',
+                purchasePrice: (item['purchasePrice'] as num).toDouble(),
+                sellingPrice: (item['sellingPrice'] as num).toDouble(),
+                mainStock: item['mainStock'] ?? 0,
+                storeStock: item['storeStock'] ?? 0,
+                bulkClinicStock: item['bulkClinicStock'] ?? 0,
+                bulkStoreStock: item['bulkStoreStock'] ?? 0,
+                lowStockThreshold: item['lowStockThreshold'] ?? 10,
+                isScheduleH1: item['isScheduleH1'] ?? false,
+                updatedAt: updatedAt,
+              );
+              if (item['batches'] != null) {
+                for (var bItem in item['batches']) {
+                  m.batches.add(MedicineBatch(
+                    id: 0,
+                    batchNo: bItem['batchNo'] ?? '',
+                    expiryDate: DateHelper.parseDateTime(bItem['expiryDate']) ?? DateTime.now(),
+                    mainStock: bItem['mainStock'] ?? 0,
+                    storeStock: bItem['storeStock'] ?? 0,
+                    bulkClinicStock: bItem['bulkClinicStock'] ?? 0,
+                    bulkStoreStock: bItem['bulkStoreStock'] ?? 0,
+                  ));
+                }
+              }
+              medicinesToPut.add(m);
+            }
+          }
+
+          // Execute batch put for all updated/new medicines in this chunk
+          if (medicinesToPut.isNotEmpty) {
+            box.putMany(medicinesToPut);
+            for (final m in medicinesToPut) {
+              if (m.id != 0) {
+                claimedLocalIds.add(m.id);
               }
             }
-          } else {
-            final m = Medicine(
-              id: 0, 
-              name: name,
-              barcode: barcode,
-              category: item['category'] ?? 'General',
-              unit: item['unit'] ?? 'Pcs',
-              purchasePrice: (item['purchasePrice'] as num).toDouble(),
-              sellingPrice: (item['sellingPrice'] as num).toDouble(),
-              mainStock: item['mainStock'] ?? 0,
-              storeStock: item['storeStock'] ?? 0,
-              bulkClinicStock: item['bulkClinicStock'] ?? 0,
-              bulkStoreStock: item['bulkStoreStock'] ?? 0,
-              lowStockThreshold: item['lowStockThreshold'] ?? 10,
-              isScheduleH1: item['isScheduleH1'] ?? false,
-              updatedAt: updatedAt,
-            );
-            if (item['batches'] != null) {
-              for (var bItem in item['batches']) {
-                m.batches.add(MedicineBatch(
-                  id: 0,
-                  batchNo: bItem['batchNo'] ?? '',
-                  expiryDate: DateHelper.parseDateTime(bItem['expiryDate']) ?? DateTime.now(),
-                  mainStock: bItem['mainStock'] ?? 0,
-                  storeStock: bItem['storeStock'] ?? 0,
-                  bulkClinicStock: bItem['bulkClinicStock'] ?? 0,
-                  bulkStoreStock: bItem['bulkStoreStock'] ?? 0,
-                ));
-              }
-            }
-            int newId = box.put(m);
-            claimedLocalIds.add(newId);
+          }
+
+          offset += limit;
+          hasMore = data.length == limit;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      // Remove redundant medicines
+      if (redundantIdsToRemove.isNotEmpty) {
+        box.removeMany(redundantIdsToRemove);
+      }
+
+      // Cleanup phase: Only run during full sync (since == null)
+      if (since == null) {
+        final toRemoveIds = <int>[];
+        for (final m in allLocal) {
+          if (claimedLocalIds.contains(m.id)) continue;
+
+          final bc = m.barcode.trim();
+          final matchesBar = bc.isNotEmpty && hubBarcodes.contains(bc);
+          final matchesName = hubNames.any(
+              (hn) => hn.toLowerCase() == m.name.trim().toLowerCase());
+
+          if (!matchesBar && !matchesName) {
+            debugPrint('SyncService: Removing orphaned local medicine: ${m.name}');
+            toRemoveIds.add(m.id);
           }
         }
-        // Cleanup phase: Only run during full sync (since == null)
-        // If it's a delta sync, we don't have the full list of hub items
-        if (since == null) {
-          for (final m in allLocal) {
-            if (claimedLocalIds.contains(m.id)) continue;
-
-            final bc = m.barcode.trim();
-            final matchesBar = bc.isNotEmpty && hubBarcodes.contains(bc);
-            final matchesName = hubNames.any(
-                (hn) => hn.toLowerCase() == m.name.trim().toLowerCase());
-
-            if (!matchesBar && !matchesName) {
-              debugPrint(
-                  'SyncService: Removing orphaned local medicine: ${m.name}');
-              box.remove(m.id);
-            }
-          }
+        if (toRemoveIds.isNotEmpty) {
+          box.removeMany(toRemoveIds);
         }
-        debugPrint(
-            'SyncService: pullMedicines synced ${data.length} medicines.');
-        return jsonDecode(res.body)['serverTime'] as int?;
       }
+      debugPrint('SyncService: pullMedicines synced successfully.');
+      return latestServerTime;
     } catch (e) {
       debugPrint('pullMedicines err: $e');
-      // Fallback to Cloud if enabled
       if (since == null || _isCloudMode) {
         await syncAllFromCloud();
       }
@@ -835,61 +892,98 @@ class SyncService extends ChangeNotifier {
     if (!_isConnected || _jwtToken == null) return null;
     debugPrint('SyncService: pullPatients starting (since=$since)...');
     try {
-      var url = Uri.parse('$_baseUrl/api/patients');
-      if (since != null) {
-        url = url.replace(queryParameters: {'since': since});
-      }
-      final res = await http.get(url, headers: _authHeaders());
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body)['data'] as List;
-        final box = ObjectBoxService.instance.patientBox;
-        final allLocal = box.getAll();
+      final box = ObjectBoxService.instance.patientBox;
+      final allLocal = box.getAll();
 
-        // Natural key: UHID (globally unique across Hub and Android)
-        final hubUhids = <String>{};
-        for (final item in data) {
-          final uhid = item['uhid'] as String? ?? '';
-          if (uhid.isNotEmpty) hubUhids.add(uhid);
-          final serverTime =
-              DateHelper.parseDateTime(item['createdAt']) ?? DateTime.now();
-
-          final existing = allLocal.where((p) => p.uhid == uhid).firstOrNull;
-          if (existing != null) {
-            existing
-              ..uhid = uhid
-              ..name = item['name'] ?? ''
-              ..phone = item['phone'] ?? ''
-              ..gender = item['gender'] ?? 'Other'
-              ..address = item['address'] ?? ''
-              ..bloodGroup = item['bloodGroup'] ?? ''
-              ..age = item['age'] ?? 0
-              ..createdAt = serverTime;
-            box.put(existing);
-          } else {
-            box.put(Patient(
-              id: 0, // Auto-assign — never force Hub IDs
-              uhid: uhid,
-              name: item['name'] ?? '',
-              phone: item['phone'] ?? '',
-              gender: item['gender'] ?? 'Other',
-              address: item['address'] ?? '',
-              bloodGroup: item['bloodGroup'] ?? '',
-              age: item['age'] ?? 0,
-              createdAt: serverTime,
-            ));
-          }
+      // Build fast lookup map
+      final Map<String, Patient> uhidMap = {};
+      for (final p in allLocal) {
+        final uh = p.uhid.trim();
+        if (uh.isNotEmpty) {
+          uhidMap[uh] = p;
         }
-        // Remove patients deleted on Hub (Full Sync only)
-        if (since == null) {
-          for (final p in allLocal) {
-            if (p.uhid.isNotEmpty && !hubUhids.contains(p.uhid)) {
-              box.remove(p.id);
+      }
+
+      final hubUhids = <String>{};
+      int offset = 0;
+      const int limit = 500;
+      bool hasMore = true;
+      int? latestServerTime;
+
+      while (hasMore) {
+        var url = Uri.parse('$_baseUrl/api/patients').replace(
+          queryParameters: {
+            if (since != null) 'since': since,
+            'limit': '$limit',
+            'offset': '$offset',
+          },
+        );
+        final res = await http.get(url, headers: _authHeaders());
+        if (res.statusCode == 200) {
+          final payload = jsonDecode(res.body);
+          final data = payload['data'] as List;
+          latestServerTime = payload['serverTime'] as int?;
+
+          final List<Patient> patientsToPut = [];
+
+          for (final item in data) {
+            final uhid = item['uhid'] as String? ?? '';
+            if (uhid.isNotEmpty) hubUhids.add(uhid);
+            final serverTime =
+                DateHelper.parseDateTime(item['createdAt']) ?? DateTime.now();
+
+            final existing = uhid.isNotEmpty ? uhidMap[uhid] : null;
+            if (existing != null) {
+              existing
+                ..uhid = uhid
+                ..name = item['name'] ?? ''
+                ..phone = item['phone'] ?? ''
+                ..gender = item['gender'] ?? 'Other'
+                ..address = item['address'] ?? ''
+                ..bloodGroup = item['bloodGroup'] ?? ''
+                ..age = item['age'] ?? 0
+                ..createdAt = serverTime;
+              patientsToPut.add(existing);
+            } else {
+              patientsToPut.add(Patient(
+                id: 0, // Auto-assign — never force Hub IDs
+                uhid: uhid,
+                name: item['name'] ?? '',
+                phone: item['phone'] ?? '',
+                gender: item['gender'] ?? 'Other',
+                address: item['address'] ?? '',
+                bloodGroup: item['bloodGroup'] ?? '',
+                age: item['age'] ?? 0,
+                createdAt: serverTime,
+              ));
             }
           }
+
+          if (patientsToPut.isNotEmpty) {
+            box.putMany(patientsToPut);
+          }
+
+          offset += limit;
+          hasMore = data.length == limit;
+        } else {
+          hasMore = false;
         }
-        debugPrint('SyncService: pullPatients synced ${data.length} patients.');
-        return jsonDecode(res.body)['serverTime'] as int?;
       }
+
+      // Remove patients deleted on Hub (Full Sync only)
+      if (since == null) {
+        final toRemoveIds = <int>[];
+        for (final p in allLocal) {
+          if (p.uhid.isNotEmpty && !hubUhids.contains(p.uhid)) {
+            toRemoveIds.add(p.id);
+          }
+        }
+        if (toRemoveIds.isNotEmpty) {
+          box.removeMany(toRemoveIds);
+        }
+      }
+      debugPrint('SyncService: pullPatients synced successfully.');
+      return latestServerTime;
     } catch (e) {
       debugPrint('pullPatients err: $e');
       if (since == null || _isCloudMode) {
@@ -910,25 +1004,45 @@ class SyncService extends ChangeNotifier {
         final box = ObjectBoxService.instance.appointmentBox;
         final allLocal = box.getAll();
 
+        // Cache all patients to map UHID <-> ID
+        final allPatients = ObjectBoxService.instance.patientBox.getAll();
+        final Map<String, Patient> patientUhidMap = {};
+        final Map<int, String> patientIdToUhidMap = {};
+        for (final p in allPatients) {
+          final uh = p.uhid.trim();
+          if (uh.isNotEmpty) {
+            patientUhidMap[uh] = p;
+            patientIdToUhidMap[p.id] = uh;
+          }
+        }
+
         // Natural key: tokenNumber + patientUhid + scheduledAt date (YYYY-MM-DD)
         String _apptKey(int token, String uhid, DateTime scheduledAt) =>
             '${token}_${uhid}_${scheduledAt.year}-${scheduledAt.month}-${scheduledAt.day}';
 
+        // Precompute local appointment keys
+        final Map<String, Appointment> localApptMap = {};
+        for (final a in allLocal) {
+          final uh = patientIdToUhidMap[a.patientId];
+          if (uh != null) {
+            final lKey = _apptKey(a.tokenNumber, uh, a.scheduledAt);
+            localApptMap[lKey] = a;
+          }
+        }
+
         final hubKeys = <String>{};
+        final List<Appointment> apptsToPut = [];
+
         for (final item in data) {
           final uhid = item['patientUhid'] as String? ?? '';
           final scheduledAt = DateHelper.parseDateTime(item['scheduledAt']) ?? DateTime.now();
           final createdAt = DateHelper.parseDateTime(item['createdAt']) ?? DateTime.now();
           final token = item['tokenNumber'] as int? ?? 0;
 
-          // Resolve local patient ID using UHID
+          // Resolve local patient ID using cached Map
           int localPatientId = 0;
-          if (uhid.isNotEmpty) {
-            final p = ObjectBoxService.instance.patientBox
-                .query(Patient_.uhid.equals(uhid))
-                .build()
-                .findFirst();
-            if (p != null) localPatientId = p.id;
+          if (uhid.isNotEmpty && patientUhidMap.containsKey(uhid)) {
+            localPatientId = patientUhidMap[uhid]!.id;
           }
 
           if (localPatientId == 0) {
@@ -939,13 +1053,7 @@ class SyncService extends ChangeNotifier {
           final key = _apptKey(token, uhid, scheduledAt);
           hubKeys.add(key);
 
-          // Find existing by natural key (requires looking up UHID for local patients)
-          final existing = allLocal.where((a) {
-            final p = ObjectBoxService.instance.patientBox.get(a.patientId);
-            if (p == null) return false;
-            final lKey = _apptKey(a.tokenNumber, p.uhid, a.scheduledAt);
-            return lKey == key;
-          }).firstOrNull;
+          final existing = localApptMap[key];
 
           if (existing != null) {
             existing
@@ -958,9 +1066,9 @@ class SyncService extends ChangeNotifier {
               ..calledAt = DateHelper.parseDateTime(item['calledAt'])
               ..pharmacyAt = DateHelper.parseDateTime(item['pharmacyAt'])
               ..completedAt = DateHelper.parseDateTime(item['completedAt']);
-            box.put(existing);
+            apptsToPut.add(existing);
           } else {
-            box.put(Appointment(
+            apptsToPut.add(Appointment(
               id: 0,
               patientId: localPatientId,
               patientName: item['patientName'] ?? '',
@@ -981,17 +1089,26 @@ class SyncService extends ChangeNotifier {
               ..completedAt = DateHelper.parseDateTime(item['completedAt']));
           }
         }
+
+        if (apptsToPut.isNotEmpty) {
+          box.putMany(apptsToPut);
+        }
+
         // Remove appointments deleted on Hub
+        final List<int> apptsToRemove = [];
         for (final a in allLocal) {
-          final p = ObjectBoxService.instance.patientBox.get(a.patientId);
-          if (p == null) {
-             box.remove(a.id);
-             continue;
+          final uh = patientIdToUhidMap[a.patientId];
+          if (uh == null) {
+            apptsToRemove.add(a.id);
+            continue;
           }
-          final key = _apptKey(a.tokenNumber, p.uhid, a.scheduledAt);
+          final key = _apptKey(a.tokenNumber, uh, a.scheduledAt);
           if (!hubKeys.contains(key)) {
-            box.remove(a.id);
+            apptsToRemove.add(a.id);
           }
+        }
+        if (apptsToRemove.isNotEmpty) {
+          box.removeMany(apptsToRemove);
         }
         debugPrint('SyncService: pullAppointments synced ${data.length} appointments.');
       }
@@ -1012,15 +1129,21 @@ class SyncService extends ChangeNotifier {
         final box = ObjectBoxService.instance.doctorBox;
         final allLocal = box.getAll();
 
-        // Natural key: doctor name
+        // Build fast lookup map for local doctors
+        final Map<String, Doctor> localDoctorsMap = {
+          for (final d in allLocal) d.name: d
+        };
+
         final hubNames = <String>{};
+        final List<Doctor> doctorsToPut = [];
+
         for (final item in data) {
           final name = item['name'] as String? ?? '';
           hubNames.add(name);
           final createdAt =
               DateHelper.parseDateTime(item['createdAt']) ?? DateTime.now();
 
-          final existing = allLocal.where((d) => d.name == name).firstOrNull;
+          final existing = localDoctorsMap[name];
           if (existing != null) {
             existing
               ..name = name
@@ -1031,9 +1154,9 @@ class SyncService extends ChangeNotifier {
               ..phone = item['phone'] ?? ''
               ..isActive = item['isActive'] ?? true
               ..createdAt = createdAt;
-            box.put(existing);
+            doctorsToPut.add(existing);
           } else {
-            box.put(Doctor(
+            doctorsToPut.add(Doctor(
               id: 0, // Auto-assign
               name: name,
               specialization: item['specialization'] ?? 'General',
@@ -1046,11 +1169,20 @@ class SyncService extends ChangeNotifier {
             ));
           }
         }
+
+        if (doctorsToPut.isNotEmpty) {
+          box.putMany(doctorsToPut);
+        }
+
         // Remove doctors deleted on Hub
+        final List<int> toRemoveIds = [];
         for (final d in allLocal) {
           if (!hubNames.contains(d.name)) {
-            box.remove(d.id);
+            toRemoveIds.add(d.id);
           }
+        }
+        if (toRemoveIds.isNotEmpty) {
+          box.removeMany(toRemoveIds);
         }
         debugPrint('SyncService: pullDoctors synced ${data.length} doctors.');
       }
@@ -1071,25 +1203,41 @@ class SyncService extends ChangeNotifier {
         final box = ObjectBoxService.instance.procedureBox;
         final allLocal = box.getAll();
 
+        // Build fast lookup map for local procedures
+        final Map<String, Procedure> localProceduresMap = {
+          for (final p in allLocal) p.name: p
+        };
+
         final hubNames = <String>{};
+        final List<Procedure> proceduresToPut = [];
+
         for (final item in data) {
           final name = item['name'] as String? ?? '';
           hubNames.add(name);
 
-          final existing = allLocal.where((p) => p.name == name).firstOrNull;
+          final existing = localProceduresMap[name];
           final p = Procedure.fromJson(item as Map<String, dynamic>);
           if (existing != null) {
             p.id = existing.id;
           } else {
             p.id = 0;
           }
-          box.put(p);
+          proceduresToPut.add(p);
         }
+
+        if (proceduresToPut.isNotEmpty) {
+          box.putMany(proceduresToPut);
+        }
+
         // Cleanup phase
+        final List<int> toRemoveIds = [];
         for (final p in allLocal) {
           if (!hubNames.contains(p.name)) {
-            box.remove(p.id);
+            toRemoveIds.add(p.id);
           }
+        }
+        if (toRemoveIds.isNotEmpty) {
+          box.removeMany(toRemoveIds);
         }
         debugPrint(
             'SyncService: pullProcedures synced ${data.length} procedures.');
@@ -1099,125 +1247,164 @@ class SyncService extends ChangeNotifier {
     }
   }
 
-  Future<void> pullPrescriptions({String? since}) async {
-    if (!_isConnected || _jwtToken == null) return;
+  Future<int?> pullPrescriptions({String? since}) async {
+    if (!_isConnected || _jwtToken == null) return null;
     debugPrint('SyncService: pullPrescriptions starting (since=$since)...');
     try {
-      var url = Uri.parse('$_baseUrl/api/prescriptions');
-      if (since != null) {
-        url = url.replace(queryParameters: {'since': since});
+      final box = ObjectBoxService.instance.prescriptionBox;
+      final allLocal = box.getAll();
+
+      // Cache all patients to map UHID <-> ID
+      final allPatients = ObjectBoxService.instance.patientBox.getAll();
+      final Map<String, Patient> patientUhidMap = {};
+      final Map<int, String> patientIdToUhidMap = {};
+      for (final p in allPatients) {
+        final uh = p.uhid.trim();
+        if (uh.isNotEmpty) {
+          patientUhidMap[uh] = p;
+          patientIdToUhidMap[p.id] = uh;
+        }
       }
-      final res = await http.get(url, headers: _authHeaders());
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body)['data'] as List;
-        final box = ObjectBoxService.instance.prescriptionBox;
-        final allLocal = box.getAll();
 
-        // Natural key: patientUhid + createdAt date
-        String _pKey(String uhid, DateTime dt) =>
-            '${uhid}_${dt.year}-${dt.month}-${dt.day}';
+      // Cache appointments to map (tokenNumber + date YYYY-MM-DD) -> Appointment ID
+      final allAppointments = ObjectBoxService.instance.appointmentBox.getAll();
+      final Map<String, int> appointmentMap = {};
+      for (final a in allAppointments) {
+        final key = '${a.tokenNumber}_${a.scheduledAt.year}-${a.scheduledAt.month}-${a.scheduledAt.day}';
+        appointmentMap[key] = a.id;
+      }
 
-        final hubKeys = <String>{};
-        for (final item in data) {
-          final uhid = item['patientUhid'] as String? ?? '';
-          final token = item['tokenNumber'] as int? ?? 0;
-          final createdAt = DateHelper.parseDateTime(item['createdAt']) ?? DateTime.now();
-          final patientName = item['patientName'] ?? '';
+      // Natural key: patientUhid + createdAt date
+      String _pKey(String uhid, DateTime dt) =>
+          '${uhid}_${dt.year}-${dt.month}-${dt.day}';
 
-          // Resolve local patient ID using UHID
-          int localPatientId = 0;
-          if (uhid.isNotEmpty) {
-            final p = ObjectBoxService.instance.patientBox
-                .query(Patient_.uhid.equals(uhid))
-                .build()
-                .findFirst();
-            if (p != null) localPatientId = p.id;
+      // Precompute local prescription lookup map
+      final Map<String, Prescription> localPrescriptionMap = {};
+      for (final p in allLocal) {
+        final uh = patientIdToUhidMap[p.patientId];
+        if (uh != null) {
+          final lKey = _pKey(uh, p.createdAt);
+          localPrescriptionMap[lKey] = p;
+        }
+      }
+
+      final hubKeys = <String>{};
+      int offset = 0;
+      const int limit = 500;
+      bool hasMore = true;
+      int? latestServerTime;
+
+      while (hasMore) {
+        var url = Uri.parse('$_baseUrl/api/prescriptions').replace(
+          queryParameters: {
+            if (since != null) 'since': since,
+            'limit': '$limit',
+            'offset': '$offset',
+          },
+        );
+        final res = await http.get(url, headers: _authHeaders());
+        if (res.statusCode == 200) {
+          final payload = jsonDecode(res.body);
+          final data = payload['data'] as List;
+          latestServerTime = payload['serverTime'] as int?;
+
+          final List<Prescription> prescriptionsToPut = [];
+
+          for (final item in data) {
+            final uhid = item['patientUhid'] as String? ?? '';
+            final token = item['tokenNumber'] as int? ?? 0;
+            final createdAt = DateHelper.parseDateTime(item['createdAt']) ?? DateTime.now();
+            final patientName = item['patientName'] ?? '';
+
+            // Resolve local patient ID using cached Map
+            int localPatientId = 0;
+            if (uhid.isNotEmpty && patientUhidMap.containsKey(uhid)) {
+              localPatientId = patientUhidMap[uhid]!.id;
+            }
+
+            // Resolve local appointment ID using cached Map
+            int localApptId = 0;
+            if (token > 0) {
+              final apptKey = '${token}_${createdAt.year}-${createdAt.month}-${createdAt.day}';
+              localApptId = appointmentMap[apptKey] ?? 0;
+            }
+
+            final key = _pKey(uhid, createdAt);
+            hubKeys.add(key);
+
+            final existing = localPrescriptionMap[key];
+
+            if (existing != null) {
+              existing
+                ..appointmentId = localApptId > 0 ? localApptId : existing.appointmentId
+                ..patientId = localPatientId > 0 ? localPatientId : existing.patientId
+                ..diagnosis = item['diagnosis'] ?? ''
+                ..complaints = item['complaints'] ?? ''
+                ..notes = item['notes'] ?? ''
+                ..itemsJson = item['itemsJson'] ?? '[]'
+                ..labTestsJson = item['labTestsJson'] ?? '[]'
+                ..imagesJson = item['imagesJson'] ?? '[]'
+                ..proceduresJson = item['proceduresJson'] ?? '[]'
+                ..vitalsJson = item['vitalsJson'] ?? '{}'
+                ..dispensed = item['dispensed'] ?? false;
+              prescriptionsToPut.add(existing);
+            } else {
+              prescriptionsToPut.add(Prescription(
+                id: 0,
+                appointmentId: localApptId,
+                patientId: localPatientId,
+                patientName: patientName,
+                doctorId: item['doctorId'] ?? 0,
+                doctorName: item['doctorName'] ?? '',
+                diagnosis: item['diagnosis'] ?? '',
+                complaints: item['complaints'] ?? '',
+                notes: item['notes'] ?? '',
+                itemsJson: item['itemsJson'] ?? '[]',
+                labTestsJson: item['labTestsJson'] ?? '[]',
+                vitalsJson: item['vitalsJson'] ?? '{}',
+                imagesJson: item['imagesJson'] ?? '[]',
+                proceduresJson: item['proceduresJson'] ?? '[]',
+                dispensed: item['dispensed'] ?? false,
+                createdAt: createdAt,
+              ));
+            }
           }
 
-          // Resolve local appointment ID using tokenNumber and date
-          int localApptId = 0;
-          if (token > 0) {
-            final appt = ObjectBoxService.instance.appointmentBox
-                .getAll()
-                .where((a) =>
-                    a.tokenNumber == token &&
-                    a.scheduledAt.year == createdAt.year &&
-                    a.scheduledAt.month == createdAt.month &&
-                    a.scheduledAt.day == createdAt.day)
-                .firstOrNull;
-            if (appt != null) localApptId = appt.id;
+          if (prescriptionsToPut.isNotEmpty) {
+            box.putMany(prescriptionsToPut);
           }
 
-          final key = _pKey(uhid, createdAt);
-          hubKeys.add(key);
+          offset += limit;
+          hasMore = data.length == limit;
+        } else {
+          hasMore = false;
+        }
+      }
 
-          final existing = allLocal.where((p) {
-            if (p.patientId <= 0) return false;
-            final patient = ObjectBoxService.instance.patientBox.get(p.patientId);
-            if (patient == null) return false;
-            final lKey = _pKey(patient.uhid, p.createdAt);
-            return lKey == key;
-          }).firstOrNull;
-
-          if (existing != null) {
-            existing
-              ..appointmentId = localApptId > 0 ? localApptId : existing.appointmentId
-              ..patientId = localPatientId > 0 ? localPatientId : existing.patientId
-              ..diagnosis = item['diagnosis'] ?? ''
-              ..complaints = item['complaints'] ?? ''
-              ..notes = item['notes'] ?? ''
-              ..itemsJson = item['itemsJson'] ?? '[]'
-              ..labTestsJson = item['labTestsJson'] ?? '[]'
-              ..imagesJson = item['imagesJson'] ?? '[]'
-              ..proceduresJson = item['proceduresJson'] ?? '[]'
-              ..vitalsJson = item['vitalsJson'] ?? '{}'
-              ..dispensed = item['dispensed'] ?? false;
-            box.put(existing);
-          } else {
-            box.put(Prescription(
-              id: 0,
-              appointmentId: localApptId,
-              patientId: localPatientId,
-              patientName: patientName,
-              doctorId: item['doctorId'] ?? 0,
-              doctorName: item['doctorName'] ?? '',
-              diagnosis: item['diagnosis'] ?? '',
-              complaints: item['complaints'] ?? '',
-              notes: item['notes'] ?? '',
-              itemsJson: item['itemsJson'] ?? '[]',
-              labTestsJson: item['labTestsJson'] ?? '[]',
-              vitalsJson: item['vitalsJson'] ?? '{}',
-              imagesJson: item['imagesJson'] ?? '[]',
-              proceduresJson: item['proceduresJson'] ?? '[]',
-              dispensed: item['dispensed'] ?? false,
-              createdAt: createdAt,
-            ));
+      // Remove prescriptions deleted on Hub (Full Sync only)
+      if (since == null) {
+        final List<int> toRemoveIds = [];
+        for (final p in allLocal) {
+          final uh = patientIdToUhidMap[p.patientId];
+          if (uh == null) {
+            toRemoveIds.add(p.id);
+            continue;
+          }
+          final key = _pKey(uh, p.createdAt);
+          if (!hubKeys.contains(key)) {
+            toRemoveIds.add(p.id);
           }
         }
-        // Remove prescriptions deleted on Hub (Full Sync only)
-        if (since == null) {
-          for (final p in allLocal) {
-            if (p.patientId <= 0) {
-              box.remove(p.id);
-              continue;
-            }
-            final patient = ObjectBoxService.instance.patientBox.get(p.patientId);
-            if (patient == null) {
-              box.remove(p.id);
-              continue;
-            }
-            final key = _pKey(patient.uhid, p.createdAt);
-            if (!hubKeys.contains(key)) {
-              box.remove(p.id);
-            }
-          }
+        if (toRemoveIds.isNotEmpty) {
+          box.removeMany(toRemoveIds);
         }
-        debugPrint('SyncService: pullPrescriptions synced ${data.length} prescriptions.');
       }
+      debugPrint('SyncService: pullPrescriptions synced successfully.');
+      return latestServerTime;
     } catch (e) {
       debugPrint('pullPrescriptions err: $e');
     }
-    debugPrint('SyncService: pullPrescriptions done.');
+    return null;
   }
 
   Future<int?> pullSales({String? since}) async {
@@ -1227,122 +1414,170 @@ class SyncService extends ChangeNotifier {
     }
     debugPrint('SyncService: pullSales starting (since=$since)...');
     try {
-      var url = Uri.parse('$_baseUrl/api/sales');
-      if (since != null) {
-        url = url.replace(queryParameters: {'since': since});
+      final box = ObjectBoxService.instance.saleBox;
+      final allLocal = box.getAll();
+
+      // Build fast lookup map for local sales
+      final Map<String, Sale> localSalesMap = {};
+      for (final s in allLocal) {
+        if (s.invoiceNo.isNotEmpty) {
+          final key = '${s.invoiceNo}_${s.createdAt.millisecondsSinceEpoch}';
+          localSalesMap[key] = s;
+        }
       }
-      final res = await http.get(url, headers: _authHeaders());
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body)['data'] as List;
-        final box = ObjectBoxService.instance.saleBox;
-        final allLocal = box.getAll();
 
-        // Natural key: invoiceNo (globally unique across all devices)
-        final hubInvoiceNos = <String>{};
-        for (final item in data) {
-          final invoiceNo = item['invoiceNo'] as String? ?? '';
-          if (invoiceNo.isEmpty) continue;
-          hubInvoiceNos.add(invoiceNo);
-          final createdAt =
-              DateHelper.parseDateTime(item['createdAt']) ?? DateTime.now();
+      // Cache all patients to avoid DB/linear scans inside the loop
+      final allPatients = ObjectBoxService.instance.patientBox.getAll();
+      final Map<String, Patient> patientUhidMap = {};
+      final Map<String, Patient> patientNamePhoneMap = {};
+      final Map<String, Patient> patientNameMap = {};
 
-          final existing = allLocal
-              .where((s) =>
-                  s.invoiceNo == invoiceNo &&
-                  s.createdAt.millisecondsSinceEpoch == createdAt.millisecondsSinceEpoch)
-              .firstOrNull;
-
-          // Resolve local patient ID using UHID or fallback to Name/Phone
-          int localPatientId = 0;
-          final uhid = item['patientUhid'] as String? ?? '';
-          if (uhid.isNotEmpty) {
-            final p = ObjectBoxService.instance.patientBox
-                .query(Patient_.uhid.equals(uhid))
-                .build()
-                .findFirst();
-            if (p != null) localPatientId = p.id;
+      for (final p in allPatients) {
+        final uh = p.uhid.trim();
+        if (uh.isNotEmpty) {
+          patientUhidMap[uh] = p;
+        }
+        final nameNorm = p.name.trim().toLowerCase();
+        final phoneNorm = p.phone.trim();
+        if (nameNorm.isNotEmpty) {
+          if (phoneNorm.isNotEmpty) {
+            patientNamePhoneMap['${nameNorm}_$phoneNorm'] = p;
           }
-          if (localPatientId == 0) {
-            final pName = item['patientName'] as String? ?? '';
-            final pPhone = item['patientPhone'] as String? ?? '';
-            if (pName.isNotEmpty) {
-              final match = ObjectBoxService.instance.patientBox
-                  .getAll()
-                  .where((p) {
-                    final nMatch = p.name.trim().toLowerCase() == pName.trim().toLowerCase();
-                    final phMatch = pPhone.isNotEmpty && p.phone.trim() == pPhone.trim();
-                    return nMatch && (pPhone.isEmpty || phMatch);
-                  }).firstOrNull;
-              if (match != null) localPatientId = match.id;
+          patientNameMap[nameNorm] = p;
+        }
+      }
+
+      final hubInvoiceNos = <String>{};
+      int offset = 0;
+      const int limit = 500;
+      bool hasMore = true;
+      int? latestServerTime;
+
+      while (hasMore) {
+        var url = Uri.parse('$_baseUrl/api/sales').replace(
+          queryParameters: {
+            if (since != null) 'since': since,
+            'limit': '$limit',
+            'offset': '$offset',
+          },
+        );
+        final res = await http.get(url, headers: _authHeaders());
+        if (res.statusCode == 200) {
+          final payload = jsonDecode(res.body);
+          final data = payload['data'] as List;
+          latestServerTime = payload['serverTime'] as int?;
+
+          final List<Sale> salesToPut = [];
+
+          for (final item in data) {
+            final invoiceNo = item['invoiceNo'] as String? ?? '';
+            if (invoiceNo.isEmpty) continue;
+            hubInvoiceNos.add(invoiceNo);
+            final createdAt =
+                DateHelper.parseDateTime(item['createdAt']) ?? DateTime.now();
+
+            final key = '${invoiceNo}_${createdAt.millisecondsSinceEpoch}';
+            final existing = localSalesMap[key];
+
+            // Resolve local patient ID using cached Maps
+            int localPatientId = 0;
+            final uhid = item['patientUhid'] as String? ?? '';
+            if (uhid.isNotEmpty && patientUhidMap.containsKey(uhid)) {
+              localPatientId = patientUhidMap[uhid]!.id;
+            }
+            if (localPatientId == 0) {
+              final pName = (item['patientName'] as String? ?? '').trim().toLowerCase();
+              final pPhone = (item['patientPhone'] as String? ?? '').trim();
+              if (pName.isNotEmpty) {
+                if (pPhone.isNotEmpty && patientNamePhoneMap.containsKey('${pName}_$pPhone')) {
+                  localPatientId = patientNamePhoneMap['${pName}_$pPhone']!.id;
+                } else if (patientNameMap.containsKey(pName)) {
+                  localPatientId = patientNameMap[pName]!.id;
+                }
+              }
+            }
+
+            if (existing != null) {
+              existing
+                ..invoiceNo = invoiceNo
+                ..patientId = localPatientId > 0 ? localPatientId : (item['patientId'] ?? 0)
+                ..patientName = item['patientName'] ?? ''
+                ..patientPhone = item['patientPhone'] ?? ''
+                ..patientUhid = uhid
+                ..subtotal = (item['subtotal'] as num?)?.toDouble() ?? 0
+                ..discount = (item['discount'] as num?)?.toDouble() ?? 0
+                ..taxRate = (item['taxRate'] as num?)?.toDouble() ?? 0
+                ..taxAmount = (item['taxAmount'] as num?)?.toDouble() ?? 0
+                ..total = (item['total'] as num?)?.toDouble() ?? 0
+                ..paymentMethod = item['paymentMethod'] ?? 'cash'
+                ..cashAmount = (item['cashAmount'] as num?)?.toDouble() ?? 0
+                ..upiAmount = (item['upiAmount'] as num?)?.toDouble() ?? 0
+                ..cardAmount = (item['cardAmount'] as num?)?.toDouble() ?? 0
+                ..createdAt = createdAt
+                ..updatedAt = DateHelper.parseDateTime(item['updatedAt']) ?? createdAt
+                ..synced = true
+                ..isReturn = item['isReturn'] ?? false
+                ..isClinicalDispense = item['isClinicalDispense'] ?? false
+                ..linkedAppointmentId = item['linkedAppointmentId'] ?? 0
+                ..linkedProcedureId = item['linkedProcedureId'] ?? 0
+                ..itemsJson = item['itemsJson'] ?? '[]';
+              salesToPut.add(existing);
+            } else {
+              salesToPut.add(Sale(
+                id: 0, // Auto-assign — never force Hub IDs
+                invoiceNo: invoiceNo,
+                patientId: localPatientId > 0 ? localPatientId : (item['patientId'] ?? 0),
+                patientName: item['patientName'] ?? '',
+                patientPhone: item['patientPhone'] ?? '',
+                patientUhid: uhid,
+                subtotal: (item['subtotal'] as num?)?.toDouble() ?? 0,
+                discount: (item['discount'] as num?)?.toDouble() ?? 0,
+                taxRate: (item['taxRate'] as num?)?.toDouble() ?? 0,
+                taxAmount: (item['taxAmount'] as num?)?.toDouble() ?? 0,
+                total: (item['total'] as num?)?.toDouble() ?? 0,
+                paymentMethod: item['paymentMethod'] ?? 'cash',
+                cashAmount: (item['cashAmount'] as num?)?.toDouble() ?? 0,
+                upiAmount: (item['upiAmount'] as num?)?.toDouble() ?? 0,
+                cardAmount: (item['cardAmount'] as num?)?.toDouble() ?? 0,
+                createdAt: createdAt,
+                updatedAt: DateHelper.parseDateTime(item['updatedAt']) ?? createdAt,
+                synced: true,
+                isReturn: item['isReturn'] ?? false,
+                isClinicalDispense: item['isClinicalDispense'] ?? false,
+                linkedAppointmentId: item['linkedAppointmentId'] ?? 0,
+                linkedProcedureId: item['linkedProcedureId'] ?? 0,
+                itemsJson: item['itemsJson'] ?? '[]',
+              ));
             }
           }
 
-          if (existing != null) {
-            existing
-              ..invoiceNo = invoiceNo
-              ..patientId = localPatientId > 0 ? localPatientId : (item['patientId'] ?? 0)
-              ..patientName = item['patientName'] ?? ''
-              ..patientPhone = item['patientPhone'] ?? ''
-              ..patientUhid = uhid
-              ..subtotal = (item['subtotal'] as num?)?.toDouble() ?? 0
-              ..discount = (item['discount'] as num?)?.toDouble() ?? 0
-              ..taxRate = (item['taxRate'] as num?)?.toDouble() ?? 0
-              ..taxAmount = (item['taxAmount'] as num?)?.toDouble() ?? 0
-              ..total = (item['total'] as num?)?.toDouble() ?? 0
-              ..paymentMethod = item['paymentMethod'] ?? 'cash'
-              ..cashAmount = (item['cashAmount'] as num?)?.toDouble() ?? 0
-              ..upiAmount = (item['upiAmount'] as num?)?.toDouble() ?? 0
-              ..cardAmount = (item['cardAmount'] as num?)?.toDouble() ?? 0
-              ..createdAt = createdAt
-              ..updatedAt = DateHelper.parseDateTime(item['updatedAt']) ?? createdAt
-              ..synced = true
-              ..isReturn = item['isReturn'] ?? false
-              ..isClinicalDispense = item['isClinicalDispense'] ?? false
-              ..linkedAppointmentId = item['linkedAppointmentId'] ?? 0
-              ..linkedProcedureId = item['linkedProcedureId'] ?? 0
-              ..itemsJson = item['itemsJson'] ?? '[]';
-            box.put(existing);
-          } else {
-            box.put(Sale(
-              id: 0, // Auto-assign — never force Hub IDs
-              invoiceNo: invoiceNo,
-              patientId: localPatientId > 0 ? localPatientId : (item['patientId'] ?? 0),
-              patientName: item['patientName'] ?? '',
-              patientPhone: item['patientPhone'] ?? '',
-              patientUhid: uhid,
-              subtotal: (item['subtotal'] as num?)?.toDouble() ?? 0,
-              discount: (item['discount'] as num?)?.toDouble() ?? 0,
-              taxRate: (item['taxRate'] as num?)?.toDouble() ?? 0,
-              taxAmount: (item['taxAmount'] as num?)?.toDouble() ?? 0,
-              total: (item['total'] as num?)?.toDouble() ?? 0,
-              paymentMethod: item['paymentMethod'] ?? 'cash',
-              cashAmount: (item['cashAmount'] as num?)?.toDouble() ?? 0,
-              upiAmount: (item['upiAmount'] as num?)?.toDouble() ?? 0,
-              cardAmount: (item['cardAmount'] as num?)?.toDouble() ?? 0,
-              createdAt: createdAt,
-              updatedAt: DateHelper.parseDateTime(item['updatedAt']) ?? createdAt,
-              synced: true,
-              isReturn: item['isReturn'] ?? false,
-              isClinicalDispense: item['isClinicalDispense'] ?? false,
-              linkedAppointmentId: item['linkedAppointmentId'] ?? 0,
-              linkedProcedureId: item['linkedProcedureId'] ?? 0,
-              itemsJson: item['itemsJson'] ?? '[]',
-            ));
+          if (salesToPut.isNotEmpty) {
+            box.putMany(salesToPut);
           }
+
+          offset += limit;
+          hasMore = data.length == limit;
+        } else {
+          hasMore = false;
         }
-        // Remove sales voided on Hub (only remove synced=true sales not in Hub, Full Sync only)
-        if (since == null) {
-          for (final s in allLocal) {
-            if (s.synced &&
-                s.invoiceNo.isNotEmpty &&
-                !hubInvoiceNos.contains(s.invoiceNo)) {
-              box.remove(s.id);
-            }
-          }
-        }
-        debugPrint('SyncService: pullSales synced ${data.length} sales.');
-        return jsonDecode(res.body)['serverTime'] as int?;
       }
+
+      // Remove sales voided on Hub (only remove synced=true sales not in Hub, Full Sync only)
+      if (since == null) {
+        final toRemoveIds = <int>[];
+        for (final s in allLocal) {
+          if (s.synced &&
+              s.invoiceNo.isNotEmpty &&
+              !hubInvoiceNos.contains(s.invoiceNo)) {
+            toRemoveIds.add(s.id);
+          }
+        }
+        if (toRemoveIds.isNotEmpty) {
+          box.removeMany(toRemoveIds);
+        }
+      }
+      debugPrint('SyncService: pullSales synced successfully.');
+      return latestServerTime;
     } catch (e) {
       debugPrint('pullSales err: $e');
     }
@@ -1354,41 +1589,59 @@ class SyncService extends ChangeNotifier {
     if (!_isConnected || _jwtToken == null) return;
     debugPrint('SyncService: pullH1Records starting (since=$since)...');
     try {
-      var url = Uri.parse('$_baseUrl/api/h1-records');
-      if (since != null) {
-        url = url.replace(queryParameters: {'since': since});
-      }
-      final res = await http.get(url, headers: _authHeaders());
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body)['data'] as List;
-        final box = ObjectBoxService.instance.store.box<ScheduleH1Record>();
-        final allLocal = box.getAll();
+      final box = ObjectBoxService.instance.store.box<ScheduleH1Record>();
+      final allLocal = box.getAll();
 
-        final hubKeys = <String>{};
-        for (final item in data) {
-          final invoiceNo = item['invoiceNo'] as String? ?? '';
-          final medicineName = item['medicineName'] as String? ?? '';
-          final batchNo = item['batchNo'] as String? ?? '';
-          final key = '${invoiceNo}_${medicineName}_$batchNo';
-          hubKeys.add(key);
+      final Map<String, ScheduleH1Record> localH1Map = {
+        for (final x in allLocal) '${x.invoiceNo}_${x.medicineName}_${x.batchNo}': x
+      };
 
-          final existing = allLocal.where((x) =>
-              x.invoiceNo == invoiceNo &&
-              x.medicineName == medicineName &&
-              x.batchNo == batchNo).firstOrNull;
+      int offset = 0;
+      const int limit = 500;
+      bool hasMore = true;
 
-          if (existing != null) {
+      while (hasMore) {
+        var url = Uri.parse('$_baseUrl/api/h1-records').replace(
+          queryParameters: {
+            if (since != null) 'since': since,
+            'limit': '$limit',
+            'offset': '$offset',
+          },
+        );
+        final res = await http.get(url, headers: _authHeaders());
+        if (res.statusCode == 200) {
+          final payload = jsonDecode(res.body);
+          final data = payload['data'] as List;
+
+          final List<ScheduleH1Record> recsToPut = [];
+
+          for (final item in data) {
+            final invoiceNo = item['invoiceNo'] as String? ?? '';
+            final medicineName = item['medicineName'] as String? ?? '';
+            final batchNo = item['batchNo'] as String? ?? '';
+            final key = '${invoiceNo}_${medicineName}_$batchNo';
+
+            final existing = localH1Map[key];
             final rec = ScheduleH1Record.fromJson(item as Map<String, dynamic>);
-            rec.id = existing.id;
-            box.put(rec);
-          } else {
-            final rec = ScheduleH1Record.fromJson(item as Map<String, dynamic>);
-            rec.id = 0;
-            box.put(rec);
+            if (existing != null) {
+              rec.id = existing.id;
+            } else {
+              rec.id = 0;
+            }
+            recsToPut.add(rec);
           }
+
+          if (recsToPut.isNotEmpty) {
+            box.putMany(recsToPut);
+          }
+
+          offset += limit;
+          hasMore = data.length == limit;
+        } else {
+          hasMore = false;
         }
-        debugPrint('SyncService: pullH1Records synced ${data.length} records.');
       }
+      debugPrint('SyncService: pullH1Records synced successfully.');
     } catch (e) {
       debugPrint('pullH1Records err: $e');
     }
@@ -1405,6 +1658,13 @@ class SyncService extends ChangeNotifier {
         final box = ObjectBoxService.instance.transferBox;
         final allLocal = box.getAll();
 
+        final Map<String, StockTransfer> localTransfersMap = {
+          for (final t in allLocal)
+            '${t.medicineName.toLowerCase().trim()}_${t.qty}_${t.fromWarehouse}_${t.toWarehouse}_${t.transferredAt.millisecondsSinceEpoch}_${t.batchNo}': t
+        };
+
+        final List<StockTransfer> transfersToPut = [];
+
         for (final item in data) {
           final serverTime =
               DateHelper.parseDateTime(item['transferredAt']) ?? DateTime.now();
@@ -1414,18 +1674,11 @@ class SyncService extends ChangeNotifier {
           final to = item['toWarehouse'] as String? ?? '';
           final batch = item['batchNo'] as String?;
 
-          final existing = allLocal.where((t) {
-            final nameMatch = t.medicineName.toLowerCase().trim() == medicineName.toLowerCase().trim();
-            final qtyMatch = t.qty == qty;
-            final fromMatch = t.fromWarehouse == from;
-            final toMatch = t.toWarehouse == to;
-            final timeMatch = t.transferredAt.millisecondsSinceEpoch == serverTime.millisecondsSinceEpoch;
-            final batchMatch = t.batchNo == batch;
-            return nameMatch && qtyMatch && fromMatch && toMatch && timeMatch && batchMatch;
-          }).firstOrNull;
+          final key = '${medicineName.toLowerCase().trim()}_${qty}_${from}_${to}_${serverTime.millisecondsSinceEpoch}_$batch';
+          final existing = localTransfersMap[key];
 
           if (existing == null) {
-            box.put(StockTransfer(
+            transfersToPut.add(StockTransfer(
               id: 0,
               medicineId: item['medicineId'] ?? 0,
               medicineName: medicineName,
@@ -1439,6 +1692,10 @@ class SyncService extends ChangeNotifier {
               transferredBy: item['transferredBy'] ?? '',
             ));
           }
+        }
+
+        if (transfersToPut.isNotEmpty) {
+          box.putMany(transfersToPut);
         }
       }
     } catch (e) {
@@ -1459,7 +1716,14 @@ class SyncService extends ChangeNotifier {
         final data = jsonDecode(res.body)['data'] as List;
         final box = ObjectBoxService.instance.templateBox;
         final allLocal = box.getAll();
+
+        final Map<String, PrescriptionTemplate> localTemplatesMap = {
+          for (final t in allLocal) t.name: t
+        };
+
         final hubNames = <String>{};
+        final List<PrescriptionTemplate> templatesToPut = [];
+
         for (final item in data) {
           final name = item['name'] as String? ?? '';
           if (name.isEmpty) continue;
@@ -1467,7 +1731,7 @@ class SyncService extends ChangeNotifier {
           final createdAt =
               DateHelper.parseDateTime(item['createdAt']) ?? DateTime.now();
 
-          final existing = allLocal.where((t) => t.name == name).firstOrNull;
+          final existing = localTemplatesMap[name];
           if (existing != null) {
             existing
               ..diagnosis = item['diagnosis'] ?? ''
@@ -1477,9 +1741,9 @@ class SyncService extends ChangeNotifier {
               ..labTestsJson = item['labTestsJson'] ?? '[]'
               ..doctorId = item['doctorId'] ?? 0
               ..createdAt = createdAt;
-            box.put(existing);
+            templatesToPut.add(existing);
           } else {
-            box.put(PrescriptionTemplate(
+            templatesToPut.add(PrescriptionTemplate(
               id: 0,
               name: name,
               diagnosis: item['diagnosis'] ?? '',
@@ -1492,8 +1756,19 @@ class SyncService extends ChangeNotifier {
             ));
           }
         }
+
+        if (templatesToPut.isNotEmpty) {
+          box.putMany(templatesToPut);
+        }
+
+        final List<int> toRemoveIds = [];
         for (final t in allLocal) {
-          if (!hubNames.contains(t.name)) box.remove(t.id);
+          if (!hubNames.contains(t.name)) {
+            toRemoveIds.add(t.id);
+          }
+        }
+        if (toRemoveIds.isNotEmpty) {
+          box.removeMany(toRemoveIds);
         }
         debugPrint('SyncService: pullTemplates synced ${data.length} records.');
       }
@@ -1869,33 +2144,57 @@ class SyncService extends ChangeNotifier {
     if (!_isConnected || _jwtToken == null) return;
     debugPrint('SyncService: pullAuditLogs starting (since=$since)...');
     try {
-      var url = Uri.parse('$_baseUrl/api/audit');
-      if (since != null) {
-        url = url.replace(queryParameters: {'since': since});
-      }
-      final res = await http.get(url, headers: _authHeaders());
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body)['data'] as List;
-        final box = ObjectBoxService.instance.store.box<AuditLog>();
-        final allLocal = box.getAll();
+      final box = ObjectBoxService.instance.store.box<AuditLog>();
+      final allLocal = box.getAll();
 
-        for (final item in data) {
-          final deviceId = item['deviceId'] as String? ?? '';
-          final timestampMs = item['timestamp'] as int? ?? 0;
+      final Map<String, AuditLog> localLogsMap = {
+        for (final l in allLocal) '${l.deviceId}_${l.timestamp.millisecondsSinceEpoch}': l
+      };
 
-          final existing = allLocal.where((l) =>
-              l.deviceId == deviceId &&
-              l.timestamp.millisecondsSinceEpoch == timestampMs).firstOrNull;
+      int offset = 0;
+      const int limit = 500;
+      bool hasMore = true;
 
-          if (existing == null) {
-            final log = AuditLog.fromJson(item as Map<String, dynamic>);
-            log.id = 0;
-            log.isSynced = true;
-            box.put(log);
+      while (hasMore) {
+        var url = Uri.parse('$_baseUrl/api/audit').replace(
+          queryParameters: {
+            if (since != null) 'since': since,
+            'limit': '$limit',
+            'offset': '$offset',
+          },
+        );
+        final res = await http.get(url, headers: _authHeaders());
+        if (res.statusCode == 200) {
+          final payload = jsonDecode(res.body);
+          final data = payload['data'] as List;
+
+          final List<AuditLog> logsToPut = [];
+
+          for (final item in data) {
+            final deviceId = item['deviceId'] as String? ?? '';
+            final timestampMs = item['timestamp'] as int? ?? 0;
+            final key = '${deviceId}_$timestampMs';
+
+            final existing = localLogsMap[key];
+            if (existing == null) {
+              final log = AuditLog.fromJson(item as Map<String, dynamic>);
+              log.id = 0;
+              log.isSynced = true;
+              logsToPut.add(log);
+            }
           }
+
+          if (logsToPut.isNotEmpty) {
+            box.putMany(logsToPut);
+          }
+
+          offset += limit;
+          hasMore = data.length == limit;
+        } else {
+          hasMore = false;
         }
-        debugPrint('SyncService: pullAuditLogs synced ${data.length} logs.');
       }
+      debugPrint('SyncService: pullAuditLogs synced successfully.');
     } catch (e) {
       debugPrint('pullAuditLogs err: $e');
     }

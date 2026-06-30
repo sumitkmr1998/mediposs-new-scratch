@@ -18,6 +18,8 @@ class PatientListAndroid extends StatefulWidget {
 
 class _PatientListAndroidState extends State<PatientListAndroid> {
   final _searchCtrl = TextEditingController();
+  int _currentPage = 1;
+  final int _pageSize = 10;
 
   @override
   void initState() {
@@ -36,6 +38,13 @@ class _PatientListAndroidState extends State<PatientListAndroid> {
   @override
   Widget build(BuildContext context) {
     final patients = context.watch<PatientProvider>();
+    final list = patients.filtered;
+    final totalItems = list.length;
+    final totalPages = (totalItems / _pageSize).ceil();
+    final currentPage = _currentPage.clamp(1, totalPages > 0 ? totalPages : 1);
+    final startIndex = (currentPage - 1) * _pageSize;
+    final endIndex = (startIndex + _pageSize).clamp(0, totalItems);
+    final paginatedList = list.isEmpty ? <Patient>[] : list.sublist(startIndex, endIndex);
 
     return Scaffold(
       backgroundColor: context.surfaceColor,
@@ -82,7 +91,10 @@ class _PatientListAndroidState extends State<PatientListAndroid> {
                 ),
                 child: TextField(
                   controller: _searchCtrl,
-                  onChanged: (v) => patients.setSearch(v),
+                  onChanged: (v) {
+                    patients.setSearch(v);
+                    setState(() => _currentPage = 1);
+                  },
                   decoration: InputDecoration(
                     hintText: 'Search by name, phone, or UHID...',
                     hintStyle: TextStyle(color: context.textMutedColor),
@@ -98,16 +110,16 @@ class _PatientListAndroidState extends State<PatientListAndroid> {
             ),
           ),
         ],
-        body: patients.filtered.isEmpty
+        body: paginatedList.isEmpty
             ? const AppEmptyState(
                 icon: Icons.people_outline,
                 title: 'No patients found',
               )
             : ListView.builder(
                 padding: const EdgeInsets.all(20).copyWith(bottom: 100),
-                itemCount: patients.filtered.length,
+                itemCount: paginatedList.length,
                 itemBuilder: (ctx, i) {
-                  final p = patients.filtered[i];
+                  final p = paginatedList[i];
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: _ModernPatientTile(
@@ -120,6 +132,51 @@ class _PatientListAndroidState extends State<PatientListAndroid> {
               ),
       ),
     ),
+      bottomNavigationBar: list.isEmpty ? null : Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: context.surfaceColor,
+          border: Border(top: BorderSide(color: context.borderColor)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 4,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Showing ${totalItems == 0 ? 0 : startIndex + 1}-$endIndex of $totalItems',
+                style: TextStyle(color: context.textMutedColor, fontSize: 13),
+              ),
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left),
+                    onPressed: currentPage > 1
+                        ? () => setState(() => _currentPage = currentPage - 1)
+                        : null,
+                  ),
+                  Text(
+                    'Page $currentPage of ${totalPages > 0 ? totalPages : 1}',
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right),
+                    onPressed: currentPage < totalPages
+                        ? () => setState(() => _currentPage = currentPage + 1)
+                        : null,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showPatientDialog(context),
         backgroundColor: AppTheme.primary,

@@ -22,6 +22,8 @@ class PatientListWindows extends StatefulWidget {
 class _PatientListWindowsState extends State<PatientListWindows> {
   final _searchCtrl = TextEditingController();
   String _filter = 'all';
+  int _currentPage = 1;
+  int _pageSize = 10;
 
   @override
   void initState() {
@@ -57,6 +59,13 @@ class _PatientListWindowsState extends State<PatientListWindows> {
                     .where((p) => p.gender != 'Male' && p.gender != 'Female')
                     .toList();
 
+    final totalItems = filteredList.length;
+    final totalPages = (totalItems / _pageSize).ceil();
+    final currentPage = _currentPage.clamp(1, totalPages > 0 ? totalPages : 1);
+    final startIndex = (currentPage - 1) * _pageSize;
+    final endIndex = (startIndex + _pageSize).clamp(0, totalItems);
+    final paginatedList = filteredList.isEmpty ? <Patient>[] : filteredList.sublist(startIndex, endIndex);
+
     return Scaffold(
       appBar: _buildAppBar(allPatients.length),
       body: SingleChildScrollView(
@@ -68,7 +77,16 @@ class _PatientListWindowsState extends State<PatientListWindows> {
             const SizedBox(height: 24),
             _buildFilterSearchCard(context, patients),
             const SizedBox(height: 24),
-            _buildDataTable(context, filteredList, patients),
+            _buildDataTable(
+              context,
+              paginatedList,
+              patients,
+              currentPage,
+              totalPages,
+              totalItems,
+              startIndex,
+              endIndex,
+            ),
           ],
         ),
       ),
@@ -183,14 +201,20 @@ class _PatientListWindowsState extends State<PatientListWindows> {
                     label: 'All',
                     icon: Icons.groups_rounded,
                     isSelected: _filter == 'all',
-                    onTap: () => setState(() => _filter = 'all'),
+                    onTap: () => setState(() {
+                      _filter = 'all';
+                      _currentPage = 1;
+                    }),
                   ),
                   const SizedBox(width: 8),
                   AppFilterChip(
                     label: 'Male',
                     icon: Icons.male_rounded,
                     isSelected: _filter == 'male',
-                    onTap: () => setState(() => _filter = 'male'),
+                    onTap: () => setState(() {
+                      _filter = 'male';
+                      _currentPage = 1;
+                    }),
                     activeColor: AppTheme.primaryLight,
                   ),
                   const SizedBox(width: 8),
@@ -198,7 +222,10 @@ class _PatientListWindowsState extends State<PatientListWindows> {
                     label: 'Female',
                     icon: Icons.female_rounded,
                     isSelected: _filter == 'female',
-                    onTap: () => setState(() => _filter = 'female'),
+                    onTap: () => setState(() {
+                      _filter = 'female';
+                      _currentPage = 1;
+                    }),
                     activeColor: AppTheme.danger,
                   ),
                 ],
@@ -210,7 +237,10 @@ class _PatientListWindowsState extends State<PatientListWindows> {
             width: 260,
             child: TextField(
               controller: _searchCtrl,
-              onChanged: (v) => patients.setSearch(v),
+              onChanged: (v) {
+                patients.setSearch(v);
+                setState(() => _currentPage = 1);
+              },
               style: const TextStyle(fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'Search patients...',
@@ -224,6 +254,7 @@ class _PatientListWindowsState extends State<PatientListWindows> {
                         onPressed: () {
                           _searchCtrl.clear();
                           patients.setSearch('');
+                          setState(() => _currentPage = 1);
                         },
                       )
                     : null,
@@ -242,14 +273,22 @@ class _PatientListWindowsState extends State<PatientListWindows> {
   }
 
   Widget _buildDataTable(
-      BuildContext context, List<Patient> list, PatientProvider patients) {
+    BuildContext context,
+    List<Patient> list,
+    PatientProvider patients,
+    int currentPage,
+    int totalPages,
+    int totalItems,
+    int startIndex,
+    int endIndex,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 12, left: 4),
           child: Text(
-            'FOUND ${list.length} PATIENTS',
+            'FOUND $totalItems PATIENTS',
             style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w800,
@@ -291,7 +330,7 @@ class _PatientListWindowsState extends State<PatientListWindows> {
                     iconColor: AppTheme.primary,
                   ),
                 )
-              else
+              else ...[
                 ...list.map((p) => _PatientRow(
                       patient: p,
                       onEdit: () => _showPatientDialog(context, patient: p),
@@ -304,11 +343,166 @@ class _PatientListWindowsState extends State<PatientListWindows> {
                         ),
                       ),
                     )),
+                Divider(height: 1, color: context.borderColor),
+                _buildPaginationFooter(currentPage, totalPages, totalItems, startIndex, endIndex),
+              ],
             ],
           ),
         ),
       ],
     );
+  }
+
+  Widget _buildPaginationFooter(
+    int currentPage,
+    int totalPages,
+    int totalItems,
+    int startIndex,
+    int endIndex,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text.rich(
+            TextSpan(
+              style: TextStyle(fontSize: 13, color: context.textMutedColor),
+              children: [
+                const TextSpan(text: 'Showing '),
+                TextSpan(
+                  text: '${totalItems == 0 ? 0 : startIndex + 1}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const TextSpan(text: ' to '),
+                TextSpan(
+                  text: '$endIndex',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const TextSpan(text: ' of '),
+                TextSpan(
+                  text: '$totalItems',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const TextSpan(text: ' patients'),
+              ],
+            ),
+          ),
+          Row(
+            children: [
+              Text(
+                'Rows per page: ',
+                style: TextStyle(fontSize: 13, color: context.textMutedColor),
+              ),
+              const SizedBox(width: 4),
+              DropdownButtonHideUnderline(
+                child: SizedBox(
+                  height: 32,
+                  child: DropdownButton<int>(
+                    value: _pageSize,
+                    items: [10, 25, 50, 100].map((size) {
+                      return DropdownMenuItem<int>(
+                        value: size,
+                        child: Text('$size', style: const TextStyle(fontSize: 13)),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() {
+                          _pageSize = val;
+                          _currentPage = 1;
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 24),
+              IconButton(
+                icon: const Icon(Icons.chevron_left_rounded, size: 20),
+                onPressed: currentPage > 1
+                    ? () => setState(() => _currentPage = currentPage - 1)
+                    : null,
+                tooltip: 'Previous Page',
+              ),
+              ..._buildPageNumbers(currentPage, totalPages),
+              IconButton(
+                icon: const Icon(Icons.chevron_right_rounded, size: 20),
+                onPressed: currentPage < totalPages
+                    ? () => setState(() => _currentPage = currentPage + 1)
+                    : null,
+                tooltip: 'Next Page',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildPageNumbers(int currentPage, int totalPages) {
+    List<Widget> buttons = [];
+    final List<int> pagesToShow = [];
+    if (totalPages <= 5) {
+      for (int i = 1; i <= totalPages; i++) {
+        pagesToShow.add(i);
+      }
+    } else {
+      pagesToShow.add(1);
+      for (int i = currentPage - 1; i <= currentPage + 1; i++) {
+        if (i > 1 && i < totalPages) {
+          pagesToShow.add(i);
+        }
+      }
+      pagesToShow.add(totalPages);
+    }
+
+    int lastPage = 0;
+    for (var page in pagesToShow) {
+      if (lastPage > 0 && page - lastPage > 1) {
+        buttons.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text('...', style: TextStyle(color: context.textMutedColor)),
+          ),
+        );
+      }
+      
+      final isSelected = page == currentPage;
+      buttons.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(6),
+            onTap: () => setState(() => _currentPage = page),
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: isSelected ? AppTheme.primary : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: isSelected ? AppTheme.primary : Colors.transparent,
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  '$page',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    color: isSelected ? Colors.white : context.textMutedColor,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      lastPage = page;
+    }
+    
+    return buttons;
   }
 
   Widget _buildTableHeader() {

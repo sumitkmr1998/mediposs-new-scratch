@@ -37,6 +37,7 @@ import '../opd/doctor_list_screen.dart';
 import 'user_management_windows.dart';
 import 'opd/doctor_list_windows.dart';
 import 'widgets/settings_widgets.dart';
+import '../../shared/services/data_population_service.dart';
 
 class SettingsWindows extends StatefulWidget {
   const SettingsWindows({super.key});
@@ -1733,6 +1734,30 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                     ),
                   ],
                 ),
+                // 5. Demo Data Seeding Card
+                _buildFeatureCard(
+                  context: context,
+                  title: 'Demo Data Seeding',
+                  subtitle: 'Populate database with 6 months of realistic data: 30 patients, 30 dispenses, 20 retail sales daily (avg cart value 1500, avg 5 items), and 10 stock transfers daily.',
+                  icon: LucideIcons.database,
+                  accentColor: Colors.purple,
+                  actions: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _seedCustomDemoData(),
+                        icon: const Icon(LucideIcons.playCircle, size: 16),
+                        label: const Text('Seed 6-Month Data', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.purple,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             );
           },
@@ -1768,6 +1793,88 @@ class _SettingsWindowsState extends State<SettingsWindows> {
   }
 
   // Staff and Doctor sections are now embedded directly via UserManagementWindows and DoctorListWindows
+
+  Future<void> _seedCustomDemoData() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Seed 6-Month Demo Data?'),
+        content: const Text(
+          'This will populate the database with a high volume of demo data (approx. 5,400 patients, 9,000 sales transactions/dispenses, and 1,800 stock transfers) across the last 180 days. This process may take a few seconds.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
+            child: const Text('Seed Data'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(color: Colors.purple),
+            SizedBox(width: 24),
+            Expanded(
+              child: Text(
+                'Generating and writing data to local ObjectBox. Please wait...',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final seeder = DataPopulationService();
+      await seeder.populateCustomDataFor6Months();
+      
+      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Data Seeded Successfully'),
+            content: const Text(
+              'Successfully seeded patients, dispenses, sales, and stock transfers for the last 6 months.\n\nPlease restart the application to refresh all providers and cache lists.',
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  exit(0);
+                },
+                child: const Text('Exit App Now'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Seeding failed: $e'),
+          backgroundColor: AppTheme.danger,
+        ));
+      }
+    }
+  }
 
   // --- Core Data Operations ---
   Future<void> _backupDatabase() async {

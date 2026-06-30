@@ -16,6 +16,7 @@ import '../../shared/utils/analytics_helper.dart';
 import '../../theme/app_theme.dart';
 import 'package:excel/excel.dart' as excel_pkg;
 import '../../shared/models/schedule_h1_record.dart';
+import '../../objectbox.g.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
@@ -2661,14 +2662,19 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
       start = DateTime(now.year, now.month, 1);
     }
 
-    final allRecords = h1Box.getAll();
+    final queryBuilder = h1Box.query(
+      ScheduleH1Record_.saleDate.between(
+        start.millisecondsSinceEpoch,
+        end.millisecondsSinceEpoch,
+      ),
+    );
+    final query = queryBuilder.build();
+    final allRecords = query.find();
+    query.close();
+
     allRecords.sort((a, b) => b.saleDate.compareTo(a.saleDate));
 
     final filteredRecords = allRecords.where((r) {
-      final matchesDate = r.saleDate.isAfter(start.subtract(const Duration(seconds: 1))) &&
-          r.saleDate.isBefore(end.add(const Duration(seconds: 1)));
-      if (!matchesDate) return false;
-
       if (_h1SearchQuery.isEmpty) return true;
       final query = _h1SearchQuery.toLowerCase();
       return r.medicineName.toLowerCase().contains(query) ||

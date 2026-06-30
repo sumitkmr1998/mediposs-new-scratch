@@ -84,9 +84,6 @@ class _LoginAndroidState extends State<LoginAndroid> {
         final errorMsg = await sync.login(_selectedUser!.name, _pin);
 
         if (errorMsg == null && mounted) {
-          // Auth passed on Hub, trigger incremental sync
-          await sync.syncAll(isFullSync: false);
-
           if (!mounted) return;
 
           // Reload providers with the new Hub data

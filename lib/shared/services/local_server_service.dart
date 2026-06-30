@@ -445,9 +445,17 @@ class LocalServerService {
   Response _medicinesGetHandler(Request req) {
     final sinceStr = req.url.queryParameters['since'];
     final since = DateTime.tryParse(sinceStr ?? '') ?? DateTime(2000);
+    final limitStr = req.url.queryParameters['limit'];
+    final offsetStr = req.url.queryParameters['offset'];
+    final limit = int.tryParse(limitStr ?? '');
+    final offset = int.tryParse(offsetStr ?? '');
 
     final box = ObjectBoxService.instance.medicineBox;
-    final medicines = box.query(Medicine_.updatedAt.greaterThan(since.millisecondsSinceEpoch)).build().find();
+    final queryBuilder = box.query(Medicine_.updatedAt.greaterThan(since.millisecondsSinceEpoch));
+    final query = queryBuilder.build();
+    if (offset != null) query.offset = offset;
+    if (limit != null) query.limit = limit;
+    final medicines = query.find();
     
     final json = medicines
         .map((m) => {
@@ -669,12 +677,19 @@ class LocalServerService {
   Response _salesGetHandler(Request req) {
     final sinceStr = req.url.queryParameters['since'];
     final sinceMs = int.tryParse(sinceStr ?? '') ?? (DateTime.tryParse(sinceStr ?? '')?.millisecondsSinceEpoch) ?? 0;
+    final limitStr = req.url.queryParameters['limit'];
+    final offsetStr = req.url.queryParameters['offset'];
+    final limit = int.tryParse(limitStr ?? '');
+    final offset = int.tryParse(offsetStr ?? '');
 
     final box = ObjectBoxService.instance.saleBox;
-    final query = box.query(Sale_.updatedAt.greaterThan(sinceMs - 1));
-    final sales = query.build().find();
+    final queryBuilder = box.query(Sale_.updatedAt.greaterThan(sinceMs - 1));
+    final query = queryBuilder.build();
+    if (offset != null) query.offset = offset;
+    if (limit != null) query.limit = limit;
+    final sales = query.find();
     
-    debugPrint('Hub: Sales sync requested (since=$sinceMs). Returning ${sales.length} sales.');
+    debugPrint('Hub: Sales sync requested (since=$sinceMs, limit=$limit, offset=$offset). Returning ${sales.length} sales.');
 
     final json = sales
         .map((s) => {
@@ -1131,12 +1146,17 @@ class LocalServerService {
   Response _patientsGetHandler(Request req) {
     final sinceStr = req.url.queryParameters['since'];
     final since = DateTime.tryParse(sinceStr ?? '') ?? DateTime(2000);
+    final limitStr = req.url.queryParameters['limit'];
+    final offsetStr = req.url.queryParameters['offset'];
+    final limit = int.tryParse(limitStr ?? '');
+    final offset = int.tryParse(offsetStr ?? '');
 
     final box = ObjectBoxService.instance.patientBox;
-    final patients = box
-        .query(Patient_.updatedAt.greaterThan(since.millisecondsSinceEpoch))
-        .build()
-        .find();
+    final queryBuilder = box.query(Patient_.updatedAt.greaterThan(since.millisecondsSinceEpoch));
+    final query = queryBuilder.build();
+    if (offset != null) query.offset = offset;
+    if (limit != null) query.limit = limit;
+    final patients = query.find();
 
     final json = patients
         .map((p) => {
@@ -1255,7 +1275,18 @@ class LocalServerService {
   Response _prescriptionsGetHandler(Request req) {
     final sinceStr = req.url.queryParameters['since'];
     final since = DateTime.tryParse(sinceStr ?? '') ?? DateTime(2000);
-    final prescriptions = ObjectBoxService.instance.prescriptionBox.getAll();
+    final limitStr = req.url.queryParameters['limit'];
+    final offsetStr = req.url.queryParameters['offset'];
+    final limit = int.tryParse(limitStr ?? '');
+    final offset = int.tryParse(offsetStr ?? '');
+
+    final box = ObjectBoxService.instance.prescriptionBox;
+    final queryBuilder = box.query(Prescription_.updatedAt.greaterThan(since.millisecondsSinceEpoch));
+    final query = queryBuilder.build();
+    if (offset != null) query.offset = offset;
+    if (limit != null) query.limit = limit;
+    final prescriptions = query.find();
+
     final patientBox = ObjectBoxService.instance.patientBox;
     final json = prescriptions.map((p) {
       final patient = patientBox.get(p.patientId);
@@ -1281,7 +1312,11 @@ class LocalServerService {
       };
     }).toList();
     return Response.ok(
-      jsonEncode({'data': json, 'count': json.length}),
+      jsonEncode({
+        'data': json,
+        'count': json.length,
+        'serverTime': DateTime.now().millisecondsSinceEpoch,
+      }),
       headers: {'content-type': 'application/json'},
     );
   }
@@ -2430,12 +2465,19 @@ class LocalServerService {
   Response _auditGetHandler(Request req) {
     final sinceStr = req.url.queryParameters['since'];
     final sinceMs = int.tryParse(sinceStr ?? '') ?? (DateTime.tryParse(sinceStr ?? '')?.millisecondsSinceEpoch) ?? 0;
+    final limitStr = req.url.queryParameters['limit'];
+    final offsetStr = req.url.queryParameters['offset'];
+    final limit = int.tryParse(limitStr ?? '');
+    final offset = int.tryParse(offsetStr ?? '');
 
     final box = ObjectBoxService.instance.store.box<AuditLog>();
-    final query = box.query(AuditLog_.timestamp.greaterThan(sinceMs - 1));
-    final logs = query.build().find();
+    final queryBuilder = box.query(AuditLog_.timestamp.greaterThan(sinceMs - 1));
+    final query = queryBuilder.build();
+    if (offset != null) query.offset = offset;
+    if (limit != null) query.limit = limit;
+    final logs = query.find();
 
-    debugPrint('Hub: Audit log sync requested (since=$sinceMs). Returning ${logs.length} logs.');
+    debugPrint('Hub: Audit log sync requested (since=$sinceMs, limit=$limit, offset=$offset). Returning ${logs.length} logs.');
 
     final json = logs
         .map((l) => {
@@ -2460,11 +2502,19 @@ class LocalServerService {
   Response _h1RecordsGetHandler(Request req) {
     final sinceStr = req.url.queryParameters['since'];
     final sinceMs = int.tryParse(sinceStr ?? '') ?? (DateTime.tryParse(sinceStr ?? '')?.millisecondsSinceEpoch) ?? 0;
+    final limitStr = req.url.queryParameters['limit'];
+    final offsetStr = req.url.queryParameters['offset'];
+    final limit = int.tryParse(limitStr ?? '');
+    final offset = int.tryParse(offsetStr ?? '');
 
     final box = ObjectBoxService.instance.store.box<ScheduleH1Record>();
-    final records = box.getAll().where((r) => r.saleDate.millisecondsSinceEpoch > sinceMs - 1).toList();
+    final queryBuilder = box.query(ScheduleH1Record_.saleDate.greaterThan(sinceMs - 1));
+    final query = queryBuilder.build();
+    if (offset != null) query.offset = offset;
+    if (limit != null) query.limit = limit;
+    final records = query.find();
 
-    debugPrint('Hub: H1 sync requested (since=$sinceMs). Returning ${records.length} records.');
+    debugPrint('Hub: H1 sync requested (since=$sinceMs, limit=$limit, offset=$offset). Returning ${records.length} records.');
 
     final json = records.map((r) => r.toJson()).toList();
     return Response.ok(
