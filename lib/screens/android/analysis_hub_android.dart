@@ -129,10 +129,37 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
     );
   }
 
+  List<String> _allowedTabTitles = [];
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 7, vsync: this);
+    final auth = context.read<AuthProvider>();
+    final user = auth.currentUser;
+    _allowedTabTitles = [];
+    if (user != null) {
+      if (user.canViewFinancialAnalytics) {
+        _allowedTabTitles.add('Trends');
+        _allowedTabTitles.add('Categories');
+      }
+      if (user.canViewAnalytics) {
+        _allowedTabTitles.add('Explorer');
+      }
+      if (user.canEditInventory) {
+        _allowedTabTitles.add('Reorder');
+      }
+      if (user.canAccessOPD) {
+        _allowedTabTitles.add('Patients');
+      }
+      if (user.canViewFinancialAnalytics) {
+        _allowedTabTitles.add('Reconcile');
+      }
+      if (user.canViewOpdReports) {
+        _allowedTabTitles.add('H1 Compliance');
+      }
+    }
+    final length = _allowedTabTitles.isEmpty ? 1 : _allowedTabTitles.length;
+    _tabController = TabController(length: length, vsync: this);
   }
 
   @override
@@ -162,6 +189,50 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
           s.createdAt.year == today.year &&
           s.createdAt.month == today.month &&
           s.createdAt.day == today.day).toList();
+    }
+
+    if (_allowedTabTitles.isEmpty) {
+      return Scaffold(
+        backgroundColor: context.bgColor,
+        appBar: AppBar(
+          backgroundColor: context.surfaceColor,
+          elevation: 0,
+          title: const Text('Business Analytics'),
+        ),
+        body: const Center(
+          child: Text(
+            'You do not have permission to view Business Analytics.',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+    }
+
+    final List<Widget> tabWidgets = [];
+    final List<Widget> tabViews = [];
+    for (final title in _allowedTabTitles) {
+      if (title == 'Trends') {
+        tabWidgets.add(const Tab(child: Text('Trends')));
+        tabViews.add(_buildSalesTrendsTab(allSales, allMedicines));
+      } else if (title == 'Categories') {
+        tabWidgets.add(const Tab(child: Text('Categories')));
+        tabViews.add(_buildCategorySalesTab(allSales, allMedicines));
+      } else if (title == 'Explorer') {
+        tabWidgets.add(const Tab(child: Text('Explorer')));
+        tabViews.add(_buildProductPerformanceTab(allSales, allMedicines, allProcedures));
+      } else if (title == 'Reorder') {
+        tabWidgets.add(const Tab(child: Text('Reorder')));
+        tabViews.add(_buildReorderAndDeadStockTab(allSales, allMedicines));
+      } else if (title == 'Patients') {
+        tabWidgets.add(const Tab(child: Text('Patients')));
+        tabViews.add(_buildPatientAnalyticsTab(allSales, allPatients));
+      } else if (title == 'Reconcile') {
+        tabWidgets.add(const Tab(child: Text('Reconcile')));
+        tabViews.add(_buildClinicReconciliationTab(allSales, allMedicines));
+      } else if (title == 'H1 Compliance') {
+        tabWidgets.add(const Tab(child: Text('H1 Compliance')));
+        tabViews.add(_buildScheduleH1RegisterTab());
+      }
     }
 
     return Scaffold(
@@ -218,30 +289,14 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
               unselectedLabelColor: context.textMutedColor,
               labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
               unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
-              tabs: const [
-                Tab(child: Text('Trends')),
-                Tab(child: Text('Categories')),
-                Tab(child: Text('Explorer')),
-                Tab(child: Text('Reorder')),
-                Tab(child: Text('Patients')),
-                Tab(child: Text('Reconcile')),
-                Tab(child: Text('H1 Compliance')),
-              ],
+              tabs: tabWidgets,
             ),
           ),
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          _buildSalesTrendsTab(allSales, allMedicines),
-          _buildCategorySalesTab(allSales, allMedicines),
-          _buildProductPerformanceTab(allSales, allMedicines, allProcedures),
-          _buildReorderAndDeadStockTab(allSales, allMedicines),
-          _buildPatientAnalyticsTab(allSales, allPatients),
-          _buildClinicReconciliationTab(allSales, allMedicines),
-          _buildScheduleH1RegisterTab(),
-        ],
+        children: tabViews,
       ),
     );
   }

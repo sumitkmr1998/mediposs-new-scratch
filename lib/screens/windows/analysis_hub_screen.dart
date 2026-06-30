@@ -129,10 +129,37 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
     );
   }
 
+  List<String> _allowedTabTitles = [];
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 7, vsync: this);
+    final auth = context.read<AuthProvider>();
+    final user = auth.currentUser;
+    _allowedTabTitles = [];
+    if (user != null) {
+      if (user.canViewFinancialAnalytics) {
+        _allowedTabTitles.add('Trends');
+        _allowedTabTitles.add('Categories');
+      }
+      if (user.canViewAnalytics) {
+        _allowedTabTitles.add('Explorer');
+      }
+      if (user.canEditInventory) {
+        _allowedTabTitles.add('Reorder');
+      }
+      if (user.canAccessOPD) {
+        _allowedTabTitles.add('Patients');
+      }
+      if (user.canViewFinancialAnalytics) {
+        _allowedTabTitles.add('Reconcile');
+      }
+      if (user.canViewOpdReports) {
+        _allowedTabTitles.add('H1 Compliance');
+      }
+    }
+    final length = _allowedTabTitles.isEmpty ? 1 : _allowedTabTitles.length;
+    _tabController = TabController(length: length, vsync: this);
   }
 
   @override
@@ -163,55 +190,178 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
           s.createdAt.day == today.day).toList();
     }
 
+    if (_allowedTabTitles.isEmpty) {
+      return Scaffold(
+        backgroundColor: context.bgColor,
+        appBar: AppBar(
+          backgroundColor: context.surfaceColor,
+          elevation: 0,
+          title: const Text('Business Analytics'),
+        ),
+        body: const Center(
+          child: Text(
+            'You do not have permission to view Business Analytics.',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+    }
+
+    final List<Widget> tabWidgets = [];
+    final List<Widget> tabViews = [];
+    for (final title in _allowedTabTitles) {
+      if (title == 'Trends') {
+        tabWidgets.add(
+          const Tab(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.analytics_rounded, size: 16),
+                  SizedBox(width: 6),
+                  Text('Sales Trends'),
+                ],
+              ),
+            ),
+          ),
+        );
+        tabViews.add(_buildSalesTrendsTab(allSales, allMedicines));
+      } else if (title == 'Categories') {
+        tabWidgets.add(
+          const Tab(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.pie_chart_rounded, size: 16),
+                  SizedBox(width: 6),
+                  Text('Category Sales Weight'),
+                ],
+              ),
+            ),
+          ),
+        );
+        tabViews.add(_buildCategorySalesTab(allSales, allMedicines));
+      } else if (title == 'Explorer') {
+        tabWidgets.add(
+          const Tab(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.bar_chart_rounded, size: 16),
+                  SizedBox(width: 6),
+                  Text('Performance Explorer'),
+                ],
+              ),
+            ),
+          ),
+        );
+        tabViews.add(_buildProductPerformanceTab(allSales, allMedicines, allProcedures));
+      } else if (title == 'Reorder') {
+        tabWidgets.add(
+          const Tab(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.warning_amber_rounded, size: 16),
+                  SizedBox(width: 6),
+                  Text('Reorder & Dead Stock'),
+                ],
+              ),
+            ),
+          ),
+        );
+        tabViews.add(_buildReorderAndDeadStockTab(allSales, allMedicines));
+      } else if (title == 'Patients') {
+        tabWidgets.add(
+          const Tab(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.people_rounded, size: 16),
+                  SizedBox(width: 6),
+                  Text('Patient Analytics'),
+                ],
+              ),
+            ),
+          ),
+        );
+        tabViews.add(_buildPatientAnalyticsTab(allSales, allPatients));
+      } else if (title == 'Reconcile') {
+        tabWidgets.add(
+          const Tab(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.compare_arrows_rounded, size: 16),
+                  SizedBox(width: 6),
+                  Text('Clinic Reconciliation'),
+                ],
+              ),
+            ),
+          ),
+        );
+        tabViews.add(_buildClinicReconciliationTab(allSales, allMedicines));
+      } else if (title == 'H1 Compliance') {
+        tabWidgets.add(
+          const Tab(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.receipt_long_rounded, size: 16),
+                  SizedBox(width: 6),
+                  Text('Schedule H1 Register'),
+                ],
+              ),
+            ),
+          ),
+        );
+        tabViews.add(_buildScheduleH1RegisterTab());
+      }
+    }
+
     return Scaffold(
       backgroundColor: context.bgColor,
       appBar: AppBar(
         backgroundColor: context.surfaceColor,
         elevation: 0,
-        toolbarHeight: 76,
         centerTitle: false,
-        title: Padding(
-          padding: const EdgeInsets.only(left: 8.0, top: 16.0, bottom: 4.0),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.insights_rounded,
-                  color: AppTheme.primary,
-                  size: 24,
-                ),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
               ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Advanced Business Analytics',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Real-time financial performance, product activity & inventory velocity',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: context.textMutedColor,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
+              child: const Icon(
+                Icons.insights_rounded,
+                color: AppTheme.primary,
+                size: 20,
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Business Analytics Hub',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
@@ -240,114 +390,14 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
               unselectedLabelColor: context.textMutedColor,
               labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
               unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-              tabs: const [
-                Tab(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.analytics_rounded, size: 16),
-                        SizedBox(width: 6),
-                        Text('Sales Trends'),
-                      ],
-                    ),
-                  ),
-                ),
-                Tab(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.pie_chart_rounded, size: 16),
-                        SizedBox(width: 6),
-                        Text('Category Sales Weight'),
-                      ],
-                    ),
-                  ),
-                ),
-                Tab(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.bar_chart_rounded, size: 16),
-                        SizedBox(width: 6),
-                        Text('Performance Explorer'),
-                      ],
-                    ),
-                  ),
-                ),
-                Tab(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.warning_amber_rounded, size: 16),
-                        SizedBox(width: 6),
-                        Text('Reorder & Dead Stock'),
-                      ],
-                    ),
-                  ),
-                ),
-                Tab(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.people_rounded, size: 16),
-                        SizedBox(width: 6),
-                        Text('Patient Analytics'),
-                      ],
-                    ),
-                  ),
-                ),
-                Tab(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.compare_arrows_rounded, size: 16),
-                        SizedBox(width: 6),
-                        Text('Clinic Reconciliation'),
-                      ],
-                    ),
-                  ),
-                ),
-                Tab(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.receipt_long_rounded, size: 16),
-                        SizedBox(width: 6),
-                        Text('Schedule H1 Register'),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+              tabs: tabWidgets,
             ),
           ),
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          _buildSalesTrendsTab(allSales, allMedicines),
-          _buildCategorySalesTab(allSales, allMedicines),
-          _buildProductPerformanceTab(allSales, allMedicines, allProcedures),
-          _buildReorderAndDeadStockTab(allSales, allMedicines),
-          _buildPatientAnalyticsTab(allSales, allPatients),
-          _buildClinicReconciliationTab(allSales, allMedicines),
-          _buildScheduleH1RegisterTab(),
-        ],
+        children: tabViews,
       ),
     );
   }

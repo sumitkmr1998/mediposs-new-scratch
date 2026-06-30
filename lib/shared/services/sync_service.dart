@@ -361,6 +361,9 @@ class SyncService extends ChangeNotifier {
 
   /// Pulls latest "Source of Truth" from Firebase if Hub is offline.
   Future<void> syncAllFromCloud() async {
+    if (_isSyncing) return;
+    _isSyncing = true;
+    notifyListeners();
     debugPrint('SyncService: syncAllFromCloud starting...');
     try {
       // 1. Pull Users (CRITICAL for login while offline)
@@ -547,15 +550,23 @@ class SyncService extends ChangeNotifier {
       }
 
       debugPrint('SyncService: syncAllFromCloud completed.');
-      notifyListeners();
     } catch (e) {
       debugPrint('SyncService: syncAllFromCloud global error - $e');
+    } finally {
+      _isSyncing = false;
+      notifyListeners();
     }
   }
 
   /// Pulls all relevant data from Hub to ensure Android parity
   Future<void> syncAll({bool isFullSync = false}) async {
     if (!_isConnected || _jwtToken == null) return;
+    if (_isSyncing) {
+      debugPrint('SyncService: syncAll already in progress, skipping.');
+      return;
+    }
+    _isSyncing = true;
+    notifyListeners();
     debugPrint('SyncService: syncAll starting (isFullSync=$isFullSync)...');
 
     final settings = ObjectBoxService.instance.settings;
@@ -589,7 +600,7 @@ class SyncService extends ChangeNotifier {
     }
 
     try {
-      final t1 = await pullMedicines(since: sinceStr);
+      final t1 = await pullMedicines(since: sinceStr, isNested: true);
       final t2 = await pullPatients(since: sinceStr);
       await pullAppointments();
       await pullDoctors();
@@ -616,6 +627,9 @@ class SyncService extends ChangeNotifier {
       debugPrint('SyncService: syncAll completed successfully.');
     } catch (e) {
       debugPrint('SyncService: syncAll error - $e');
+    } finally {
+      _isSyncing = false;
+      notifyListeners();
     }
   }
 
@@ -674,14 +688,17 @@ class SyncService extends ChangeNotifier {
     }
   }
 
-  Future<int?> pullMedicines({String? since}) async {
-    if (!_isConnected || _jwtToken == null || _isSyncing) {
+  Future<int?> pullMedicines({String? since, bool isNested = false}) async {
+    if (!_isConnected || _jwtToken == null || (_isSyncing && !isNested)) {
       debugPrint('SyncService: pullMedicines aborted (isConnected: $_isConnected, jwt: $_jwtToken, isSyncing: $_isSyncing)');
       return null;
     }
     debugPrint('SyncService: pullMedicines starting (since=$since)...');
-    _isSyncing = true;
-    notifyListeners();
+    final bool manageSyncState = !_isSyncing;
+    if (manageSyncState) {
+      _isSyncing = true;
+      notifyListeners();
+    }
 
     try {
       final box = ObjectBoxService.instance.medicineBox;
@@ -882,8 +899,10 @@ class SyncService extends ChangeNotifier {
         await syncAllFromCloud();
       }
     } finally {
-      _isSyncing = false;
-      notifyListeners();
+      if (manageSyncState) {
+        _isSyncing = false;
+        notifyListeners();
+      }
     }
     return null;
   }

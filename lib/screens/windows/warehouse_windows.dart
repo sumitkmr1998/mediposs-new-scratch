@@ -1618,6 +1618,7 @@ class _TransferHistoryTab extends StatefulWidget {
 
 class _TransferHistoryTabState extends State<_TransferHistoryTab> {
   String _searchQuery = '';
+  int _limit = 30;
 
   @override
   Widget build(BuildContext context) {
@@ -1713,6 +1714,7 @@ class _TransferHistoryTabState extends State<_TransferHistoryTab> {
                         );
                         if (range != null) {
                           wh.setFilter(SalesFilter.custom, range: range);
+                          setState(() => _limit = 30);
                         }
                       },
                     ),
@@ -1721,7 +1723,10 @@ class _TransferHistoryTabState extends State<_TransferHistoryTab> {
                         icon: const Icon(Icons.clear, size: 18),
                         color: AppTheme.danger,
                         tooltip: 'Clear Date Filter',
-                        onPressed: () => wh.setFilter(SalesFilter.allTime),
+                        onPressed: () {
+                          wh.setFilter(SalesFilter.allTime);
+                          setState(() => _limit = 30);
+                        },
                       ),
                     PopupMenuButton<String>(
                       icon: const Icon(Icons.arrow_drop_down, size: 20, color: AppTheme.primary),
@@ -1736,6 +1741,7 @@ class _TransferHistoryTabState extends State<_TransferHistoryTab> {
                         } else if (value == 'all_time') {
                           wh.setFilter(SalesFilter.allTime);
                         }
+                        setState(() => _limit = 30);
                       },
                       itemBuilder: (context) => [
                         const PopupMenuItem(value: 'today', child: Text('Today')),
@@ -1753,7 +1759,10 @@ class _TransferHistoryTabState extends State<_TransferHistoryTab> {
               SizedBox(
                 width: 280,
                 child: TextField(
-                  onChanged: (v) => setState(() => _searchQuery = v),
+                  onChanged: (v) => setState(() {
+                    _searchQuery = v;
+                    _limit = 30;
+                  }),
                   decoration: InputDecoration(
                     hintText: 'Search medicine, batch, note...',
                     prefixIcon: const Icon(Icons.search, size: 20),
@@ -1787,60 +1796,79 @@ class _TransferHistoryTabState extends State<_TransferHistoryTab> {
               : SingleChildScrollView(
                   scrollDirection: Axis.vertical,
                   padding: const EdgeInsets.all(20),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 300),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: context.cardColor,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: context.borderColor),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: DataTable(
-                            headingRowColor: WidgetStateProperty.all(context.bgColor.withValues(alpha: 0.5)),
-                            headingTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary),
-                            dataRowMinHeight: 60,
-                            dataRowMaxHeight: 60,
-                            dividerThickness: 1,
-                            columns: const [
-                              DataColumn(label: Text('Date & Time')),
-                              DataColumn(label: Text('Medicine Name')),
-                              DataColumn(label: Text('From Location')),
-                              DataColumn(label: Text('To Location')),
-                              DataColumn(label: Text('Batch Number')),
-                              DataColumn(label: Text('Qty'), numeric: true),
-                              DataColumn(label: Text('Notes')),
-                              DataColumn(label: Text('Transferred By')),
-                            ],
-                            rows: history.map((t) {
-                              final dateStr = '${t.transferredAt.day.toString().padLeft(2,'0')}/${t.transferredAt.month.toString().padLeft(2,'0')}/${t.transferredAt.year} ${t.transferredAt.hour.toString().padLeft(2,'0')}:${t.transferredAt.minute.toString().padLeft(2,'0')}';
-                              return DataRow(
-                                cells: [
-                                  DataCell(Text(dateStr, style: const TextStyle(fontSize: 13))),
-                                  DataCell(Text(t.medicineName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14))),
-                                  DataCell(_buildLocationBadge(context, t.fromWarehouse)),
-                                  DataCell(_buildLocationBadge(context, t.toWarehouse)),
-                                  DataCell(Text(t.batchNo ?? '-', style: TextStyle(fontSize: 13, color: t.batchNo == null ? context.textMutedColor : null))),
-                                  DataCell(Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(color: AppTheme.primaryLight.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
-                                    child: Text('${t.qty}', style: const TextStyle(color: AppTheme.primaryLight, fontWeight: FontWeight.bold)),
-                                  )),
-                                  DataCell(SizedBox(
-                                    width: 150,
-                                    child: Text(t.note.isEmpty ? '-' : t.note, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: context.textMutedColor, fontStyle: FontStyle.italic)),
-                                  )),
-                                  DataCell(Text(t.transferredBy, style: const TextStyle(fontSize: 13))),
+                  child: Column(
+                    children: [
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 300),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: context.cardColor,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: context.borderColor),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: DataTable(
+                                headingRowColor: WidgetStateProperty.all(context.bgColor.withValues(alpha: 0.5)),
+                                headingTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary),
+                                dataRowMinHeight: 60,
+                                dataRowMaxHeight: 60,
+                                dividerThickness: 1,
+                                columns: const [
+                                  DataColumn(label: Text('Date & Time')),
+                                  DataColumn(label: Text('Medicine Name')),
+                                  DataColumn(label: Text('From Location')),
+                                  DataColumn(label: Text('To Location')),
+                                  DataColumn(label: Text('Batch Number')),
+                                  DataColumn(label: Text('Qty'), numeric: true),
+                                  DataColumn(label: Text('Notes')),
+                                  DataColumn(label: Text('Transferred By')),
                                 ],
-                              );
-                            }).toList(),
+                                rows: history.take(_limit).map((t) {
+                                  final dateStr = '${t.transferredAt.day.toString().padLeft(2,'0')}/${t.transferredAt.month.toString().padLeft(2,'0')}/${t.transferredAt.year} ${t.transferredAt.hour.toString().padLeft(2,'0')}:${t.transferredAt.minute.toString().padLeft(2,'0')}';
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(Text(dateStr, style: const TextStyle(fontSize: 13))),
+                                      DataCell(Text(t.medicineName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14))),
+                                      DataCell(_buildLocationBadge(context, t.fromWarehouse)),
+                                      DataCell(_buildLocationBadge(context, t.toWarehouse)),
+                                      DataCell(Text(t.batchNo ?? '-', style: TextStyle(fontSize: 13, color: t.batchNo == null ? context.textMutedColor : null))),
+                                      DataCell(Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(color: AppTheme.primaryLight.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+                                        child: Text('${t.qty}', style: const TextStyle(color: AppTheme.primaryLight, fontWeight: FontWeight.bold)),
+                                      )),
+                                      DataCell(SizedBox(
+                                        width: 150,
+                                        child: Text(t.note.isEmpty ? '-' : t.note, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: context.textMutedColor, fontStyle: FontStyle.italic)),
+                                      )),
+                                      DataCell(Text(t.transferredBy, style: const TextStyle(fontSize: 13))),
+                                    ],
+                                  );
+                                }).toList(),
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
+                      if (history.length > _limit)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: Center(
+                            child: FilledButton.icon(
+                              onPressed: () => setState(() => _limit += 30),
+                              icon: const Icon(Icons.expand_more),
+                              label: const Text('Load More'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AppTheme.primary,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
         ),
@@ -2553,6 +2581,15 @@ class _PurchaseHistoryTabState extends State<_PurchaseHistoryTab> {
   String _searchQuery = '';
   DateTime? _startDate;
   DateTime? _endDate;
+  int _limit = 30;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _startDate = DateTime(now.year, now.month, now.day);
+    _endDate = DateTime(now.year, now.month, now.day);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2644,6 +2681,7 @@ class _PurchaseHistoryTabState extends State<_PurchaseHistoryTab> {
                           setState(() {
                             _startDate = picked.start;
                             _endDate = picked.end;
+                            _limit = 30;
                           });
                         }
                       },
@@ -2653,7 +2691,11 @@ class _PurchaseHistoryTabState extends State<_PurchaseHistoryTab> {
                         icon: const Icon(Icons.clear, size: 18),
                         color: AppTheme.danger,
                         tooltip: 'Clear Date Filter',
-                        onPressed: () => setState(() { _startDate = null; _endDate = null; }),
+                        onPressed: () => setState(() {
+                          _startDate = null;
+                          _endDate = null;
+                          _limit = 30;
+                        }),
                       ),
                     PopupMenuButton<String>(
                       icon: const Icon(Icons.arrow_drop_down, size: 20, color: AppTheme.primary),
@@ -2672,9 +2714,9 @@ class _PurchaseHistoryTabState extends State<_PurchaseHistoryTab> {
                             _endDate = _startDate!.add(const Duration(days: 6));
                           } else if (value == 'this_month') {
                             _startDate = DateTime(now.year, now.month, 1);
-                            // Set to last day of month
                             _endDate = DateTime(now.year, now.month + 1, 0);
                           }
+                          _limit = 30;
                         });
                       },
                       itemBuilder: (context) => [
@@ -2693,7 +2735,10 @@ class _PurchaseHistoryTabState extends State<_PurchaseHistoryTab> {
               SizedBox(
                 width: 280,
                 child: TextField(
-                  onChanged: (v) => setState(() => _searchQuery = v),
+                  onChanged: (v) => setState(() {
+                    _searchQuery = v;
+                    _limit = 30;
+                  }),
                   decoration: InputDecoration(
                     hintText: 'Search medicine or supplier...',
                     prefixIcon: const Icon(Icons.search, size: 20),
@@ -2726,87 +2771,106 @@ class _PurchaseHistoryTabState extends State<_PurchaseHistoryTab> {
               : SingleChildScrollView(
                   scrollDirection: Axis.vertical,
                   padding: const EdgeInsets.all(20),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 300),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: context.cardColor,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: context.borderColor),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: DataTable(
-                            headingRowColor: WidgetStateProperty.all(context.bgColor.withValues(alpha: 0.5)),
-                            headingTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary),
-                            dataRowMinHeight: 60,
-                            dataRowMaxHeight: 60,
-                            dividerThickness: 1,
-                            columns: const [
-                              DataColumn(label: Text('Date & Time')),
-                              DataColumn(label: Text('Medicine Name')),
-                              DataColumn(label: Text('Supplier')),
-                              DataColumn(label: Text('Purchase Price'), numeric: true),
-                              DataColumn(label: Text('Qty'), numeric: true),
-                              DataColumn(label: Text('Target Location')),
-                              DataColumn(label: Text('Notes')),
-                              DataColumn(label: Text('Actions')),
-                            ],
-                            rows: history.map((p) {
-                              final dateStr = '${p.purchasedAt.day.toString().padLeft(2,'0')}/${p.purchasedAt.month.toString().padLeft(2,'0')}/${p.purchasedAt.year} ${p.purchasedAt.hour.toString().padLeft(2,'0')}:${p.purchasedAt.minute.toString().padLeft(2,'0')}';
-                              return DataRow(
-                                cells: [
-                                  DataCell(Text(dateStr, style: const TextStyle(fontSize: 13))),
-                                  DataCell(Text(p.medicineName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14))),
-                                  DataCell(
-                                    p.supplier.isEmpty 
-                                        ? Text('-', style: TextStyle(color: context.textMutedColor))
-                                        : Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(Icons.business, size: 14, color: context.textMutedColor),
-                                              const SizedBox(width: 6),
-                                              Text(p.supplier, style: const TextStyle(fontWeight: FontWeight.w600)),
-                                            ],
-                                          )
-                                  ),
-                                  DataCell(Text('₹${p.purchasePrice.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600, color: AppTheme.success))),
-                                  DataCell(Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(color: AppTheme.indigo.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
-                                    child: Text('+${p.qty}', style: const TextStyle(color: AppTheme.indigo, fontWeight: FontWeight.bold)),
-                                  )),
-                                  DataCell(_buildLocationBadge(context, p.location)),
-                                  DataCell(SizedBox(
-                                    width: 150,
-                                    child: Text(p.note.isEmpty ? '-' : p.note, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: context.textMutedColor, fontStyle: FontStyle.italic)),
-                                  )),
-                                  DataCell(Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.edit_outlined, size: 18),
-                                        color: AppTheme.primary,
-                                        tooltip: 'Edit Record',
-                                        onPressed: () => showDialog(context: context, builder: (ctx) => _EditPurchaseDialog(purchase: p)),
+                  child: Column(
+                    children: [
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 300),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: context.cardColor,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: context.borderColor),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: DataTable(
+                                headingRowColor: WidgetStateProperty.all(context.bgColor.withValues(alpha: 0.5)),
+                                headingTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary),
+                                dataRowMinHeight: 60,
+                                dataRowMaxHeight: 60,
+                                dividerThickness: 1,
+                                columns: const [
+                                  DataColumn(label: Text('Date & Time')),
+                                  DataColumn(label: Text('Medicine Name')),
+                                  DataColumn(label: Text('Supplier')),
+                                  DataColumn(label: Text('Purchase Price'), numeric: true),
+                                  DataColumn(label: Text('Qty'), numeric: true),
+                                  DataColumn(label: Text('Target Location')),
+                                  DataColumn(label: Text('Notes')),
+                                  DataColumn(label: Text('Actions')),
+                                ],
+                                rows: history.take(_limit).map((p) {
+                                  final dateStr = '${p.purchasedAt.day.toString().padLeft(2,'0')}/${p.purchasedAt.month.toString().padLeft(2,'0')}/${p.purchasedAt.year} ${p.purchasedAt.hour.toString().padLeft(2,'0')}:${p.purchasedAt.minute.toString().padLeft(2,'0')}';
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(Text(dateStr, style: const TextStyle(fontSize: 13))),
+                                      DataCell(Text(p.medicineName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14))),
+                                      DataCell(
+                                        p.supplier.isEmpty 
+                                            ? Text('-', style: TextStyle(color: context.textMutedColor))
+                                            : Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(Icons.business, size: 14, color: context.textMutedColor),
+                                                  const SizedBox(width: 6),
+                                                  Text(p.supplier, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                                ],
+                                              )
                                       ),
-                                      IconButton(
-                                        icon: const Icon(Icons.delete_outline, size: 18),
-                                        color: AppTheme.danger,
-                                        tooltip: 'Delete Record',
-                                        onPressed: () => _showDeleteConfirm(context, inv, p),
-                                      ),
-                                    ],
-                                  )),
-                                ]
-                              );
-                            }).toList(),
+                                      DataCell(Text('₹${p.purchasePrice.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600, color: AppTheme.success))),
+                                      DataCell(Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(color: AppTheme.indigo.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+                                        child: Text('+${p.qty}', style: const TextStyle(color: AppTheme.indigo, fontWeight: FontWeight.bold)),
+                                      )),
+                                      DataCell(_buildLocationBadge(context, p.location)),
+                                      DataCell(SizedBox(
+                                        width: 150,
+                                        child: Text(p.note.isEmpty ? '-' : p.note, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: context.textMutedColor, fontStyle: FontStyle.italic)),
+                                      )),
+                                      DataCell(Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.edit_outlined, size: 18),
+                                            color: AppTheme.primary,
+                                            tooltip: 'Edit Record',
+                                            onPressed: () => showDialog(context: context, builder: (ctx) => _EditPurchaseDialog(purchase: p)),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline, size: 18),
+                                            color: AppTheme.danger,
+                                            tooltip: 'Delete Record',
+                                            onPressed: () => _showDeleteConfirm(context, inv, p),
+                                          ),
+                                        ],
+                                      )),
+                                    ]
+                                  );
+                                }).toList(),
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
+                      if (history.length > _limit)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: Center(
+                            child: FilledButton.icon(
+                              onPressed: () => setState(() => _limit += 30),
+                              icon: const Icon(Icons.expand_more),
+                              label: const Text('Load More'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AppTheme.primary,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
         ),

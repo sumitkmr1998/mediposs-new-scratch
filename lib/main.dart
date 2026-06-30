@@ -143,6 +143,22 @@ void main(List<String> args) async {
   final wsService = WebSocketService();
   SyncQueueService.instance.init();
 
+  // Listen to SyncService changes to reload local providers on sync completion
+  bool wasSyncing = false;
+  syncService.addListener(() {
+    final isSyncing = syncService.isSyncing;
+    if (wasSyncing && !isSyncing) {
+      debugPrint('Main: SyncService completed sync. Reloading providers...');
+      inventoryProvider.load();
+      salesProvider.load();
+      patientProvider.load();
+      opdProvider.loadAll();
+      prescriptionProvider.load();
+      templateProvider.load();
+    }
+    wasSyncing = isSyncing;
+  });
+
   // Global listener for real-time data sync (Mobile Only)
   setupForegroundSyncListeners(
       inventoryProvider,

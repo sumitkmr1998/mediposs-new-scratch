@@ -1037,12 +1037,21 @@ class _LocLabel extends StatelessWidget {
   }
 }
 
-class _TransferHistoryTab extends StatelessWidget {
+class _TransferHistoryTab extends StatefulWidget {
   const _TransferHistoryTab();
+
+  @override
+  State<_TransferHistoryTab> createState() => _TransferHistoryTabState();
+}
+
+class _TransferHistoryTabState extends State<_TransferHistoryTab> {
+  int _limit = 20;
 
   @override
   Widget build(BuildContext context) {
     final wh = context.watch<WarehouseProvider>();
+    final allTransfers = wh.transfers;
+    final displayedCount = allTransfers.length > _limit ? _limit : allTransfers.length;
 
     return CustomScrollView(
       slivers: [
@@ -1055,25 +1064,34 @@ class _TransferHistoryTab extends StatelessWidget {
                 _FilterChip(
                   label: 'Today',
                   isSelected: wh.activeFilter == SalesFilter.today,
-                  onSelected: () => wh.setFilter(SalesFilter.today),
+                  onSelected: () {
+                    wh.setFilter(SalesFilter.today);
+                    setState(() => _limit = 20);
+                  },
                 ),
                 const SizedBox(width: 8),
                 _FilterChip(
                   label: 'Yesterday',
                   isSelected: wh.activeFilter == SalesFilter.yesterday,
-                  onSelected: () => wh.setFilter(SalesFilter.yesterday),
+                  onSelected: () {
+                    wh.setFilter(SalesFilter.yesterday);
+                    setState(() => _limit = 20);
+                  },
                 ),
                 const SizedBox(width: 8),
                 _FilterChip(
                   label: 'Past Week',
                   isSelected: wh.activeFilter == SalesFilter.last7Days,
-                  onSelected: () => wh.setFilter(SalesFilter.last7Days),
+                  onSelected: () {
+                    wh.setFilter(SalesFilter.last7Days);
+                    setState(() => _limit = 20);
+                  },
                 ),
               ],
             ),
           ),
         ),
-        wh.transfers.isEmpty
+        allTransfers.isEmpty
             ? const SliverFillRemaining(
                 child: AppEmptyState(
                   icon: Icons.swap_horiz_rounded,
@@ -1085,7 +1103,7 @@ class _TransferHistoryTab extends StatelessWidget {
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (context, i) {
-                      final t = wh.transfers[i];
+                      final t = allTransfers[i];
                       final isSendOut = t.fromWarehouse == 'main' || t.fromWarehouse == 'clinic';
                       final accentColor =
                           isSendOut ? AppTheme.success : AppTheme.indigo;
@@ -1170,10 +1188,27 @@ class _TransferHistoryTab extends StatelessWidget {
                     ),
                   );
                     },
-                    childCount: wh.transfers.length,
+                    childCount: displayedCount,
                   ),
                 ),
               ),
+        if (allTransfers.length > _limit)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: TextButton.icon(
+                  onPressed: () => setState(() => _limit += 20),
+                  icon: const Icon(Icons.expand_more),
+                  label: const Text('Load More'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppTheme.primary,
+                    textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ),
+          ),
         const SliverToBoxAdapter(child: SizedBox(height: 32)),
       ],
     );
@@ -1519,7 +1554,8 @@ class _PurchaseHistoryTabAndroid extends StatefulWidget {
 
 class _PurchaseHistoryTabAndroidState extends State<_PurchaseHistoryTabAndroid> {
   String _search = '';
-  SalesFilter _activeFilter = SalesFilter.last7Days;
+  SalesFilter _activeFilter = SalesFilter.today;
+  int _limit = 20;
 
   @override
   Widget build(BuildContext context) {
@@ -1546,13 +1582,18 @@ class _PurchaseHistoryTabAndroidState extends State<_PurchaseHistoryTabAndroid> 
       return true;
     }).toList();
 
+    final displayedCount = filtered.length > _limit ? _limit : filtered.length;
+
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: TextField(
-              onChanged: (v) => setState(() => _search = v),
+              onChanged: (v) => setState(() {
+                _search = v;
+                _limit = 20;
+              }),
               decoration: InputDecoration(
                 hintText: 'Search purchase logs...',
                 prefixIcon: const Icon(Icons.search),
@@ -1575,25 +1616,37 @@ class _PurchaseHistoryTabAndroidState extends State<_PurchaseHistoryTabAndroid> 
                 _FilterChip(
                   label: 'Today',
                   isSelected: _activeFilter == SalesFilter.today,
-                  onSelected: () => setState(() => _activeFilter = SalesFilter.today),
+                  onSelected: () => setState(() {
+                    _activeFilter = SalesFilter.today;
+                    _limit = 20;
+                  }),
                 ),
                 const SizedBox(width: 8),
                 _FilterChip(
                   label: 'Yesterday',
                   isSelected: _activeFilter == SalesFilter.yesterday,
-                  onSelected: () => setState(() => _activeFilter = SalesFilter.yesterday),
+                  onSelected: () => setState(() {
+                    _activeFilter = SalesFilter.yesterday;
+                    _limit = 20;
+                  }),
                 ),
                 const SizedBox(width: 8),
                 _FilterChip(
                   label: 'Past Week',
                   isSelected: _activeFilter == SalesFilter.last7Days,
-                  onSelected: () => setState(() => _activeFilter = SalesFilter.last7Days),
+                  onSelected: () => setState(() {
+                    _activeFilter = SalesFilter.last7Days;
+                    _limit = 20;
+                  }),
                 ),
                 const SizedBox(width: 8),
                 _FilterChip(
                   label: 'All Time',
                   isSelected: _activeFilter == SalesFilter.custom,
-                  onSelected: () => setState(() => _activeFilter = SalesFilter.custom),
+                  onSelected: () => setState(() {
+                    _activeFilter = SalesFilter.custom;
+                    _limit = 20;
+                  }),
                 ),
               ],
             ),
@@ -1684,10 +1737,27 @@ class _PurchaseHistoryTabAndroidState extends State<_PurchaseHistoryTabAndroid> 
                         ),
                       );
                     },
-                    childCount: filtered.length,
+                    childCount: displayedCount,
                   ),
                 ),
               ),
+        if (filtered.length > _limit)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: TextButton.icon(
+                  onPressed: () => setState(() => _limit += 20),
+                  icon: const Icon(Icons.expand_more),
+                  label: const Text('Load More'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppTheme.primary,
+                    textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ),
+          ),
         const SliverToBoxAdapter(child: SizedBox(height: 32)),
       ],
     );
