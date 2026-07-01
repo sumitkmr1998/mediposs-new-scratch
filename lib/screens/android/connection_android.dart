@@ -14,6 +14,7 @@ import 'package:flutter/services.dart';
 import '../../shared/services/firebase_sync_service.dart';
 import '../../shared/providers/settings_provider.dart';
 import 'package:battery_optimization_helper/battery_optimization_helper.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ConnectionAndroid extends StatefulWidget {
   const ConnectionAndroid({super.key});
@@ -32,6 +33,45 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
   bool _isFetchingCloudflare = false;
   Timer? _hubCheckTimer;
   bool _isHubBackOnline = false;
+  bool _showAdvanced = false;
+  bool _autoConnectToPrevious = true;
+  bool _isScanning = false;
+
+  Future<List<String>> _getRecentShopIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList('recentShopIds') ?? [];
+  }
+
+  Future<void> _addRecentShopId(String shopId) async {
+    if (shopId.isEmpty || shopId == 'default_shop') return;
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList('recentShopIds') ?? [];
+    list.remove(shopId);
+    list.insert(0, shopId);
+    if (list.length > 5) {
+      list.removeLast();
+    }
+    await prefs.setStringList('recentShopIds', list);
+  }
+
+  Future<void> _loadAutoConnectPref() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _autoConnectToPrevious = prefs.getBool('autoConnectToPreviousHub') ?? true;
+      });
+    }
+  }
+
+  Future<void> _saveAutoConnectPref(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('autoConnectToPreviousHub', value);
+    if (mounted) {
+      setState(() {
+        _autoConnectToPrevious = value;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -42,6 +82,7 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
   @override
   void initState() {
     super.initState();
+    _loadAutoConnectPref();
     final s = context.read<SettingsProvider>().settings;
     _ipCtrl.text = s.hubIp ?? '';
     _connectionMode = s.connectionMode;
@@ -59,6 +100,13 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
         }
       }
     });
+
+    // Auto-detect Hub on first launch if no Hub Address is configured
+    if (s.hubIp == null || s.hubIp!.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _autoDetect();
+      });
+    }
   }
 
   Future<void> _checkBatteryOptimization() async {
@@ -126,6 +174,7 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
     );
 
     final List<String> shopIds = await FirebaseSyncService.instance.fetchShopIds();
+    final List<String> recentShops = await _getRecentShopIds();
 
     if (!mounted) return;
     Navigator.pop(context); // Dismiss loading
@@ -156,16 +205,48 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
                     style: TextStyle(fontSize: 12),
                   ),
                   const SizedBox(height: 12),
+                  
+                  // Recently used chips list
+                  if (recentShops.isNotEmpty) ...[
+                    const Text(
+                      'Recently Used:',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: recentShops.map((id) {
+                        return ActionChip(
+                          avatar: const Icon(Icons.history, size: 14, color: AppTheme.primary),
+                          label: Text(id, style: const TextStyle(fontSize: 12)),
+                          onPressed: () {
+                            setDialogState(() {
+                              selectedShop = id;
+                              writeInController.text = id;
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
                   if (shopIds.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
                       child: Text('No active shops detected in Firebase.',
                           style: TextStyle(fontSize: 12, color: AppTheme.danger)),
                     )
-                  else
+                  else ...[
+                    const Text(
+                      'Available in Cloud:',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 6),
                     Flexible(
                       child: Container(
-                        constraints: const BoxConstraints(maxHeight: 180),
+                        constraints: const BoxConstraints(maxHeight: 150),
                         decoration: BoxDecoration(
                           border: Border.all(color: Theme.of(context).dividerColor),
                           borderRadius: BorderRadius.circular(8),
@@ -192,6 +273,7 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
                         ),
                       ),
                     ),
+                  ],
                   const SizedBox(height: 16),
                   TextField(
                     controller: writeInController,
@@ -217,10 +299,12 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
                 child: const Text('Cancel'),
               ),
               ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
                   final finalId = writeInController.text.trim();
                   if (finalId.isEmpty) return;
                   Navigator.pop(ctx);
+                  
+                  await _addRecentShopId(finalId);
                   
                   final settingsProv = context.read<SettingsProvider>();
                   final s = settingsProv.settings;
@@ -280,54 +364,164 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
     }
   }
 
+  void _showNetworkSelectionDialog(List<Map<String, dynamic>> hubs) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.network_wifi, color: AppTheme.primary),
+            SizedBox(width: 8),
+            Text('Select Active Hub'),
+          ],
+        ),
+        content: SizedBox(
+          width: 350,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Multiple active hubs or tunnels were detected. Choose which one to connect to:',
+                style: TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: hubs.length,
+                  itemBuilder: (_, i) {
+                    final hub = hubs[i];
+                    final ip = hub['ip'] as String;
+                    final shopId = hub['shopId'] as String;
+                    final isLocal = hub['isLocal'] as bool;
+                    
+                    return Card(
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      child: ListTile(
+                        leading: Icon(
+                          isLocal ? Icons.router : Icons.cloud,
+                          color: isLocal ? Colors.green : Colors.blue,
+                        ),
+                        title: Text(
+                          shopId,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        subtitle: Text(
+                          ip,
+                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isLocal ? Colors.green.withValues(alpha: 0.1) : Colors.blue.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            isLocal ? 'Local' : 'Cloud',
+                            style: TextStyle(
+                              color: isLocal ? Colors.green : Colors.blue,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        onTap: () async {
+                          Navigator.pop(ctx);
+                          _ipCtrl.text = ip;
+                          
+                          // Save to Shop ID history
+                          await _addRecentShopId(shopId);
+                          
+                          final settingsProv = context.read<SettingsProvider>();
+                          final s = settingsProv.settings;
+                          s.shopId = shopId;
+                          s.hubIp = ip;
+                          settingsProv.save(s);
+                          
+                          _connect();
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _autoDetect() async {
     setState(() {
+      _isScanning = true;
       _testing = true;
       _errorMsg = null;
       _reachable = null;
     });
 
-    // Fetch the latest cloudflare tunnel URL first so the UI and fallback are always up-to-date
-    await _fetchCloudflareUrl();
+    final List<Map<String, dynamic>> results = [];
+    try {
+      final scans = await Future.wait([
+        DiscoveryService.discoverHubs(),
+        FirebaseSyncService.instance.getAllActiveCloudTunnels(),
+      ]).timeout(const Duration(seconds: 4));
+      
+      results.addAll(scans[0]);
+      results.addAll(scans[1]);
+    } catch (_) {}
 
-    final settings = context.read<SettingsProvider>().settings;
-    // 1. Try Local Network Discovery (UDP)
-    String? ip = await DiscoveryService.discoverHub(targetShopId: settings.shopId);
-
-    // 2. If local fails, try Cloud Discovery (Firebase)
-    if (ip == null && _cloudflareUrl.isNotEmpty) {
-      ip = _cloudflareUrl;
-      debugPrint('Auto-detected Hub via Cloudflare: $ip');
+    // Save all scanned shop IDs to history automatically
+    for (final hub in results) {
+      final shopId = hub['shopId'] as String? ?? '';
+      if (shopId.isNotEmpty && shopId != 'Unknown') {
+        await _addRecentShopId(shopId);
+      }
     }
 
     if (!mounted) return;
+    setState(() {
+      _isScanning = false;
+      _testing = false;
+    });
 
-    if (ip != null) {
-      _ipCtrl.text = ip;
-      // Flawless experience: automatically test and connect if found
+    if (results.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No active hubs detected. Try scanning the QR Code or manual entry.'),
+        backgroundColor: AppTheme.warning,
+      ));
+    } else if (results.length == 1) {
+      final hub = results.first;
+      _ipCtrl.text = hub['ip'];
+      final shopId = hub['shopId'];
+      await _addRecentShopId(shopId);
+      
+      final settingsProv = context.read<SettingsProvider>();
+      final s = settingsProv.settings;
+      s.shopId = shopId;
+      s.hubIp = hub['ip'];
+      settingsProv.save(s);
+
       final sync = context.read<SyncService>();
-      final ok = await sync.testConnection(ip);
+      final ok = await sync.testConnection(hub['ip']);
       if (mounted) {
         setState(() {
-          _testing = false;
           _reachable = ok;
         });
         if (ok) {
-          _connect(); // Auto-connect if health check passes
+          _connect();
         }
       }
     } else {
-      setState(() {
-        _testing = false;
-        _reachable = false;
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text(
-              'Could not find Hub. Please check if Hub is running or use Cloud Mode.'),
-          backgroundColor: AppTheme.warning,
-        ));
-      }
+      _showNetworkSelectionDialog(results);
     }
   }
 
@@ -384,10 +578,11 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
   }
 
   bool _isConnecting = false;
-
   @override
   Widget build(BuildContext context) {
     final sync = context.watch<SyncService>();
+    final settingsProvider = context.watch<SettingsProvider>();
+    final currentShopId = settingsProvider.settings.shopId.isEmpty ? 'default_shop' : settingsProvider.settings.shopId;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Connect to Hub')),
@@ -400,330 +595,343 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                        color: AppTheme.primary.withValues(alpha: 0.3)),
+                  // --- Clean & Visual Header ---
+                  const Icon(
+                    Icons.sync,
+                    size: 64,
+                    color: AppTheme.primary,
                   ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.router, color: AppTheme.primaryLight),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Enter the IP address of the Windows PC running MediPoss Hub.',
-                          style: TextStyle(color: context.textMutedColor),
+                  const SizedBox(height: 16),
+                  Text(
+                    'MediPoss Hub Connection',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
                         ),
-                      ),
-                    ],
                   ),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: _testing ? null : _scanQr,
-                  icon: const Icon(Icons.qr_code_scanner),
-                  label: const Text('Scan Hub QR'),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 50),
-                    backgroundColor: AppTheme.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  onPressed: _testing ? null : _autoDetect,
-                  icon: const Icon(Icons.search),
-                  label: const Text('Auto-Detect Hub'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 45),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                // --- Hybrid Mode Selector ---
-                 Row(
-                  children: [
-                    Text('Sync Mode:',
-                        style: TextStyle(
-                            color: context.textMutedColor,
-                            fontWeight: FontWeight.bold)),
-                    const Spacer(),
-                    DropdownButton<String>(
-                      value: _connectionMode,
-                      dropdownColor: context.surfaceColor,
-                      underline: const SizedBox(),
-                      items: const [
-                        DropdownMenuItem(
-                            value: 'auto', child: Text('Auto (Hybrid)')),
-                        DropdownMenuItem(
-                            value: 'local', child: Text('Local Only')),
-                        DropdownMenuItem(
-                            value: 'cloudflare', child: Text('Tunnel Only')),
-                        DropdownMenuItem(
-                            value: 'firebase', child: Text('Cloud Only')),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) _saveMode(val);
-                      },
-                    ),
-                  ],
-                ),
-                // --- Shop Partition Selector ---
-                Row(
-                  children: [
-                    Text('Shop Partition:',
-                        style: TextStyle(
-                            color: context.textMutedColor,
-                            fontWeight: FontWeight.bold)),
-                    const Spacer(),
-                    TextButton.icon(
-                      onPressed: _selectShopPartition,
-                      icon: const Icon(Icons.store, size: 14),
-                      label: Text(
-                        context.watch<SettingsProvider>().settings.shopId.isEmpty
-                            ? 'default_shop'
-                            : context.watch<SettingsProvider>().settings.shopId,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-                if (_connectionMode == 'cloudflare' ||
-                    _connectionMode == 'auto') ...[
                   const SizedBox(height: 8),
+                  Text(
+                    'Connect this Android terminal with the MediPoss Hub desktop application to sync users, inventory, and sales.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: context.textMutedColor,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // --- Active Shop ID Badge ---
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     decoration: BoxDecoration(
-                      color: context.textMutedColor.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                          color: context.borderColor.withValues(alpha: 0.3)),
+                      color: AppTheme.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppTheme.primary.withValues(alpha: 0.2)),
                     ),
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.cloud_done,
-                            size: 16, color: AppTheme.primaryLight),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _cloudflareUrl.isEmpty
-                                ? 'Fetching Tunnel...'
-                                : _cloudflareUrl,
-                            style: const TextStyle(
-                                fontSize: 12, overflow: TextOverflow.ellipsis),
+                        const Icon(Icons.store, size: 16, color: AppTheme.primary),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Shop ID: $currentShopId',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primary,
+                            fontSize: 13,
                           ),
                         ),
-                        if (_isFetchingCloudflare)
-                          const SizedBox(
-                              width: 12,
-                              height: 12,
-                              child: CircularProgressIndicator(strokeWidth: 2))
-                        else
-                          IconButton(
-                            icon: const Icon(Icons.copy, size: 14),
-                            onPressed: () {
-                              if (_cloudflareUrl.isNotEmpty) {
-                                Clipboard.setData(
-                                    ClipboardData(text: _cloudflareUrl));
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                        content:
-                                            Text('Tunnel URL copied!')));
-                              }
-                            },
-                          ),
                       ],
                     ),
                   ),
-                ],
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _ipCtrl,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    labelText: 'Hub IP Address (e.g. 192.168.1.5)',
-                    prefixIcon: const Icon(Icons.computer),
-                    suffixIcon: _testing
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: SizedBox(
-                                width: 16,
-                                height: 16,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2)),
-                          )
-                        : _reachable == null
-                            ? null
-                            : Icon(
-                                _reachable! ? Icons.check_circle : Icons.cancel,
-                                color: _reachable!
-                                    ? AppTheme.success
-                                    : AppTheme.danger),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                      onPressed: _testing ? null : _test,
-                      child: const Text('Test Connection')),
-                ),
-                if (_errorMsg != null) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppTheme.danger.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
+                  const SizedBox(height: 32),
+
+                  // --- First-Class Pairing Actions ---
+                  ElevatedButton.icon(
+                    onPressed: _testing ? null : _scanQr,
+                    icon: const Icon(Icons.qr_code_scanner),
+                    label: const Text('Scan Hub QR Code'),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 54),
+                      backgroundColor: AppTheme.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
                     ),
-                    child: Text(_errorMsg!,
-                        style: const TextStyle(color: AppTheme.danger)),
                   ),
-                ],
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed:
-                        (sync.isSyncing || _isConnecting) ? null : _connect,
-                    icon: (sync.isSyncing || _isConnecting)
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.link),
-                    label: Text((sync.isSyncing || _isConnecting)
-                        ? 'Pairing...'
-                        : 'Pair with Hub'),
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: _testing ? null : _autoDetect,
+                    icon: const Icon(Icons.search),
+                    label: const Text('Auto-Detect Hub'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
                   ),
-                ),
-                if (_errorMsg != null || _reachable == false) ...[
                   const SizedBox(height: 24),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppTheme.warning.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppTheme.warning.withValues(alpha: 0.3)),
+
+                  // --- Collapsible Manual/Advanced Configuration ---
+                  Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: BorderSide(color: context.borderColor.withValues(alpha: 0.4)),
                     ),
                     child: Column(
                       children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.cloud_off, color: AppTheme.warning),
-                            SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'Hub is currently Offline.',
-                                style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.warning),
-                              ),
+                        ListTile(
+                          leading: const Icon(Icons.tune, size: 20),
+                          title: const Text(
+                            'Configure Manually',
+                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                          ),
+                          trailing: Icon(
+                            _showAdvanced ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                            size: 20,
+                          ),
+                          onTap: () => setState(() => _showAdvanced = !_showAdvanced),
+                        ),
+                        if (_showAdvanced) ...[
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Divider(),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    const Text(
+                                      'Shop Partition:',
+                                      style: TextStyle(fontSize: 13, color: Colors.grey),
+                                    ),
+                                    const Spacer(),
+                                    TextButton.icon(
+                                      onPressed: _selectShopPartition,
+                                      icon: const Icon(Icons.store, size: 14),
+                                      label: Text(
+                                        currentShopId,
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller: _ipCtrl,
+                                  keyboardType: TextInputType.text,
+                                  decoration: InputDecoration(
+                                    labelText: 'Hub Address',
+                                    prefixIcon: const Icon(Icons.computer),
+                                    suffixIcon: _testing
+                                        ? const Padding(
+                                            padding: EdgeInsets.all(12),
+                                            child: SizedBox(
+                                                width: 16,
+                                                height: 16,
+                                                child: CircularProgressIndicator(strokeWidth: 2)),
+                                          )
+                                        : _reachable == null
+                                            ? null
+                                            : Icon(
+                                                _reachable! ? Icons.check_circle : Icons.cancel,
+                                                color: _reachable! ? AppTheme.success : AppTheme.danger,
+                                              ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton(
+                                    onPressed: _testing ? null : _test,
+                                    child: const Text('Test Connection'),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    SizedBox(
+                                      height: 24,
+                                      width: 24,
+                                      child: Checkbox(
+                                        value: _autoConnectToPrevious,
+                                        onChanged: (val) {
+                                          if (val != null) {
+                                            _saveAutoConnectPref(val);
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Expanded(
+                                      child: Text(
+                                        'Auto-connect on restart',
+                                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    onPressed: (sync.isSyncing || _isConnecting) ? null : _connect,
+                                    icon: (sync.isSyncing || _isConnecting)
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                                strokeWidth: 2, color: Colors.white))
+                                        : const Icon(Icons.link),
+                                    label: Text((sync.isSyncing || _isConnecting) ? 'Pairing...' : 'Pair with Hub'),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'You can continue in Cloud Mode to view data and make sales via Firebase.',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            final savedId = ObjectBoxService.instance.settings.shopId;
-                            if (savedId.isNotEmpty) {
-                              sync.enterCloudMode(savedId);
-                            } else {
-                              showShopSelectionDialog(context);
-                            }
-                          },
-                          icon: const Icon(Icons.cloud_sync),
-                          label: const Text('Enter Cloud Mode'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.warning,
-                            foregroundColor: Colors.white,
-                            minimumSize: const Size(double.infinity, 40),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ),
-                ],
-                if (sync.isCloudMode) ...[
-                   const SizedBox(height: 16),
-                   Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
+
+                  // --- Connection Status Display ---
+                  if (_errorMsg != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.danger.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        _errorMsg!,
+                        style: const TextStyle(color: AppTheme.danger, fontSize: 13),
+                      ),
                     ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.cloud_done, color: AppTheme.primary),
-                        const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text(
-                            'Active in Cloud Mode (Firebase)',
-                            style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold),
+                  ],
+
+                  if (_errorMsg != null || _reachable == false) ...[
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.warning.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppTheme.warning.withValues(alpha: 0.3)),
+                      ),
+                      child: Column(
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.cloud_off, color: AppTheme.warning),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Hub is Offline.',
+                                  style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.warning),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        TextButton(
-                          onPressed: () => sync.exitCloudMode(),
-                          child: const Text('Exit'),
-                        ),
-                      ],
+                          const SizedBox(height: 8),
+                          const Text(
+                            'You can continue in Cloud Mode to view data and make sales via Firebase.',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              final savedId = ObjectBoxService.instance.settings.shopId;
+                              if (savedId.isNotEmpty) {
+                                sync.enterCloudMode(savedId);
+                              } else {
+                                showShopSelectionDialog(context);
+                              }
+                            },
+                            icon: const Icon(Icons.cloud_sync),
+                            label: const Text('Enter Cloud Mode'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.warning,
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size(double.infinity, 40),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ] else if (sync.isConnected || _reachable == true) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppTheme.success.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
+                  ],
+
+                  if (sync.isCloudMode) ...[
+                     const SizedBox(height: 16),
+                     Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.cloud_done, color: AppTheme.primary),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              'Active in Cloud Mode (Firebase)',
+                              style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => sync.exitCloudMode(),
+                            child: const Text('Exit'),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.check_circle, color: AppTheme.success),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                              'Connected to ${sync.hubIp ?? _ipCtrl.text}',
-                              style: const TextStyle(
-                                  color: AppTheme.success,
-                                  fontWeight: FontWeight.bold)),
-                        ),
-                      ],
+                  ] else if (sync.isConnected || _reachable == true) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.success.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.check_circle, color: AppTheme.success),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                                'Connected to ${sync.hubIp ?? _ipCtrl.text}',
+                                style: const TextStyle(
+                                    color: AppTheme.success,
+                                    fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
+
+                  if (sync.isConnected) ...[
+                     const SizedBox(height: 12),
+                     OutlinedButton.icon(
+                      onPressed: () async {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Starting full data refresh...')));
+                        await sync.forceFullSync();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Full Sync Complete'), backgroundColor: AppTheme.success));
+                        }
+                      },
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: const Text('Force Full Sync'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 40),
+                        side: BorderSide(color: AppTheme.primary.withValues(alpha: 0.5)),
+                      ),
+                    ),
+                  ],
                 ],
-                if (sync.isConnected) ...[
-                   const SizedBox(height: 12),
-                   OutlinedButton.icon(
-                    onPressed: () async {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Starting full data refresh...')));
-                      await sync.forceFullSync();
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Full Sync Complete'), backgroundColor: AppTheme.success));
-                      }
-                    },
-                    icon: const Icon(Icons.refresh, size: 18),
-                    label: const Text('Force Full Sync'),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 40),
-                      side: BorderSide(color: AppTheme.primary.withValues(alpha: 0.5)),
-                    ),
-                  ),
-                ],
-              ],
-            ),
+              ),
             ),
           ),
         ),

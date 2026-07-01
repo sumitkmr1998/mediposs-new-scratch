@@ -1,10 +1,14 @@
 import 'dart:io';
 import 'dart:ui';
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:network_info_plus/network_info_plus.dart';
 
+import '../../shared/services/objectbox_service.dart';
 import '../../shared/providers/inventory_provider.dart';
 import '../../shared/providers/sales_provider.dart';
 import '../../shared/providers/patient_provider.dart';
@@ -641,7 +645,7 @@ class _SideNav extends StatelessWidget {
             _buildCloudSyncButton(expanded),
             const SizedBox(height: 8),
           ],
-          _buildStatusBadge(expanded),
+          _buildStatusBadge(context, expanded),
           const SizedBox(height: 8),
         ],
       ),
@@ -710,14 +714,116 @@ class _SideNav extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusBadge(bool expanded) {
+  Future<String> _getLocalIp() async {
+    try {
+      final wifiIp = await NetworkInfo().getWifiIP();
+      if (wifiIp != null && wifiIp.isNotEmpty) return wifiIp;
+    } catch (_) {}
+    try {
+      final interfaces = await NetworkInterface.list(type: InternetAddressType.IPv4);
+      for (final interface in interfaces) {
+        for (final addr in interface.addresses) {
+          if (!addr.isLoopback) {
+            return addr.address;
+          }
+        }
+      }
+    } catch (_) {}
+    return '127.0.0.1';
+  }
+
+  void _showHubQrDialog(BuildContext context) async {
+    final settings = ObjectBoxService.instance.settings;
+    final localIp = await _getLocalIp();
+    final tunnelUrl = settings.cloudflareUrl;
+    final shopId = settings.shopId;
+    final secret = settings.jwtSecret;
+
+    final pairingPayload = jsonEncode({
+      'type': 'hub_pair',
+      'localIp': localIp,
+      'tunnelUrl': tunnelUrl,
+      'shopId': shopId,
+      'secret': secret,
+    });
+
+    if (!context.mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.qr_code, color: AppTheme.primary),
+              SizedBox(width: 8),
+              Text('Hub Pairing QR Code'),
+            ],
+          ),
+          content: SizedBox(
+            width: 320,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Scan this QR code from the MediPoss Android app\'s connection screen to pair instantly.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  color: Colors.white,
+                  padding: const EdgeInsets.all(12),
+                  child: QrImageView(
+                    data: pairingPayload,
+                    version: QrVersions.auto,
+                    size: 200.0,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Shop ID: $shopId',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                Text(
+                  'Local IP: $localIp',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                if (tunnelUrl.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4.0),
+                    child: Text(
+                      'Tunnel URL: $tunnelUrl',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildStatusBadge(BuildContext context, bool expanded) {
     return Padding(
       padding: const EdgeInsets.all(12),
       child: isWindowsHub
-          ? _StatusBadge(
-              label: expanded ? 'Hub Active' : '',
-              color: AppTheme.success,
-              icon: Icons.router)
+          ? InkWell(
+              onTap: () => _showHubQrDialog(context),
+              borderRadius: BorderRadius.circular(8),
+              child: _StatusBadge(
+                  label: expanded ? 'Hub Active' : '',
+                  color: AppTheme.success,
+                  icon: Icons.router),
+            )
           : InkWell(
               onTap: onConnectTap,
               borderRadius: BorderRadius.circular(8),

@@ -30,6 +30,16 @@ import '../../objectbox.g.dart';
 class SyncService extends ChangeNotifier {
   static final SyncService instance = SyncService._();
   Timer? _reconnectTimer;
+  bool _queueSyncFailed = false;
+  bool get queueSyncFailed => _queueSyncFailed;
+
+  void setQueueSyncFailed(bool value) {
+    if (_queueSyncFailed != value) {
+      _queueSyncFailed = value;
+      notifyListeners();
+    }
+  }
+
   SyncService._() {
     _startConnectionWatcher();
   }
@@ -96,6 +106,22 @@ class SyncService extends ChangeNotifier {
       final ok = await testConnection(address);
       if (ok) {
         _hubIp = address;
+
+        // Fetch health endpoint body to get Hub's shopId
+        final url = address.startsWith('http')
+            ? Uri.parse('$address/health')
+            : Uri.parse('http://$address:8080/health');
+        final res = await http.get(url, headers: _authHeaders()).timeout(const Duration(seconds: 4));
+        
+        String hubShopId = '';
+        if (res.statusCode == 200) {
+          try {
+            final payload = jsonDecode(res.body);
+            hubShopId = payload['shopId'] as String? ?? '';
+          } catch (e) {
+            debugPrint('SyncService: Error parsing shopId from health check: $e');
+          }
+        }
         
         // On Windows, if we are currently not in terminal mode, we need to transition!
         if (defaultTargetPlatform == TargetPlatform.windows) {
@@ -111,6 +137,9 @@ class SyncService extends ChangeNotifier {
             } else {
               settings.hubIp = address;
             }
+            if (hubShopId.isNotEmpty) {
+              settings.shopId = hubShopId;
+            }
             ObjectBoxService.instance.settingsBox.put(settings);
             
             // Return special status to prevent unmounting and show the restart prompt
@@ -118,15 +147,57 @@ class SyncService extends ChangeNotifier {
           }
         }
 
+        final settings = ObjectBoxService.instance.settings;
+        final localShopId = settings.shopId;
+        final oldHubAddress = isUrl ? settings.cloudflareUrl : settings.hubIp;
+
+        final isDifferentHub = oldHubAddress != null &&
+            oldHubAddress.isNotEmpty &&
+            oldHubAddress.trim().toLowerCase() != address.trim().toLowerCase();
+
+        final isDifferentShop = hubShopId.isNotEmpty &&
+            localShopId.isNotEmpty &&
+            localShopId.trim().toLowerCase() != hubShopId.trim().toLowerCase();
+
+        if (isDifferentHub || isDifferentShop) {
+          debugPrint('SyncService: Hub address or Shop ID changed (Hub: $address, Shop: $hubShopId). Wiping local database and resetting sync state.');
+          
+          // 1. Logout (invalidate/clear session & credentials)
+          _jwtToken = null;
+          _connectedRole = null;
+          _lastUserMap = null;
+          settings.autoLoginPin = null;
+          settings.autoLoginName = null;
+
+          // 2. Clear previous database data
+          ObjectBoxService.instance.patientBox.removeAll();
+          ObjectBoxService.instance.medicineBox.removeAll();
+          ObjectBoxService.instance.saleBox.removeAll();
+          ObjectBoxService.instance.prescriptionBox.removeAll();
+          ObjectBoxService.instance.appointmentBox.removeAll();
+          ObjectBoxService.instance.doctorBox.removeAll();
+          ObjectBoxService.instance.transferBox.removeAll();
+          ObjectBoxService.instance.templateBox.removeAll();
+          ObjectBoxService.instance.store.box<ScheduleH1Record>().removeAll();
+          ObjectBoxService.instance.store.box<AuditLog>().removeAll();
+
+          // 3. Clear previous sync state so it does a full sync next time
+          settings.lastGlobalSync = null;
+          settings.lastFirebaseSync = null;
+        }
+
+        // Update shopId to the new one
+        if (hubShopId.isNotEmpty) {
+          settings.shopId = hubShopId;
+        }
+
         _isConnected = true;
         // Persist the address (IP or URL)
-        final settings = ObjectBoxService.instance.settings;
         if (isUrl) {
           settings.cloudflareUrl = address;
         } else {
           settings.hubIp = address;
         }
-        // Retain settings.lastGlobalSync to use the local cache and perform fast incremental syncs
         ObjectBoxService.instance.settingsBox.put(settings);
 
         notifyListeners();
@@ -231,23 +302,6 @@ class SyncService extends ChangeNotifier {
       final res = await http.get(url, headers: _authHeaders()).timeout(const Duration(seconds: 4));
       debugPrint('SyncService: Connection test result: ${res.statusCode}');
       if (res.statusCode == 200) {
-        if (ObjectBoxService.isInitialized) {
-          final settings = ObjectBoxService.instance.settings;
-          final localShopId = settings.shopId;
-          if (localShopId.isNotEmpty) {
-            try {
-              final payload = jsonDecode(res.body);
-              final hubShopId = payload['shopId'] as String? ?? '';
-              if (hubShopId.isNotEmpty &&
-                  localShopId.trim().toLowerCase() != hubShopId.trim().toLowerCase()) {
-                debugPrint('SyncService: Health check mismatch. Local shopId: $localShopId, Hub shopId: $hubShopId');
-                return false;
-              }
-            } catch (e) {
-              debugPrint('SyncService: Error parsing health response: $e');
-            }
-          }
-        }
         return true;
       }
       return false;
@@ -266,6 +320,12 @@ class SyncService extends ChangeNotifier {
   Future<bool> tryAutoConnect() async {
     if (!ObjectBoxService.isInitialized) {
       debugPrint('SyncService: tryAutoConnect ABORTED - ObjectBox not initialized.');
+      return false;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final autoConnect = prefs.getBool('autoConnectToPreviousHub') ?? true;
+    if (!autoConnect) {
+      debugPrint('SyncService: tryAutoConnect bypassed since autoConnectToPreviousHub is false');
       return false;
     }
     final settings = ObjectBoxService.instance.settings;
@@ -2291,6 +2351,7 @@ class WebSocketService extends ChangeNotifier {
   Stream<Map<String, dynamic>> get eventStream => _eventController.stream;
 
   Timer? _heartbeatTimer;
+  int _heartbeatFailures = 0;
 
   void connect(String ip, String secret) {
     _lastIp = ip;
@@ -2302,6 +2363,7 @@ class WebSocketService extends ChangeNotifier {
 
   void _startHeartbeat(String secret) {
     _heartbeatTimer?.cancel();
+    _heartbeatFailures = 0;
     _heartbeatTimer = Timer.periodic(const Duration(seconds: 20), (timer) async {
       if (_intentionalDisconnect || _lastIp == null) {
         timer.cancel();
@@ -2309,13 +2371,19 @@ class WebSocketService extends ChangeNotifier {
       }
       
       final reachable = await SyncService.instance.testConnection(_lastIp!);
-      if (!reachable) {
-        if (_connected) {
-          debugPrint('WebSocketService: Heartbeat failed! Force disconnecting WebSocket.');
-          _connected = false;
-          _channel?.sink.close();
-          notifyListeners();
-          _scheduleReconnect();
+      if (reachable) {
+        _heartbeatFailures = 0;
+      } else {
+        _heartbeatFailures++;
+        debugPrint('WebSocketService: Heartbeat failure count: $_heartbeatFailures');
+        if (_heartbeatFailures >= 3) { // 3 consecutive failures = 60 seconds
+          if (_connected) {
+            debugPrint('WebSocketService: 3 consecutive heartbeats failed! Force disconnecting WebSocket.');
+            _connected = false;
+            _channel?.sink.close();
+            notifyListeners();
+            _scheduleReconnect();
+          }
         }
       }
     });
@@ -2374,6 +2442,11 @@ class WebSocketService extends ChangeNotifier {
                 debugPrint('WebSocketService: Received non-map JSON: $decoded');
                 return;
               }
+            }
+
+            if (msg['event'] == 'ping') {
+              // Ignore heartbeat ping
+              return;
             }
 
             _events.insert(0, msg);

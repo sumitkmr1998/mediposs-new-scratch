@@ -844,4 +844,57 @@ class FirebaseSyncService {
       return false;
     }
   }
+
+  /// Fetches Cloudflare tunnels for all active shop partitions.
+  Future<List<Map<String, dynamic>>> getAllActiveCloudTunnels() async {
+    if (!_isEnabled) return [];
+    final List<Map<String, dynamic>> tunnels = [];
+    try {
+      final shopIds = await fetchShopIds();
+      for (final id in shopIds) {
+        try {
+          Map<String, dynamic>? data;
+          if (defaultTargetPlatform == TargetPlatform.windows) {
+            // Under REST
+            final projectId = DefaultFirebaseOptions.windows.projectId;
+            final apiKey = DefaultFirebaseOptions.windows.apiKey;
+            final url = Uri.parse('https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops/$id/settings/hub_status?key=$apiKey');
+            final res = await http.get(url).timeout(const Duration(seconds: 2));
+            if (res.statusCode == 200) {
+              final payload = jsonDecode(res.body);
+              final fields = payload['fields'] as Map<String, dynamic>?;
+              if (fields != null) {
+                final urlField = fields['cloudflareUrl'] as Map<String, dynamic>?;
+                if (urlField != null) {
+                  final cloudflareUrl = urlField['stringValue'] as String? ?? '';
+                  if (cloudflareUrl.isNotEmpty) {
+                    data = {'cloudflareUrl': cloudflareUrl};
+                  }
+                }
+              }
+            }
+          } else {
+            // Android SDK
+            if (!_isInitialized) continue;
+            final doc = await _db.collection('shops').doc(id).collection('settings').doc('hub_status').get(const GetOptions(source: Source.server)).timeout(const Duration(seconds: 2));
+            data = doc.data();
+          }
+
+          if (data != null) {
+            final urlStr = data['cloudflareUrl'] as String? ?? '';
+            if (urlStr.isNotEmpty) {
+              tunnels.add({
+                'ip': urlStr,
+                'shopId': id,
+                'isLocal': false,
+              });
+            }
+          }
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('Firebase getAllActiveCloudTunnels error: $e');
+    }
+    return tunnels;
+  }
 }

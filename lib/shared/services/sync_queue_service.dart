@@ -55,6 +55,7 @@ class SyncQueueService extends ChangeNotifier {
     if (_isProcessing) return;
     _isProcessing = true;
 
+    bool queueFailed = false;
     try {
       final box = ObjectBoxService.instance.syncQueueBox;
       
@@ -87,13 +88,16 @@ class SyncQueueService extends ChangeNotifier {
         }
         
         if (hasFailed) {
+          queueFailed = true;
           break; // Stop outer loop if an item failed
         }
       }
     } catch (e) {
       debugPrint('SyncQueueService error: $e');
+      queueFailed = true;
     } finally {
       _isProcessing = false;
+      SyncService.instance.setQueueSyncFailed(queueFailed);
       notifyListeners();
     }
   }

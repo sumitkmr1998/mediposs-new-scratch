@@ -139,4 +139,75 @@ class DiscoveryService {
       socket?.close();
     }
   }
+
+  /// Blasts UDP pings and collects all replying Hubs for 1.5 seconds.
+  static Future<List<Map<String, dynamic>>> discoverHubs() async {
+    RawDatagramSocket? socket;
+    final List<Map<String, dynamic>> hubs = [];
+    final Set<String> seenIps = {};
+    try {
+      final info = NetworkInfo();
+      final wifiIP = await info.getWifiIP();
+      debugPrint('DiscoveryService: discoverHubs - My IP: $wifiIP');
+
+      String? broadcastAddr = '255.255.255.255';
+      if (wifiIP != null) {
+        final parts = wifiIP.split('.');
+        if (parts.length == 4) {
+          broadcastAddr = '${parts[0]}.${parts[1]}.${parts[2]}.255';
+        }
+      }
+
+      socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      socket.broadcastEnabled = true;
+
+      socket.listen((RawSocketEvent event) {
+        if (event == RawSocketEvent.read) {
+          final datagram = socket!.receive();
+          if (datagram != null) {
+            try {
+              final payload = jsonDecode(utf8.decode(datagram.data));
+              if (payload['id'] == 'MediPoss_Hub') {
+                final ip = datagram.address.address;
+                if (!seenIps.contains(ip)) {
+                  seenIps.add(ip);
+                  hubs.add({
+                    'ip': ip,
+                    'shopId': payload['shopId'] as String? ?? 'Unknown',
+                    'apiPort': payload['apiPort'] as int? ?? 8080,
+                    'isLocal': true,
+                  });
+                }
+              }
+            } catch (_) {}
+          }
+        }
+      });
+
+      // Send to broadcast addresses
+      socket.send(utf8.encode(_magicPing), InternetAddress(broadcastAddr), _udpPort);
+      
+      final fallbacks = [
+        '255.255.255.255',
+        '192.168.1.255',
+        '192.168.0.255',
+        '192.168.43.255',
+        '192.168.8.255',
+        '10.0.2.255',
+      ];
+      for (final addr in fallbacks) {
+        if (addr != broadcastAddr) {
+          socket.send(utf8.encode(_magicPing), InternetAddress(addr), _udpPort);
+        }
+      }
+
+      // Wait 1.5 seconds to gather all responses
+      await Future.delayed(const Duration(milliseconds: 1500));
+    } catch (e) {
+      debugPrint('UDP Discovery error: $e');
+    } finally {
+      socket?.close();
+    }
+    return hubs;
+  }
 }

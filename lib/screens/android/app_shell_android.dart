@@ -51,10 +51,52 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
   Timer? _hubCheckTimer;
   bool _isHubBackOnline = false;
 
+  WebSocketService? _webSocketService;
+  bool _isOfflineOverlayVisible = false;
+  Timer? _offlineDebounceTimer;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final newWsvc = context.read<WebSocketService>();
+    if (_webSocketService != newWsvc) {
+      _webSocketService?.removeListener(_onWebSocketConnectionChanged);
+      _webSocketService = newWsvc;
+      _webSocketService?.addListener(_onWebSocketConnectionChanged);
+      _onWebSocketConnectionChanged(); // initial check
+    }
+  }
+
   @override
   void dispose() {
+    _webSocketService?.removeListener(_onWebSocketConnectionChanged);
+    _offlineDebounceTimer?.cancel();
     _hubCheckTimer?.cancel();
     super.dispose();
+  }
+
+  void _onWebSocketConnectionChanged() {
+    final connected = _webSocketService?.connected ?? false;
+    if (connected) {
+      _offlineDebounceTimer?.cancel();
+      _offlineDebounceTimer = null;
+      if (_isOfflineOverlayVisible) {
+        setState(() {
+          _isOfflineOverlayVisible = false;
+        });
+      }
+    } else {
+      // Start debounce timer if not already running and not currently showing overlay
+      if (_offlineDebounceTimer == null && !_isOfflineOverlayVisible) {
+        _offlineDebounceTimer = Timer(const Duration(seconds: 7), () {
+          if (mounted && !(_webSocketService?.connected ?? false)) {
+            setState(() {
+              _isOfflineOverlayVisible = true;
+            });
+          }
+        });
+      }
+    }
   }
 
   List<_Dest> _buildDestinations(BuildContext context) {
@@ -407,7 +449,7 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
             ),
           
           // --- HUB OFFLINE OVERLAY (BLOCKING) ---
-          if (!sync.isCloudMode && !wsvc.connected && sync.hubIp != null)
+          if (!sync.isCloudMode && sync.queueSyncFailed && sync.hubIp != null)
             ConnectivityOverlay(
               title: 'Hub Connection Lost',
               message: 'The Windows Hub is offline or unreachable. What would you like to do?',

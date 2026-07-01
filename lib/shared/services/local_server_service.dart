@@ -37,6 +37,7 @@ class LocalServerService {
 
   HttpServer? _server;
   final Set<WebSocketChannel> _wsClients = {};
+  Timer? _wsKeepAliveTimer;
   bool get isRunning => _server != null;
 
   // Stream that fires when Android pushes data to the Hub
@@ -146,11 +147,33 @@ class LocalServerService {
         }
       }
     });
+
+    // Start WebSocket Keep-Alive Timer to detect and clean up dead clients
+    _wsKeepAliveTimer?.cancel();
+    _wsKeepAliveTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      _pingAllWsClients();
+    });
   }
 
   Future<void> stop() async {
+    _wsKeepAliveTimer?.cancel();
+    _wsKeepAliveTimer = null;
     await _server?.close(force: true);
     _server = null;
+  }
+
+  void _pingAllWsClients() {
+    if (_wsClients.isEmpty) return;
+    final pingPayload = jsonEncode({'event': 'ping'});
+    // Copy the list to avoid concurrent modification issues
+    for (final client in _wsClients.toList()) {
+      try {
+        client.sink.add(pingPayload);
+      } catch (e) {
+        debugPrint('LocalServerService: Failed to ping WebSocket client, removing: $e');
+        _wsClients.remove(client);
+      }
+    }
   }
 
   // Broadcast a JSON message to all connected WS clients
