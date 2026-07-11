@@ -28,14 +28,15 @@ class _BulkItem {
 }
 
 class AndroidBulkPurchaseDialog extends StatefulWidget {
-  const AndroidBulkPurchaseDialog({super.key});
+  final Medicine? initialMedicine;
+  const AndroidBulkPurchaseDialog({super.key, this.initialMedicine});
 
-  static void show(BuildContext context) {
+  static void show(BuildContext context, {Medicine? initialMedicine}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => const AndroidBulkPurchaseDialog(),
+      builder: (ctx) => AndroidBulkPurchaseDialog(initialMedicine: initialMedicine),
     );
   }
 
@@ -45,6 +46,21 @@ class AndroidBulkPurchaseDialog extends StatefulWidget {
 
 class _AndroidBulkPurchaseDialogState extends State<AndroidBulkPurchaseDialog> {
   final Map<int, _BulkItem> _selectedItems = {};
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialMedicine != null) {
+      final m = widget.initialMedicine!;
+      final activeBatch = m.batches.isNotEmpty ? m.batches.last : null;
+      _selectedItems[m.id] = _BulkItem(
+        medicine: m,
+        bulkClinicQty: 1,
+        batchNo: activeBatch?.batchNo ?? '',
+        expiryDate: activeBatch?.expiryDate ?? DateTime.now().add(const Duration(days: 365)),
+      );
+    }
+  }
   final TextEditingController _searchCtrl = TextEditingController();
   final TextEditingController _noteCtrl = TextEditingController();
   final TextEditingController _supplierCtrl = TextEditingController();

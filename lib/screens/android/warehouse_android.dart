@@ -429,33 +429,58 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
               padding: const EdgeInsets.all(12),
               child: Column(
                 children: [
-                  if (widget.auth.hasWarehouseWriteAccess)
+                  if (widget.auth.hasWarehouseWriteAccess || widget.auth.hasInventoryWriteAccess || widget.auth.canAddStock)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Row(
                         children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.primaryLight.withValues(alpha: 0.1),
-                                foregroundColor: AppTheme.primaryLight,
-                                elevation: 0,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  side: BorderSide(color: AppTheme.primaryLight.withValues(alpha: 0.2)),
+                          if (widget.auth.hasWarehouseWriteAccess)
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.primaryLight.withValues(alpha: 0.1),
+                                  foregroundColor: AppTheme.primaryLight,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    side: BorderSide(color: AppTheme.primaryLight.withValues(alpha: 0.2)),
+                                  ),
                                 ),
+                                onPressed: () => _showTransferDialog(
+                                    context, widget.medicine, 'bulkClinic', 'clinic', widget.wh),
+                                icon: const Icon(Icons.swap_horiz, size: 18),
+                                label: const Text('TRANSFER STOCK',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 11,
+                                        letterSpacing: 1)),
                               ),
-                              onPressed: () => _showTransferDialog(
-                                  context, widget.medicine, 'bulkClinic', 'clinic', widget.wh),
-                              icon: const Icon(Icons.swap_horiz, size: 18),
-                              label: const Text('TRANSFER STOCK',
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 11,
-                                      letterSpacing: 1)),
                             ),
-                          ),
+                          if (widget.auth.hasWarehouseWriteAccess && (widget.auth.hasInventoryWriteAccess || widget.auth.canAddStock))
+                            const SizedBox(width: 8),
+                          if (widget.auth.hasInventoryWriteAccess || widget.auth.canAddStock)
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.success.withValues(alpha: 0.1),
+                                  foregroundColor: AppTheme.success,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    side: BorderSide(color: AppTheme.success.withValues(alpha: 0.2)),
+                                  ),
+                                ),
+                                onPressed: () => AndroidBulkPurchaseDialog.show(context, initialMedicine: widget.medicine),
+                                icon: const Icon(Icons.add_shopping_cart_rounded, size: 18),
+                                label: const Text('PURCHASE',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 11,
+                                        letterSpacing: 1)),
+                              ),
+                            ),
                         ],
                       ),
                     ),
