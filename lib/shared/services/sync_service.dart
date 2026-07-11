@@ -228,7 +228,10 @@ class SyncService extends ChangeNotifier {
       final user = box.query(AppUser_.name.equals(name)).build().findFirst();
       
       if (user != null) {
-        if (user.pin == pin || pin == '1234') { // Allow default pin as fallback
+        // If the stored PIN is the masked 'xxxx', allow default '1234' as fallback.
+        // Otherwise, enforce the actual synced PIN.
+        final bool isAuthorized = (user.pin == pin) || (user.pin == 'xxxx' && pin == '1234');
+        if (isAuthorized) {
           _jwtToken = 'cloud_token_${DateTime.now().millisecondsSinceEpoch}';
           _connectedRole = user.role;
           _lastUserMap = user.toJson();
@@ -747,19 +750,33 @@ class SyncService extends ChangeNotifier {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body)['data'] as List;
         final box = ObjectBoxService.instance.userBox;
+        final allLocal = box.getAll();
 
-        // Quick sync approach just for login:
-        box.removeAll();
         debugPrint(
             'SyncService: pullUsers received ${data.length} users from Hub.');
         final users = data.map((u) {
           debugPrint(
               'SyncService Mapping User: HubId=${u['id']}, name=${u['name']}');
           final user = AppUser.fromJson(u);
-          user.id = 0; // Auto-assign local ID
-          user.pin = 'xxxx'; // Mask PIN locally as it's not needed for companion auth (handled via Hub)
+          final existing = allLocal.where((x) => x.name == user.name).firstOrNull;
+          if (existing != null) {
+            user.id = existing.id;
+            // Preserve the local PIN if the incoming one is masked/xxxx and the local one is a real PIN
+            if (user.pin == 'xxxx' && existing.pin != 'xxxx') {
+              user.pin = existing.pin;
+            }
+          } else {
+            user.id = 0; // Auto-assign local ID
+          }
           return user;
         }).toList();
+
+        // Remove any local users that are no longer present on the server
+        final incomingNames = users.map((u) => u.name).toSet();
+        final toRemove = allLocal.where((l) => !incomingNames.contains(l.name)).map((l) => l.id).toList();
+        if (toRemove.isNotEmpty) {
+          box.removeMany(toRemove);
+        }
 
         box.putMany(users);
         debugPrint(
