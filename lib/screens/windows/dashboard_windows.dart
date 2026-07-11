@@ -13,6 +13,8 @@ import '../sales_history_screen.dart';
 import '../settings_screen.dart';
 import '../user_management_screen.dart';
 import 'opd/opd_queue_windows.dart';
+import 'analysis_hub_screen.dart';
+import '../audit_logs_screen.dart';
 import '../../shared/widgets/interactive_hover.dart';
 import '../../shared/widgets/app_filter_chip.dart';
 import '../../shared/widgets/app_kpi_card.dart';
@@ -864,6 +866,20 @@ class _QuickActions extends StatelessWidget {
         color: Colors.blueGrey,
         screen: const SettingsScreen(),
         isAllowed: auth.canAccessSettings,
+      ),
+      _DashboardAction(
+        label: 'Analysis Hub',
+        icon: Icons.analytics_rounded,
+        color: AppTheme.primary,
+        screen: const AnalysisHubScreen(),
+        isAllowed: auth.canViewAnalytics,
+      ),
+      _DashboardAction(
+        label: 'Audit Logs',
+        icon: Icons.history_toggle_off_rounded,
+        color: AppTheme.orange,
+        screen: const AuditLogsScreen(),
+        isAllowed: auth.isAdmin || auth.currentUser?.role.toLowerCase() == 'manager',
       ),
     ];
 

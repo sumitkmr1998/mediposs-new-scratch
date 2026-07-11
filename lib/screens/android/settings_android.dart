@@ -493,7 +493,7 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                   const Text('Default Prescribing Doctor', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                   DropdownButton<int?>(
                     isExpanded: true,
-                    value: _selectedDefaultDoctorId,
+                    value: _doctors.any((d) => d.id == _selectedDefaultDoctorId) ? _selectedDefaultDoctorId : null,
                     dropdownColor: context.surfaceColor,
                     items: [
                       const DropdownMenuItem<int?>(

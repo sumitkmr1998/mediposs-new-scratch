@@ -24,6 +24,7 @@ import '../models/stock_transfer.dart';
 import '../models/procedure.dart';
 import '../models/audit_log.dart';
 import '../models/schedule_h1_record.dart';
+import '../models/purchase_record.dart';
 import 'package:objectbox/objectbox.dart';
 import '../../objectbox.g.dart';
 import 'package:flutter/foundation.dart';
@@ -46,6 +47,11 @@ class LocalServerService {
       StreamController<String>.broadcast();
   Stream<String> get incomingDataStream => _incomingDataController.stream;
 
+  final StreamController<int> _connectedClientsController =
+      StreamController<int>.broadcast();
+  Stream<int> get connectedClientsStream => _connectedClientsController.stream;
+  int get connectedClientsCount => _wsClients.length;
+
   String get _jwtSecret => ObjectBoxService.instance.settings.jwtSecret;
   int get _port => ObjectBoxService.instance.settings.serverPort;
 
@@ -66,6 +72,8 @@ class LocalServerService {
     router.post('/api/medicines/sync', _withAuth(_medicinesSyncHandler));
     router.get('/api/transfers', _withAuth(_transfersGetHandler));
     router.post('/api/transfers/push', _withAuth(_transfersPushHandler));
+    router.get('/api/purchases', _withAuth(_purchasesGetHandler));
+    router.post('/api/purchases/push', _withAuth(_purchasesPushHandler));
     router.get('/api/sales', _withAuth(_salesGetHandler));
     router.post('/api/sales/push', _withAuth(_salesPushHandler));
     router.get('/api/patients', _withAuth(_patientsGetHandler));
@@ -171,7 +179,7 @@ class LocalServerService {
         client.sink.add(pingPayload);
       } catch (e) {
         debugPrint('LocalServerService: Failed to ping WebSocket client, removing: $e');
-        _wsClients.remove(client);
+        _removeWsClient(client);
       }
     }
   }
@@ -185,7 +193,7 @@ class LocalServerService {
       try {
         client.sink.add(data);
       } catch (_) {
-        _wsClients.remove(client);
+        _removeWsClient(client);
       }
     }
   }
@@ -214,17 +222,28 @@ class LocalServerService {
     };
   }
 
+  void _addWsClient(WebSocketChannel client) {
+    _wsClients.add(client);
+    _connectedClientsController.add(_wsClients.length);
+  }
+
+  void _removeWsClient(WebSocketChannel client) {
+    if (_wsClients.remove(client)) {
+      _connectedClientsController.add(_wsClients.length);
+    }
+  }
+
   void _onWsConnect(WebSocketChannel channel) {
     debugPrint('LocalServerService: New WebSocket client connected! Total clients: ${_wsClients.length + 1}');
-    _wsClients.add(channel);
+    _addWsClient(channel);
     channel.stream.listen(
       (_) {},
       onDone: () {
-        _wsClients.remove(channel);
+        _removeWsClient(channel);
         debugPrint('LocalServerService: WebSocket client disconnected. Total clients: ${_wsClients.length}');
       },
       onError: (_) {
-        _wsClients.remove(channel);
+        _removeWsClient(channel);
         debugPrint('LocalServerService: WebSocket client error. Total clients: ${_wsClients.length}');
       },
     );
@@ -784,12 +803,7 @@ class LocalServerService {
             }
           }
 
-          if (oldSale.isClinicalDispense) {
-            m.mainStock = (m.mainStock + qty).clamp(0, 999999);
-          } else {
-            m.storeStock = (m.storeStock + qty).clamp(0, 999999);
-          }
-          m.updatedAt = DateTime.now();
+          m.recalculateStockFromBatches();
           ObjectBoxService.instance.medicineBox.put(m);
         }
       }
@@ -850,12 +864,7 @@ class LocalServerService {
             }
           }
 
-          if (sale.isClinicalDispense) {
-            m.mainStock = (m.mainStock - qty).clamp(0, 999999);
-          } else {
-            m.storeStock = (m.storeStock - qty).clamp(0, 999999);
-          }
-          m.updatedAt = DateTime.now();
+          m.recalculateStockFromBatches();
           ObjectBoxService.instance.medicineBox.put(m);
         }
       }
@@ -916,13 +925,11 @@ class LocalServerService {
         itemsJson: body['itemsJson'] ?? '[]',
       );
 
-      // Deduplication: check if invoiceNo already exists with the same millisecond timestamp
+      // Deduplication: check if invoiceNo already exists
       final existing = ObjectBoxService.instance.saleBox
           .query(Sale_.invoiceNo.equals(sale.invoiceNo))
           .build()
-          .find()
-          .where((s) => s.createdAt.millisecondsSinceEpoch == sale.createdAt.millisecondsSinceEpoch)
-          .firstOrNull;
+          .findFirst();
 
       if (existing != null) {
         // Revert old inventory deductions on Hub
@@ -1599,6 +1606,55 @@ class LocalServerService {
       return Response.ok(jsonEncode({'status': 'success'}));
     } catch (e) {
       debugPrint('Hub transfer push error: $e');
+      return Response.internalServerError();
+    }
+  }
+
+  Future<Response> _purchasesGetHandler(Request req) async {
+    final purchases = ObjectBoxService.instance.purchaseBox.getAll();
+    final json = purchases
+        .map((p) => {
+              'id': p.id,
+              'medicineId': p.medicineId,
+              'medicineName': p.medicineName,
+              'qty': p.qty,
+              'purchasePrice': p.purchasePrice,
+              'purchasedAt': p.purchasedAt.toIso8601String(),
+              'location': p.location,
+              'note': p.note,
+              'supplier': p.supplier,
+            })
+        .toList();
+    return Response.ok(
+      jsonEncode({
+        'data': json,
+        'serverTime': DateTime.now().millisecondsSinceEpoch,
+      }),
+      headers: {'content-type': 'application/json'},
+    );
+  }
+
+  Future<Response> _purchasesPushHandler(Request req) async {
+    try {
+      final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      final purchase = PurchaseRecord(
+        medicineId: body['medicineId'],
+        medicineName: body['medicineName'],
+        qty: body['qty'],
+        purchasePrice: (body['purchasePrice'] as num).toDouble(),
+        purchasedAt: DateTime.tryParse(body['purchasedAt'] ?? '') ?? DateTime.now(),
+        location: body['location'] ?? '',
+        note: body['note'] ?? '',
+        supplier: body['supplier'] ?? '',
+      );
+
+      // Save purchase to Hub
+      ObjectBoxService.instance.purchaseBox.put(purchase);
+
+      broadcast({'event': 'sync_received'});
+      return Response.ok(jsonEncode({'status': 'success'}));
+    } catch (e) {
+      debugPrint('Hub purchase push error: $e');
       return Response.internalServerError();
     }
   }

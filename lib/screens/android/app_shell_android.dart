@@ -37,6 +37,7 @@ import '../../shared/widgets/connectivity_overlay.dart';
 import 'dart:async';
 import 'analysis_hub_android.dart';
 import '../../shared/services/ota_update_service.dart';
+import '../../objectbox.g.dart';
 
 class AppShellAndroid extends StatefulWidget {
   const AppShellAndroid({super.key});
@@ -298,6 +299,7 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
             event == 'patients_updated' ||
             event == 'sales_updated' ||
             event == 'sales_deleted' ||
+            event == 'sale_deleted' ||
             event == 'patient_deleted') {
           debugPrint('AppShellAndroid: Triggering pull cascade for $event...');
 
@@ -324,6 +326,19 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
               await sync.pullPatients(since: sinceStr);
               if (mounted) {
                 context.read<PatientProvider>().load();
+              }
+            } else if (event == 'sale_deleted') {
+              final invoiceNo = msg['invoiceNo'] as String? ?? '';
+              if (invoiceNo.isNotEmpty) {
+                final box = ObjectBoxService.instance.saleBox;
+                final s = box.query(Sale_.invoiceNo.equals(invoiceNo)).build().findFirst();
+                if (s != null) {
+                  box.remove(s.id);
+                  debugPrint('AppShellAndroid: WebSocket event deleted sale $invoiceNo locally.');
+                }
+              }
+              if (mounted) {
+                context.read<SalesProvider>().load();
               }
             } else if (event == 'sales_updated' || event == 'sales_deleted') {
               await sync.pullSales(since: sinceStr);
@@ -486,7 +501,7 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
             ),
 
           // --- HUB BACK ONLINE OVERLAY (NON-BLOCKING PROMPT) ---
-          if (sync.isCloudMode && _isHubBackOnline)
+          if (sync.isCloudMode && _isHubBackOnline && sync.showHubOnlinePrompt)
             ConnectivityOverlay(
               isBlocking: false,
               title: 'Hub is Back Online!',
@@ -510,6 +525,14 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
                 TextButton(
                   onPressed: () => setState(() => _isHubBackOnline = false),
                   child: const Text('Dismiss (Stay in Cloud Mode)'),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () {
+                    sync.setShowHubOnlinePrompt(false);
+                    setState(() => _isHubBackOnline = false);
+                  },
+                  child: const Text("Don't show again"),
                 ),
               ],
             ),

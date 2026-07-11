@@ -117,24 +117,24 @@ class _MedicineDialogState extends State<MedicineDialog> {
                 const SizedBox(height: 12),
                 Row(children: [
                   Expanded(
-                      child: _field(_bulkClinicCtrl, widget.medicine != null ? 'Clinic Bulk' : 'Add to Clinic Bulk',
+                      child: _field(_bulkStoreCtrl, widget.medicine != null ? 'Store Bulk' : 'Add to Store Bulk',
                           keyboardType: TextInputType.number,
                           readOnly: widget.medicine != null)),
                   const SizedBox(width: 12),
                   Expanded(
-                      child: _field(_bulkStoreCtrl, widget.medicine != null ? 'Store Bulk' : 'Add to Store Bulk',
+                      child: _field(_bulkClinicCtrl, widget.medicine != null ? 'Clinic Bulk' : 'Add to Clinic Bulk',
                           keyboardType: TextInputType.number,
                           readOnly: widget.medicine != null)),
                 ]),
                 const SizedBox(height: 12),
                 Row(children: [
                   Expanded(
-                      child: _field(_mainStockCtrl, widget.medicine != null ? 'Clinic Dispense' : 'Add to Clinic Disp.',
+                      child: _field(_storeStockCtrl, widget.medicine != null ? 'Store POS' : 'Add to Store POS',
                           keyboardType: TextInputType.number,
                           readOnly: widget.medicine != null)),
                   const SizedBox(width: 12),
                   Expanded(
-                      child: _field(_storeStockCtrl, widget.medicine != null ? 'Store POS' : 'Add to Store POS',
+                      child: _field(_mainStockCtrl, widget.medicine != null ? 'Clinic Dispense' : 'Add to Clinic Disp.',
                           keyboardType: TextInputType.number,
                           readOnly: widget.medicine != null)),
                 ]),

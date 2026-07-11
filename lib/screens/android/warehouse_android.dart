@@ -353,6 +353,7 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
                         context, widget.medicine, 'bulkStore', 'store', widget.wh),
                   ),
                 ),
+                const SizedBox(width: 8),
                 Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -369,6 +370,7 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
                         child: Container(
                           width: 32,
                           height: 22,
+                          alignment: Alignment.center,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(6),
                             color: const Color(0xFF14B8A6).withValues(alpha: 0.1),
@@ -392,6 +394,7 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
                         child: Container(
                           width: 32,
                           height: 22,
+                          alignment: Alignment.center,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(6),
                             color: AppTheme.indigo.withValues(alpha: 0.1),
@@ -1057,164 +1060,178 @@ class _TransferHistoryTabState extends State<_TransferHistoryTab> {
     final allTransfers = wh.transfers;
     final displayedCount = allTransfers.length > _limit ? _limit : allTransfers.length;
 
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            child: Row(
-              children: [
-                _FilterChip(
-                  label: 'Today',
-                  isSelected: wh.activeFilter == SalesFilter.today,
-                  onSelected: () {
-                    wh.setFilter(SalesFilter.today);
-                    setState(() => _limit = 20);
-                  },
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'Yesterday',
-                  isSelected: wh.activeFilter == SalesFilter.yesterday,
-                  onSelected: () {
-                    wh.setFilter(SalesFilter.yesterday);
-                    setState(() => _limit = 20);
-                  },
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'Past Week',
-                  isSelected: wh.activeFilter == SalesFilter.last7Days,
-                  onSelected: () {
-                    wh.setFilter(SalesFilter.last7Days);
-                    setState(() => _limit = 20);
-                  },
-                ),
-              ],
+    return RefreshIndicator(
+      onRefresh: () async {
+        final sync = context.read<SyncService>();
+        if (sync.isCloudMode) {
+          await sync.syncAllFromCloud();
+        } else {
+          await sync.syncAll();
+        }
+        if (mounted) {
+          wh.loadTransfers();
+          context.read<InventoryProvider>().load();
+        }
+      },
+      child: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              child: Row(
+                children: [
+                  _FilterChip(
+                    label: 'Today',
+                    isSelected: wh.activeFilter == SalesFilter.today,
+                    onSelected: () {
+                      wh.setFilter(SalesFilter.today);
+                      setState(() => _limit = 20);
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _FilterChip(
+                    label: 'Yesterday',
+                    isSelected: wh.activeFilter == SalesFilter.yesterday,
+                    onSelected: () {
+                      wh.setFilter(SalesFilter.yesterday);
+                      setState(() => _limit = 20);
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _FilterChip(
+                    label: 'Past Week',
+                    isSelected: wh.activeFilter == SalesFilter.last7Days,
+                    onSelected: () {
+                      wh.setFilter(SalesFilter.last7Days);
+                      setState(() => _limit = 20);
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        allTransfers.isEmpty
-            ? const SliverFillRemaining(
-                child: AppEmptyState(
-                  icon: Icons.swap_horiz_rounded,
-                  title: 'No transfer records',
-                ),
-              )
-            : SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, i) {
-                      final t = allTransfers[i];
-                      final isSendOut = t.fromWarehouse == 'main' || t.fromWarehouse == 'clinic';
-                      final accentColor =
-                          isSendOut ? AppTheme.success : AppTheme.indigo;
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        decoration: BoxDecoration(
-                          color: context.surfaceColor,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                              color:
-                                  context.borderColor.withValues(alpha: 0.5)),
-                        ),
-                        child: InkWell(
-                          onTap: () => _showTransferDetailsDialog(context, t),
-                          borderRadius: BorderRadius.circular(16),
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Row(
-                              children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                  color: accentColor.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(12)),
-                              child: Icon(
-                                  isSendOut
-                                      ? Icons.outbox_rounded
-                                      : Icons.move_to_inbox_rounded,
-                                  color: accentColor,
-                                  size: 20),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+          allTransfers.isEmpty
+              ? const SliverFillRemaining(
+                  child: AppEmptyState(
+                    icon: Icons.swap_horiz_rounded,
+                    title: 'No transfer records',
+                  ),
+                )
+              : SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) {
+                        final t = allTransfers[i];
+                        final isSendOut = t.fromWarehouse == 'main' || t.fromWarehouse == 'clinic';
+                        final accentColor =
+                            isSendOut ? AppTheme.success : AppTheme.indigo;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          decoration: BoxDecoration(
+                            color: context.surfaceColor,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                                color:
+                                    context.borderColor.withValues(alpha: 0.5)),
+                          ),
+                          child: InkWell(
+                            onTap: () => _showTransferDetailsDialog(context, t),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Row(
                                 children: [
-                                  Text(t.medicineName,
-                                      style: const TextStyle(
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                    color: accentColor.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(12)),
+                                child: Icon(
+                                    isSendOut
+                                        ? Icons.outbox_rounded
+                                        : Icons.move_to_inbox_rounded,
+                                    color: accentColor,
+                                    size: 20),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(t.medicineName,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 14)),
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      crossAxisAlignment: CrossAxisAlignment.center,
+                                      children: [
+                                        _buildLocationBadge(context, t.fromWarehouse),
+                                        const Padding(
+                                          padding: EdgeInsets.symmetric(horizontal: 4),
+                                          child: Icon(Icons.arrow_forward_rounded, size: 12, color: Colors.grey),
+                                        ),
+                                        _buildLocationBadge(context, t.toWarehouse),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                            '• ${t.transferredAt.day}/${t.transferredAt.month}',
+                                            style: TextStyle(
+                                                fontSize: 11,
+                                                color: context.textMutedColor,
+                                                fontWeight: FontWeight.w600)),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text('${isSendOut ? "-" : "+"}${t.qty}',
+                                      style: TextStyle(
                                           fontWeight: FontWeight.w800,
-                                          fontSize: 14)),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.center,
-                                    children: [
-                                      _buildLocationBadge(context, t.fromWarehouse),
-                                      const Padding(
-                                        padding: EdgeInsets.symmetric(horizontal: 4),
-                                        child: Icon(Icons.arrow_forward_rounded, size: 12, color: Colors.grey),
-                                      ),
-                                      _buildLocationBadge(context, t.toWarehouse),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                          '• ${t.transferredAt.day}/${t.transferredAt.month}',
-                                          style: TextStyle(
-                                              fontSize: 11,
-                                              color: context.textMutedColor,
-                                              fontWeight: FontWeight.w600)),
-                                    ],
-                                  ),
+                                          color: accentColor,
+                                          fontSize: 16)),
+                                  Text(isSendOut ? 'OUT' : 'IN',
+                                      style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          color: context.textMutedColor,
+                                          letterSpacing: 0.5)),
                                 ],
                               ),
-                            ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text('${isSendOut ? "-" : "+"}${t.qty}',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        color: accentColor,
-                                        fontSize: 16)),
-                                Text(isSendOut ? 'OUT' : 'IN',
-                                    style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        color: context.textMutedColor,
-                                        letterSpacing: 0.5)),
-                              ],
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
+                    );
+                      },
+                      childCount: displayedCount,
                     ),
-                  );
-                    },
-                    childCount: displayedCount,
                   ),
                 ),
-              ),
-        if (allTransfers.length > _limit)
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Center(
-                child: TextButton.icon(
-                  onPressed: () => setState(() => _limit += 20),
-                  icon: const Icon(Icons.expand_more),
-                  label: const Text('Load More'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppTheme.primary,
-                    textStyle: const TextStyle(fontWeight: FontWeight.bold),
+          if (allTransfers.length > _limit)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: TextButton.icon(
+                    onPressed: () => setState(() => _limit += 20),
+                    icon: const Icon(Icons.expand_more),
+                    label: const Text('Load More'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppTheme.primary,
+                      textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        const SliverToBoxAdapter(child: SizedBox(height: 32)),
-      ],
+          const SliverToBoxAdapter(child: SizedBox(height: 32)),
+        ],
+      ),
     );
   }
 }
@@ -1588,182 +1605,195 @@ class _PurchaseHistoryTabAndroidState extends State<_PurchaseHistoryTabAndroid> 
 
     final displayedCount = filtered.length > _limit ? _limit : filtered.length;
 
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: TextField(
-              onChanged: (v) => setState(() {
-                _search = v;
-                _limit = 20;
-              }),
-              decoration: InputDecoration(
-                hintText: 'Search purchase logs...',
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: context.bgColor.withValues(alpha: 0.5),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-          ),
-        ),
-        SliverToBoxAdapter(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                _FilterChip(
-                  label: 'Today',
-                  isSelected: _activeFilter == SalesFilter.today,
-                  onSelected: () => setState(() {
-                    _activeFilter = SalesFilter.today;
-                    _limit = 20;
-                  }),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'Yesterday',
-                  isSelected: _activeFilter == SalesFilter.yesterday,
-                  onSelected: () => setState(() {
-                    _activeFilter = SalesFilter.yesterday;
-                    _limit = 20;
-                  }),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'Past Week',
-                  isSelected: _activeFilter == SalesFilter.last7Days,
-                  onSelected: () => setState(() {
-                    _activeFilter = SalesFilter.last7Days;
-                    _limit = 20;
-                  }),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'All Time',
-                  isSelected: _activeFilter == SalesFilter.custom,
-                  onSelected: () => setState(() {
-                    _activeFilter = SalesFilter.custom;
-                    _limit = 20;
-                  }),
-                ),
-              ],
-            ),
-          ),
-        ),
-        filtered.isEmpty
-            ? const SliverFillRemaining(
-                child: AppEmptyState(
-                  icon: Icons.shopping_bag_outlined,
-                  title: 'No purchase records found',
-                ),
-              )
-            : SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, i) {
-                      final p = filtered[i];
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        decoration: BoxDecoration(
-                          color: context.surfaceColor,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                              color: context.borderColor.withValues(alpha: 0.5)),
-                        ),
-                        child: InkWell(
-                          onTap: () => _showPurchaseDetailsDialog(context, p),
-                          borderRadius: BorderRadius.circular(16),
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                      color: Colors.teal.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(12)),
-                                  child: const Icon(
-                                      Icons.shopping_bag_outlined,
-                                      color: Colors.teal,
-                                      size: 20),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(p.medicineName,
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.w800,
-                                              fontSize: 14)),
-                                      const SizedBox(height: 6),
-                                      Row(
-                                        children: [
-                                          _buildLocationBadge(context, p.location),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                              '• ${p.purchasedAt.day}/${p.purchasedAt.month}',
-                                              style: TextStyle(
-                                                  fontSize: 11,
-                                                  color: context.textMutedColor,
-                                                  fontWeight: FontWeight.w600)),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text('+${p.qty}',
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.w800,
-                                            color: Colors.teal,
-                                            fontSize: 16)),
-                                    Text('₹${(p.qty * p.purchasePrice).toStringAsFixed(0)}',
-                                        style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w700,
-                                            color: context.textColor,
-                                            letterSpacing: 0.5)),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                    childCount: displayedCount,
-                  ),
-                ),
-              ),
-        if (filtered.length > _limit)
+    return RefreshIndicator(
+      onRefresh: () async {
+        final sync = context.read<SyncService>();
+        if (sync.isCloudMode) {
+          await sync.syncAllFromCloud();
+        } else {
+          await sync.syncAll();
+        }
+        if (mounted) {
+          context.read<InventoryProvider>().load();
+        }
+      },
+      child: CustomScrollView(
+        slivers: [
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Center(
-                child: TextButton.icon(
-                  onPressed: () => setState(() => _limit += 20),
-                  icon: const Icon(Icons.expand_more),
-                  label: const Text('Load More'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppTheme.primary,
-                    textStyle: const TextStyle(fontWeight: FontWeight.bold),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: TextField(
+                onChanged: (v) => setState(() {
+                  _search = v;
+                  _limit = 20;
+                }),
+                decoration: InputDecoration(
+                  hintText: 'Search purchase logs...',
+                  prefixIcon: const Icon(Icons.search),
+                  filled: true,
+                  fillColor: context.bgColor.withValues(alpha: 0.5),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
                   ),
                 ),
               ),
             ),
           ),
-        const SliverToBoxAdapter(child: SizedBox(height: 32)),
-      ],
+          SliverToBoxAdapter(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  _FilterChip(
+                    label: 'Today',
+                    isSelected: _activeFilter == SalesFilter.today,
+                    onSelected: () => setState(() {
+                      _activeFilter = SalesFilter.today;
+                      _limit = 20;
+                    }),
+                  ),
+                  const SizedBox(width: 8),
+                  _FilterChip(
+                    label: 'Yesterday',
+                    isSelected: _activeFilter == SalesFilter.yesterday,
+                    onSelected: () => setState(() {
+                      _activeFilter = SalesFilter.yesterday;
+                      _limit = 20;
+                    }),
+                  ),
+                  const SizedBox(width: 8),
+                  _FilterChip(
+                    label: 'Past Week',
+                    isSelected: _activeFilter == SalesFilter.last7Days,
+                    onSelected: () => setState(() {
+                      _activeFilter = SalesFilter.last7Days;
+                      _limit = 20;
+                    }),
+                  ),
+                  const SizedBox(width: 8),
+                  _FilterChip(
+                    label: 'All Time',
+                    isSelected: _activeFilter == SalesFilter.custom,
+                    onSelected: () => setState(() {
+                      _activeFilter = SalesFilter.custom;
+                      _limit = 20;
+                    }),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          filtered.isEmpty
+              ? const SliverFillRemaining(
+                  child: AppEmptyState(
+                    icon: Icons.shopping_bag_outlined,
+                    title: 'No purchase records found',
+                  ),
+                )
+              : SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) {
+                        final p = filtered[i];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          decoration: BoxDecoration(
+                            color: context.surfaceColor,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                                color: context.borderColor.withValues(alpha: 0.5)),
+                          ),
+                          child: InkWell(
+                            onTap: () => _showPurchaseDetailsDialog(context, p),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                        color: Colors.teal.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(12)),
+                                    child: const Icon(
+                                        Icons.shopping_bag_outlined,
+                                        color: Colors.teal,
+                                        size: 20),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(p.medicineName,
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.w800,
+                                                fontSize: 14)),
+                                        const SizedBox(height: 6),
+                                        Row(
+                                          children: [
+                                            _buildLocationBadge(context, p.location),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                                '• ${p.purchasedAt.day}/${p.purchasedAt.month}',
+                                                style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: context.textMutedColor,
+                                                    fontWeight: FontWeight.w600)),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text('+${p.qty}',
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                              color: Colors.teal,
+                                              fontSize: 16)),
+                                      Text('₹${(p.qty * p.purchasePrice).toStringAsFixed(0)}',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                              color: context.textColor,
+                                              letterSpacing: 0.5)),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                      childCount: displayedCount,
+                    ),
+                  ),
+                ),
+          if (filtered.length > _limit)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: TextButton.icon(
+                    onPressed: () => setState(() => _limit += 20),
+                    icon: const Icon(Icons.expand_more),
+                    label: const Text('Load More'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppTheme.primary,
+                      textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          const SliverToBoxAdapter(child: SizedBox(height: 32)),
+        ],
+      ),
     );
   }
 }

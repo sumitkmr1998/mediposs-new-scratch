@@ -340,8 +340,7 @@ class InventoryProvider extends ChangeNotifier {
       }
 
       // Update the main medicine entity's cached stock
-      m.storeStock = (m.storeStock - qty).clamp(0, 999999);
-      m.updatedAt = DateTime.now();
+      m.recalculateStockFromBatches();
       _box.put(m);
       load();
 
@@ -512,25 +511,7 @@ class InventoryProvider extends ChangeNotifier {
         }
       }
 
-      int getStock(String loc) {
-        if (loc == 'main' || loc == 'clinic') return m.mainStock;
-        if (loc == 'store') return m.storeStock;
-        if (loc == 'bulkClinic') return m.bulkClinicStock;
-        if (loc == 'bulkStore') return m.bulkStoreStock;
-        return 0;
-      }
-
-      void setStock(String loc, int val) {
-        if (loc == 'main' || loc == 'clinic') m.mainStock = val;
-        if (loc == 'store') m.storeStock = val;
-        if (loc == 'bulkClinic') m.bulkClinicStock = val;
-        if (loc == 'bulkStore') m.bulkStoreStock = val;
-      }
-
-      setStock(from, (getStock(from) - qty).clamp(0, 999999));
-      setStock(to, getStock(to) + qty);
-
-      m.updatedAt = DateTime.now();
+      m.recalculateStockFromBatches();
       _box.put(m);
 
       // Log stock transfer
@@ -606,7 +587,8 @@ class InventoryProvider extends ChangeNotifier {
     if (actor != null &&
         !(actor.role.toLowerCase() == 'admin' ||
             actor.canOverrideStock ||
-            actor.canEditInventory)) {
+            actor.canEditInventory ||
+            actor.canAddStock)) {
       throw Exception('Unauthorized: You do not have permission to modify batch stock.');
     }
     final ids = {
@@ -654,10 +636,14 @@ class InventoryProvider extends ChangeNotifier {
           }
         }
 
-        m.mainStock += mainQty;
-        m.storeStock += storeQty;
-        m.bulkClinicStock += bulkClinicQty;
-        m.bulkStoreStock += bulkStoreQty;
+        if (batchNo.isNotEmpty && expiryDate != null) {
+          m.recalculateStockFromBatches();
+        } else {
+          m.mainStock += mainQty;
+          m.storeStock += storeQty;
+          m.bulkClinicStock += bulkClinicQty;
+          m.bulkStoreStock += bulkStoreQty;
+        }
         m.updatedAt = now;
         finalUpdates.add(m);
 
@@ -727,6 +713,19 @@ class InventoryProvider extends ChangeNotifier {
     if (finalUpdates.isNotEmpty) {
       _box.putMany(finalUpdates);
       _purchaseBox.putMany(purchaseRecords);
+
+      final isClient = Platform.isAndroid ||
+          (Platform.isWindows &&
+              ObjectBoxService.instance.settings.isWindowsClient);
+      if (isClient) {
+        for (final p in purchaseRecords) {
+          SyncQueueService.instance.addToQueue(
+            entity: 'purchase',
+            action: 'create',
+            data: p.toJson(),
+          );
+        }
+      }
 
       // Log manual stock updates / batch additions
       for (final record in purchaseRecords) {

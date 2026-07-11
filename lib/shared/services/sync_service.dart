@@ -17,6 +17,7 @@ import '../models/audit_log.dart';
 import '../models/prescription.dart';
 import '../models/prescription_template.dart';
 import '../models/stock_transfer.dart';
+import '../models/purchase_record.dart';
 import '../models/procedure.dart';
 import '../models/schedule_h1_record.dart';
 import '../services/objectbox_service.dart';
@@ -73,10 +74,19 @@ class SyncService extends ChangeNotifier {
   bool _isConnected = false;
   bool _isSyncing = false;
   bool _isCloudMode = false;
+  bool _showHubOnlinePrompt = true;
 
   String? get hubIp => _hubIp;
   bool get isConnected => _isConnected;
   bool get isCloudMode => _isCloudMode;
+  bool get showHubOnlinePrompt => _showHubOnlinePrompt;
+
+  void setShowHubOnlinePrompt(bool val) {
+    if (_showHubOnlinePrompt != val) {
+      _showHubOnlinePrompt = val;
+      notifyListeners();
+    }
+  }
   bool get isSyncing => _isSyncing;
   bool get isHub {
     if (defaultTargetPlatform != TargetPlatform.windows) return false;
@@ -404,6 +414,7 @@ class SyncService extends ChangeNotifier {
 
     _isCloudMode = true;
     _isConnected = true; // Set connected to true so UI allows usage
+    _showHubOnlinePrompt = true;
     notifyListeners();
     
     debugPrint('SyncService: Manual Cloud Mode activated. Syncing from Firebase...');
@@ -677,11 +688,12 @@ class SyncService extends ChangeNotifier {
       await pullDoctors();
       await pullProcedures();
       await pullPrescriptions(since: sinceStr);
+      await pullAuditLogs(since: sinceStr);
       final t3 = await pullSales(since: sinceStr);
       await pullTransfers();
+      await pullPurchases();
       await pullTemplates();
       await pullH1Records(since: sinceStr);
-      await pullAuditLogs(since: sinceStr);
 
       // Update sync timestamp using the Hub's reported time if available
       final serverTime = t1 ?? t2 ?? t3;
@@ -873,6 +885,7 @@ class SyncService extends ChangeNotifier {
                     bulkStoreStock: bItem['bulkStoreStock'] ?? 0,
                   ));
                 }
+                existing.recalculateStockFromBatches();
               }
 
               medicinesToPut.add(existing);
@@ -915,6 +928,7 @@ class SyncService extends ChangeNotifier {
                     bulkStoreStock: bItem['bulkStoreStock'] ?? 0,
                   ));
                 }
+                m.recalculateStockFromBatches();
               }
               medicinesToPut.add(m);
             }
@@ -1511,8 +1525,7 @@ class SyncService extends ChangeNotifier {
       final Map<String, Sale> localSalesMap = {};
       for (final s in allLocal) {
         if (s.invoiceNo.isNotEmpty) {
-          final key = '${s.invoiceNo}_${s.createdAt.millisecondsSinceEpoch}';
-          localSalesMap[key] = s;
+          localSalesMap[s.invoiceNo] = s;
         }
       }
 
@@ -1566,8 +1579,7 @@ class SyncService extends ChangeNotifier {
             final createdAt =
                 DateHelper.parseDateTime(item['createdAt']) ?? DateTime.now();
 
-            final key = '${invoiceNo}_${createdAt.millisecondsSinceEpoch}';
-            final existing = localSalesMap[key];
+            final existing = localSalesMap[invoiceNo];
 
             // Resolve local patient ID using cached Maps
             int localPatientId = 0;
@@ -1664,6 +1676,33 @@ class SyncService extends ChangeNotifier {
         }
         if (toRemoveIds.isNotEmpty) {
           box.removeMany(toRemoveIds);
+        }
+      } else {
+        // Incremental cleanup fallback: check local AuditLog box for VOID/DELETE sale actions
+        // and delete those sales from local ObjectBox.
+        try {
+          final auditBox = ObjectBoxService.instance.store.box<AuditLog>();
+          final voidedSaleLogs = auditBox
+              .query(AuditLog_.entityType.equals('Sale')
+                  .and(AuditLog_.action.equals('VOID').or(AuditLog_.action.equals('DELETE'))))
+              .build()
+              .find();
+          if (voidedSaleLogs.isNotEmpty) {
+            final List<int> voidedSaleLocalIds = [];
+            for (final log in voidedSaleLogs) {
+              final invNo = log.entityId;
+              final s = box.query(Sale_.invoiceNo.equals(invNo)).build().findFirst();
+              if (s != null) {
+                voidedSaleLocalIds.add(s.id);
+              }
+            }
+            if (voidedSaleLocalIds.isNotEmpty) {
+              box.removeMany(voidedSaleLocalIds);
+              debugPrint('SyncService: Incremental cleanup removed ${voidedSaleLocalIds.length} voided/deleted sales locally based on audit logs.');
+            }
+          }
+        } catch (e) {
+          debugPrint('SyncService: Error during incremental sales cleanup: $e');
         }
       }
       debugPrint('SyncService: pullSales synced successfully.');
@@ -1792,6 +1831,59 @@ class SyncService extends ChangeNotifier {
       debugPrint('pullTransfers err: $e');
     }
     debugPrint('SyncService: pullTransfers done.');
+  }
+
+  Future<void> pullPurchases() async {
+    if (!_isConnected || _jwtToken == null) return;
+    debugPrint('SyncService: pullPurchases starting...');
+    try {
+      final url = Uri.parse('$_baseUrl/api/purchases');
+      final res = await http.get(url, headers: _authHeaders());
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body)['data'] as List;
+        final box = ObjectBoxService.instance.purchaseBox;
+        final allLocal = box.getAll();
+
+        final Map<String, PurchaseRecord> localPurchasesMap = {
+          for (final p in allLocal)
+            '${p.medicineName.toLowerCase().trim()}_${p.qty}_${p.location}_${p.purchasedAt.millisecondsSinceEpoch}': p
+        };
+
+        final List<PurchaseRecord> purchasesToPut = [];
+
+        for (final item in data) {
+          final serverTime =
+              DateHelper.parseDateTime(item['purchasedAt']) ?? DateTime.now();
+          final medicineName = item['medicineName'] as String? ?? '';
+          final qty = item['qty'] as int? ?? 0;
+          final location = item['location'] as String? ?? '';
+
+          final key = '${medicineName.toLowerCase().trim()}_${qty}_${location}_${serverTime.millisecondsSinceEpoch}';
+          final existing = localPurchasesMap[key];
+
+          if (existing == null) {
+            purchasesToPut.add(PurchaseRecord(
+              id: 0,
+              medicineId: item['medicineId'] ?? 0,
+              medicineName: medicineName,
+              qty: qty,
+              purchasePrice: (item['purchasePrice'] as num).toDouble(),
+              purchasedAt: serverTime,
+              location: location,
+              note: item['note'] ?? '',
+              supplier: item['supplier'] ?? '',
+            ));
+          }
+        }
+
+        if (purchasesToPut.isNotEmpty) {
+          box.putMany(purchasesToPut);
+        }
+      }
+    } catch (e) {
+      debugPrint('pullPurchases err: $e');
+    }
+    debugPrint('SyncService: pullPurchases done.');
   }
 
   // ─── Prescription Templates ───────────────────────────────────────────────
@@ -2095,6 +2187,11 @@ class SyncService extends ChangeNotifier {
   Future<bool> pushTransfer(StockTransfer t) async {
     return await _unifiedPush('/api/transfers/push', t.toJson(),
         entity: 'transfer', action: 'create');
+  }
+
+  Future<bool> pushPurchase(PurchaseRecord p) async {
+    return await _unifiedPush('/api/purchases/push', p.toJson(),
+        entity: 'purchase', action: 'create');
   }
 
   Future<bool> pushProcedure(Procedure p) async {

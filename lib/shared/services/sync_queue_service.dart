@@ -10,6 +10,7 @@ import '../models/doctor.dart';
 import '../models/prescription.dart';
 import '../models/audit_log.dart';
 import '../models/stock_transfer.dart';
+import '../models/purchase_record.dart';
 import '../models/medicine.dart';
 import '../models/prescription_template.dart';
 import '../models/procedure.dart';
@@ -141,6 +142,8 @@ class SyncQueueService extends ChangeNotifier {
           return await syncService.pushPrescription(Prescription.fromJson(data));
         case 'transfer':
           return await syncService.pushTransfer(StockTransfer.fromJson(data));
+        case 'purchase':
+          return await syncService.pushPurchase(PurchaseRecord.fromJson(data));
         case 'audit_log':
           try {
             final ok = await syncService.pushAuditLog(AuditLog.fromJson(data));

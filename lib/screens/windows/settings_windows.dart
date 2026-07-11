@@ -612,7 +612,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                 const Divider(height: 24),
                 SettingsDropdown<int?>(
                   title: 'Default Prescribing Doctor',
-                  value: _selectedDefaultDoctorId,
+                  value: _doctors.any((d) => d.id == _selectedDefaultDoctorId) ? _selectedDefaultDoctorId : null,
                   icon: LucideIcons.userCheck,
                   items: [
                     const DropdownMenuItem<int?>(

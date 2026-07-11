@@ -12,6 +12,8 @@ import 'sales_history_android.dart';
 import 'settings_android.dart';
 import 'user_management_android.dart';
 import '../connection_screen.dart';
+import 'analysis_hub_android.dart';
+import '../audit_logs_screen.dart';
 import 'opd/opd_queue_android.dart';
 import 'opd/opd_report_android.dart';
 import 'opd/patient_list_android.dart';
@@ -468,6 +470,7 @@ class _PrimaryStats extends StatelessWidget {
           color: AppTheme.emerald,
           subtitle: 'Combined collections',
           width: double.infinity,
+          onTap: () => context.read<NavigationProvider>().selectDestination('sales'),
         ),
         const SizedBox(height: 14),
         Row(
@@ -478,6 +481,7 @@ class _PrimaryStats extends StatelessWidget {
                 value: '${sales.filteredSalesCount}',
                 icon: Icons.shopping_bag_rounded,
                 color: AppTheme.teal,
+                onTap: () => context.read<NavigationProvider>().selectDestination('sales'),
               ),
             ),
             const SizedBox(width: 14),
@@ -487,6 +491,7 @@ class _PrimaryStats extends StatelessWidget {
                 value: '${opd.filteredPatientCount}',
                 icon: Icons.medical_services_rounded,
                 color: AppTheme.primary,
+                onTap: () => context.read<NavigationProvider>().selectDestination('opd_queue'),
               ),
             ),
           ],
@@ -499,6 +504,7 @@ class _PrimaryStats extends StatelessWidget {
           color: AppTheme.accent,
           subtitle: 'Procedure collections',
           width: double.infinity,
+          onTap: () => context.read<NavigationProvider>().selectDestination('sales'),
         ),
       ],
     );
@@ -793,6 +799,22 @@ class _QuickActionsCardState extends State<_QuickActionsCard> {
       color: AppTheme.teal,
       screen: const OpdReportAndroid(),
       isAllowed: (auth) => auth.canAccessOPD,
+    ),
+    'analysis': _DashboardActionData(
+      id: 'analysis',
+      label: 'Analysis Hub',
+      icon: Icons.analytics_rounded,
+      color: AppTheme.primary,
+      screen: const AnalysisHubScreenAndroid(),
+      isAllowed: (auth) => auth.canViewAnalytics,
+    ),
+    'audit_logs': _DashboardActionData(
+      id: 'audit_logs',
+      label: 'Audit Logs',
+      icon: Icons.history_toggle_off_rounded,
+      color: AppTheme.orange,
+      screen: const AuditLogsScreen(),
+      isAllowed: (auth) => auth.isAdmin || auth.currentUser?.role.toLowerCase() == 'manager',
     ),
   };
 

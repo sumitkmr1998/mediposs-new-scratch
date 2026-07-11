@@ -56,10 +56,13 @@ class _AppShellWindowsState extends State<AppShellWindows> {
   bool _isCloudSyncing = false;
   Timer? _hubCheckTimer;
   bool _isHubBackOnline = false;
+  int _connectedClientsCount = 0;
+  StreamSubscription<int>? _connectedClientsSub;
 
   @override
   void dispose() {
     _hubCheckTimer?.cancel();
+    _connectedClientsSub?.cancel();
     super.dispose();
   }
 
@@ -68,6 +71,7 @@ class _AppShellWindowsState extends State<AppShellWindows> {
     super.initState();
 
     // Start periodic Hub availability check for Cloud Mode
+    _connectedClientsCount = LocalServerService.instance.connectedClientsCount;
     _hubCheckTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
       final sync = context.read<SyncService>();
       final settings = context.read<SettingsProvider>().settings;
@@ -132,6 +136,13 @@ class _AppShellWindowsState extends State<AppShellWindows> {
           context.read<AuthProvider>().notifyListeners();
         } else {
           _loadInitialData();
+        }
+      });
+      _connectedClientsSub = LocalServerService.instance.connectedClientsStream.listen((count) {
+        if (mounted) {
+          setState(() {
+            _connectedClientsCount = count;
+          });
         }
       });
     }
@@ -358,6 +369,7 @@ class _AppShellWindowsState extends State<AppShellWindows> {
                           builder: (_) => const ConnectionScreen())),
                   onCloudSync: _performManualCloudSync,
                   isCloudSyncing: _isCloudSyncing,
+                  connectedClientsCount: _connectedClientsCount,
                 ),
               Expanded(child: _screenForId(currentDestId)),
             ],
@@ -411,7 +423,7 @@ class _AppShellWindowsState extends State<AppShellWindows> {
           ),
 
         // --- HUB BACK ONLINE OVERLAY (NON-BLOCKING PROMPT) ---
-        if (settings.isWindowsClient && sync.isCloudMode && _isHubBackOnline)
+        if (settings.isWindowsClient && sync.isCloudMode && _isHubBackOnline && sync.showHubOnlinePrompt)
           ConnectivityOverlay(
             isBlocking: false,
             title: 'Hub is Back Online!',
@@ -442,6 +454,14 @@ class _AppShellWindowsState extends State<AppShellWindows> {
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 50),
                 ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () {
+                  sync.setShowHubOnlinePrompt(false);
+                  setState(() => _isHubBackOnline = false);
+                },
+                child: const Text("Don't show again"),
               ),
             ],
           ),
@@ -519,6 +539,7 @@ class _SideNav extends StatelessWidget {
   final VoidCallback onConnectTap;
   final VoidCallback onCloudSync;
   final bool isCloudSyncing;
+  final int connectedClientsCount;
 
   const _SideNav({
     required this.selectedIndex,
@@ -531,6 +552,7 @@ class _SideNav extends StatelessWidget {
     required this.onConnectTap,
     required this.onCloudSync,
     required this.isCloudSyncing,
+    required this.connectedClientsCount,
   });
 
   @override
@@ -820,7 +842,7 @@ class _SideNav extends StatelessWidget {
               onTap: () => _showHubQrDialog(context),
               borderRadius: BorderRadius.circular(8),
               child: _StatusBadge(
-                  label: expanded ? 'Hub Active' : '',
+                  label: expanded ? 'Hub Active ($connectedClientsCount)' : '',
                   color: AppTheme.success,
                   icon: Icons.router),
             )

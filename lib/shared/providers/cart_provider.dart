@@ -192,10 +192,22 @@ class CartProvider extends ChangeNotifier {
 
   void addItem(Medicine medicine, {int qty = 1}) {
     final idx = _items.indexWhere((i) => i.medicine?.id == medicine.id && !i.isProcedure);
+    final maxStock = _isClinicalDispense ? medicine.mainStock : medicine.storeStock;
     if (idx >= 0) {
-      _items[idx].qty += qty;
+      final currentQty = _items[idx].qty;
+      if (!_isReturnMode && currentQty + qty > maxStock) {
+        _items[idx].qty = maxStock;
+      } else {
+        _items[idx].qty += qty;
+      }
     } else {
-      _items.add(CartItem(medicine: medicine, qty: qty));
+      int finalQty = qty;
+      if (!_isReturnMode && qty > maxStock) {
+        finalQty = maxStock;
+      }
+      if (finalQty > 0 || _isReturnMode) {
+        _items.add(CartItem(medicine: medicine, qty: finalQty));
+      }
     }
     notifyListeners();
   }
@@ -243,6 +255,15 @@ class CartProvider extends ChangeNotifier {
         (isProcedure ? i.procedure?.id : i.medicine?.id) == id &&
         i.isProcedure == isProcedure);
     if (idx >= 0) {
+      if (!isProcedure && !_isReturnMode) {
+        final medicine = _items[idx].medicine;
+        if (medicine != null) {
+          final maxStock = _isClinicalDispense ? medicine.mainStock : medicine.storeStock;
+          if (qty > maxStock) {
+            qty = maxStock;
+          }
+        }
+      }
       _items[idx].qty = qty;
       notifyListeners();
     }
@@ -861,6 +882,17 @@ class CartProvider extends ChangeNotifier {
 
           if (existingOpdSale != null) {
             db.saleBox.remove(existingOpdSale.id);
+            
+            // Log the deletion to AuditLog so other clients will receive this deletion incrementally
+            await AuditService.instance.log(
+              action: 'VOID',
+              entityType: 'Sale',
+              entityId: existingOpdSale.invoiceNo,
+              description: 'Removed OPD Receipt during POS checkout: invoice ${existingOpdSale.invoiceNo}',
+              details: existingOpdSale.toJson(),
+              actor: actor,
+            );
+
             if (isClient) {
               SyncQueueService.instance.addToQueue(
                 entity: 'sale',

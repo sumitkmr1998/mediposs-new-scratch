@@ -11,6 +11,7 @@ import '../services/sync_queue_service.dart';
 import '../services/audit_service.dart';
 import '../../objectbox.g.dart';
 import 'inventory_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum SalesFilter { today, yesterday, last7Days, allTime, custom }
 
@@ -268,6 +269,15 @@ class SalesProvider extends ChangeNotifier {
     _loadedCount = pageSize;
     query.close();
     _recalculateTotals();
+
+    try {
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setString('today_revenue', '₹${_todayRevenue.toStringAsFixed(0)}');
+        prefs.setInt('today_count', _todaySalesCount);
+      });
+    } catch (e) {
+      debugPrint('SalesProvider: SharedPreferences write failed: $e');
+    }
     
     // Debug log to compare sales details between Hub and Client
     final details = _sales.map((s) => '${s.invoiceNo}:total=${s.total}:isReturn=${s.isReturn}:isDispense=${s.isClinicalDispense}').toList();
