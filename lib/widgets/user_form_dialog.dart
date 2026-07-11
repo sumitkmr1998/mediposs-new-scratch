@@ -238,7 +238,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
       child: Container(
-        width: 850,
+        width: 1050,
         height: 700,
         decoration: BoxDecoration(
           color: context.surfaceColor,
