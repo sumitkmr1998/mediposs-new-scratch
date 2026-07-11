@@ -31,6 +31,9 @@ class _WarehouseAndroidState extends State<WarehouseAndroid>
   void initState() {
     super.initState();
     _tabs = TabController(length: 3, vsync: this);
+    _tabs.addListener(() {
+      if (mounted) setState(() {});
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<WarehouseProvider>().loadTransfers();
       final inv = context.read<InventoryProvider>();
@@ -51,21 +54,49 @@ class _WarehouseAndroidState extends State<WarehouseAndroid>
     final auth = context.watch<AuthProvider>();
     return Scaffold(
       backgroundColor: context.surfaceColor,
-      floatingActionButton: (auth.hasInventoryWriteAccess || auth.canAddStock)
-          ? FloatingActionButton.extended(
-              onPressed: () =>
-                  AndroidMedicineDialog.show(context, medicine: null),
-              backgroundColor: AppTheme.primary,
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('NEW MEDICINE',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1)),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-            )
-          : null,
+      floatingActionButton: () {
+        if (_tabs.index == 0) {
+          if (!(auth.hasInventoryWriteAccess || auth.canAddStock)) return null;
+          return FloatingActionButton.extended(
+            onPressed: () => AndroidMedicineDialog.show(context, medicine: null),
+            backgroundColor: AppTheme.primary,
+            icon: const Icon(Icons.add, color: Colors.white),
+            label: const Text('NEW MEDICINE',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          );
+        } else if (_tabs.index == 1) {
+          if (!auth.hasWarehouseWriteAccess) return null;
+          return FloatingActionButton.extended(
+            onPressed: () => AndroidBulkTransferDialog.show(context),
+            backgroundColor: AppTheme.indigo,
+            icon: const Icon(Icons.swap_horiz, color: Colors.white),
+            label: const Text('BULK TRANSFER',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          );
+        } else if (_tabs.index == 2) {
+          if (!(auth.hasInventoryWriteAccess || auth.canAddStock)) return null;
+          return FloatingActionButton.extended(
+            onPressed: () => AndroidBulkPurchaseDialog.show(context),
+            backgroundColor: AppTheme.primary,
+            icon: const Icon(Icons.inventory_2_outlined, color: Colors.white),
+            label: const Text('BULK PURCHASE',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          );
+        }
+        return null;
+      }(),
       body: RefreshIndicator(
         onRefresh: () async {
           final sync = context.read<SyncService>();
@@ -87,36 +118,6 @@ class _WarehouseAndroidState extends State<WarehouseAndroid>
             floating: true,
             forceElevated: innerBoxIsScrolled,
             elevation: innerBoxIsScrolled ? 2 : 0,
-            actions: [
-              if (auth.hasInventoryWriteAccess || auth.canAddStock)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
-                  child: FilledButton.icon(
-                    onPressed: () => AndroidBulkPurchaseDialog.show(context),
-                    icon: const Icon(Icons.inventory_2_outlined, size: 18),
-                    label: const Text('BULK ENTRY'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.primaryLight.withValues(alpha: 0.1),
-                      foregroundColor: AppTheme.primary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-              if (auth.hasWarehouseWriteAccess)
-                Padding(
-                  padding: const EdgeInsets.only(right: 16.0),
-                  child: FilledButton.icon(
-                    onPressed: () => AndroidBulkTransferDialog.show(context),
-                    icon: const Icon(Icons.swap_horiz, size: 18),
-                    label: const Text('BULK TRANSFER'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.indigo.withValues(alpha: 0.1),
-                      foregroundColor: AppTheme.indigo,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-            ],
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(64),
               child: Container(
