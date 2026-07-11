@@ -432,46 +432,67 @@ class _BatchItem extends StatelessWidget {
     final Color statusColor = isExpired ? AppTheme.danger : (isNear ? AppTheme.warning : AppTheme.success);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: context.textMutedColor.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.borderColor.withValues(alpha: 0.3)),
+        color: context.textMutedColor.withValues(alpha: 0.02),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.borderColor.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-            child: Icon(Icons.inventory_2_rounded, color: statusColor, size: 20),
-          ),
-          const SizedBox(width: 16),
+          Icon(Icons.inventory_2_rounded, color: statusColor, size: 16),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(batch.batchNo.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5)),
+                Row(
+                  children: [
+                    Text(
+                      batch.batchNo.isEmpty ? 'NO BATCH' : batch.batchNo.toUpperCase(),
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '(${DateFormat('MMM yy').format(batch.expiryDate).toUpperCase()})',
+                      style: TextStyle(fontSize: 10, color: statusColor, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 2),
-                Text('EXPIRY: ${DateFormat('MMM yyyy').format(batch.expiryDate).toUpperCase()}', 
-                  style: TextStyle(fontSize: 10, color: statusColor, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                Text(
+                  'ST:${batch.storeStock} | CL:${batch.mainStock} | SB:${batch.bulkStoreStock} | CB:${batch.bulkClinicStock}',
+                  style: TextStyle(fontSize: 9, color: context.textMutedColor, fontWeight: FontWeight.w600),
+                ),
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text('${batch.mainStock + batch.storeStock + batch.bulkClinicStock + batch.bulkStoreStock} PCS', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
-              const SizedBox(height: 2),
-              Text('STORE:${batch.storeStock} | CLINIC:${batch.mainStock}', style: TextStyle(fontSize: 10, color: context.textMutedColor, fontWeight: FontWeight.w700)),
-              Text('S.BULK:${batch.bulkStoreStock} | C.BULK:${batch.bulkClinicStock}', style: TextStyle(fontSize: 9, color: context.textMutedColor, fontWeight: FontWeight.w700)),
-            ],
+          const SizedBox(width: 8),
+          Text(
+            '${batch.mainStock + batch.storeStock + batch.bulkClinicStock + batch.bulkStoreStock} PCS',
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
           ),
           const SizedBox(width: 8),
-          IconButton(icon: const Icon(Icons.edit_note_rounded, color: AppTheme.primary), onPressed: onEdit, visualDensity: VisualDensity.compact),
+          IconButton(
+            icon: const Icon(Icons.edit_note_rounded, color: AppTheme.primary, size: 18),
+            onPressed: onEdit,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            visualDensity: VisualDensity.compact,
+          ),
           if (context.read<AuthProvider>().currentUser?.role.toLowerCase() == 'admin' ||
-              context.read<AuthProvider>().currentUser?.canDeleteInventory == true)
-            IconButton(icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.danger), onPressed: onDelete, visualDensity: VisualDensity.compact),
+              context.read<AuthProvider>().currentUser?.canDeleteInventory == true) ...[
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.danger, size: 18),
+              onPressed: onDelete,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              visualDensity: VisualDensity.compact,
+            ),
+          ],
         ],
       ),
     );
