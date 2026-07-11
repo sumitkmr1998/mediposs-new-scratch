@@ -471,7 +471,7 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                       value: _isCompositionScheme,
                       activeTrackColor:
                           AppTheme.primaryLight.withValues(alpha: 0.3),
-                      activeColor: AppTheme.primaryLight,
+                      activeThumbColor: AppTheme.primaryLight,
                       onChanged: (val) => setState(() => _isCompositionScheme = val),
                     ),
                   ),
@@ -567,8 +567,9 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                                     child: Text('Thermal Roll (80mm)')),
                               ],
                               onChanged: (val) {
-                                if (val != null)
+                                if (val != null) {
                                   setState(() => _paperSize = val);
+                                }
                               },
                             ),
                           ],
@@ -626,7 +627,7 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                       value: _autoPrint,
                       activeTrackColor:
                           AppTheme.primaryLight.withValues(alpha: 0.3),
-                      activeColor: AppTheme.primaryLight,
+                      activeThumbColor: AppTheme.primaryLight,
                       onChanged: _selectedPrinter.isEmpty
                           ? null
                           : (val) => setState(() => _autoPrint = val),
@@ -648,7 +649,7 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                       value: _showBatchExpiryRetail,
                       activeTrackColor:
                           AppTheme.primaryLight.withValues(alpha: 0.3),
-                      activeColor: AppTheme.primaryLight,
+                      activeThumbColor: AppTheme.primaryLight,
                       onChanged: (val) => setState(() => _showBatchExpiryRetail = val),
                     ),
                   ),
@@ -668,7 +669,7 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                       value: _showBatchExpiryClinical,
                       activeTrackColor:
                           AppTheme.primaryLight.withValues(alpha: 0.3),
-                      activeColor: AppTheme.primaryLight,
+                      activeThumbColor: AppTheme.primaryLight,
                       onChanged: (val) => setState(() => _showBatchExpiryClinical = val),
                     ),
                   ),
@@ -688,7 +689,7 @@ class _SettingsAndroidState extends State<SettingsAndroid> {
                       value: _showOpdIdInPrint,
                       activeTrackColor:
                           AppTheme.primaryLight.withValues(alpha: 0.3),
-                      activeColor: AppTheme.primaryLight,
+                      activeThumbColor: AppTheme.primaryLight,
                       onChanged: (val) => setState(() => _showOpdIdInPrint = val),
                     ),
                   ),

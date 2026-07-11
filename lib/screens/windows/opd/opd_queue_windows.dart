@@ -862,7 +862,7 @@ class _QueueRowState extends State<_QueueRow> {
                         color: AppTheme.success)),
               ),
             ),
-            SizedBox(
+            const SizedBox(
               width: 150,
               child: Center(
                 child: AppStatusBadge(
@@ -998,7 +998,7 @@ class _QueueRowState extends State<_QueueRow> {
                       color: AppTheme.warning)),
             ),
           ),
-          SizedBox(
+          const SizedBox(
             width: 150,
             child: Center(
               child: AppStatusBadge(

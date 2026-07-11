@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:provider/provider.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import '../shared/services/local_server_service.dart';
 import '../shared/services/objectbox_service.dart';

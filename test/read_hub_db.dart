@@ -1,11 +1,8 @@
-import 'dart:convert';
-import 'dart:io';
-import 'package:path/path.dart' as p;
-import '../lib/objectbox.g.dart';
-import '../lib/shared/models/sale.dart';
+import 'package:medipos/objectbox.g.dart';
+import 'package:medipos/shared/models/sale.dart';
 
 void main() async {
-  final dbDir = 'C:\\Users\\sumit\\AppData\\Roaming\\com.medipos\\medipos\\mediposs_db';
+  const dbDir = 'C:\\Users\\sumit\\AppData\\Roaming\\com.medipos\\medipos\\mediposs_db';
   print('Opening Hub database at $dbDir...');
 
   try {

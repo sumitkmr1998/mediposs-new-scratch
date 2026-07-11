@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'windows/settings_windows.dart';
 import 'android/settings_android.dart';
@@ -13,8 +12,8 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!kIsWeb && Platform.isAndroid) {
-      return SettingsAndroid();
+      return const SettingsAndroid();
     }
-    return SettingsWindows();
+    return const SettingsWindows();
   }
 }

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../shared/providers/sales_provider.dart';
-import '../../shared/providers/auth_provider.dart';
 import '../../shared/services/sync_service.dart';
 import '../../theme/app_theme.dart';
 
@@ -85,7 +84,7 @@ class _WearDashboardState extends State<WearDashboard> {
                   return Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
+                      const Text(
                         'TODAY\'S REVENUE',
                         style: TextStyle(
                           fontSize: 10,

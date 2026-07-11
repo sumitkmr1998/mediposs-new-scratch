@@ -395,7 +395,7 @@ class _MedicineRegistrationSheetState
         Padding(
           padding: const EdgeInsets.only(left: 8, bottom: 10),
           child: Text(title.toUpperCase(), 
-            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AppTheme.primaryLight, letterSpacing: 1.2)),
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: AppTheme.primaryLight, letterSpacing: 1.2)),
         ),
         Container(
           padding: const EdgeInsets.all(20),

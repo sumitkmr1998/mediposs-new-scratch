@@ -295,8 +295,9 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
                               locale: const Locale('en', 'GB'),
                               initialEntryMode: DatePickerEntryMode.input,
                             );
-                            if (range != null)
+                            if (range != null) {
                               sales.setFilter(SalesFilter.custom, range: range);
+                            }
                           },
                           style: AppFilterChipStyle.filled,
                         ),

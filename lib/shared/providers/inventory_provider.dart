@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:objectbox/objectbox.dart';
 import '../models/medicine.dart';
 import '../models/purchase_record.dart';
 import '../models/restock_request.dart';
@@ -495,9 +494,9 @@ class InventoryProvider extends ChangeNotifier {
           if (remaining <= 0) break;
 
           int available = 0;
-          if (from == 'main' || from == 'clinic')
+          if (from == 'main' || from == 'clinic') {
             available = batch.mainStock;
-          else if (from == 'store')
+          } else if (from == 'store')
             available = batch.storeStock;
           else if (from == 'bulkClinic')
             available = batch.bulkClinicStock;
@@ -611,7 +610,9 @@ class InventoryProvider extends ChangeNotifier {
         if (mainQty <= 0 &&
             storeQty <= 0 &&
             bulkClinicQty <= 0 &&
-            bulkStoreQty <= 0) continue;
+            bulkStoreQty <= 0) {
+          continue;
+        }
 
         // Update or create batch
         if (batchNo.isNotEmpty && expiryDate != null) {

@@ -1138,7 +1138,7 @@ class SyncService extends ChangeNotifier {
         }
 
         // Natural key: tokenNumber + patientUhid + scheduledAt date (YYYY-MM-DD)
-        String _apptKey(int token, String uhid, DateTime scheduledAt) =>
+        String apptKey(int token, String uhid, DateTime scheduledAt) =>
             '${token}_${uhid}_${scheduledAt.year}-${scheduledAt.month}-${scheduledAt.day}';
 
         // Precompute local appointment keys
@@ -1146,7 +1146,7 @@ class SyncService extends ChangeNotifier {
         for (final a in allLocal) {
           final uh = patientIdToUhidMap[a.patientId];
           if (uh != null) {
-            final lKey = _apptKey(a.tokenNumber, uh, a.scheduledAt);
+            final lKey = apptKey(a.tokenNumber, uh, a.scheduledAt);
             localApptMap[lKey] = a;
           }
         }
@@ -1171,7 +1171,7 @@ class SyncService extends ChangeNotifier {
             continue;
           }
 
-          final key = _apptKey(token, uhid, scheduledAt);
+          final key = apptKey(token, uhid, scheduledAt);
           hubKeys.add(key);
 
           final existing = localApptMap[key];
@@ -1223,7 +1223,7 @@ class SyncService extends ChangeNotifier {
             apptsToRemove.add(a.id);
             continue;
           }
-          final key = _apptKey(a.tokenNumber, uh, a.scheduledAt);
+          final key = apptKey(a.tokenNumber, uh, a.scheduledAt);
           if (!hubKeys.contains(key)) {
             apptsToRemove.add(a.id);
           }
@@ -1396,7 +1396,7 @@ class SyncService extends ChangeNotifier {
       }
 
       // Natural key: patientUhid + createdAt date
-      String _pKey(String uhid, DateTime dt) =>
+      String pKey(String uhid, DateTime dt) =>
           '${uhid}_${dt.year}-${dt.month}-${dt.day}';
 
       // Precompute local prescription lookup map
@@ -1404,7 +1404,7 @@ class SyncService extends ChangeNotifier {
       for (final p in allLocal) {
         final uh = patientIdToUhidMap[p.patientId];
         if (uh != null) {
-          final lKey = _pKey(uh, p.createdAt);
+          final lKey = pKey(uh, p.createdAt);
           localPrescriptionMap[lKey] = p;
         }
       }
@@ -1450,7 +1450,7 @@ class SyncService extends ChangeNotifier {
               localApptId = appointmentMap[apptKey] ?? 0;
             }
 
-            final key = _pKey(uhid, createdAt);
+            final key = pKey(uhid, createdAt);
             hubKeys.add(key);
 
             final existing = localPrescriptionMap[key];
@@ -1511,7 +1511,7 @@ class SyncService extends ChangeNotifier {
             toRemoveIds.add(p.id);
             continue;
           }
-          final key = _pKey(uh, p.createdAt);
+          final key = pKey(uh, p.createdAt);
           if (!hubKeys.contains(key)) {
             toRemoveIds.add(p.id);
           }

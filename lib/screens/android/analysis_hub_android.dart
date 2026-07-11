@@ -1230,11 +1230,11 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                const Row(
                   children: [
-                    const Icon(Icons.settings_suggest_rounded, color: AppTheme.primary, size: 18),
-                    const SizedBox(width: 8),
-                    const Text('Calculation settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    Icon(Icons.settings_suggest_rounded, color: AppTheme.primary, size: 18),
+                    SizedBox(width: 8),
+                    Text('Calculation settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   ],
                 ),
                 const SizedBox(height: 12),

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../widgets/user_form_dialog.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'windows/user_management_windows.dart';
@@ -13,8 +12,8 @@ class UserManagementScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!kIsWeb && Platform.isAndroid) {
-      return UserManagementAndroid();
+      return const UserManagementAndroid();
     }
-    return UserManagementWindows();
+    return const UserManagementWindows();
   }
 }

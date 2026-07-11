@@ -345,7 +345,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
       subtitle: Text(subtitle,
           style: TextStyle(color: context.textMutedColor, fontSize: 11, fontWeight: FontWeight.w600)),
       value: value,
-      activeColor: AppTheme.success,
+      activeThumbColor: AppTheme.success,
       activeTrackColor: AppTheme.success.withValues(alpha: 0.2),
       inactiveThumbColor: context.textMutedColor,
       inactiveTrackColor: context.borderColor.withValues(alpha: 0.3),
@@ -473,7 +473,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                                   value: _isActive,
                                   onChanged: (val) =>
                                       setState(() => _isActive = val),
-                                  activeColor: AppTheme.success,
+                                  activeThumbColor: AppTheme.success,
                                 ),
                               ],
                             ),

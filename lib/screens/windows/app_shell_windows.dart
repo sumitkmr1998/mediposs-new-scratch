@@ -21,7 +21,6 @@ import '../../shared/providers/template_provider.dart';
 import '../../shared/providers/navigation_provider.dart';
 import '../../shared/services/local_server_service.dart';
 import '../../shared/services/sync_service.dart';
-import '../../shared/services/notification_service.dart';
 import '../../theme/app_theme.dart';
 import '../../shared/widgets/interactive_hover.dart';
 import '../../widgets/exit_backup_dialog.dart';
@@ -51,7 +50,7 @@ class AppShellWindows extends StatefulWidget {
 }
 
 class _AppShellWindowsState extends State<AppShellWindows> {
-  int _selectedIndex = 0;
+  final int _selectedIndex = 0;
   bool _isForcedExit = false;
   bool _isCloudSyncing = false;
   Timer? _hubCheckTimer;
@@ -376,7 +375,7 @@ class _AppShellWindowsState extends State<AppShellWindows> {
           ),
         ),
         if (sync.isSyncing)
-          Positioned(
+          const Positioned(
             top: 0,
             left: 0,
             right: 0,

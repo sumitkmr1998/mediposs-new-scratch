@@ -25,7 +25,6 @@ import '../models/procedure.dart';
 import '../models/audit_log.dart';
 import '../models/schedule_h1_record.dart';
 import '../models/purchase_record.dart';
-import 'package:objectbox/objectbox.dart';
 import '../../objectbox.g.dart';
 import 'package:flutter/foundation.dart';
 
@@ -397,7 +396,7 @@ class LocalServerService {
   }
 
   Future<Response> _apkDownloadHandler(Request req) async {
-    final apkPath = 'build/app/outputs/flutter-apk/app-release.apk';
+    const apkPath = 'build/app/outputs/flutter-apk/app-release.apk';
     final file = File(apkPath);
     if (!await file.exists()) {
       return Response.notFound('APK not found on Hub. Please compile it first.');
@@ -1782,8 +1781,9 @@ class LocalServerService {
           '${DateTime.now().millisecondsSinceEpoch}.jpg';
       final imageData = body['imageData'] as String? ?? '';
 
-      if (patientUhid.isEmpty || imageData.isEmpty)
+      if (patientUhid.isEmpty || imageData.isEmpty) {
         return Response.badRequest();
+      }
 
       // Resolve UHID → Hub's local patientId
       final patient = ObjectBoxService.instance.patientBox

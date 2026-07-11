@@ -1,11 +1,10 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 
 void main() async {
-  final hubIp = '192.168.1.35';
-  final port = '8080';
-  final secret = 'medipos_secret_key_2024';
+  const hubIp = '192.168.1.35';
+  const port = '8080';
+  const secret = 'medipos_secret_key_2024';
 
   print('Authenticating with Hub...');
   try {

@@ -281,7 +281,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
                         children: [
                           Text(
                             widget.existingUser == null ? 'CREATE NEW STAFF' : 'EDIT STAFF PROFILE',
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 2,
@@ -750,7 +750,7 @@ class _PermTile extends StatelessWidget {
           )
         ),
         subtitle: Text(subtitle, style: TextStyle(fontSize: 11, color: context.textMutedColor, fontWeight: FontWeight.w500)),
-        activeColor: isDanger ? AppTheme.danger : AppTheme.primary,
+        activeThumbColor: isDanger ? AppTheme.danger : AppTheme.primary,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       ),
     );

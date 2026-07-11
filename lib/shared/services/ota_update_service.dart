@@ -357,7 +357,7 @@ class OtaUpdateService {
 
       final psCommand = 
           "Start-Sleep -s 2; "
-          "Wait-Process -Id ${pid} -Timeout 5 -ErrorAction SilentlyContinue; "
+          "Wait-Process -Id $pid -Timeout 5 -ErrorAction SilentlyContinue; "
           "try { "
           "  Expand-Archive -Path '$escapedZipPath' -DestinationPath '$escapedDestPath' -Force; "
           "  Remove-Item -Path '$escapedZipPath' -Force; "

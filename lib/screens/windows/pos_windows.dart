@@ -14,15 +14,12 @@ import '../../shared/providers/sales_provider.dart';
 import '../../shared/models/medicine.dart';
 import '../../shared/models/patient.dart';
 import '../../shared/models/sale.dart';
-import '../../shared/models/schedule_h1_record.dart';
 import '../../shared/models/doctor.dart';
 import '../../shared/services/objectbox_service.dart';
-import '../../objectbox.g.dart';
 import '../../shared/models/procedure.dart';
 import '../../shared/providers/opd_provider.dart';
 import '../../shared/models/appointment.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/medicine_dialog.dart';
 import '../../widgets/patient_dialogs.dart';
 import '../../widgets/procedure_dialog.dart';
 import '../../shared/services/printing_service.dart';
@@ -661,11 +658,11 @@ class _PosWindowsState extends State<PosWindows> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: Row(
+        title: const Row(
           children: [
-            const Icon(Icons.warning_amber_rounded, color: AppTheme.danger),
-            const SizedBox(width: 8),
-            const Text('Schedule H1 Compliance Details'),
+            Icon(Icons.warning_amber_rounded, color: AppTheme.danger),
+            SizedBox(width: 8),
+            Text('Schedule H1 Compliance Details'),
           ],
         ),
         content: SizedBox(

@@ -8,7 +8,6 @@ import '../../../theme/app_theme.dart';
 import '../../../shared/widgets/app_kpi_card.dart';
 import '../../../shared/widgets/app_filter_chip.dart';
 import '../../../shared/widgets/app_empty_state.dart';
-import '../../../shared/widgets/app_status_badge.dart';
 
 class DoctorListWindows extends StatefulWidget {
   final bool isEmbedded;
@@ -352,8 +351,8 @@ class _DoctorListWindowsState extends State<DoctorListWindows> {
                     _buildTableHeader(),
                     Divider(height: 1, color: context.borderColor),
                     if (doctors.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.all(40),
+                      const Padding(
+                        padding: EdgeInsets.all(40),
                         child: AppEmptyState(
                           icon: Icons.medical_services_outlined,
                           title: 'No doctors found',

@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'windows/app_shell_windows.dart';
 import 'android/app_shell_android.dart';
 import '../shared/services/objectbox_service.dart';

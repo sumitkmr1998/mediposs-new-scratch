@@ -12,8 +12,8 @@ class OpdReportScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!kIsWeb && Platform.isAndroid) {
-      return OpdReportAndroid();
+      return const OpdReportAndroid();
     }
-    return OpdReportWindows();
+    return const OpdReportWindows();
   }
 }

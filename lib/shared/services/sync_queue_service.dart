@@ -110,27 +110,34 @@ class SyncQueueService extends ChangeNotifier {
     try {
       switch (item.entity) {
         case 'patient':
-          if (item.action == 'delete')
+          if (item.action == 'delete') {
             return await syncService.pushPatientDelete(data['uhid'] ?? '');
+          }
           return await syncService.pushPatient(Patient.fromJson(data));
         case 'medicine':
-          if (item.action == 'create')
+          if (item.action == 'create') {
             return await syncService.pushMedicine(Medicine.fromJson(data));
-          if (item.action == 'update')
+          }
+          if (item.action == 'update') {
             return await syncService.pushMedicine(Medicine.fromJson(data));
-          if (item.action == 'delete')
+          }
+          if (item.action == 'delete') {
             return await syncService.pushMedicineDelete(
                 data['barcode'] ?? '', data['name'] ?? '');
+          }
           break;
         case 'sale':
-          if (item.action == 'create')
+          if (item.action == 'create') {
             return await syncService.pushSale(Sale.fromJson(data));
-          if (item.action == 'delete')
+          }
+          if (item.action == 'delete') {
             return await syncService.pushSaleDelete(data['invoiceNo'] ?? '');
+          }
           break;
         case 'h1_record':
-          if (item.action == 'create')
+          if (item.action == 'create') {
             return await syncService.pushH1Record(ScheduleH1Record.fromJson(data));
+          }
           break;
         case 'appointment':
           return await syncService.pushAppointment(Appointment.fromJson(data));
@@ -166,8 +173,9 @@ class SyncQueueService extends ChangeNotifier {
           if (photo == null) return true;
           return await syncService.pushPatientPhoto(photo, uhid);
         case 'procedure':
-          if (item.action == 'delete')
+          if (item.action == 'delete') {
             return await syncService.pushProcedureDelete(data['name'] ?? '');
+          }
           return await syncService.pushProcedure(Procedure.fromJson(data));
         default:
           return true; // Ignore unknown entities

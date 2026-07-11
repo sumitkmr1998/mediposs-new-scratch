@@ -12,8 +12,8 @@ class DoctorListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!kIsWeb && Platform.isAndroid) {
-      return DoctorListAndroid();
+      return const DoctorListAndroid();
     }
-    return DoctorListWindows();
+    return const DoctorListWindows();
   }
 }

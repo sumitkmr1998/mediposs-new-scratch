@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../shared/providers/settings_provider.dart';
 import '../theme/app_theme.dart';
-import 'dart:io';
 
 class ExitBackupDialog extends StatefulWidget {
   final VoidCallback onForceExit;

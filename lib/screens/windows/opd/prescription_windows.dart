@@ -17,9 +17,7 @@ import '../../../shared/providers/procedure_provider.dart';
 import 'patient_details_windows.dart';
 import '../../../widgets/windows_camera_dialog.dart';
 import '../../../widgets/phone_camera_dialog.dart';
-import '../../../shared/services/local_server_service.dart';
 import '../../../shared/services/objectbox_service.dart';
-import '../../../../shared/models/patient.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 class PrescriptionWindows extends StatefulWidget {
@@ -314,7 +312,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SectionBadge(
+                  const _SectionBadge(
                     icon: Icons.monitor_heart_outlined,
                     label: 'Vitals Monitor',
                   ),
@@ -366,12 +364,12 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _SectionBadge(
+                        const _SectionBadge(
                           icon: Icons.edit_note,
                           label: 'Consultation Notes',
                         ),
                         const SizedBox(height: 24),
-                        _FormLabel('Chief Complaints'),
+                        const _FormLabel('Chief Complaints'),
                         const SizedBox(height: 8),
                         TextField(
                           controller: _complaintsCtrl,
@@ -395,7 +393,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
                           ),
                         ),
                         const SizedBox(height: 20),
-                        _FormLabel('Diagnosis / Impression'),
+                        const _FormLabel('Diagnosis / Impression'),
                         const SizedBox(height: 8),
                         TextField(
                           controller: _diagnosisCtrl,
@@ -419,7 +417,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
                           ),
                         ),
                         const SizedBox(height: 20),
-                        _FormLabel("Doctor's Clinical Notes"),
+                        const _FormLabel("Doctor's Clinical Notes"),
                         const SizedBox(height: 8),
                         TextField(
                           controller: _notesCtrl,
@@ -459,7 +457,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _SectionBadge(
+                            const _SectionBadge(
                               icon: Icons.medication_outlined,
                               label: 'Prescribed Medications',
                             ),
@@ -506,7 +504,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _SectionBadge(
+                            const _SectionBadge(
                               icon: Icons.science_outlined,
                               label: 'Diagnostic Lab Orders',
                             ),
@@ -601,7 +599,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _SectionBadge(
+                            const _SectionBadge(
                               icon: Icons.auto_awesome_outlined,
                               label: 'Cosmetic Procedures',
                             ),
@@ -689,7 +687,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _SectionBadge(
+                            const _SectionBadge(
                               icon: Icons.attach_file_outlined,
                               label: 'Attach Prescription Images',
                             ),
@@ -796,7 +794,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
         position:
             const RelativeRect.fromLTRB(100, 100, 100, 100), // Approximate
         items: [
-          PopupMenuItem(
+          const PopupMenuItem(
             value: 'webcam',
             child: Row(
               children: [
@@ -806,7 +804,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
               ],
             ),
           ),
-          PopupMenuItem(
+          const PopupMenuItem(
             value: 'phone',
             child: Row(
               children: [
@@ -1997,9 +1995,9 @@ class _SaveButtonUI extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
-              color: Colors.black26, blurRadius: 10, offset: const Offset(0, 4)),
+              color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
         ],
       ),
       child: Material(

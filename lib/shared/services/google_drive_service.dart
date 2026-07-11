@@ -5,7 +5,6 @@ import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path/path.dart' as p;
-import 'package:archive/archive_io.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'objectbox_service.dart';
@@ -213,7 +212,7 @@ class GoogleDriveService {
  
   Future<String> _getOrCreateFolder(drive.DriveApi driveApi) async {
     const folderName = 'MediPoss Backups';
-    final query = "name = '$folderName' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
+    const query = "name = '$folderName' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
     
     final list = await driveApi.files.list(q: query);
     if (list.files != null && list.files!.isNotEmpty) {

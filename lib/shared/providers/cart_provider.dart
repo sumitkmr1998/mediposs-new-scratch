@@ -16,7 +16,6 @@ import '../services/local_server_service.dart';
 import '../services/sync_service.dart';
 import '../services/sync_queue_service.dart';
 import 'dart:io';
-import 'package:provider/provider.dart';
 import '../services/firebase_sync_service.dart';
 
 import '../../objectbox.g.dart';
@@ -424,8 +423,8 @@ class CartProvider extends ChangeNotifier {
       doctorAddress = doctorObj.address.trim();
     } else if (settings.clinicAddress != null && settings.clinicAddress!.trim().isNotEmpty) {
       doctorAddress = settings.clinicAddress!.trim();
-    } else if (settings.storeAddress != null && settings.storeAddress!.trim().isNotEmpty) {
-      doctorAddress = settings.storeAddress!.trim();
+    } else if (settings.storeAddress.trim().isNotEmpty) {
+      doctorAddress = settings.storeAddress.trim();
     }
 
     setH1PrescriptionDetails(

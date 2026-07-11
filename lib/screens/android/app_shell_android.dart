@@ -30,7 +30,6 @@ import '../../shared/providers/opd_provider.dart';
 import '../../shared/providers/prescription_provider.dart';
 import '../../shared/providers/template_provider.dart';
 import '../../shared/widgets/interactive_hover.dart';
-import 'opd/remote_camera_screen_android.dart';
 import 'package:flutter/services.dart';
 import '../../shared/providers/navigation_provider.dart';
 import '../../shared/widgets/connectivity_overlay.dart';
@@ -47,7 +46,7 @@ class AppShellAndroid extends StatefulWidget {
 }
 
 class _AppShellAndroidState extends State<AppShellAndroid> {
-  int _selectedIndex = 0;
+  final int _selectedIndex = 0;
   DateTime? _lastBackPress;
   Timer? _hubCheckTimer;
   bool _isHubBackOnline = false;
@@ -428,7 +427,7 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
                         onConnectTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                                builder: (_) => ConnectionScreen())),
+                                builder: (_) => const ConnectionScreen())),
                       ),
                       Expanded(child: _screenForId(currentDestId)),
                     ],
@@ -447,7 +446,7 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
                   ),
           ),
           if (sync.isSyncing)
-            Positioned(
+            const Positioned(
               top: 0,
               left: 0,
               right: 0,

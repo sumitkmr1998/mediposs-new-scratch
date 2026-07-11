@@ -12,8 +12,8 @@ class WarehouseScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!kIsWeb && Platform.isAndroid) {
-      return WarehouseAndroid();
+      return const WarehouseAndroid();
     }
-    return WarehouseWindows();
+    return const WarehouseWindows();
   }
 }

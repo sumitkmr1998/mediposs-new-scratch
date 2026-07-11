@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../lib/objectbox.g.dart';
-import '../lib/shared/models/sync_queue_item.dart';
+import 'package:medipos/objectbox.g.dart';
+import 'package:medipos/shared/models/sync_queue_item.dart';
 
 void main() async {
-  final srcDir = 'C:\\Users\\sumit\\AppData\\Roaming\\com.medipos\\medipos\\mediposs_terminal_db';
+  const srcDir = 'C:\\Users\\sumit\\AppData\\Roaming\\com.medipos\\medipos\\mediposs_terminal_db';
   final tempDir = Directory(p.join(Directory.current.path, 'scratch', 'temp_db'));
   
   if (tempDir.existsSync()) {

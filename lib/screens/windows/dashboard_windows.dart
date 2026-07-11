@@ -101,7 +101,7 @@ class _DashboardHeader extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
+                gradient: const LinearGradient(
                   colors: [AppTheme.primary, AppTheme.primaryLight],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -456,7 +456,7 @@ class _RevenueBreakdown extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.analytics_rounded, color: AppTheme.primary, size: 20),
+              const Icon(Icons.analytics_rounded, color: AppTheme.primary, size: 20),
               const SizedBox(width: 10),
               Text(
                 'Financial Performance',
@@ -1041,7 +1041,7 @@ class _RecentTransfersTimeline extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.swap_horiz_rounded, color: AppTheme.primary, size: 22),
+              const Icon(Icons.swap_horiz_rounded, color: AppTheme.primary, size: 22),
               const SizedBox(width: 12),
               Text(
                 'Live Stock Operations Timeline',
@@ -1249,7 +1249,7 @@ class _TopPerformingMedicines extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.leaderboard_rounded, color: AppTheme.orange, size: 22),
+              const Icon(Icons.leaderboard_rounded, color: AppTheme.orange, size: 22),
               const SizedBox(width: 12),
               Text(
                 'Top Selling Medicines',

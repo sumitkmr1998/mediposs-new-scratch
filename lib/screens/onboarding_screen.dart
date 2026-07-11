@@ -6,7 +6,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../shared/services/subscription_service.dart';
 import '../shared/services/objectbox_service.dart';
-import '../shared/models/app_user.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});

@@ -243,7 +243,7 @@ class SettingsSwitch extends StatelessWidget {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: AppTheme.primary,
+            activeThumbColor: AppTheme.primary,
           ),
         ],
       ),
@@ -288,7 +288,7 @@ class SettingsDropdown<T> extends StatelessWidget {
           SizedBox(
             width: 150,
             child: DropdownButtonFormField<T>(
-              value: value,
+              initialValue: value,
               items: items,
               onChanged: onChanged,
               isExpanded: true,

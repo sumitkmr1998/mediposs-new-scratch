@@ -19,11 +19,7 @@ import 'opd/opd_report_android.dart';
 import 'opd/patient_list_android.dart';
 import '../../shared/services/sync_service.dart';
 import '../../shared/widgets/app_kpi_card.dart';
-import '../../shared/widgets/app_filter_chip.dart';
-import '../../shared/models/appointment.dart';
 import '../../shared/providers/navigation_provider.dart';
-import '../../shared/services/local_server_service.dart';
-import '../../shared/services/discovery_service.dart';
 import '../../widgets/invoice_search_dialog.dart';
 import 'package:reorderable_grid_view/reorderable_grid_view.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -85,7 +81,7 @@ class DashboardAndroid extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
+                      gradient: const LinearGradient(
                         colors: [AppTheme.primary, AppTheme.primaryLight],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -165,7 +161,7 @@ class DashboardAndroid extends StatelessWidget {
                     ),
                     onPressed: () => Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => ConnectionScreen()),
+                      MaterialPageRoute(builder: (_) => const ConnectionScreen()),
                     ),
                   );
                 },
@@ -924,7 +920,7 @@ class _QuickActionsCardState extends State<_QuickActionsCard> {
                   });
                 },
               );
-            }).toList(),
+            }),
             if (_isEditMode)
               _AddCardItem(
                 key: const ValueKey('add_button'),
@@ -1006,11 +1002,11 @@ class _AddCardItem extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3), style: BorderStyle.solid, width: 2),
         ),
-        child: Column(
+        child: const Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.add_circle_outline_rounded, color: AppTheme.primary, size: 30),
-            const SizedBox(height: 8),
+            Icon(Icons.add_circle_outline_rounded, color: AppTheme.primary, size: 30),
+            SizedBox(height: 8),
             Text('Add Card', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppTheme.primary)),
           ],
         ),

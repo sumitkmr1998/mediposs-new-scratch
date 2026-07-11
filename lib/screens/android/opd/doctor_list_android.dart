@@ -175,7 +175,7 @@ class _DoctorListAndroidState extends State<DoctorListAndroid> {
                                             .read<OpdProvider>()
                                             .saveDoctor(d, syncService: sync);
                                       },
-                                      activeColor: AppTheme.success,
+                                      activeThumbColor: AppTheme.success,
                                       activeTrackColor: AppTheme.success
                                           .withValues(alpha: 0.3),
                                       materialTapTargetSize:

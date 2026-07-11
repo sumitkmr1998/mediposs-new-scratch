@@ -119,8 +119,9 @@ class WarehouseProvider extends ChangeNotifier {
     if (qty <= 0) return 'Quantity must be greater than 0';
 
     int available = 0;
-    if (from == 'main' || from == 'clinic') available = medicine.mainStock;
-    else if (from == 'store') available = medicine.storeStock;
+    if (from == 'main' || from == 'clinic') {
+      available = medicine.mainStock;
+    } else if (from == 'store') available = medicine.storeStock;
     else if (from == 'bulkClinic') available = medicine.bulkClinicStock;
     else if (from == 'bulkStore') available = medicine.bulkStoreStock;
 

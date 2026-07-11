@@ -212,7 +212,7 @@ class _PatientRegistrationSheetState extends State<_PatientRegistrationSheet> {
                   Expanded(
                     flex: 2,
                     child: DropdownButtonFormField<String>(
-                      value: _gender,
+                      initialValue: _gender,
                       decoration: InputDecoration(
                         labelText: 'Gender',
                         labelStyle: TextStyle(color: context.textMutedColor),
@@ -859,7 +859,7 @@ class _BookAppointmentSheetState extends State<_BookAppointmentSheet> {
             )
           else
             DropdownButtonFormField<Doctor>(
-              value: resolvedDoctor,
+              initialValue: resolvedDoctor,
               decoration: InputDecoration(
                 labelText: 'ASSIGN DOCTOR',
                 labelStyle: TextStyle(color: context.textMutedColor, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1),

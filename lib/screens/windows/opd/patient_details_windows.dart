@@ -9,7 +9,6 @@ import '../../../shared/models/patient.dart';
 import '../../../shared/models/patient_image.dart';
 import '../../../shared/models/sale.dart';
 import '../../../shared/models/prescription.dart';
-import '../../../shared/models/doctor.dart';
 import '../../../shared/models/appointment.dart';
 import '../../../shared/providers/patient_provider.dart';
 import '../../../shared/providers/sales_provider.dart';
@@ -99,7 +98,7 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  const Color(0xFF0A5D5F),
+                  Color(0xFF0A5D5F),
                   AppTheme.primary,
                   AppTheme.primaryLight
                 ],
@@ -279,7 +278,7 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
                                         _viewPhotos(context, photos, i),
                                   ),
                                 )
-                              : _RestrictedSectionCard(
+                              : const _RestrictedSectionCard(
                                   title: 'Gallery',
                                   icon: Icons.photo_library_rounded,
                                   accentColor: AppTheme.purple,
@@ -312,7 +311,7 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
                                         context.watch<PrescriptionProvider>(),
                                   ),
                                 )
-                              : _RestrictedSectionCard(
+                              : const _RestrictedSectionCard(
                                   title: 'Prescriptions',
                                   icon: Icons.medical_services_rounded,
                                   accentColor: AppTheme.primaryLight,

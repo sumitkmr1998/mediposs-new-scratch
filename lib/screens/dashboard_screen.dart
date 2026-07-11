@@ -12,8 +12,8 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!kIsWeb && Platform.isAndroid) {
-      return DashboardAndroid();
+      return const DashboardAndroid();
     }
-    return DashboardWindows();
+    return const DashboardWindows();
   }
 }

@@ -7,7 +7,6 @@ import '../../../shared/providers/auth_provider.dart';
 import '../../../shared/providers/prescription_provider.dart';
 import '../../../theme/app_theme.dart';
 import '../../../shared/widgets/app_status_badge.dart';
-import '../../../shared/widgets/app_kpi_card.dart';
 import '../../../shared/services/objectbox_service.dart';
 import '../../../shared/models/sale.dart';
 import '../../../objectbox.g.dart';
@@ -283,9 +282,9 @@ class OpdReportAndroid extends StatelessWidget {
                 // We should iterate over ALL doctors who have activity in the range, 
                 // but for now we'll match Windows logic which maps over all active doctors but shows activity.
                 if (opd.doctors.isNotEmpty) ...[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: const Text('PER DOCTOR PERFORMANCE',
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20),
+                    child: Text('PER DOCTOR PERFORMANCE',
                         style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w900,

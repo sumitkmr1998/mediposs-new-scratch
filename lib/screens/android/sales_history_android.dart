@@ -548,8 +548,7 @@ class _SaleRow extends StatelessWidget {
                                         fontWeight: FontWeight.w700,
                                         fontSize: 13)),
                                 Text(
-                                     '${item.qty} units @ ₹${item.unitPrice.toStringAsFixed(2)}' +
-                                     ((!item.isProcedure && item.batchNo.isNotEmpty) ? ' | Batch: ${item.batchNo} | Exp: ${item.expiryDate}' : ''),
+                                     '${item.qty} units @ ₹${item.unitPrice.toStringAsFixed(2)}${(!item.isProcedure && item.batchNo.isNotEmpty) ? ' | Batch: ${item.batchNo} | Exp: ${item.expiryDate}' : ''}',
                                      style: TextStyle(
                                          fontSize: 11,
                                          color: context.textMutedColor)),

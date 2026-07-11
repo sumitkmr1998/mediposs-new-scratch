@@ -9,9 +9,7 @@ import 'firebase_sync_service.dart';
 class CloudflareService {
   static CloudflareService? _instance;
   static CloudflareService get instance {
-    if (_instance == null) {
-      _instance = CloudflareService._();
-    }
+    _instance ??= CloudflareService._();
     return _instance!;
   }
 

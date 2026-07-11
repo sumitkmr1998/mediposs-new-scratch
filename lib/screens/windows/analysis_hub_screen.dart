@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import '../../shared/models/medicine.dart';
 import '../../shared/models/procedure.dart';
 import '../../shared/models/sale.dart';
-import '../../shared/models/stock_transfer.dart';
 import '../../shared/services/objectbox_service.dart';
 import '../../shared/providers/inventory_provider.dart';
 import '../../shared/providers/sales_provider.dart';

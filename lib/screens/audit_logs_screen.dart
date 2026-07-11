@@ -250,10 +250,10 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
               child: Icon(_actionIcon(log.action), color: _actionColor(log.action), size: 20),
             ),
             const SizedBox(width: 12),
-            Expanded(
+            const Expanded(
               child: Text(
                 'Audit Record Details',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
             ),
           ],

@@ -12,7 +12,6 @@ import '../models/patient.dart';
 import '../services/objectbox_service.dart';
 import '../services/invoice_generator.dart';
 import '../../objectbox.g.dart';
-import 'package:objectbox/objectbox.dart';
 
 class PrintingService {
   static final PrintingService instance = PrintingService._();
@@ -25,15 +24,15 @@ class PrintingService {
     // Resolve header details based on whether this is a Clinical Dispense
     final headerName = sale.isClinicalDispense 
         ? ((settings.clinicName?.isNotEmpty ?? false) ? settings.clinicName! : 'MediPoss Clinic')
-        : ((settings.storeName?.isNotEmpty ?? false) ? settings.storeName! : 'MediPoss Store');
+        : ((settings.storeName.isNotEmpty ?? false) ? settings.storeName : 'MediPoss Store');
         
     final headerAddress = sale.isClinicalDispense
         ? ((settings.clinicAddress?.isNotEmpty ?? false) ? settings.clinicAddress! : 'Address not set')
-        : ((settings.storeAddress?.isNotEmpty ?? false) ? settings.storeAddress! : 'Address not set');
+        : ((settings.storeAddress.isNotEmpty ?? false) ? settings.storeAddress : 'Address not set');
         
     final headerPhone = sale.isClinicalDispense
         ? ((settings.clinicPhone?.isNotEmpty ?? false) ? settings.clinicPhone! : 'Phone not set')
-        : ((settings.storePhone?.isNotEmpty ?? false) ? settings.storePhone! : 'Phone not set');
+        : ((settings.storePhone.isNotEmpty ?? false) ? settings.storePhone : 'Phone not set');
 
     // Try to resolve related doctor name for display on the receipt
     String doctorName = '';
@@ -100,7 +99,7 @@ class PrintingService {
                         textAlign: pw.TextAlign.center),
                   ),
               ] else ...[
-                if (settings.gstNumber != null && settings.gstNumber!.isNotEmpty)
+                if (settings.gstNumber.isNotEmpty)
                   pw.Padding(
                     padding: const pw.EdgeInsets.only(top: 2),
                     child: pw.Text('GST: ${settings.gstNumber}',
@@ -227,14 +226,14 @@ class PrintingService {
                                     padding: const pw.EdgeInsets.only(top: 1),
                                     child: pw.Text(
                                         'Batch: ${item.batchNo} | Exp: ${item.expiryDate}',
-                                        style: pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+                                        style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
                                   )
                                 else if (item.medicineName.contains('Consultation Fee') && settings.showOpdIdInPrint)
                                   pw.Padding(
                                     padding: const pw.EdgeInsets.only(top: 1),
                                     child: pw.Text(
                                         'OPD ID: ${sale.invoiceNo.startsWith('OPD-') ? sale.invoiceNo : (sale.opdInvoiceNo.isNotEmpty ? sale.opdInvoiceNo : '')}',
-                                        style: pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+                                        style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
                                   ),
                               ],
                             )),
@@ -610,15 +609,15 @@ class PrintingService {
 
     final invoiceClinicName = sale.isClinicalDispense
         ? ((settings.clinicName?.isNotEmpty ?? false) ? settings.clinicName! : 'MediPoss Clinic')
-        : ((settings.storeName?.isNotEmpty ?? false) ? settings.storeName! : 'MediPoss Store');
+        : ((settings.storeName.isNotEmpty ?? false) ? settings.storeName : 'MediPoss Store');
         
     final invoiceClinicAddress = sale.isClinicalDispense
         ? ((settings.clinicAddress?.isNotEmpty ?? false) ? settings.clinicAddress! : 'Address not set')
-        : ((settings.storeAddress?.isNotEmpty ?? false) ? settings.storeAddress! : 'Address not set');
+        : ((settings.storeAddress.isNotEmpty ?? false) ? settings.storeAddress : 'Address not set');
         
     final regNo = sale.isClinicalDispense
         ? ((settings.clinicRegNo?.isNotEmpty ?? false) ? settings.clinicRegNo! : 'N/A')
-        : ((settings.gstNumber?.isNotEmpty ?? false) ? settings.gstNumber! : 'N/A');
+        : ((settings.gstNumber.isNotEmpty ?? false) ? settings.gstNumber : 'N/A');
 
     final invoice = Invoice(
       invoiceNo: sale.invoiceNo,

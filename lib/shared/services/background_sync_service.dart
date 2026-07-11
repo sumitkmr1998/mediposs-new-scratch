@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -8,15 +7,12 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../firebase_options.dart';
 import 'firebase_sync_service.dart';
-import 'package:flutter_background_service_android/flutter_background_service_android.dart';
 import '../services/objectbox_service.dart';
 import '../services/sync_service.dart';
 import '../services/notification_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../../objectbox.g.dart';
-import '../models/patient.dart';
 import '../models/medicine.dart';
-import '../models/sale.dart';
 import 'package:flutter/foundation.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/sales_provider.dart';
@@ -151,7 +147,7 @@ void onStart(ServiceInstance service) async {
                   processedIds.add(doc.id);
                   
                   final data = doc.data();
-                  if (data != null && data['event'] == 'new_patient') {
+                  if (data['event'] == 'new_patient') {
                     final payload = data['data'] as Map<String, dynamic>?;
                     if (payload != null) {
                       final patientName = payload['patientName'] ?? 'A patient';
@@ -310,7 +306,9 @@ void setupForegroundSyncListeners(
 ) {
   if (kIsWeb) return;
   if (defaultTargetPlatform != TargetPlatform.android &&
-      defaultTargetPlatform != TargetPlatform.iOS) return;
+      defaultTargetPlatform != TargetPlatform.iOS) {
+    return;
+  }
 
   FlutterBackgroundService().on('data_synced').listen((event) {
     debugPrint('Foreground: Received sync notification from Background Service');

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../shared/providers/sales_provider.dart';
-import '../shared/models/sale.dart';
 import '../theme/app_theme.dart';
 import 'return_dialog.dart';
 

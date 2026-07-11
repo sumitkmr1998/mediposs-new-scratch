@@ -10,7 +10,6 @@ import '../models/medicine.dart';
 import '../models/stock_transfer.dart';
 import '../models/sale.dart';
 import '../models/patient.dart';
-import '../models/appointment.dart';
 import '../models/prescription.dart';
 
 class AuditExportService {

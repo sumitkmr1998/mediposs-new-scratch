@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../widgets/return_dialog.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'windows/sales_history_windows.dart';
@@ -13,8 +12,8 @@ class SalesHistoryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!kIsWeb && Platform.isAndroid) {
-      return SalesHistoryAndroid();
+      return const SalesHistoryAndroid();
     }
-    return SalesHistoryWindows();
+    return const SalesHistoryWindows();
   }
 }

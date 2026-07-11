@@ -18,7 +18,6 @@ import '../../shared/services/ota_update_service.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/navigation_provider.dart';
 import '../../shared/providers/settings_provider.dart';
-import '../../shared/models/app_user.dart';
 import '../../theme/app_theme.dart';
 import '../../shared/services/local_server_service.dart';
 import '../../shared/services/printing_service.dart';
@@ -32,8 +31,6 @@ import '../../shared/providers/inventory_provider.dart';
 import '../../shared/models/medicine.dart';
 import '../../shared/services/audit_export_service.dart';
 import '../../shared/services/backup_restore_service.dart';
-import '../user_management_screen.dart';
-import '../opd/doctor_list_screen.dart';
 import 'user_management_windows.dart';
 import 'opd/doctor_list_windows.dart';
 import 'widgets/settings_widgets.dart';
@@ -234,11 +231,11 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: const Text('Settings saved successfully'),
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('Settings saved successfully'),
       backgroundColor: AppTheme.success,
       behavior: SnackBarBehavior.floating,
-      margin: const EdgeInsets.all(20),
+      margin: EdgeInsets.all(20),
     ));
   }
 
@@ -404,7 +401,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const Text(
                 'Settings',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
               ),
@@ -471,9 +468,9 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       case 'Updates':
         return _buildUpdatesSection();
       case 'Staff':
-        return UserManagementWindows(isEmbedded: true);
+        return const UserManagementWindows(isEmbedded: true);
       case 'Doctors':
-        return DoctorListWindows(isEmbedded: true);
+        return const DoctorListWindows(isEmbedded: true);
       default:
         return const SizedBox();
     }
@@ -544,7 +541,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const Text(
                 'STORE & CLINICAL IDENTITY',
                 style: TextStyle(
                   fontSize: 10,
@@ -666,7 +663,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const Text(
                 'CLOUD SERVICES & BACKUP STRATEGY',
                 style: TextStyle(
                   fontSize: 10,
@@ -911,7 +908,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                   ListTile(
                     leading: const Icon(LucideIcons.clock, size: 20),
                     title: const Text('Scheduled Time', style: TextStyle(fontSize: 14)),
-                    subtitle: Text(settingsProv.settings.autoBackupTime ?? 'Select Time', style: TextStyle(color: AppTheme.primary)),
+                    subtitle: Text(settingsProv.settings.autoBackupTime ?? 'Select Time', style: const TextStyle(color: AppTheme.primary)),
                     trailing: const Icon(LucideIcons.chevronRight, size: 16),
                     onTap: () async {
                       final time = await showTimePicker(
@@ -976,7 +973,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const Text(
                 'USER INTERFACE PREFERENCES',
                 style: TextStyle(
                   fontSize: 10,
@@ -1031,7 +1028,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const Text(
                 'INVOICE & PRINT HARDWARE CONFIG',
                 style: TextStyle(
                   fontSize: 10,
@@ -1180,7 +1177,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const Text(
                 'NETWORKING & MULTI-DEVICE SYNC',
                 style: TextStyle(
                   fontSize: 10,
@@ -1400,7 +1397,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const Text(
                 'INVENTORY ALERTS & THRESHOLDS',
                 style: TextStyle(
                   fontSize: 10,
@@ -1514,7 +1511,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const Text(
                 'DATA MANAGEMENT CONTROL CENTER',
                 style: TextStyle(
                   fontSize: 10,
@@ -1890,7 +1887,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       final backupPath = '$outputPath/mediposs_backup_$timestamp.mdb';
       await dbFile.copy(backupPath);
 
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Locally saved to Downloads'), backgroundColor: AppTheme.success, behavior: SnackBarBehavior.floating));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Locally saved to Downloads'), backgroundColor: AppTheme.success, behavior: SnackBarBehavior.floating));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
     }
@@ -2088,9 +2085,9 @@ class _SettingsWindowsState extends State<SettingsWindows> {
           final nameCell = row[1]?.value?.toString().trim() ?? '';
 
           if (isSerial && nameCell.isNotEmpty) {
-            final barcode = '';
-            final category = 'General';
-            final unit = 'Pcs';
+            const barcode = '';
+            const category = 'General';
+            const unit = 'Pcs';
 
             final double qtyVal = row.length > 3
                 ? (double.tryParse(row[3]?.value?.toString().trim() ?? '') ?? 0.0)
@@ -2100,7 +2097,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
                 : 0.0;
 
             final mainStock = qtyVal.round();
-            final storeStock = 0;
+            const storeStock = 0;
             final purchasePrice = rateVal;
             final sellingPrice = rateVal;
 

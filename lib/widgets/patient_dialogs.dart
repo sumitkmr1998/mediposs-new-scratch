@@ -110,7 +110,7 @@ class _PatientDialogState extends State<PatientDialog> {
                     Expanded(
                       flex: 2,
                       child: DropdownButtonFormField<String>(
-                        value: _gender,
+                        initialValue: _gender,
                         decoration: const InputDecoration(
                           labelText: 'Gender (M/F keys)',
                           isDense: true,
@@ -306,7 +306,7 @@ class _PatientSearchDialogState extends State<PatientSearchDialog> {
                             children: [
                               Icon(Icons.person_off_outlined,
                                   size: 48, color: Colors.grey),
-                              const SizedBox(height: 8),
+                              SizedBox(height: 8),
                               Text('No matching patient found in today\'s queue.',
                                   style: TextStyle(color: Colors.grey)),
                             ],
@@ -542,7 +542,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
                   style: TextStyle(color: AppTheme.warning))
             else
               DropdownButtonFormField<Doctor>(
-                value: resolvedDoctor,
+                initialValue: resolvedDoctor,
                 decoration: const InputDecoration(
                   labelText: 'Select Doctor *',
                   prefixIcon: Icon(Icons.medical_services_outlined),

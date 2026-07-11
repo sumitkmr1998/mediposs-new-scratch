@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../widgets/patient_dialogs.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../windows/opd/patient_list_windows.dart';
@@ -13,8 +12,8 @@ class PatientListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!kIsWeb && Platform.isAndroid) {
-      return PatientListAndroid();
+      return const PatientListAndroid();
     }
-    return PatientListWindows();
+    return const PatientListWindows();
   }
 }

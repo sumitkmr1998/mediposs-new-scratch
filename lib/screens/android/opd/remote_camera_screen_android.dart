@@ -8,10 +8,8 @@ import '../../../shared/services/sync_service.dart';
 import '../../../shared/services/sync_queue_service.dart';
 import '../../../shared/services/objectbox_service.dart';
 import '../../../shared/models/patient_image.dart';
-import '../../../shared/models/patient.dart';
 import '../../../objectbox.g.dart';
 import '../../../theme/app_theme.dart';
-import 'package:intl/intl.dart';
 
 class RemoteCameraScreenAndroid extends StatefulWidget {
   final String patientUhid;

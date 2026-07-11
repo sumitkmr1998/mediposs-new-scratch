@@ -197,7 +197,7 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SectionBadge(
+                  const _SectionBadge(
                     icon: Icons.monitor_heart_outlined,
                     label: 'Vitals Monitor',
                   ),
@@ -252,12 +252,12 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SectionBadge(
+                  const _SectionBadge(
                     icon: Icons.edit_note,
                     label: 'Consultation Notes',
                   ),
                   const SizedBox(height: 20),
-                  _FormLabel('Chief Complaints'),
+                  const _FormLabel('Chief Complaints'),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _complaintsCtrl,
@@ -281,7 +281,7 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  _FormLabel('Diagnosis / Impression'),
+                  const _FormLabel('Diagnosis / Impression'),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _diagnosisCtrl,
@@ -305,7 +305,7 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  _FormLabel("Doctor's Clinical Notes"),
+                  const _FormLabel("Doctor's Clinical Notes"),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _notesCtrl,
@@ -339,7 +339,7 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SectionBadge(
+                  const _SectionBadge(
                     icon: Icons.medication_outlined,
                     label: 'Prescribed Medications',
                   ),
@@ -382,7 +382,7 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SectionBadge(
+                  const _SectionBadge(
                     icon: Icons.science_outlined,
                     label: 'Diagnostic Lab Orders',
                   ),
@@ -467,7 +467,7 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SectionBadge(
+                  const _SectionBadge(
                     icon: Icons.auto_awesome_outlined,
                     label: 'Cosmetic Procedures',
                   ),
@@ -543,7 +543,7 @@ class _PrescriptionAndroidState extends State<PrescriptionAndroid> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SectionBadge(
+                  const _SectionBadge(
                     icon: Icons.attach_file_outlined,
                     label: 'Attach Prescription Images',
                   ),

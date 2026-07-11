@@ -330,8 +330,7 @@ class _SaleDetailDialog extends StatelessWidget {
                     dense: true,
                     title: Text(item.medicineName),
                     subtitle: Text(
-                        '${item.qty} x ₹${item.unitPrice.toStringAsFixed(2)}' +
-                        ((!item.isProcedure && item.batchNo.isNotEmpty) ? '\nBatch: ${item.batchNo} | Exp: ${item.expiryDate}' : '')),
+                        '${item.qty} x ₹${item.unitPrice.toStringAsFixed(2)}${(!item.isProcedure && item.batchNo.isNotEmpty) ? '\nBatch: ${item.batchNo} | Exp: ${item.expiryDate}' : ''}'),
                     trailing: Text('₹${item.lineTotal.toStringAsFixed(2)}'),
                   );
                 },
