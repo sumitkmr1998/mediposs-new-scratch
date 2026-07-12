@@ -1,5 +1,3 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -11,20 +9,20 @@ import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/prescription_provider.dart';
 import '../../shared/providers/patient_provider.dart';
 import '../../shared/providers/sales_provider.dart';
-import '../../shared/models/medicine.dart';
-import '../../shared/models/patient.dart';
 import '../../shared/models/sale.dart';
 import '../../shared/models/doctor.dart';
 import '../../shared/services/objectbox_service.dart';
-import '../../shared/models/procedure.dart';
 import '../../shared/providers/opd_provider.dart';
 import '../../shared/models/appointment.dart';
 import '../../theme/app_theme.dart';
+import '../../shared/models/prescription.dart';
+import '../../objectbox.g.dart';
 import '../../widgets/patient_dialogs.dart';
-import '../../widgets/procedure_dialog.dart';
 import '../../shared/services/printing_service.dart';
 import '../../shared/services/sync_service.dart';
 import '../../shared/providers/procedure_provider.dart';
+import 'pos/widgets/medicines_grid.dart';
+import 'pos/widgets/cart_panel.dart';
 
 class PosWindows extends StatefulWidget {
   const PosWindows({super.key});
@@ -445,13 +443,13 @@ class _PosWindowsState extends State<PosWindows> {
                           children: [
                             Expanded(
                               flex: 3,
-                              child: _MedicinesGrid(
+                              child: MedicinesGrid(
                                 inv: inv,
                                 cart: cart,
                                 searchCtrl: _searchCtrl,
                                 searchFocus: _searchFocus,
                                 onFirstGridFocusNodeCreated: (node) {
-                                  // Empty callback to satisfy the parameter if we decide to use it later
+                                  // Empty callback
                                 },
                                 onSearchEnter: () {
                                   if (mounted) _discountFocus.requestFocus();
@@ -467,7 +465,7 @@ class _PosWindowsState extends State<PosWindows> {
                             Container(width: 1, color: context.borderColor),
                             SizedBox(
                               width: 360,
-                              child: _CartPanel(
+                              child: CartPanel(
                                 cart: cart,
                                 discountCtrl: _discountCtrl,
                                 patientCtrl: _patientCtrl,
@@ -503,7 +501,7 @@ class _PosWindowsState extends State<PosWindows> {
                       : Column(
                           children: [
                             Expanded(
-                              child: _MedicinesGrid(
+                              child: MedicinesGrid(
                                 inv: inv,
                                 cart: cart,
                                 searchCtrl: _searchCtrl,
@@ -524,7 +522,7 @@ class _PosWindowsState extends State<PosWindows> {
                             ),
                             Container(height: 1, color: context.borderColor),
                             Expanded(
-                              child: _CartPanel(
+                              child: CartPanel(
                                 cart: cart,
                                 discountCtrl: _discountCtrl,
                                 patientCtrl: _patientCtrl,
@@ -573,12 +571,12 @@ class _PosWindowsState extends State<PosWindows> {
       cart.setClinicalDispense(false);
       return;
     }
-    
+
     // Attempting to turn ON Clinical Dispense
     // Enforce selection of a patient from today's queue
     final opd = context.read<OpdProvider>();
     final activeAppts = opd.todayQueue;
-    
+
     if (activeAppts.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('No appointments found in today\'s OPD queue. Clinical Dispense requires a patient in the OPD queue.'),
@@ -586,7 +584,7 @@ class _PosWindowsState extends State<PosWindows> {
       ));
       return;
     }
-    
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -598,31 +596,40 @@ class _PosWindowsState extends State<PosWindows> {
             itemCount: activeAppts.length,
             itemBuilder: (c, i) {
               final a = activeAppts[i];
-              return ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: AppTheme.primary.withOpacity(0.1),
-                  child: Text('#${a.tokenNumber}',
-                      style: const TextStyle(
-                          color: AppTheme.primary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold)),
+              final pres = ObjectBoxService.instance.prescriptionBox
+                  .query(Prescription_.appointmentId.equals(a.id))
+                  .build()
+                  .findFirst();
+              final isDispensed = pres?.dispensed == true || a.status == 'done';
+
+              return Opacity(
+                opacity: isDispensed ? 0.4 : 1.0,
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                    child: Text('#${a.tokenNumber}',
+                        style: const TextStyle(
+                            color: AppTheme.primary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold)),
+                  ),
+                  title: Text(a.patientName),
+                  subtitle: Text('Status: ${a.status} • Dr. ${a.doctorName}'),
+                  onTap: () {
+                    final patient = context.read<PatientProvider>().getById(a.patientId);
+                    cart.setPatient(
+                      name: a.patientName,
+                      phone: a.patientPhone,
+                      id: a.patientId,
+                      uhid: patient?.uhid,
+                      address: patient?.address,
+                    );
+                    _patientCtrl.text = a.patientName;
+                    cart.setLinkedAppointment(a.id);
+                    cart.setClinicalDispense(true);
+                    Navigator.pop(ctx);
+                  },
                 ),
-                title: Text(a.patientName),
-                subtitle: Text('Status: ${a.status} • Dr. ${a.doctorName}'),
-                onTap: () {
-                  final patient = context.read<PatientProvider>().getById(a.patientId);
-                  cart.setPatient(
-                    name: a.patientName,
-                    phone: a.patientPhone,
-                    id: a.patientId,
-                    uhid: patient?.uhid,
-                    address: patient?.address,
-                  );
-                  _patientCtrl.text = a.patientName;
-                  cart.setLinkedAppointment(a.id);
-                  cart.setClinicalDispense(true);
-                  Navigator.pop(ctx);
-                },
               );
             },
           ),
@@ -634,7 +641,7 @@ class _PosWindowsState extends State<PosWindows> {
   Future<Map<String, String>?> _showH1DetailsDialog(BuildContext context, CartProvider cart) async {
     final patientProvider = context.read<PatientProvider>();
     final patient = cart.patientId != 0 ? patientProvider.getById(cart.patientId) : null;
-    
+
     final patientNameCtrl = TextEditingController(text: cart.patientName.isNotEmpty ? cart.patientName : '');
     final patientAddrCtrl = TextEditingController(text: cart.patientAddress.isNotEmpty ? cart.patientAddress : (patient?.address ?? ''));
     final docNameCtrl = TextEditingController(text: cart.doctorName);
@@ -793,15 +800,15 @@ class _PosWindowsState extends State<PosWindows> {
           );
         }
       }
-      
+
       if (pName.isEmpty) {
         cart.setPatient(name: '', phone: '', id: 0, uhid: '', address: '');
       } else {
         cart.setPatient(
-          name: pName, 
-          id: cart.patientId, 
-          phone: cart.patientPhone, 
-          uhid: cart.patientUhid, 
+          name: pName,
+          id: cart.patientId,
+          phone: cart.patientPhone,
+          uhid: cart.patientUhid,
           address: cart.patientAddress,
         );
       }
@@ -1051,7 +1058,6 @@ class _PosWindowsState extends State<PosWindows> {
   }
 
   void _showPrescriptionLoader(BuildContext context) {
-    // Explicitly import if needed, but here it's already in the provider's context
     final pProvider = context.read<PrescriptionProvider>();
     pProvider.load();
     final pending = pProvider.pendingDispensation;
@@ -1334,1290 +1340,4 @@ class _PosWindowsState extends State<PosWindows> {
       );
     }
   }
-}
-
-class _MedicinesGrid extends StatefulWidget {
-  final InventoryProvider inv;
-  final CartProvider cart;
-  final TextEditingController searchCtrl;
-  final FocusNode searchFocus;
-  final VoidCallback onSearchEnter;
-  final ValueChanged<FocusNode> onFirstGridFocusNodeCreated;
-  final Function(Medicine) onAddToGrid;
-  final Function(String) onItemAddedToCart;
-  final VoidCallback onScanTap;
-
-  const _MedicinesGrid({
-    required this.inv,
-    required this.cart,
-    required this.searchCtrl,
-    required this.searchFocus,
-    required this.onSearchEnter,
-    required this.onFirstGridFocusNodeCreated,
-    required this.onAddToGrid,
-    required this.onItemAddedToCart,
-    required this.onScanTap,
-  });
-
-  @override
-  State<_MedicinesGrid> createState() => _MedicinesGridState();
-}
-
-class _MedicinesGridState extends State<_MedicinesGrid> {
-  // Map of Grid Item ID -> FocusNode (for keyboard navigation in the grid)
-  final Map<String, FocusNode> _gridFocusNodes = {};
-
-  @override
-  void dispose() {
-    for (var node in _gridFocusNodes.values) {
-      node.dispose();
-    }
-    super.dispose();
-  }
-
-  FocusNode _getGridFocusNode(String key, bool isFirst) {
-    if (!_gridFocusNodes.containsKey(key)) {
-      final node = FocusNode();
-      _gridFocusNodes[key] = node;
-      if (isFirst) {
-        widget.onFirstGridFocusNodeCreated(node);
-      }
-    }
-    return _gridFocusNodes[key]!;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    final procProv = context.watch<ProcedureProvider>();
-    final query = widget.searchCtrl.text.toLowerCase();
-
-    final isClinical = widget.cart.isClinicalDispense;
-    final medicines = widget.inv.rawMedicines
-        .where((m) => isClinical ? m.getNonExpiredMainStock() > 0 : m.getNonExpiredStoreStock() > 0)
-        .where(
-          (m) =>
-              query.isEmpty ||
-              m.name.toLowerCase().contains(query) ||
-              m.barcode.contains(query),
-        )
-        .toList();
-
-    final procedures = procProv.procedures
-        .where((p) => query.isEmpty || p.name.toLowerCase().contains(query))
-        .toList();
-
-    final List<dynamic> combined = [...medicines, ...procedures];
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Expanded(
-                child: KeyboardListener(
-                  focusNode: FocusNode(),
-                  onKeyEvent: (event) {
-                    if (event is KeyDownEvent) {
-                      if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                        // Pipeline Step 1: User presses Down Arrow in search -> Focus First Grid Item
-                        if (combined.isNotEmpty) {
-                          final first = combined.first;
-                          final key = first is Medicine
-                              ? 'm_${first.id}'
-                              : 'p_${first.id}';
-                          _getGridFocusNode(
-                            key,
-                            true,
-                          ).requestFocus();
-                        }
-                      }
-                    }
-                  },
-                  child: TextField(
-                    controller: widget.searchCtrl,
-                    focusNode: widget.searchFocus,
-                    onChanged: (_) => setState(() {}),
-                    onSubmitted: (_) => widget.onSearchEnter(),
-                    decoration: const InputDecoration(
-                      hintText:
-                          'Search medicine [Down for list, Enter to Checkout]...',
-                      prefixIcon: Icon(Icons.search),
-                      isDense: true,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (!kIsWeb && !Platform.isWindows) ...[
-                IconButton(
-                  icon: Icon(
-                    Icons.qr_code_scanner,
-                    color: Theme.of(context).colorScheme.primary,
-                    size: 28,
-                  ),
-                  tooltip: 'Scan Barcode',
-                  onPressed: widget.onScanTap,
-                ),
-                const SizedBox(width: 4),
-              ],
-              if (auth.hasInventoryWriteAccess) ...[
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: Icon(
-                    Icons.person_add_alt_1,
-                    color: Theme.of(context).colorScheme.primary,
-                    size: 28,
-                  ),
-                  tooltip: 'Add Patient to OPD',
-                  onPressed: () => _showPatientQueueDialog(context),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: Icon(
-                    Icons.auto_awesome_motion,
-                    color: Theme.of(context).colorScheme.primary,
-                    size: 28,
-                  ),
-                  tooltip: 'Quick Add Procedure',
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (_) => const ProcedureDialog(),
-                    );
-                  },
-                ),
-              ],
-            ],
-          ),
-        ),
-        Expanded(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              // Calculate crossAxisCount based on SliverGridDelegateWithMaxCrossAxisExtent logic
-              final int crossAxisCount =
-                  (constraints.maxWidth / (180 + 12)).floor().clamp(1, 10);
-
-              return GridView.builder(
-                padding: const EdgeInsets.all(12),
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 180,
-                  childAspectRatio: 0.85,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                ),
-                itemCount: combined.length,
-                itemBuilder: (ctx, i) {
-                  final item = combined[i];
-                  final isProcedure = item is Procedure;
-                  final key = isProcedure ? 'p_${item.id}' : 'm_${item.id}';
-                  final focusNode = _getGridFocusNode(key, i == 0);
-
-                  return Focus(
-                    onKeyEvent: (node, event) {
-                      if (event is KeyDownEvent) {
-                        if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-                          final nextIdx = (i + 1) % combined.length;
-                          final nextItem = combined[nextIdx];
-                          final nextKey = nextItem is Procedure
-                              ? 'p_${nextItem.id}'
-                              : 'm_${nextItem.id}';
-                          _getGridFocusNode(nextKey, false).requestFocus();
-                          return KeyEventResult.handled;
-                        } else if (event.logicalKey ==
-                            LogicalKeyboardKey.arrowLeft) {
-                          final prevIdx =
-                              (i - 1 + combined.length) % combined.length;
-                          final prevItem = combined[prevIdx];
-                          final prevKey = prevItem is Procedure
-                              ? 'p_${prevItem.id}'
-                              : 'm_${prevItem.id}';
-                          _getGridFocusNode(prevKey, false).requestFocus();
-                          return KeyEventResult.handled;
-                        } else if (event.logicalKey ==
-                            LogicalKeyboardKey.arrowDown) {
-                          final nextIdx = i + crossAxisCount;
-                          if (nextIdx < combined.length) {
-                            final nextItem = combined[nextIdx];
-                            final nextKey = nextItem is Procedure
-                                ? 'p_${nextItem.id}'
-                                : 'm_${nextItem.id}';
-                            _getGridFocusNode(nextKey, false).requestFocus();
-                          } else {
-                            final topIdx = i % crossAxisCount;
-                            final topItem = combined[topIdx];
-                            final topKey = topItem is Procedure
-                                ? 'p_${topItem.id}'
-                                : 'm_${topItem.id}';
-                            _getGridFocusNode(topKey, false).requestFocus();
-                          }
-                          return KeyEventResult.handled;
-                        } else if (event.logicalKey ==
-                            LogicalKeyboardKey.arrowUp) {
-                          final prevIdx = i - crossAxisCount;
-                          if (prevIdx >= 0) {
-                            final prevItem = combined[prevIdx];
-                            final prevKey = prevItem is Procedure
-                                ? 'p_${prevItem.id}'
-                                : 'm_${prevItem.id}';
-                            _getGridFocusNode(prevKey, false).requestFocus();
-                          } else {
-                            int lastVisibleIdx = i;
-                            while (lastVisibleIdx + crossAxisCount <
-                                combined.length) {
-                              lastVisibleIdx += crossAxisCount;
-                            }
-                            final lastItem = combined[lastVisibleIdx];
-                            final lastKey = lastItem is Procedure
-                                ? 'p_${lastItem.id}'
-                                : 'm_${lastItem.id}';
-                            _getGridFocusNode(lastKey, false).requestFocus();
-                          }
-                          return KeyEventResult.handled;
-                        }
-                      }
-                      return KeyEventResult.ignored;
-                    },
-                    child: _ProductCard(
-                      item: item,
-                      focusNode: focusNode,
-                      onTap: () {
-                        if (isProcedure) {
-                          widget.cart.addProcedure(item);
-                          widget.onItemAddedToCart(key);
-                        } else {
-                          widget.onAddToGrid(item);
-                        }
-                      },
-                      onSecondaryTap: isProcedure
-                          ? (details) =>
-                              _showProcedureContextMenu(context, details, item)
-                          : null,
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _showPatientQueueDialog(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 12),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 12),
-          ListTile(
-            leading:
-                const Icon(Icons.app_registration, color: AppTheme.primary),
-            title: const Text('Register New Patient'),
-            subtitle: const Text('For first-time clinic visit'),
-            onTap: () async {
-              Navigator.pop(ctx);
-              final patient = await showDialog<Patient>(
-                context: context,
-                builder: (ctx) => const PatientDialog(),
-              );
-              if (patient != null && context.mounted) {
-                _showBookingDialog(context, patient);
-              }
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.person_search, color: AppTheme.primary),
-            title: const Text('Existing Patient'),
-            subtitle: const Text('Search by name, phone or UHID'),
-            onTap: () {
-              Navigator.pop(ctx);
-              showDialog(
-                context: context,
-                builder: (ctx) => PatientSearchDialog(
-                  showSkip: false,
-                  onSelected: (p) => _showBookingDialog(context, p),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-        ],
-      ),
-    );
-  }
-
-  void _showBookingDialog(BuildContext context, Patient patient) {
-    showDialog(
-      context: context,
-      builder: (ctx) => BookAppointmentDialog(patient: patient),
-    );
-  }
-
-  void _showProcedureContextMenu(
-      BuildContext context, TapDownDetails details, Procedure procedure) {
-    final RenderBox overlay =
-        Overlay.of(context).context.findRenderObject() as RenderBox;
-    showMenu(
-      context: context,
-      position: RelativeRect.fromRect(
-        details.globalPosition & const Size(40, 40),
-        Offset.zero & overlay.size,
-      ),
-      items: [
-        PopupMenuItem(
-          child: const ListTile(
-            leading: Icon(Icons.edit, color: AppTheme.primary),
-            title: Text('Edit Procedure'),
-          ),
-          onTap: () {
-            Future.delayed(Duration.zero, () {
-              showDialog(
-                context: context,
-                builder: (_) => ProcedureDialog(procedure: procedure),
-              );
-            });
-          },
-        ),
-        PopupMenuItem(
-          child: const ListTile(
-            leading: Icon(Icons.delete, color: AppTheme.danger),
-            title: Text('Delete Procedure'),
-          ),
-          onTap: () {
-            _confirmDeleteProcedure(context, procedure);
-          },
-        ),
-      ],
-    );
-  }
-
-  void _confirmDeleteProcedure(BuildContext context, Procedure p) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Procedure'),
-        content: Text('Are you sure you want to delete "${p.name}"?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              context.read<ProcedureProvider>().deleteProcedure(p.id,
-                  syncService: context.read<SyncService>());
-              Navigator.pop(ctx);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProductCard extends StatelessWidget {
-  final dynamic item;
-  final VoidCallback onTap;
-  final FocusNode focusNode;
-
-  final void Function(TapDownDetails)? onSecondaryTap;
-
-  const _ProductCard({
-    required this.item,
-    required this.onTap,
-    required this.focusNode,
-    this.onSecondaryTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isProcedure = item is Procedure;
-    final name = item.name;
-    final price = isProcedure ? item.basePrice : item.sellingPrice;
-    final icon = isProcedure ? Icons.auto_awesome : Icons.medication;
-    final cart = context.read<CartProvider>();
-    final isLowStock = !isProcedure && 
-        (cart.isClinicalDispense ? item.mainStock <= item.lowStockThreshold : item.isLowStock);
-    final activeBatch = isProcedure ? null : (item as Medicine).getActiveBatch(cart.isClinicalDispense);
-
-    return InkWell(
-      onTap: onTap,
-      onSecondaryTapDown: onSecondaryTap,
-      focusNode: focusNode,
-      borderRadius: BorderRadius.circular(12),
-      child: Card(
-        // Use a slight border when focused
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: focusNode.hasFocus
-              ? BorderSide(
-                  color: isLowStock
-                      ? AppTheme.warning
-                      : Theme.of(context).colorScheme.primary,
-                  width: 2)
-              : BorderSide.none,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  icon,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                name,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              Text(
-                isProcedure ? 'Procedure' : item.unit,
-                style: TextStyle(color: context.textMutedColor, fontSize: 11),
-              ),
-              const SizedBox(height: 4),
-              if (!isProcedure && activeBatch != null) ...[
-                Row(
-                  children: [
-                    Icon(Icons.layers, size: 10, color: context.textMutedColor),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Batch: ${activeBatch.batchNo}',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: context.textMutedColor,
-                      ),
-                    ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    Icon(Icons.event,
-                        size: 10,
-                        color: activeBatch.expiryDate.isBefore(
-                                DateTime.now().add(const Duration(days: 90)))
-                            ? AppTheme.danger
-                            : context.textMutedColor),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Exp: ${activeBatch.expiryDate.day}/${activeBatch.expiryDate.month}/${activeBatch.expiryDate.year}',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: activeBatch.expiryDate.isBefore(
-                                DateTime.now().add(const Duration(days: 90)))
-                            ? AppTheme.danger
-                            : context.textMutedColor,
-                        fontWeight: activeBatch.expiryDate.isBefore(
-                                DateTime.now().add(const Duration(days: 90)))
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-              const Spacer(),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '₹${price.toStringAsFixed(0)}',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
-                    ),
-                  ),
-                  if (!isProcedure)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: item.isLowStock
-                            ? AppTheme.warning.withValues(alpha: 0.2)
-                            : context.borderColor,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
-                          width: 1,
-                        ),
-                      ),
-                      child: Text(
-                        '${cart.isClinicalDispense ? item.getNonExpiredMainStock() : item.getNonExpiredStoreStock()}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: isLowStock
-                              ? AppTheme.warning
-                              : Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    )
-                  else
-                    Icon(
-                      Icons.add_circle_outline,
-                      size: 20,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CartPanel extends StatelessWidget {
-  final CartProvider cart;
-  final TextEditingController discountCtrl;
-  final TextEditingController patientCtrl;
-  final TextEditingController mixCashCtrl;
-  final TextEditingController mixUpiCtrl;
-  final TextEditingController mixCardCtrl;
-  final FocusNode discountFocus;
-  final FocusNode paymentFocus;
-  final FocusNode mixCashFocus;
-  final FocusNode mixUpiFocus;
-  final FocusNode mixCardFocus;
-  final FocusNode checkoutFocus;
-  final String paymentMethod;
-  final FocusNode Function(String) getQtyFocusNode;
-  final TextEditingController Function(String, int) getQtyController;
-  final FocusNode Function(String) getPriceFocusNode;
-  final TextEditingController Function(String, double) getPriceController;
-  final VoidCallback onQtyConfirm;
-  final VoidCallback onPriceConfirm;
-  final VoidCallback onDiscountConfirm;
-  final VoidCallback onPaymentMethodConfirm;
-  final ValueChanged<String> onPaymentMethodChanged;
-  final VoidCallback onLoadPrescription;
-  final VoidCallback onImportPreviousSales;
-  final VoidCallback? onCheckout;
-
-  const _CartPanel({
-    required this.cart,
-    required this.discountCtrl,
-    required this.patientCtrl,
-    required this.mixCashCtrl,
-    required this.mixUpiCtrl,
-    required this.mixCardCtrl,
-    required this.discountFocus,
-    required this.paymentFocus,
-    required this.mixCashFocus,
-    required this.mixUpiFocus,
-    required this.mixCardFocus,
-    required this.checkoutFocus,
-    required this.paymentMethod,
-    required this.getQtyFocusNode,
-    required this.getQtyController,
-    required this.getPriceFocusNode,
-    required this.getPriceController,
-    required this.onQtyConfirm,
-    required this.onPriceConfirm,
-    required this.onDiscountConfirm,
-    required this.onPaymentMethodConfirm,
-    required this.onPaymentMethodChanged,
-    required this.onLoadPrescription,
-    required this.onImportPreviousSales,
-    required this.onCheckout,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    return Container(
-      color: Theme.of(context).cardTheme.color,
-      child: Column(
-        children: [
-          // Patient Name
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Autocomplete<Patient>(
-                    displayStringForOption: (p) => p.name,
-                    optionsBuilder: (TextEditingValue val) {
-                      if (val.text.isEmpty) return const Iterable.empty();
-                      final patients = context.read<PatientProvider>().patients;
-                      if (cart.isClinicalDispense) {
-                        final opdPatientIds = context.read<OpdProvider>().todayQueue.map((a) => a.patientId).toSet();
-                        return patients.where((p) => opdPatientIds.contains(p.id)).where((p) {
-                          final q = val.text.toLowerCase();
-                          return p.name.toLowerCase().contains(q) ||
-                              p.phone.contains(q) ||
-                              p.address.toLowerCase().contains(q);
-                        });
-                      }
-                      return patients.where((p) {
-                        final q = val.text.toLowerCase();
-                        return p.name.toLowerCase().contains(q) ||
-                            p.phone.contains(q) ||
-                            p.address.toLowerCase().contains(q);
-                      });
-                    },
-                    onSelected: (p) {
-                      cart.setPatient(name: p.name, phone: p.phone, id: p.id, uhid: p.uhid, address: p.address);
-                      patientCtrl.text = p.name;
-                    },
-                    fieldViewBuilder: (ctx, ctrl, node, onFieldSubmitted) {
-                      // Sync external controller if needed or just use this one
-                      // We'll use the Autocomplete's internal ctrl but update our parent one
-                      ctrl.addListener(() {
-                        if (ctrl.text != patientCtrl.text) {
-                          patientCtrl.text = ctrl.text;
-                        }
-                      });
-                      // If parent ctrl changes (e.g. from prescription loader), sync here
-                      if (patientCtrl.text != ctrl.text) {
-                        ctrl.text = patientCtrl.text;
-                      }
-
-                      return TextField(
-                        controller: ctrl,
-                        focusNode: node,
-                        onSubmitted: (_) => onFieldSubmitted(),
-                        decoration: const InputDecoration(
-                          hintText: 'Search Patient (Name/Phone/Addr)',
-                          prefixIcon: Icon(Icons.person_outline),
-                          isDense: true,
-                        ),
-                      );
-                    },
-                    optionsViewBuilder: (ctx, onSelected, options) {
-                      return Align(
-                        alignment: Alignment.topLeft,
-                        child: Material(
-                          elevation: 4,
-                          child: SizedBox(
-                            width: 320,
-                            child: ListView.builder(
-                              shrinkWrap: true,
-                              padding: EdgeInsets.zero,
-                              itemCount: options.length,
-                              itemBuilder: (ctx, i) {
-                                final p = options.elementAt(i);
-                                return ListTile(
-                                  title: Text(p.name),
-                                  subtitle: Text('${p.uhid} • ${p.phone} • ${p.address}'),
-                                  onTap: () => onSelected(p),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: Icon(
-                    Icons.receipt_long_outlined,
-                    color: cart.isReturnMode
-                        ? AppTheme.danger
-                        : (cart.isClinicalDispense ? AppTheme.indigo : AppTheme.primary),
-                  ),
-                  tooltip: 'Load Prescription',
-                  onPressed: onLoadPrescription,
-                ),
-                if (cart.patientId != 0) ...[
-                  const SizedBox(width: 4),
-                  IconButton(
-                    icon: Icon(
-                      Icons.restore_page_outlined,
-                      color: cart.isReturnMode
-                          ? AppTheme.danger
-                          : (cart.isClinicalDispense ? AppTheme.indigo : AppTheme.primary),
-                    ),
-                    tooltip: 'Import from Previous Sales',
-                    onPressed: onImportPreviousSales,
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          // Cart Items
-          Expanded(
-            child: cart.items.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.shopping_cart_outlined,
-                          size: 48,
-                          color: Colors.grey,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Cart is empty',
-                          style: TextStyle(color: context.textMutedColor),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    itemCount: cart.items.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (ctx, i) {
-                      final item = cart.items[i];
-                      final key =
-                          item.isProcedure ? 'p_${item.id}' : 'm_${item.id}';
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(vertical: 4),
-                        title: Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                item.name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (item.medicine?.isScheduleH1 == true) ...[
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.danger.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: AppTheme.danger, width: 0.8),
-                                ),
-                                child: const Text(
-                                  'H1',
-                                  style: TextStyle(
-                                    color: AppTheme.danger,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ]
-                          ],
-                        ),
-                        subtitle: item.isProcedure
-                            ? Row(
-                                children: [
-                                  const Text('₹', style: TextStyle(fontSize: 12)),
-                                  SizedBox(
-                                    width: 60,
-                                    child: TextField(
-                                      controller: getPriceController(
-                                          key,
-                                          item.customPrice ??
-                                              item.procedure!.basePrice),
-                                      focusNode: getPriceFocusNode(key),
-                                      style: const TextStyle(fontSize: 12),
-                                      decoration: const InputDecoration(
-                                        isDense: true,
-                                        border: InputBorder.none,
-                                        contentPadding: EdgeInsets.zero,
-                                      ),
-                                      keyboardType: TextInputType.number,
-                                      onChanged: (val) {
-                                        final p = double.tryParse(val);
-                                        if (p != null) {
-                                          cart.updatePrice(item.id, p);
-                                        }
-                                      },
-                                      onSubmitted: (val) {
-                                        final p = double.tryParse(val);
-                                        if (p != null) {
-                                          cart.updatePrice(item.id, p);
-                                          onPriceConfirm();
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                  Text(' × ${item.qty}',
-                                      style: const TextStyle(fontSize: 12)),
-                                ],
-                              )
-                            : Text(
-                                '₹${(item.medicine?.sellingPrice ?? item.customPrice ?? item.procedure!.basePrice).toStringAsFixed(2)} × ${item.qty}',
-                              ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '₹${item.lineTotal.toStringAsFixed(2)}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: cart.isReturnMode
-                                    ? AppTheme.danger
-                                    : (cart.isClinicalDispense
-                                        ? AppTheme.indigo
-                                        : AppTheme.primaryLight),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            InkWell(
-                              onTap: () => cart.removeItem(item.id,
-                                  isProcedure: item.isProcedure),
-                              child: const Icon(
-                                Icons.close,
-                                size: 16,
-                                color: AppTheme.danger,
-                              ),
-                            ),
-                          ],
-                        ),
-                        leading: Container(
-                          width: 65,
-                          height: 42,
-                          margin: const EdgeInsets.symmetric(vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).brightness ==
-                                    Brightness.dark
-                                ? (cart.isClinicalDispense
-                                    ? AppTheme.indigo.withValues(alpha: 0.15)
-                                    : AppTheme.primary.withValues(alpha: 0.15))
-                                : (cart.isClinicalDispense
-                                    ? AppTheme.indigo.withValues(alpha: 0.1)
-                                    : AppTheme.primaryLight.withValues(alpha: 0.1)),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: cart.isClinicalDispense
-                                  ? AppTheme.indigo.withValues(alpha: 0.5)
-                                  : AppTheme.primaryLight.withValues(alpha: 0.3),
-                              width: 1.5,
-                            ),
-                          ),
-                          alignment: Alignment.center,
-                          child: TextField(
-                            focusNode: getQtyFocusNode(key),
-                            controller: getQtyController(
-                              key,
-                              item.qty,
-                            ),
-                            keyboardType: TextInputType.number,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? (cart.isClinicalDispense
-                                      ? AppTheme.indigo
-                                      : AppTheme.primaryLight)
-                                  : (cart.isClinicalDispense
-                                      ? AppTheme.indigo
-                                      : AppTheme.primary),
-                            ),
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                            onChanged: (val) {
-                              final newQty = int.tryParse(val);
-                              if (newQty != null && newQty > 0) {
-                                int finalQty = newQty;
-                                final maxStock = cart.isClinicalDispense ? item.medicine!.getNonExpiredMainStock() : item.medicine!.getNonExpiredStoreStock();
-                                if (!item.isProcedure &&
-                                    !cart.isReturnMode &&
-                                    finalQty > maxStock) {
-                                  finalQty = maxStock;
-                                  final ctrl = getQtyController(
-                                    key,
-                                    item.qty,
-                                  );
-                                  ctrl.text = finalQty.toString();
-                                  ctrl.selection = TextSelection.collapsed(
-                                    offset: finalQty.toString().length,
-                                  );
-                                }
-                                cart.updateQty(item.id, finalQty,
-                                    isProcedure: item.isProcedure);
-                              }
-                            },
-                            onSubmitted: (val) {
-                              int newQty = int.tryParse(val) ?? 1;
-                              if (newQty > 0) {
-                                final maxStock = cart.isClinicalDispense ? item.medicine!.mainStock : item.medicine!.storeStock;
-                                if (!item.isProcedure &&
-                                    !cart.isReturnMode &&
-                                    newQty > maxStock) {
-                                  newQty = maxStock;
-                                }
-                                cart.updateQty(item.id, newQty,
-                                    isProcedure: item.isProcedure);
-                              } else {
-                                cart.updateQty(item.id, 1,
-                                    isProcedure: item.isProcedure);
-                              }
-                              onQtyConfirm();
-                            },
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-
-          // Discount & Totals
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: context.borderColor)),
-            ),
-            child: Column(
-              children: [
-                // Discount
-                TextField(
-                  controller: discountCtrl,
-                  focusNode: discountFocus,
-                  keyboardType: TextInputType.number,
-                  enabled: auth.canDiscountSales,
-                  decoration: const InputDecoration(
-                    hintText: 'Discount (₹)',
-                    prefixIcon: Icon(Icons.discount_outlined),
-                    isDense: true,
-                  ),
-                  onChanged: (val) {
-                    final discount = double.tryParse(val) ?? 0.0;
-                    cart.setDiscount(discount);
-                  },
-                  onSubmitted: (_) => onDiscountConfirm(),
-                ),
-                const SizedBox(height: 12),
-
-                // Payment method
-                SizedBox(
-                  height: 32,
-                  child: Focus(
-                    focusNode: paymentFocus,
-                    onKeyEvent: (node, event) {
-                      if (event is KeyDownEvent) {
-                        final methods = ['cash', 'card', 'upi', 'mixed'];
-                        var idx = methods.indexOf(paymentMethod);
-                        if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-                          idx = (idx + 1) % methods.length;
-                          onPaymentMethodChanged(methods[idx]);
-                          return KeyEventResult.handled;
-                        } else if (event.logicalKey ==
-                            LogicalKeyboardKey.arrowLeft) {
-                          idx = (idx - 1 + methods.length) % methods.length;
-                          onPaymentMethodChanged(methods[idx]);
-                          return KeyEventResult.handled;
-                        } else if (event.logicalKey ==
-                            LogicalKeyboardKey.enter) {
-                          onPaymentMethodConfirm();
-                          return KeyEventResult.handled;
-                        }
-                      }
-                      return KeyEventResult.ignored;
-                    },
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        Center(
-                          child: Text(
-                            'Pay: ',
-                            style: TextStyle(
-                              color: context.textMutedColor,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                        _PayChip(
-                          'cash',
-                          'Cash',
-                          paymentMethod,
-                          onPaymentMethodChanged,
-                          paymentFocus,
-                        ),
-                        const SizedBox(width: 8),
-                        _PayChip(
-                          'card',
-                          'Card',
-                          paymentMethod,
-                          onPaymentMethodChanged,
-                          paymentFocus,
-                        ),
-                        const SizedBox(width: 8),
-                        _PayChip(
-                          'upi',
-                          'UPI',
-                          paymentMethod,
-                          onPaymentMethodChanged,
-                          paymentFocus,
-                        ),
-                        const SizedBox(width: 8),
-                        _PayChip(
-                          'mixed',
-                          'Mixed',
-                          paymentMethod,
-                          onPaymentMethodChanged,
-                          paymentFocus,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                if (paymentMethod == 'mixed') ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _MixedField(
-                          label: 'Cash',
-                          controller: mixCashCtrl,
-                          focusNode: mixCashFocus,
-                          onSubmitted: () => mixUpiFocus.requestFocus(),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _MixedField(
-                          label: 'UPI',
-                          controller: mixUpiCtrl,
-                          focusNode: mixUpiFocus,
-                          onSubmitted: () => mixCardFocus.requestFocus(),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _MixedField(
-                          label: 'Card',
-                          controller: mixCardCtrl,
-                          focusNode: mixCardFocus,
-                          onSubmitted: () => onCheckout?.call(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 12),
-
-                // Totals
-                _TotalRow('Subtotal', '₹${cart.subtotal.toStringAsFixed(2)}'),
-                if (cart.discountAmount > 0)
-                  _TotalRow(
-                    'Discount',
-                    '-₹${cart.discountAmount.toStringAsFixed(2)}',
-                    color: AppTheme.danger,
-                  ),
-                if (cart.taxAmount > 0)
-                  _TotalRow('Tax', '₹${cart.taxAmount.toStringAsFixed(2)}'),
-                const Divider(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'TOTAL',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                      ),
-                    ),
-                    Text(
-                      cart.isReturnMode
-                          ? '-₹${cart.totalRounded.toStringAsFixed(2)}'
-                          : '₹${cart.totalRounded.toStringAsFixed(2)}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 20,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    focusNode: checkoutFocus,
-                    onPressed: cart.items.isEmpty ? null : onCheckout,
-                    icon: Icon(
-                      cart.isReturnMode
-                          ? Icons.assignment_return
-                          : (cart.isClinicalDispense ? Icons.local_hospital_outlined : Icons.shopping_cart_checkout),
-                    ),
-                    label: Text(
-                      cart.isEditingSale
-                          ? 'UPDATE SALE'
-                          : (cart.isReturnMode
-                              ? 'REFUND & PROCESS RETURN'
-                              : (cart.isClinicalDispense ? 'DISPENSE CLINICAL MEDICINES' : 'COLLECT PAYMENT & PRINT')),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PayChip extends StatelessWidget {
-  final String value;
-  final String label;
-  final String selected;
-  final ValueChanged<String> onChanged;
-  final FocusNode? primaryFocusNode;
-
-  const _PayChip(
-    this.value,
-    this.label,
-    this.selected,
-    this.onChanged,
-    this.primaryFocusNode,
-  );
-
-  @override
-  Widget build(BuildContext context) {
-    final isSelected = value == selected;
-    return InkWell(
-      onTap: () => onChanged(value),
-      borderRadius: BorderRadius.circular(8),
-      child: AnimatedBuilder(
-        animation: primaryFocusNode ?? const AlwaysStoppedAnimation(null),
-        builder: (context, _) {
-          final isFocused = primaryFocusNode?.hasFocus ?? false;
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? (context.read<CartProvider>().isReturnMode
-                      ? AppTheme.danger
-                      : (context.read<CartProvider>().isClinicalDispense
-                          ? AppTheme.indigo
-                          : AppTheme.primary))
-                  : context.borderColor,
-              borderRadius: BorderRadius.circular(8),
-              border: (isFocused && isSelected)
-                  ? Border.all(
-                      color: context.read<CartProvider>().isReturnMode
-                          ? AppTheme.danger
-                          : (context.read<CartProvider>().isClinicalDispense
-                              ? AppTheme.indigo
-                              : AppTheme.primaryLight),
-                      width: 2)
-                  : null,
-            ),
-            child: Center(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isSelected ? Colors.white : context.textMutedColor,
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _MixedField extends StatelessWidget {
-  final String label;
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final VoidCallback onSubmitted;
-
-  const _MixedField({
-    required this.label,
-    required this.controller,
-    required this.focusNode,
-    required this.onSubmitted,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      focusNode: focusNode,
-      keyboardType: TextInputType.number,
-      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-      textAlign: TextAlign.center,
-      onSubmitted: (_) => onSubmitted(),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(fontSize: 11),
-        isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-      ),
-    );
-  }
-}
-
-class _TotalRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color? color;
-
-  const _TotalRow(this.label, this.value, {this.color});
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              label,
-              style: TextStyle(color: context.textMutedColor, fontSize: 13),
-            ),
-            Text(
-              value,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: color ?? context.textColor,
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
-      );
 }

@@ -35,6 +35,9 @@ import 'user_management_windows.dart';
 import 'opd/doctor_list_windows.dart';
 import 'widgets/settings_widgets.dart';
 import '../../shared/services/data_population_service.dart';
+import 'settings/sections/identity_printing_section.dart';
+import 'settings/sections/interface_network_inventory_section.dart';
+import 'settings/sections/data_control_section.dart';
 
 class SettingsWindows extends StatefulWidget {
   const SettingsWindows({super.key});
@@ -452,21 +455,155 @@ class _SettingsWindowsState extends State<SettingsWindows> {
   Widget _buildSectionContent(String title, SettingsProvider settingsProv, AuthProvider auth) {
     switch (title) {
       case 'Store Details':
-        return _buildStoreSection();
+        return StoreDetailsSection(
+          storeNameCtrl: _storeNameCtrl,
+          addressCtrl: _addressCtrl,
+          phoneCtrl: _phoneCtrl,
+          gstCtrl: _gstCtrl,
+          clinicNameCtrl: _clinicNameCtrl,
+          clinicAddressCtrl: _clinicAddressCtrl,
+          clinicPhoneCtrl: _clinicPhoneCtrl,
+          clinicRegCtrl: _clinicRegCtrl,
+          taxCtrl: _taxCtrl,
+          isCompositionScheme: _isCompositionScheme,
+          selectedDefaultDoctorId: _selectedDefaultDoctorId,
+          doctors: _doctors,
+          onCompositionSchemeChanged: (val) => setState(() => _isCompositionScheme = val),
+          onDefaultDoctorChanged: (val) => setState(() => _selectedDefaultDoctorId = val),
+        );
       case 'Printing':
-        return _buildPrintingSection();
+        return PrintingSection(
+          footerCtrl: _footerCtrl,
+          currencyCtrl: _currencyCtrl,
+          taxCtrl: _taxCtrl,
+          paperSize: _paperSize,
+          selectedPrinter: _selectedPrinter,
+          autoPrint: _autoPrint,
+          showBatchExpiryRetail: _showBatchExpiryRetail,
+          showBatchExpiryClinical: _showBatchExpiryClinical,
+          showOpdIdInPrint: _showOpdIdInPrint,
+          printers: _printers,
+          isCompositionScheme: _isCompositionScheme,
+          onPaperSizeChanged: (val) => setState(() => _paperSize = val),
+          onPrinterChanged: (val) => setState(() => _selectedPrinter = val),
+          onAutoPrintChanged: (val) => setState(() => _autoPrint = val),
+          onShowBatchExpiryRetailChanged: (val) => setState(() => _showBatchExpiryRetail = val),
+          onShowBatchExpiryClinicalChanged: (val) => setState(() => _showBatchExpiryClinical = val),
+          onShowOpdIdInPrintChanged: (val) => setState(() => _showOpdIdInPrint = val),
+        );
       case 'Interface':
-        return _buildInterfaceSection();
+        return InterfaceSection(
+          selectedTheme: _selectedTheme,
+          enableAnimations: _enableAnimations,
+          onThemeChanged: (val) => setState(() => _selectedTheme = val),
+          onAnimationsChanged: (val) => setState(() => _enableAnimations = val),
+        );
       case 'Cloud Sync':
-        return _buildCloudSection(settingsProv);
+        return CloudSection(
+          settingsProv: settingsProv,
+          googleDriveSyncEnabled: _googleDriveSyncEnabled,
+          firebaseEnabled: _firebaseEnabled,
+          firebaseMirrorEnabled: _firebaseMirrorEnabled,
+          firebaseSummaryEnabled: _firebaseSummaryEnabled,
+          shopIdCtrl: _shopIdCtrl,
+          autoBackupFreq: _autoBackupFreq,
+          autoBackupLogic: _autoBackupLogic,
+          onGoogleDriveSyncEnabledChanged: (val) => setState(() => _googleDriveSyncEnabled = val),
+          onFirebaseEnabledChanged: (val) => setState(() => _firebaseEnabled = val),
+          onFirebaseMirrorEnabledChanged: (val) => setState(() => _firebaseMirrorEnabled = val),
+          onFirebaseSummaryEnabledChanged: (val) => setState(() => _firebaseSummaryEnabled = val),
+          onAutoBackupFreqChanged: (val) => setState(() => _autoBackupFreq = val),
+          onAutoBackupLogicChanged: (val) => setState(() => _autoBackupLogic = val),
+          onSyncTodayNow: () async {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Syncing today's data to cloud..."), duration: Duration(seconds: 2)),
+            );
+            await FirebaseSyncService.instance.uploadTodaysDataToCloud();
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Today's data synced successfully!"), backgroundColor: AppTheme.success),
+              );
+            }
+          },
+          onShowRestoreDialog: () => _showRestoreDialog(context, settingsProv),
+          onSelectBackupTime: () async {
+            final time = await showTimePicker(
+              context: context,
+              initialTime: TimeOfDay(
+                hour: int.parse((settingsProv.settings.autoBackupTime ?? '22:00').split(':').first),
+                minute: int.parse((settingsProv.settings.autoBackupTime ?? '22:00').split(':').last),
+              ),
+            );
+            if (time != null) {
+              final timeStr = '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+              final updated = settingsProv.settings;
+              updated.autoBackupTime = timeStr;
+              settingsProv.save(updated);
+              setState(() {});
+            }
+          },
+        );
       case 'Networking':
-        return _buildNetworkingSection();
+        return NetworkingSection(
+          isWindowsClient: _isWindowsClient,
+          portCtrl: _portCtrl,
+          hubIp: _hubIp,
+          syncService: context.watch<SyncService>(),
+          onWindowsClientChanged: (val) => setState(() => _isWindowsClient = val),
+        );
       case 'Inventory':
-        return _buildInventorySection();
+        return InventorySection(
+          lowStockCtrl: _lowStockCtrl,
+          nearExpiryCtrl: _nearExpiryCtrl,
+        );
       case 'Data':
-        return _buildDataSection(settingsProv);
+        return DataSection(
+          auditRetentionDays: _auditRetentionDays,
+          onAuditRetentionDaysChanged: (val) => setState(() => _auditRetentionDays = val),
+          onExportExcel: _exportExcel,
+          onImportExcel: _importExcel,
+          onBackupDatabase: _backupDatabase,
+          onRestoreDatabase: _restoreDatabase,
+          onBackupJsonGranular: _backupJsonGranular,
+          onRestoreJsonGranular: _restoreJsonGranular,
+          onGenerateAuditReport: () async {
+            String? defaultDir;
+            try {
+              defaultDir = Platform.isWindows
+                  ? '${Platform.environment['USERPROFILE']}\\Downloads'
+                  : (await getDownloadsDirectory())?.path;
+            } catch (_) {}
+
+            final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
+            final fileName = 'MediPoss_Audit_Report_$timestamp.xlsx';
+
+            final outputPath = await FilePicker.platform.saveFile(
+              dialogTitle: 'Save Audit Report',
+              fileName: fileName,
+              initialDirectory: defaultDir,
+              type: FileType.custom,
+              allowedExtensions: ['xlsx'],
+            );
+
+            if (outputPath == null) return; // User cancelled
+
+            final file = await AuditExportService.generateAuditReport(customPath: outputPath);
+            if (file != null && mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text('Audit Report Saved to: ${file.path}'),
+                backgroundColor: AppTheme.success,
+              ));
+            } else if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Failed to generate Audit Report'),
+                backgroundColor: AppTheme.danger,
+              ));
+            }
+          },
+          onSeedCustomDemoData: _seedCustomDemoData,
+        );
       case 'Updates':
-        return _buildUpdatesSection();
+        return const UpdatesSection();
       case 'Staff':
         return const UserManagementWindows(isEmbedded: true);
       case 'Doctors':
@@ -474,1319 +611,6 @@ class _SettingsWindowsState extends State<SettingsWindows> {
       default:
         return const SizedBox();
     }
-  }
-
-  Widget _buildUpdatesSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'SOFTWARE UPDATE',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.5,
-                  color: Colors.pink,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Check for new version of MediPoss and update the portable client automatically.',
-                style: TextStyle(fontSize: 12, color: context.textMutedColor),
-              ),
-            ],
-          ),
-        ),
-        SettingsSection(
-          title: 'Software Update Management',
-          icon: LucideIcons.download,
-          children: [
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.system_update_rounded,
-                    color: AppTheme.primary, size: 20),
-              ),
-              title: const Text('Check for Updates',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: const Text('Check for new version on Firebase Storage',
-                  style: TextStyle(fontSize: 12)),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () {
-                OtaUpdateService.checkForUpdate(context, forceShowNoUpdate: true);
-              },
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStoreSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'STORE & CLINICAL IDENTITY',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.5,
-                  color: AppTheme.primaryLight,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Update details printed on receipts, customer invoices, and clinical dispense logs.',
-                style: TextStyle(fontSize: 12, color: context.textMutedColor),
-              ),
-            ],
-          ),
-        ),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final useHorizontal = constraints.maxWidth > 1000;
-            
-            final storeCard = SettingsSection(
-              title: 'Store Information',
-              icon: LucideIcons.building,
-              children: [
-                SettingsField(controller: _storeNameCtrl, label: 'Store Name', icon: LucideIcons.building),
-                SettingsField(controller: _addressCtrl, label: 'Store Address', icon: LucideIcons.mapPin),
-                Row(
-                  children: [
-                    Expanded(child: SettingsField(controller: _phoneCtrl, label: 'Store Phone', icon: LucideIcons.phone)),
-                    const SizedBox(width: 16),
-                    Expanded(child: SettingsField(controller: _gstCtrl, label: 'GST Number', icon: LucideIcons.fileText)),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                SettingsSwitch(
-                  title: 'GST Composition Scheme',
-                  subtitle: 'Tax is not collected from customers',
-                  value: _isCompositionScheme,
-                  icon: LucideIcons.percent,
-                  onChanged: (val) {
-                    setState(() {
-                      _isCompositionScheme = val;
-                      if (val) {
-                        _taxCtrl.text = '0.0';
-                      }
-                    });
-                  },
-                ),
-              ],
-            );
-
-            final clinicCard = SettingsSection(
-              title: 'Clinic / Doctor Details',
-              icon: LucideIcons.stethoscope,
-              children: [
-                SettingsField(controller: _clinicNameCtrl, label: 'Clinic / Doctor Name', icon: LucideIcons.stethoscope),
-                SettingsField(controller: _clinicAddressCtrl, label: 'Physical Address', icon: LucideIcons.mapPin),
-                Row(
-                  children: [
-                    Expanded(child: SettingsField(controller: _clinicPhoneCtrl, label: 'Contact Phone', icon: LucideIcons.phone)),
-                    const SizedBox(width: 16),
-                    Expanded(child: SettingsField(controller: _clinicRegCtrl, label: 'Medical Reg No.', icon: LucideIcons.fileText)),
-                  ],
-                ),
-                const Divider(height: 24),
-                SettingsDropdown<int?>(
-                  title: 'Default Prescribing Doctor',
-                  value: _doctors.any((d) => d.id == _selectedDefaultDoctorId) ? _selectedDefaultDoctorId : null,
-                  icon: LucideIcons.userCheck,
-                  items: [
-                    const DropdownMenuItem<int?>(
-                      value: null,
-                      child: Text('None (Manual Entry)'),
-                    ),
-                    ..._doctors.map((d) => DropdownMenuItem<int?>(
-                          value: d.id,
-                          child: Text(d.name),
-                        )),
-                  ],
-                  onChanged: (val) {
-                    setState(() {
-                      _selectedDefaultDoctorId = val;
-                    });
-                  },
-                ),
-              ],
-            );
-
-            if (useHorizontal) {
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: storeCard),
-                  const SizedBox(width: 24),
-                  Expanded(child: clinicCard),
-                ],
-              );
-            } else {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  storeCard,
-                  clinicCard,
-                ],
-              );
-            }
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCloudSection(SettingsProvider settingsProv) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'CLOUD SERVICES & BACKUP STRATEGY',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.5,
-                  color: AppTheme.sky,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Configure Google Drive linking, set up multi-tenant companion app sync, or adjust automatic background backups.',
-                style: TextStyle(fontSize: 12, color: context.textMutedColor),
-              ),
-            ],
-          ),
-        ),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final useHorizontal = constraints.maxWidth > 1000;
-            
-            final leftCol = Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SettingsSection(
-                  title: 'Google Drive Cloud Sync',
-                  icon: LucideIcons.cloud,
-                  children: [
-                    SettingsSwitch(
-                      title: 'Enable Google Drive Sync',
-                      subtitle: 'Allow backups to Google Drive (on close/periodic/manual)',
-                      value: _googleDriveSyncEnabled,
-                      icon: LucideIcons.cloud,
-                      onChanged: (val) => setState(() => _googleDriveSyncEnabled = val),
-                    ),
-                    const Divider(height: 24),
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 24,
-                          backgroundColor: settingsProv.settings.googleDriveLinked ? AppTheme.success.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.1),
-                          child: Icon(
-                            settingsProv.settings.googleDriveLinked ? LucideIcons.cloudLightning : LucideIcons.cloudOff,
-                            color: settingsProv.settings.googleDriveLinked ? AppTheme.success : AppTheme.danger,
-                          ),
-                        ),
-                        const SizedBox(width: 20),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                settingsProv.settings.googleDriveLinked ? 'Google Connected' : 'Google Drive Disconnected',
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                              ),
-                              Text(
-                                settingsProv.settings.googleDriveLinked 
-                                  ? 'Automated backups are configured and running.' 
-                                  : 'Connect Google account to enable cloud backups.',
-                                style: TextStyle(color: context.textMutedColor, fontSize: 12),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        if (!settingsProv.settings.googleDriveLinked)
-                          ElevatedButton.icon(
-                            onPressed: settingsProv.isGoogleLoading ? null : () => settingsProv.linkGoogleDrive(),
-                            icon: const Icon(LucideIcons.chrome, size: 16),
-                            label: Text(settingsProv.isGoogleLoading ? 'Connecting...' : 'Link'),
-                            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.sky),
-                          )
-                        else
-                          TextButton.icon(
-                            onPressed: () => settingsProv.unlinkGoogleDrive(),
-                            icon: const Icon(LucideIcons.logOut, size: 16),
-                            label: const Text('Disconnect'),
-                            style: TextButton.styleFrom(foregroundColor: AppTheme.danger),
-                          ),
-                      ],
-                    ),
-                    if (settingsProv.settings.googleDriveLinked) ...[
-                      const Divider(height: 32),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('Last Cloud Sync', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                Text(
-                                  settingsProv.settings.lastBackupMillis != null 
-                                    ? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.fromMillisecondsSinceEpoch(settingsProv.settings.lastBackupMillis!))
-                                    : 'No backups recorded',
-                                  style: TextStyle(color: context.textMutedColor, fontSize: 11),
-                                ),
-                              ],
-                            ),
-                          ),
-                          ElevatedButton.icon(
-                            onPressed: settingsProv.isGoogleLoading ? null : () async {
-                              final success = await settingsProv.performManualBackup();
-                              if (success && mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Backup Success!'), backgroundColor: AppTheme.success));
-                              } else if (!success && mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                  content: Text('Backup Failed: ${settingsProv.googleError ?? 'Unknown Error'}'), 
-                                  backgroundColor: AppTheme.danger,
-                                ));
-                              }
-                            },
-                            icon: settingsProv.isGoogleLoading 
-                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                              : const Icon(LucideIcons.uploadCloud, size: 16),
-                            label: const Text('Sync Now'),
-                            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
-                          ),
-                          const SizedBox(width: 8),
-                          OutlinedButton.icon(
-                            onPressed: settingsProv.isGoogleLoading ? null : () => _showRestoreDialog(context, settingsProv),
-                            icon: const Icon(LucideIcons.downloadCloud, size: 16),
-                            label: const Text('Restore'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppTheme.warning,
-                              side: const BorderSide(color: AppTheme.warning),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-                SettingsSection(
-                  title: 'Multi-Tenant Firebase Sync',
-                  icon: LucideIcons.database,
-                  children: [
-                    SettingsSwitch(
-                      title: 'Enable Firebase Integration',
-                      subtitle: 'Enables status discovery and sync features',
-                      value: _firebaseEnabled,
-                      icon: LucideIcons.database,
-                      onChanged: (val) => setState(() => _firebaseEnabled = val),
-                    ),
-                    if (_firebaseEnabled) ...[
-                      const SizedBox(height: 16),
-                      SettingsSwitch(
-                        title: 'Enable Cloud Database Mirroring',
-                        subtitle: 'Uploads new/updated sales, medicines, and patients incrementally from now onwards (conserves quota)',
-                        value: _firebaseMirrorEnabled,
-                        icon: LucideIcons.cloud,
-                        onChanged: (val) {
-                          setState(() {
-                            _firebaseMirrorEnabled = val;
-                            if (val) _firebaseSummaryEnabled = false;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      SettingsSwitch(
-                        title: 'Enable Daily Cloud Summary Upload',
-                        subtitle: "Uploads today's sales, prescriptions, and patients daily at scheduled time",
-                        value: _firebaseSummaryEnabled,
-                        icon: LucideIcons.calendar,
-                        onChanged: (val) {
-                          setState(() {
-                            _firebaseSummaryEnabled = val;
-                            if (val) _firebaseMirrorEnabled = false;
-                          });
-                        },
-                      ),
-                    ],
-                    const SizedBox(height: 16),
-                    SettingsField(
-                      controller: _shopIdCtrl, 
-                      label: 'Shop ID (Leave blank to auto-generate)', 
-                      icon: LucideIcons.store,
-                      enabled: _firebaseEnabled,
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 4.0),
-                      child: Text(
-                        'Changing this ID partitions your cloud database. Companion apps must use this exact ID to sync.',
-                        style: TextStyle(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                    if (_firebaseEnabled) ...[
-                      const SizedBox(height: 16),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                          child: OutlinedButton.icon(
-                            onPressed: () async {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text("Syncing today's data to cloud..."), duration: Duration(seconds: 2)),
-                              );
-                              await FirebaseSyncService.instance.uploadTodaysDataToCloud();
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text("Today's data synced successfully!"), backgroundColor: AppTheme.success),
-                                );
-                              }
-                            },
-                            icon: const Icon(LucideIcons.cloud, size: 16),
-                            label: const Text("Sync Today's Data Now"),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            );
-
-            final rightCol = SettingsSection(
-              title: 'Automated Backups',
-              icon: LucideIcons.calendarClock,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
-                  child: Text(
-                    'Automated backups are stored locally. If Google Drive is connected, they will also sync to the cloud.',
-                    style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
-                  ),
-                ),
-                SettingsDropdown<String>(
-                  title: 'Frequency Strategy',
-                  value: _autoBackupFreq,
-                  icon: LucideIcons.calendar,
-                  items: ['Never', 'Daily', 'Weekly', 'Monthly']
-                      .map((f) => DropdownMenuItem(value: f, child: Text(f)))
-                      .toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() => _autoBackupFreq = val);
-                      final updated = settingsProv.settings;
-                      updated.autoBackupFrequency = val;
-                      settingsProv.save(updated);
-                    }
-                  },
-                ),
-                if (_autoBackupFreq != 'Never')
-                  ListTile(
-                    leading: const Icon(LucideIcons.clock, size: 20),
-                    title: const Text('Scheduled Time', style: TextStyle(fontSize: 14)),
-                    subtitle: Text(settingsProv.settings.autoBackupTime ?? 'Select Time', style: const TextStyle(color: AppTheme.primary)),
-                    trailing: const Icon(LucideIcons.chevronRight, size: 16),
-                    onTap: () async {
-                      final time = await showTimePicker(
-                        context: context,
-                        initialTime: TimeOfDay(
-                          hour: int.parse((settingsProv.settings.autoBackupTime ?? '22:00').split(':').first),
-                          minute: int.parse((settingsProv.settings.autoBackupTime ?? '22:00').split(':').last),
-                        ),
-                      );
-                      if (time != null) {
-                        final timeStr = '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
-                        final updated = settingsProv.settings;
-                        updated.autoBackupTime = timeStr;
-                        settingsProv.save(updated);
-                        setState(() {});
-                      }
-                    },
-                  ),
-                const Divider(),
-                SettingsDropdown<String>(
-                  title: 'Trigger Logic',
-                  value: _autoBackupLogic,
-                  icon: LucideIcons.cog,
-                  items: ['At Startup', 'On Close', 'Periodic']
-                      .map((l) => DropdownMenuItem(value: l, child: Text(l)))
-                      .toList(),
-                  onChanged: (val) => setState(() => _autoBackupLogic = val!),
-                ),
-              ],
-            );
-
-            if (useHorizontal) {
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: leftCol),
-                  const SizedBox(width: 24),
-                  Expanded(child: rightCol),
-                ],
-              );
-            } else {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  leftCol,
-                  rightCol,
-                ],
-              );
-            }
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInterfaceSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'USER INTERFACE PREFERENCES',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.5,
-                  color: AppTheme.purple,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Customize application appearance themes, color settings, and animation preferences.',
-                style: TextStyle(fontSize: 12, color: context.textMutedColor),
-              ),
-            ],
-          ),
-        ),
-        SettingsSection(
-          title: 'UI Preferences',
-          icon: LucideIcons.monitor,
-          children: [
-            SettingsDropdown<String>(
-              title: 'Visual Theme',
-              value: _selectedTheme,
-              icon: LucideIcons.palette,
-              items: const [
-                DropdownMenuItem(value: 'system', child: Text('System Preference')),
-                DropdownMenuItem(value: 'light', child: Text('Light Mode')),
-                DropdownMenuItem(value: 'dark', child: Text('Dark Mode')),
-              ],
-              onChanged: (val) => setState(() => _selectedTheme = val!),
-            ),
-            const Divider(),
-            SettingsSwitch(
-              title: 'Premium Animations',
-              subtitle: 'Enable smooth entrance and layout transitions',
-              value: _enableAnimations,
-              icon: LucideIcons.sparkles,
-              onChanged: (val) => setState(() => _enableAnimations = val),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPrintingSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'INVOICE & PRINT HARDWARE CONFIG',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.5,
-                  color: AppTheme.accent,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Adjust default billing rates, receipt layout details, active thermal/document printers, and hardware actions.',
-                style: TextStyle(fontSize: 12, color: context.textMutedColor),
-              ),
-            ],
-          ),
-        ),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final useHorizontal = constraints.maxWidth > 1000;
-            
-            final styleCard = SettingsSection(
-              title: 'Invoice Styling',
-              icon: LucideIcons.receipt,
-              children: [
-                SettingsField(controller: _footerCtrl, label: 'Receipt Footer Message', icon: LucideIcons.messageSquare),
-                Row(
-                  children: [
-                    Expanded(child: SettingsField(controller: _currencyCtrl, label: 'Currency Symbol', icon: LucideIcons.banknote)),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: SettingsField(
-                        controller: _taxCtrl, 
-                        label: _isCompositionScheme ? 'Tax Rate (%) (Locked)' : 'Tax Rate (%)', 
-                        icon: LucideIcons.percent, 
-                        keyboardType: TextInputType.number,
-                        enabled: !_isCompositionScheme,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            );
-
-            final hardwareCard = SettingsSection(
-              title: 'Printer Hardware',
-              icon: LucideIcons.printer,
-              children: [
-                SettingsDropdown<String>(
-                  title: 'Paper Type',
-                  value: _paperSize,
-                  icon: LucideIcons.fileText,
-                  items: const [
-                    DropdownMenuItem(value: 'A6', child: Text('A6 (Standard)')),
-                    DropdownMenuItem(value: 'Letter', child: Text('Letter')),
-                    DropdownMenuItem(value: 'A4', child: Text('A4')),
-                    DropdownMenuItem(value: 'Roll80', child: Text('Thermal Roll (80mm)')),
-                  ],
-                  onChanged: (val) => setState(() => _paperSize = val!),
-                ),
-                const Divider(),
-                SettingsDropdown<String>(
-                  title: 'Active Printer',
-                  value: _printers.any((p) => p.name == _selectedPrinter) ? _selectedPrinter : '',
-                  icon: LucideIcons.printer,
-                  items: [
-                    const DropdownMenuItem(value: '', child: Text('No Printer Selected')),
-                    ..._printers.map((p) => DropdownMenuItem(value: p.name, child: Text(p.name))),
-                  ],
-                  onChanged: (val) => setState(() => _selectedPrinter = val!),
-                ),
-                const Divider(),
-                SettingsSwitch(
-                  title: 'Direct Mode',
-                  subtitle: 'Skip print preview and print immediately on checkout',
-                  value: _autoPrint,
-                  icon: LucideIcons.zap,
-                  onChanged: (val) => setState(() => _autoPrint = val),
-                ),
-                const Divider(),
-                SettingsSwitch(
-                  title: 'Show Batch & Expiry (Retail)',
-                  subtitle: 'Show Batch number and Expiry date on retail receipts',
-                  value: _showBatchExpiryRetail,
-                  icon: LucideIcons.calendar,
-                  onChanged: (val) => setState(() => _showBatchExpiryRetail = val),
-                ),
-                const Divider(),
-                SettingsSwitch(
-                  title: 'Show Batch & Expiry (Dispense)',
-                  subtitle: 'Show Batch number and Expiry date on clinical dispense slips',
-                  value: _showBatchExpiryClinical,
-                  icon: LucideIcons.calendar,
-                  onChanged: (val) => setState(() => _showBatchExpiryClinical = val),
-                ),
-                const Divider(),
-                SettingsSwitch(
-                  title: 'Show OPD Transaction ID',
-                  subtitle: 'Show OPD ID on final dispense receipts',
-                  value: _showOpdIdInPrint,
-                  icon: LucideIcons.receipt,
-                  onChanged: (val) => setState(() => _showOpdIdInPrint = val),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () => PrintingService.instance.testPrint(context),
-                    icon: const Icon(LucideIcons.type, size: 16),
-                    label: const Text('Send Diagnostic Print'),
-                  ),
-                ),
-              ],
-            );
-
-            if (useHorizontal) {
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: styleCard),
-                  const SizedBox(width: 24),
-                  Expanded(child: hardwareCard),
-                ],
-              );
-            } else {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  styleCard,
-                  hardwareCard,
-                ],
-              );
-            }
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildNetworkingSection() {
-    final serverRunning = LocalServerService.instance.isRunning;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'NETWORKING & MULTI-DEVICE SYNC',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.5,
-                  color: Colors.orange,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Configure this PC to run as the main Hub or a Terminal Client, and view sync connection links.',
-                style: TextStyle(fontSize: 12, color: context.textMutedColor),
-              ),
-            ],
-          ),
-        ),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final useHorizontal = constraints.maxWidth > 1000;
-            
-            final roleCard = SettingsSection(
-              title: 'Connection Role',
-              icon: LucideIcons.cpu,
-              children: [
-                SettingsSwitch(
-                  title: 'Act as Terminal (Client Mode)',
-                  subtitle: 'Enable this if this PC should connect to a Main Hub PC instead of being the Hub itself.',
-                  value: _isWindowsClient,
-                  icon: LucideIcons.monitorSpeaker,
-                  onChanged: (val) {
-                    setState(() => _isWindowsClient = val);
-                    if (val) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                        content: Text('App will restart in Client Mode after saving.'),
-                        backgroundColor: AppTheme.warning,
-                      ));
-                    }
-                  },
-                ),
-              ],
-            );
-
-            final serverCard = SettingsSection(
-              title: _isWindowsClient ? 'Terminal Status' : 'Local Hub Server',
-              icon: _isWindowsClient ? LucideIcons.link : LucideIcons.server,
-              children: !_isWindowsClient ? [
-                Row(
-                  children: [
-                    Icon(
-                      LucideIcons.activity,
-                      color: serverRunning ? AppTheme.success : AppTheme.danger,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      serverRunning ? 'Sync Server: ACTIVE' : 'Sync Server: STOPPED',
-                      style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                SettingsField(controller: _portCtrl, label: 'Hub Sync Port', icon: LucideIcons.hash, keyboardType: TextInputType.number),
-                const Text(
-                  'Android clients must specify this port to connect to this Hub.',
-                  style: TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic),
-                ),
-                const Divider(height: 32),
-                _buildInfoCard(
-                  'Local Network Address',
-                  _hubIp ?? 'Finding IP...',
-                  LucideIcons.wifi,
-                  'Use this IP in the companion app while on the same Wi-Fi.',
-                ),
-                const SizedBox(height: 16),
-                _buildInfoCard(
-                  'Cloudflare Tunnel Link',
-                  CloudflareService.instance.currentUrl ?? 'No active tunnel',
-                  LucideIcons.globe,
-                  'Use this URL to connect remotely from anywhere in the world.',
-                  isLink: true,
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      showDialog(
-                        context: context,
-                        barrierDismissible: false,
-                        builder: (ctx) => const AlertDialog(
-                          content: Row(
-                            children: [
-                              CircularProgressIndicator(),
-                              SizedBox(width: 20),
-                              Text('Redeploying Cloudflare Tunnel...'),
-                            ],
-                          ),
-                        ),
-                      );
-                      try {
-                        await CloudflareService.instance.redeploy();
-                        if (context.mounted) {
-                          Navigator.of(context).pop();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Cloudflare Tunnel redeployed successfully!')),
-                          );
-                          setState(() {});
-                        }
-                      } catch (e) {
-                        if (context.mounted) {
-                          Navigator.of(context).pop();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Redeployment failed: $e')),
-                          );
-                        }
-                      }
-                    },
-                    icon: const Icon(LucideIcons.refreshCw, size: 16),
-                    label: const Text('Redeploy Cloudflare Tunnel'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.primary,
-                      side: const BorderSide(color: AppTheme.primary),
-                    ),
-                  ),
-                ),
-              ] : [
-                const Text(
-                  'This PC is currently acting as a Terminal Client. It will connect to the master Hub for all data.',
-                  style: TextStyle(fontSize: 13),
-                ),
-                const SizedBox(height: 16),
-                _buildInfoCard(
-                  'Connected Hub IP',
-                  context.watch<SyncService>().hubIp ?? 'Not Connected',
-                  LucideIcons.server,
-                  'The IP address of the main Windows Hub.',
-                ),
-              ],
-            );
-
-            if (useHorizontal) {
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: roleCard),
-                  const SizedBox(width: 24),
-                  Expanded(child: serverCard),
-                ],
-              );
-            } else {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  roleCard,
-                  serverCard,
-                ],
-              );
-            }
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInfoCard(String title, String value, IconData icon, String hint, {bool isLink = false}) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.borderColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 16, color: AppTheme.primaryLight),
-              const SizedBox(width: 12),
-              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              const Spacer(),
-              IconButton(
-                icon: const Icon(LucideIcons.copy, size: 14),
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: value));
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied to clipboard')));
-                },
-                tooltip: 'Copy',
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: isLink ? AppTheme.primary : context.textColor,
-              decoration: isLink ? TextDecoration.underline : null,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(hint, style: TextStyle(fontSize: 11, color: context.textMutedColor)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInventorySection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'INVENTORY ALERTS & THRESHOLDS',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.5,
-                  color: Colors.teal,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Adjust critical stock alerts and expiry warning ranges for catalog medicines.',
-                style: TextStyle(fontSize: 12, color: context.textMutedColor),
-              ),
-            ],
-          ),
-        ),
-        SettingsSection(
-          title: 'Threshold Monitoring',
-          icon: LucideIcons.alertCircle,
-          children: [
-            SettingsField(controller: _lowStockCtrl, label: 'Low Stock Level', icon: LucideIcons.alertTriangle, keyboardType: TextInputType.number),
-            SettingsField(controller: _nearExpiryCtrl, label: 'Expiry Warning (Days)', icon: LucideIcons.timer, keyboardType: TextInputType.number),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFeatureCard({
-    required BuildContext context,
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required Color accentColor,
-    required List<Widget> actions,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Theme.of(context).brightness == Brightness.dark
-            ? AppTheme.darkCard
-            : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.outline.withValues(alpha: 0.08)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.01),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(icon, color: accentColor, size: 24),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, letterSpacing: -0.2),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'DATABASE ACTION',
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w900,
-                        color: accentColor,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: Text(
-              subtitle,
-              style: TextStyle(color: context.textMutedColor, fontSize: 12, height: 1.5, fontWeight: FontWeight.w500),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(children: actions),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDataSection(SettingsProvider settingsProv) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'DATA MANAGEMENT CONTROL CENTER',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.5,
-                  color: AppTheme.primaryLight,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Configure catalog exchange sheets, raw snapshots, modular recovery zips, or export legal ledger audits.',
-                style: TextStyle(fontSize: 12, color: context.textMutedColor),
-              ),
-            ],
-          ),
-        ),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final cols = constraints.maxWidth > 900 ? 2 : 1;
-            return GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: cols,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-              childAspectRatio: cols == 2 ? 1.6 : 2.0,
-              children: [
-                // 1. Excel Card
-                _buildFeatureCard(
-                  context: context,
-                  title: 'Excel Data Exchange',
-                  subtitle: 'Bulk export collection catalog or import stock lists directly to/from MS Excel sheets.',
-                  icon: LucideIcons.fileSpreadsheet,
-                  accentColor: AppTheme.emerald,
-                  actions: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _exportExcel(),
-                        icon: const Icon(LucideIcons.fileOutput, size: 16),
-                        label: const Text('Export Collection', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.emerald,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _importExcel(),
-                        icon: const Icon(LucideIcons.plusCircle, size: 16),
-                        label: const Text('Import Catalog', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppTheme.emerald,
-                          side: const BorderSide(color: AppTheme.emerald),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                // 2. MDB Database Card
-                _buildFeatureCard(
-                  context: context,
-                  title: 'Direct Database Snap (.mdb)',
-                  subtitle: 'Low-level direct backup copy of the ObjectBox database files. Overwriting completely resets local tables.',
-                  icon: LucideIcons.database,
-                  accentColor: AppTheme.indigo,
-                  actions: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _backupDatabase(),
-                        icon: const Icon(LucideIcons.save, size: 16),
-                        label: const Text('Download .mdb', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.indigo,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _restoreDatabase(),
-                        icon: const Icon(LucideIcons.history, size: 16),
-                        label: const Text('Restore .mdb', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppTheme.danger,
-                          side: const BorderSide(color: AppTheme.danger),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                // 3. Zip Archives Card
-                _buildFeatureCard(
-                  context: context,
-                  title: 'Full System JSON Backups',
-                  subtitle: 'Local .zip package backups including modular database JSON tables, patient photos, and doctor prescriptions.',
-                  icon: LucideIcons.archive,
-                  accentColor: AppTheme.primary,
-                  actions: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _backupJsonGranular(),
-                        icon: const Icon(LucideIcons.archive, size: 16),
-                        label: const Text('Export Backup', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primary,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _restoreJsonGranular(),
-                        icon: const Icon(LucideIcons.history, size: 16),
-                        label: const Text('Restore Backup', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppTheme.primary,
-                          side: const BorderSide(color: AppTheme.primary),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    IconButton(
-                      tooltip: 'Open Automated Backups Folder',
-                      icon: const Icon(LucideIcons.folder, size: 18),
-                      onPressed: () async {
-                        final appSupportDir = await getApplicationSupportDirectory();
-                        final backupDir = Directory(p.join(appSupportDir.path, 'backups'));
-                        if (await backupDir.exists()) {
-                          launchUrl(Uri.file(backupDir.path));
-                        } else {
-                          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No automated backups created yet.')));
-                        }
-                      },
-                      style: IconButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: AppTheme.primary.withValues(alpha: 0.3)),
-                        ),
-                        padding: const EdgeInsets.all(14),
-                      ),
-                    ),
-                  ],
-                ),
-                // 4. Audits Card
-                _buildFeatureCard(
-                  context: context,
-                  title: 'Comprehensive Audits',
-                  subtitle: 'Exports readable spreadsheets detailing stocks, internal transfers (with names), sales history, patients, and clinical prescriptions.',
-                  icon: LucideIcons.clipboardCheck,
-                  accentColor: AppTheme.sky,
-                  actions: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () async {
-                          String? defaultDir;
-                          try {
-                            defaultDir = Platform.isWindows
-                                ? '${Platform.environment['USERPROFILE']}\\Downloads'
-                                : (await getDownloadsDirectory())?.path;
-                          } catch (_) {}
-
-                          final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
-                          final fileName = 'MediPoss_Audit_Report_$timestamp.xlsx';
-
-                          final outputPath = await FilePicker.platform.saveFile(
-                            dialogTitle: 'Save Audit Report',
-                            fileName: fileName,
-                            initialDirectory: defaultDir,
-                            type: FileType.custom,
-                            allowedExtensions: ['xlsx'],
-                          );
-
-                          if (outputPath == null) return; // User cancelled
-
-                          final file = await AuditExportService.generateAuditReport(customPath: outputPath);
-                          if (file != null && mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                              content: Text('Audit Report Saved to: ${file.path}'),
-                              backgroundColor: AppTheme.success,
-                            ));
-                          } else if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                              content: Text('Failed to generate Audit Report'),
-                              backgroundColor: AppTheme.danger,
-                            ));
-                          }
-                        },
-                        icon: const Icon(LucideIcons.fileSpreadsheet, size: 16),
-                        label: const Text('Generate Audit Report (.xlsx)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.sky,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                // 5. Demo Data Seeding Card
-                _buildFeatureCard(
-                  context: context,
-                  title: 'Demo Data Seeding',
-                  subtitle: 'Populate database with 6 months of realistic data: 30 patients, 30 dispenses, 20 retail sales daily (avg cart value 1500, avg 5 items), and 10 stock transfers daily.',
-                  icon: LucideIcons.database,
-                  accentColor: Colors.purple,
-                  actions: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _seedCustomDemoData(),
-                        icon: const Icon(LucideIcons.playCircle, size: 16),
-                        label: const Text('Seed 6-Month Data', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.purple,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 24),
-        SettingsSection(
-          title: 'System Audit Logs Policy',
-          icon: LucideIcons.shieldAlert,
-          children: [
-            SettingsDropdown<int>(
-              title: 'Keep Audit Logs For',
-              value: _auditRetentionDays,
-              icon: LucideIcons.history,
-              items: const [
-                DropdownMenuItem(value: 0, child: Text('Keep Forever')),
-                DropdownMenuItem(value: 30, child: Text('30 Days')),
-                DropdownMenuItem(value: 90, child: Text('90 Days')),
-                DropdownMenuItem(value: 180, child: Text('180 Days')),
-                DropdownMenuItem(value: 365, child: Text('1 Year')),
-                DropdownMenuItem(value: 730, child: Text('2 Years')),
-                DropdownMenuItem(value: 1095, child: Text('3 Years')),
-              ],
-              onChanged: (val) {
-                if (val != null) {
-                  setState(() => _auditRetentionDays = val);
-                }
-              },
-            ),
-          ],
-        ),
-      ],
-    );
   }
 
   // Staff and Doctor sections are now embedded directly via UserManagementWindows and DoctorListWindows

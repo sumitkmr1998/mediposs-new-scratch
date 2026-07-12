@@ -178,6 +178,8 @@ class _StockLevelsTab extends StatelessWidget {
     final inv = context.watch<InventoryProvider>();
     final wh = context.read<WarehouseProvider>();
     final auth = context.watch<AuthProvider>();
+    final sales = context.watch<SalesProvider>().rawSales;
+    final filteredMeds = inv.getFilteredMedicines(sales);
 
     return CustomScrollView(
       slivers: [
@@ -206,13 +208,19 @@ class _StockLevelsTab extends StatelessWidget {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(child: _SortDropdown(onChanged: (v) {
-                      if (v != null) inv.setSort(v);
-                    })),
+                    Expanded(child: _SortDropdown(
+                      value: inv.sortBy,
+                      onChanged: (v) {
+                        if (v != null) inv.setSort(v);
+                      },
+                    )),
                     const SizedBox(width: 8),
-                    Expanded(child: _FilterDropdownLoc(onChanged: (v) {
-                      if (v != null) inv.setFilter(v);
-                    })),
+                    Expanded(child: _FilterDropdownLoc(
+                      value: inv.filterWarehouse,
+                      onChanged: (v) {
+                        if (v != null) inv.setFilter(v);
+                      },
+                    )),
                   ],
                 ),
               ],
@@ -224,14 +232,14 @@ class _StockLevelsTab extends StatelessWidget {
           sliver: SliverList(
             delegate: SliverChildBuilderDelegate(
               (context, i) {
-                final m = inv.medicines[i];
+                final m = filteredMeds[i];
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: _ModernMedicineCard(
                       medicine: m, wh: wh, auth: auth, inv: inv),
                 );
               },
-              childCount: inv.medicines.length,
+              childCount: filteredMeds.length,
             ),
           ),
         ),
@@ -1263,8 +1271,9 @@ class _TransferHistoryTabState extends State<_TransferHistoryTab> {
 }
 
 class _SortDropdown extends StatelessWidget {
+  final String value;
   final ValueChanged<String?> onChanged;
-  const _SortDropdown({required this.onChanged});
+  const _SortDropdown({required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -1276,6 +1285,7 @@ class _SortDropdown extends StatelessWidget {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
+          value: value,
           isExpanded: true,
           hint: const Text('Sort By',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
@@ -1285,8 +1295,8 @@ class _SortDropdown extends StatelessWidget {
               fontWeight: FontWeight.w600),
           items: const [
             DropdownMenuItem(value: 'name', child: Text('Medicine Name')),
-            DropdownMenuItem(value: 'stock_low', child: Text('Lowest Stock')),
-            DropdownMenuItem(value: 'price_high', child: Text('Highest Price')),
+            DropdownMenuItem(value: 'stock', child: Text('Lowest Stock')),
+            DropdownMenuItem(value: 'price', child: Text('Highest Price')),
           ],
           onChanged: onChanged,
         ),
@@ -1296,8 +1306,9 @@ class _SortDropdown extends StatelessWidget {
 }
 
 class _FilterDropdownLoc extends StatelessWidget {
+  final String value;
   final ValueChanged<String?> onChanged;
-  const _FilterDropdownLoc({required this.onChanged});
+  const _FilterDropdownLoc({required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -1309,6 +1320,7 @@ class _FilterDropdownLoc extends StatelessWidget {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
+          value: value,
           isExpanded: true,
           hint: const Text('Filter Area',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
@@ -1318,8 +1330,8 @@ class _FilterDropdownLoc extends StatelessWidget {
               fontWeight: FontWeight.w600),
           items: const [
             DropdownMenuItem(value: 'all', child: Text('All Stock')),
-            DropdownMenuItem(value: 'low', child: Text('Low Stock Alert')),
-            DropdownMenuItem(value: 'out', child: Text('Out of Stock')),
+            DropdownMenuItem(value: 'low-stock', child: Text('Low Stock Alert')),
+            DropdownMenuItem(value: 'main-empty', child: Text('Out of Stock')),
           ],
           onChanged: onChanged,
         ),
