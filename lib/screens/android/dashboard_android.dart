@@ -1116,7 +1116,11 @@ class _InventoryAlertsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (inv.lowStockCount == 0 && inv.nearExpiryCount == 0 && inv.expiredCount == 0) return const SizedBox.shrink();
+    final sales = context.watch<SalesProvider>().rawSales;
+    final smartLowCount = inv.getSmartLowStockCount(sales);
+    final smartLowMeds = inv.getSmartLowStockMedicines(sales);
+
+    if (smartLowCount == 0 && inv.nearExpiryCount == 0 && inv.expiredCount == 0) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1127,10 +1131,10 @@ class _InventoryAlertsSection extends StatelessWidget {
         ),
         _ExpandableHealthCard(
           label: 'Low Stock',
-          count: inv.lowStockCount,
+          count: smartLowCount,
           color: AppTheme.warning,
           icon: Icons.warning_amber_rounded,
-          items: inv.lowStockMedicines,
+          items: smartLowMeds,
           subtitleBuilder: (m) => 'Store: ${m.storeStock} | Main: ${m.mainStock}',
         ),
         const SizedBox(height: 12),

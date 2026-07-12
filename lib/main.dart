@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'shared/services/objectbox_service.dart';
 import 'shared/services/sync_service.dart';
+import 'shared/services/sync/sync_facade.dart';
 import 'shared/providers/auth_provider.dart';
 import 'shared/providers/settings_provider.dart';
 import 'shared/providers/inventory_provider.dart';
@@ -276,6 +277,7 @@ void main(List<String> args) async {
         ChangeNotifierProvider.value(value: warehouseProvider),
         ChangeNotifierProvider.value(value: cartProvider),
         ChangeNotifierProvider.value(value: syncService),
+        ChangeNotifierProvider.value(value: SyncFacade.instance),
         ChangeNotifierProvider.value(value: wsService),
         ChangeNotifierProvider.value(value: patientProvider),
         ChangeNotifierProvider.value(value: opdProvider),

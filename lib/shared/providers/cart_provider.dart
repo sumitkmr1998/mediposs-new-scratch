@@ -25,6 +25,7 @@ import '../models/patient.dart';
 import '../models/prescription.dart';
 import 'patient_provider.dart';
 import 'procedure_provider.dart';
+import '../domain/sale_calculator.dart';
 
 class CartItem {
   final Medicine? medicine;
@@ -168,19 +169,23 @@ class CartProvider extends ChangeNotifier {
     return appt?.consultationFee ?? 0.0;
   }
 
-  double get subtotal => _items.fold(0.0, (sum, item) => sum + item.lineTotal);
+  SaleTotals get _totals => SaleCalculator.calculate(
+        items: _items,
+        discountAmount: _discountAmount,
+        storeTaxRate: ObjectBoxService.instance.settings.taxRate,
+        isClinicalDispense: _isClinicalDispense,
+        isCompositionScheme: ObjectBoxService.instance.settings.isCompositionScheme,
+      );
 
-  double get taxRate => (_isClinicalDispense || ObjectBoxService.instance.settings.isCompositionScheme)
-      ? 0.0
-      : ObjectBoxService.instance.settings.taxRate / 100.0;
+  double get subtotal => _totals.subtotal;
 
-  double get taxAmount =>
-      (subtotal - _discountAmount).clamp(0, double.infinity) * taxRate;
+  double get taxRate => _totals.taxRate;
 
-  double get total =>
-      (subtotal - _discountAmount + taxAmount).clamp(0, double.infinity);
+  double get taxAmount => _totals.taxAmount;
 
-  double get totalRounded => (total * 10).round() / 10.0;
+  double get total => _totals.total;
+
+  double get totalRounded => _totals.totalRounded;
 
   bool get isEmpty => _items.isEmpty;
 
@@ -286,10 +291,118 @@ class CartProvider extends ChangeNotifier {
   void setPatient({String? name, String? phone, int? id, String? uhid, String? address}) {
     if (name != null) _patientName = name;
     if (phone != null) _patientPhone = phone;
-    if (id != null) _patientId = id;
+    if (id != null) {
+      final oldId = _patientId;
+      _patientId = id;
+      if (id > 0 && id != oldId && _editingSaleId == null && !_isReturnMode) {
+        Future.microtask(() {
+          checkAndLoadPrescriptionForPatient(id);
+        });
+      }
+    }
     if (uhid != null) _patientUhid = uhid;
     if (address != null) _patientAddress = address;
     notifyListeners();
+  }
+
+  void checkAndLoadPrescriptionForPatient(int patientId) {
+    if (patientId <= 0) return;
+    try {
+      final pBox = ObjectBoxService.instance.prescriptionBox;
+      final prescription = pBox
+          .query(Prescription_.patientId.equals(patientId).and(Prescription_.dispensed.equals(false)))
+          .order(Prescription_.createdAt, flags: Order.descending)
+          .build()
+          .findFirst();
+      if (prescription != null) {
+        debugPrint('CartProvider: Found undispensed prescription ID ${prescription.id} for patient ID $patientId. Auto-loading...');
+        loadPrescriptionIntoCartInternal(prescription);
+      }
+    } catch (e) {
+      debugPrint('CartProvider: Error checking prescription for patient: $e');
+    }
+  }
+
+  void loadPrescriptionIntoCartInternal(Prescription prescription) {
+    clearCart();
+    setClinicalDispense(true);
+    if (prescription.appointmentId != 0) {
+      setLinkedAppointment(prescription.appointmentId);
+    }
+    
+    var patientPhone = '';
+    if (prescription.appointmentId != 0) {
+      final appt = ObjectBoxService.instance.store.box<Appointment>().get(prescription.appointmentId);
+      if (appt != null) {
+        patientPhone = appt.patientPhone;
+      }
+    }
+
+    Patient? patient = ObjectBoxService.instance.patientBox.get(prescription.patientId);
+    _patientName = prescription.patientName;
+    _patientPhone = patient?.phone ?? patientPhone;
+    _patientId = patient?.id ?? 0;
+    _patientUhid = patient?.uhid ?? '';
+    _patientAddress = patient?.address ?? '';
+    setLinkedPrescription(prescription.id);
+
+    final docBox = ObjectBoxService.instance.store.box<Doctor>();
+    var doctorObj = docBox.get(prescription.doctorId);
+    if (doctorObj == null && prescription.doctorName.isNotEmpty) {
+      doctorObj = docBox.query(Doctor_.name.equals(prescription.doctorName, caseSensitive: false)).build().findFirst();
+    }
+    
+    final settings = ObjectBoxService.instance.settings;
+    String doctorAddress = '';
+    if (doctorObj != null && doctorObj.address.trim().isNotEmpty) {
+      doctorAddress = doctorObj.address.trim();
+    } else if (settings.clinicAddress != null && settings.clinicAddress!.trim().isNotEmpty) {
+      doctorAddress = settings.clinicAddress!.trim();
+    } else if (settings.storeAddress.trim().isNotEmpty) {
+      doctorAddress = settings.storeAddress.trim();
+    }
+
+    setH1PrescriptionDetails(
+      doctorName: prescription.doctorName,
+      doctorAddress: doctorAddress,
+      doctorRegistrationNo: doctorObj?.registrationNo ?? '',
+      patientAddress: patient?.address ?? '',
+    );
+
+    // Extract prescription items
+    List<PrescriptionItem> pItems = [];
+    try {
+      final List<dynamic> decoded = jsonDecode(prescription.itemsJson);
+      pItems = decoded.map((j) => PrescriptionItem.fromJson(j)).toList();
+    } catch (_) {}
+
+    for (final pItem in pItems) {
+      final medicine = ObjectBoxService.instance.medicineBox
+          .query(Medicine_.name.equals(pItem.medicineName, caseSensitive: false))
+          .build()
+          .findFirst();
+
+      if (medicine != null) {
+        addItem(medicine, qty: pItem.qty);
+      }
+    }
+
+    // Extract procedures
+    List<String> procedures = [];
+    try {
+      final List<dynamic> decoded = jsonDecode(prescription.proceduresJson);
+      procedures = decoded.cast<String>();
+    } catch (_) {}
+
+    for (final pName in procedures) {
+      final proc = ObjectBoxService.instance.procedureBox
+          .query(Procedure_.name.equals(pName, caseSensitive: false))
+          .build()
+          .findFirst();
+      if (proc != null) {
+        addProcedure(proc);
+      }
+    }
   }
 
   void setH1PrescriptionDetails({required String doctorName, required String doctorAddress, required String doctorRegistrationNo, required String patientAddress}) {

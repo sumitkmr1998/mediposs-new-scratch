@@ -9,6 +9,7 @@ import '../services/sync_queue_service.dart';
 import '../../objectbox.g.dart';
 import 'inventory_provider.dart';
 import 'sales_provider.dart';
+import '../domain/transfer_rules.dart';
 import 'dart:io';
 
 class WarehouseProvider extends ChangeNotifier {
@@ -105,37 +106,15 @@ class WarehouseProvider extends ChangeNotifier {
     SyncService? syncService,
     AppUser? actor,
   }) async {
-    if (actor != null &&
-        !(actor.role.toLowerCase() == 'admin' || actor.canTransferStock)) {
-      return 'Unauthorized: You do not have permission to execute stock transfers.';
-    }
-
-    if (expiryDate != null &&
-        expiryDate.isBefore(DateTime.now()) &&
-        (to == 'main' || to == 'clinic' || to == 'store')) {
-      return 'Validation Error: Cannot transfer expired stock to active retail locations (Clinic/Store). Expired stock must remain in storage bulk locations.';
-    }
-
-    if (qty <= 0) return 'Quantity must be greater than 0';
-
-    int available = 0;
-    if (from == 'main' || from == 'clinic') {
-      available = medicine.mainStock;
-    } else if (from == 'store') available = medicine.storeStock;
-    else if (from == 'bulkClinic') available = medicine.bulkClinicStock;
-    else if (from == 'bulkStore') available = medicine.bulkStoreStock;
-
-    String getLocName(String loc) {
-      if (loc == 'main' || loc == 'clinic') return 'Clinic';
-      if (loc == 'store') return 'Store';
-      if (loc == 'bulkClinic') return 'Clinic Bulk';
-      if (loc == 'bulkStore') return 'Store Bulk';
-      return loc;
-    }
-
-    if (qty > available) {
-      return 'Insufficient stock in ${getLocName(from)} (available: $available)';
-    }
+    final validationError = TransferRules.validateTransfer(
+      medicine: medicine,
+      qty: qty,
+      from: from,
+      to: to,
+      expiryDate: expiryDate,
+      actor: actor,
+    );
+    if (validationError != null) return validationError;
 
     // Update medicine stock via InventoryProvider
     _inventoryProvider.applyTransfer(

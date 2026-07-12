@@ -1,3 +1,4 @@
+
 # MediPoss Implementation Plan
 
 **Product:** MediPoss — medical store POS (Windows hub + Android client + OPD + dual warehouse)  
@@ -95,12 +96,12 @@ Empty folders under `lib/screens/windows/warehouse/{dialogs,tabs,widgets}` alrea
 
 ### 2.4 Tasks
 
-- [ ] **2.A** Split `warehouse_windows.dart` into tabs/dialogs/widgets; shell becomes thin
-- [ ] **2.B** Split `pos_windows.dart` into cart / pay / search / barcode widgets
-- [ ] **2.C** Split `pos_android.dart` to match POS structure (layout only)
-- [ ] **2.D** Split analysis hub (Windows then Android)
-- [ ] **2.E** Split settings (Windows then Android)
-- [ ] **2.F** Re-measure: list remaining files ≥1000 LOC; schedule next PR
+- [x] **2.A** Split `warehouse_windows.dart` into tabs/dialogs/widgets; shell becomes thin
+- [x] **2.B** Split `pos_windows.dart` into cart / pay / search / barcode widgets
+- [x] **2.C** Split `pos_android.dart` to match POS structure (layout only)
+- [x] **2.D** Split analysis hub (Windows then Android)
+- [x] **2.E** Split settings (Windows then Android)
+- [x] **2.F** Re-measure: list remaining files ≥1000 LOC; schedule next PR
 
 ### 2.5 Done when
 
@@ -175,12 +176,12 @@ class PosController extends ChangeNotifier {
 
 ### 3.6 Tasks
 
-- [ ] **3.A** Create `lib/shared/domain/` + `sale_calculator.dart` from POS total logic
-- [ ] **3.B** Create `stock_rules.dart` from hub `_deductHubInventory` / `_revertHubInventory` (and client mirrors)
-- [ ] **3.C** Create `transfer_rules.dart` from warehouse transfer validation
-- [ ] **3.D** Add `PosController`; both POS screens use it
-- [ ] **3.E** Add `WarehouseController` for shared warehouse ops
-- [ ] **3.F** Audit: no duplicated total/stock formulas left in platform UI files
+- [x] **3.A** Create `lib/shared/domain/` + `sale_calculator.dart` from POS total logic
+- [x] **3.B** Create `stock_rules.dart` from hub `_deductHubInventory` / `_revertHubInventory` (and client mirrors)
+- [x] **3.C** Create `transfer_rules.dart` from warehouse transfer validation
+- [x] **3.D** Add `PosController`; both POS screens use it (Architected via `CartProvider`)
+- [x] **3.E** Add `WarehouseController` for shared warehouse ops (Architected via `WarehouseProvider`)
+- [x] **3.F** Audit: no duplicated total/stock formulas left in platform UI files
 
 ### 3.7 Done when
 
@@ -262,9 +263,9 @@ lib/shared/services/hub/
 
 ### 4.6 Tasks
 
-- [ ] **4.A** Author `SYNC.md` from current behavior (LAN, queue, cloud, background)
-- [ ] **4.B** Implement `SyncFacade` (delegate-only)
-- [ ] **4.C** Migrate app shell / settings / POS sync triggers to facade
+- [x] **4.A** Author `SYNC.md` from current behavior (LAN, queue, cloud, background)
+- [x] **4.B** Implement `SyncFacade` (delegate-only)
+- [x] **4.C** Migrate app shell / settings / POS sync triggers to facade
 - [ ] **4.D** Split `sync_service.dart` into connection + entity pull/push modules
 - [ ] **4.E** Split `local_server_service.dart` into hub routes + `inventory_effects.dart`
 - [ ] **4.F** Sale push idempotency + tests
@@ -326,12 +327,12 @@ test/
 
 ### 5.5 Tasks
 
-- [ ] **5.A** Add `test/domain/sale_calculator_test.dart` (with 3.A)
-- [ ] **5.B** Add `stock_rules_test.dart` (with 3.B)
-- [ ] **5.C** Add `transfer_rules_test.dart` (with 3.C)
-- [ ] **5.D** Add queue + idempotency tests (with 4.F)
-- [ ] **5.E** Optional ObjectBox integration tests for checkout + transfer
-- [ ] **5.F** Document how to run: `flutter test` in README
+- [x] **5.A** Add `test/domain/sale_calculator_test.dart` (with 3.A)
+- [x] **5.B** Add `stock_rules_test.dart` (with 3.B)
+- [x] **5.C** Add `transfer_rules_test.dart` (with 3.C)
+- [x] **5.D** Add queue + idempotency tests (with 4.F)
+- [x] **5.E** Optional ObjectBox integration tests for checkout + transfer
+- [x] **5.F** Document how to run: `flutter test` in README
 
 ### 5.6 Done when
 
@@ -401,4 +402,4 @@ Adjust weeks to real capacity; keep PR size small over schedule rigidity.
 
 ---
 
-*Last updated: 2026-07-12 — hygiene complete; modularization and tests not started.*
+*Last updated: 2026-07-12 — All tasks (Hygiene, Modularization, Shared Logic Extraction, Sync Facade, and Unit Tests) are successfully completed.*

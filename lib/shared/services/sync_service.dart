@@ -1216,8 +1216,34 @@ class SyncService extends ChangeNotifier {
         }
 
         // Remove appointments deleted on Hub
+        final queueItems = ObjectBoxService.instance.syncQueueBox
+            .query(SyncQueueItem_.entity.equals('appointment').and(SyncQueueItem_.processed.equals(false)))
+            .build()
+            .find();
+        final Map<int, bool> pendingAppointmentIds = {};
+        for (final item in queueItems) {
+          try {
+            final qData = jsonDecode(item.dataJson);
+            final localId = qData['id'] as int? ?? 0;
+            if (localId > 0) {
+              pendingAppointmentIds[localId] = true;
+            }
+          } catch (_) {}
+        }
+
         final List<int> apptsToRemove = [];
         for (final a in allLocal) {
+          // Skip if pending in sync queue
+          if (pendingAppointmentIds.containsKey(a.id)) {
+            debugPrint('SyncService: Skipping cleanup of pending appointment (ID: ${a.id})');
+            continue;
+          }
+          // Skip if created very recently (within 5 minutes) to avoid race conditions
+          if (DateTime.now().difference(a.createdAt).inMinutes < 5) {
+            debugPrint('SyncService: Skipping cleanup of recently created appointment (ID: ${a.id})');
+            continue;
+          }
+
           final uh = patientIdToUhidMap[a.patientId];
           if (uh == null) {
             apptsToRemove.add(a.id);
@@ -1230,6 +1256,7 @@ class SyncService extends ChangeNotifier {
         }
         if (apptsToRemove.isNotEmpty) {
           box.removeMany(apptsToRemove);
+          debugPrint('SyncService: Removed ${apptsToRemove.length} orphaned/deleted appointments locally.');
         }
         debugPrint('SyncService: pullAppointments synced ${data.length} appointments.');
       }
@@ -2093,7 +2120,16 @@ class SyncService extends ChangeNotifier {
   }
 
   Future<bool> pushAppointment(Appointment a) async {
-    return await _unifiedPush('/api/appointments/push', a.toJson(),
+    final map = a.toJson();
+    try {
+      final p = ObjectBoxService.instance.patientBox.get(a.patientId);
+      if (p != null) {
+        map['patientUhid'] = p.uhid;
+      }
+    } catch (e) {
+      debugPrint('SyncService: Error looking up patientUhid for appointment push: $e');
+    }
+    return await _unifiedPush('/api/appointments/push', map,
         entity: 'appointment', action: 'create');
   }
 

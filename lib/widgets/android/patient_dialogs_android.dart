@@ -8,6 +8,9 @@ import '../../shared/providers/sales_provider.dart';
 import '../../shared/providers/opd_provider.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/services/sync_service.dart';
+import '../../shared/services/objectbox_service.dart';
+import '../../shared/models/prescription.dart';
+import '../../objectbox.g.dart';
 import '../../theme/app_theme.dart';
 
 class AndroidPatientDialogs {
@@ -444,68 +447,77 @@ class _PatientSearchSheetState extends State<_PatientSearchSheet> {
                       itemCount: filteredAppts.length,
                       itemBuilder: (ctx, i) {
                         final a = filteredAppts[i];
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            color: context.surfaceColor.withValues(alpha: 0.9),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))
-                            ],
-                            border: Border.all(
-                                color:
-                                    context.borderColor.withValues(alpha: 0.2)),
-                          ),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 6),
-                            leading: Container(
-                              width: 44, height: 44,
-                              decoration: BoxDecoration(
-                                color: AppTheme.primary.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  '#${a.tokenNumber}',
-                                  style: const TextStyle(
-                                    color: AppTheme.primary,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w900,
+                        final pres = ObjectBoxService.instance.prescriptionBox
+                            .query(Prescription_.appointmentId.equals(a.id))
+                            .build()
+                            .findFirst();
+                        final isDispensed = pres?.dispensed == true || a.status == 'done';
+
+                        return Opacity(
+                          opacity: isDispensed ? 0.4 : 1.0,
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: context.surfaceColor.withValues(alpha: 0.9),
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))
+                              ],
+                              border: Border.all(
+                                  color:
+                                      context.borderColor.withValues(alpha: 0.2)),
+                            ),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 6),
+                              leading: Container(
+                                width: 44, height: 44,
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primary.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '#${a.tokenNumber}',
+                                    style: const TextStyle(
+                                      color: AppTheme.primary,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w900,
+                                    ),
                                   ),
                                 ),
                               ),
+                              title: Text(
+                                a.patientName,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w900, fontSize: 15),
+                              ),
+                              subtitle: Text(
+                                'Dr. ${a.doctorName} • Status: ${a.status}',
+                                style: TextStyle(
+                                    color: context.textMutedColor,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                              trailing: Text(
+                                a.patientPhone,
+                                style: TextStyle(
+                                    color: context.textMutedColor,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                              onTap: () {
+                                Navigator.pop(context);
+                                if (widget.onAppointmentSelected != null) {
+                                  widget.onAppointmentSelected!(a);
+                                } else {
+                                  final patients = context.read<PatientProvider>().patients;
+                                  final p = patients.where((x) => x.id == a.patientId).firstOrNull ??
+                                      (Patient(uhid: '', name: a.patientName, phone: a.patientPhone, gender: 'Male')..id = a.patientId);
+                                  widget.onSelected(p);
+                                }
+                              },
                             ),
-                            title: Text(
-                              a.patientName,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w900, fontSize: 15),
-                            ),
-                            subtitle: Text(
-                              'Dr. ${a.doctorName} • Status: ${a.status}',
-                              style: TextStyle(
-                                  color: context.textMutedColor,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600),
-                            ),
-                            trailing: Text(
-                              a.patientPhone,
-                              style: TextStyle(
-                                  color: context.textMutedColor,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600),
-                            ),
-                            onTap: () {
-                              Navigator.pop(context);
-                              if (widget.onAppointmentSelected != null) {
-                                widget.onAppointmentSelected!(a);
-                              } else {
-                                final patients = context.read<PatientProvider>().patients;
-                                final p = patients.where((x) => x.id == a.patientId).firstOrNull ??
-                                    (Patient(uhid: '', name: a.patientName, phone: a.patientPhone, gender: 'Male')..id = a.patientId);
-                                widget.onSelected(p);
-                              }
-                            },
                           ),
                         );
                       },

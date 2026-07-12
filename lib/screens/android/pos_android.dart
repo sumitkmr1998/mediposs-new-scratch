@@ -17,6 +17,13 @@ import '../../shared/models/procedure.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/opd_provider.dart';
 import '../../shared/models/appointment.dart';
+import 'pos/widgets/cart_item_tile.dart';
+import '../../shared/services/objectbox_service.dart';
+import '../../shared/models/prescription.dart';
+import '../../objectbox.g.dart';
+import 'pos/widgets/mixed_payment_inputs.dart';
+import 'pos/widgets/payment_selector.dart';
+import 'pos/widgets/summary_field.dart';
 
 class PosAndroid extends StatefulWidget {
   const PosAndroid({super.key});
@@ -93,34 +100,6 @@ class _PosAndroidState extends State<PosAndroid> {
     super.dispose();
   }
 
-  FocusNode _getQtyFocusNode(int medicineId) {
-    if (!_qtyFocusNodes.containsKey(medicineId)) {
-      final node = FocusNode();
-      node.addListener(() {
-        if (node.hasFocus && _qtyControllers.containsKey(medicineId)) {
-          final ctrl = _qtyControllers[medicineId]!;
-          ctrl.selection = TextSelection(
-            baseOffset: 0,
-            extentOffset: ctrl.text.length,
-          );
-        }
-      });
-      _qtyFocusNodes[medicineId] = node;
-    }
-    return _qtyFocusNodes[medicineId]!;
-  }
-
-  TextEditingController _getQtyController(int medicineId, int qty) {
-    if (!_qtyControllers.containsKey(medicineId)) {
-      _qtyControllers[medicineId] = TextEditingController(text: qty.toString());
-    } else {
-      if (!_qtyFocusNodes[medicineId]!.hasFocus) {
-        _qtyControllers[medicineId]!.text = qty.toString();
-      }
-    }
-    return _qtyControllers[medicineId]!;
-  }
-
   void _syncControllersWithCart() {
     final cart = context.read<CartProvider>();
     _patientCtrl.text = cart.patientName;
@@ -136,12 +115,6 @@ class _PosAndroidState extends State<PosAndroid> {
 
     _searchCtrl.clear();
     _currentSearchFocusNode?.requestFocus();
-  }
-
-  void _onMedicineAddedToCart(int medicineId) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _getQtyFocusNode(medicineId).requestFocus();
-    });
   }
 
   void _handleClinicalDispenseToggle(bool val, CartProvider cart) {
@@ -208,62 +181,71 @@ class _PosAndroidState extends State<PosAndroid> {
                   itemCount: activeAppts.length,
                   itemBuilder: (c, i) {
                     final a = activeAppts[i];
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: context.surfaceColor.withValues(alpha: 0.9),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: context.borderColor.withValues(alpha: 0.2),
-                        ),
-                      ),
-                      child: ListTile(
-                        leading: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: AppTheme.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
+                    final pres = ObjectBoxService.instance.prescriptionBox
+                        .query(Prescription_.appointmentId.equals(a.id))
+                        .build()
+                        .findFirst();
+                    final isDispensed = pres?.dispensed == true || a.status == 'done';
+
+                    return Opacity(
+                      opacity: isDispensed ? 0.4 : 1.0,
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: context.surfaceColor.withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: context.borderColor.withValues(alpha: 0.2),
                           ),
-                          child: Center(
-                            child: Text(
-                              '#${a.tokenNumber}',
-                              style: const TextStyle(
-                                color: AppTheme.primary,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w900,
+                        ),
+                        child: ListTile(
+                          leading: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: AppTheme.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Center(
+                              child: Text(
+                                '#${a.tokenNumber}',
+                                style: const TextStyle(
+                                  color: AppTheme.primary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w900,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        title: Text(
-                          a.patientName,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 16,
+                          title: Text(
+                            a.patientName,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16,
+                            ),
                           ),
-                        ),
-                        subtitle: Text(
-                          'Doctor: Dr. ${a.doctorName} • Status: ${a.status.toUpperCase()}',
-                          style: TextStyle(
-                            color: context.textMutedColor,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
+                          subtitle: Text(
+                            'Doctor: Dr. ${a.doctorName} • Status: ${a.status.toUpperCase()}',
+                            style: TextStyle(
+                              color: context.textMutedColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
+                          onTap: () {
+                            final patient = context.read<PatientProvider>().getById(a.patientId);
+                            cart.setPatient(
+                              name: a.patientName,
+                              phone: a.patientPhone,
+                              id: a.patientId,
+                              uhid: patient?.uhid,
+                            );
+                            _patientCtrl.text = a.patientName;
+                            cart.setLinkedAppointment(a.id);
+                            cart.setClinicalDispense(true);
+                            Navigator.pop(ctx);
+                          },
                         ),
-                        onTap: () {
-                          final patient = context.read<PatientProvider>().getById(a.patientId);
-                          cart.setPatient(
-                            name: a.patientName,
-                            phone: a.patientPhone,
-                            id: a.patientId,
-                            uhid: patient?.uhid,
-                          );
-                          _patientCtrl.text = a.patientName;
-                          cart.setLinkedAppointment(a.id);
-                          cart.setClinicalDispense(true);
-                          Navigator.pop(ctx);
-                        },
                       ),
                     );
                   },
@@ -292,7 +274,7 @@ class _PosAndroidState extends State<PosAndroid> {
           return false;
         }
       }
-      
+
       if (pName.isEmpty) {
         cart.setPatient(name: '', phone: '', id: 0, uhid: '');
       } else {
@@ -500,7 +482,7 @@ class _PosAndroidState extends State<PosAndroid> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  _SummaryField(
+                  SummaryField(
                     label: 'Subtotal',
                     value: '₹${cart.subtotal.toStringAsFixed(2)}',
                   ),
@@ -552,56 +534,16 @@ class _PosAndroidState extends State<PosAndroid> {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  Text(
-                    'Payment Method',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: context.textMutedColor),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _PayChip(
-                        id: 'cash',
-                        label: 'Cash',
-                        selected: _paymentMethod,
-                        onTap: (val) {
-                          setSheetState(() => _paymentMethod = val);
-                          setState(() => _paymentMethod = val);
-                        },
-                      ),
-                      _PayChip(
-                        id: 'upi',
-                        label: 'UPI',
-                        selected: _paymentMethod,
-                        onTap: (val) {
-                          setSheetState(() => _paymentMethod = val);
-                          setState(() => _paymentMethod = val);
-                        },
-                      ),
-                      _PayChip(
-                        id: 'card',
-                        label: 'Card',
-                        selected: _paymentMethod,
-                        onTap: (val) {
-                          setSheetState(() => _paymentMethod = val);
-                          setState(() => _paymentMethod = val);
-                        },
-                      ),
-                      _PayChip(
-                        id: 'mixed',
-                        label: 'Mixed',
-                        selected: _paymentMethod,
-                        onTap: (val) {
-                          setSheetState(() => _paymentMethod = val);
-                          setState(() => _paymentMethod = val);
-                        },
-                      ),
-                    ],
+                  PaymentSelector(
+                    selected: _paymentMethod,
+                    onSelected: (val) {
+                      setSheetState(() => _paymentMethod = val);
+                      setState(() => _paymentMethod = val);
+                    },
                   ),
                   if (_paymentMethod == 'mixed') ...[
                     const SizedBox(height: 16),
-                    _MixedPaymentInputs(
+                    MixedPaymentInputs(
                       cashCtrl: _mixCashCtrl,
                       upiCtrl: _mixUpiCtrl,
                       cardCtrl: _mixCardCtrl,
@@ -1141,7 +1083,7 @@ class _PosAndroidState extends State<PosAndroid> {
                         color: context.borderColor.withValues(alpha: 0.1)),
                     itemBuilder: (ctx, i) {
                       final item = cart.items[i];
-                      return _CartItemTile(
+                      return CartItemTile(
                         item: item,
                         onRemove: () => cart.removeItem(item.id, isProcedure: item.isProcedure),
                         onLongPress: () => _showItemContextMenu(item, cart),
@@ -1154,392 +1096,6 @@ class _PosAndroidState extends State<PosAndroid> {
             _buildStickyBottomBar(cart),
         ],
       ),
-    );
-  }
-}
-
-class _SummaryField extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color? color;
-
-  const _SummaryField({
-    required this.label,
-    required this.value,
-    this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: context.textMutedColor,
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              color: color ?? context.textColor,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PaymentSelector extends StatelessWidget {
-  final String selected;
-  final ValueChanged<String> onSelected;
-
-  const _PaymentSelector({
-    required this.selected,
-    required this.onSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Payment Method',
-            style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: context.textMutedColor)),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _PayChip(
-                id: 'cash',
-                label: 'Cash',
-                selected: selected,
-                onTap: onSelected),
-            _PayChip(
-                id: 'upi', label: 'UPI', selected: selected, onTap: onSelected),
-            _PayChip(
-                id: 'card',
-                label: 'Card',
-                selected: selected,
-                onTap: onSelected),
-            _PayChip(
-                id: 'mixed',
-                label: 'Mixed',
-                selected: selected,
-                onTap: onSelected),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _PayChip extends StatelessWidget {
-  final String id;
-  final String label;
-  final String selected;
-  final ValueChanged<String> onTap;
-
-  const _PayChip({
-    required this.id,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isSelected = selected == id;
-    return GestureDetector(
-      onTap: () => onTap(id),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primary : context.surfaceColor,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-              color: isSelected ? AppTheme.primary : context.borderColor),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                      color: AppTheme.primary.withValues(alpha: 0.3),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2))
-                ]
-              : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : context.textMutedColor,
-            fontWeight: FontWeight.w800,
-            fontSize: 12,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MixedPaymentInputs extends StatelessWidget {
-  final TextEditingController cashCtrl, upiCtrl, cardCtrl;
-  final FocusNode cashFocus, upiFocus, cardFocus;
-
-  const _MixedPaymentInputs({
-    required this.cashCtrl,
-    required this.upiCtrl,
-    required this.cardCtrl,
-    required this.cashFocus,
-    required this.upiFocus,
-    required this.cardFocus,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-            child: _MixedField(
-                label: 'Cash',
-                controller: cashCtrl,
-                focusNode: cashFocus,
-                onSubmitted: () => upiFocus.requestFocus())),
-        const SizedBox(width: 8),
-        Expanded(
-            child: _MixedField(
-                label: 'UPI',
-                controller: upiCtrl,
-                focusNode: upiFocus,
-                onSubmitted: () => cardFocus.requestFocus())),
-        const SizedBox(width: 8),
-        Expanded(
-            child: _MixedField(
-          label: 'Card',
-          controller: cardCtrl,
-          focusNode: cardFocus,
-        )),
-      ],
-    );
-  }
-}
-
-class _CartItemTile extends StatelessWidget {
-  final CartItem item;
-  final VoidCallback onRemove;
-  final VoidCallback onLongPress;
-
-  const _CartItemTile({
-    required this.item,
-    required this.onRemove,
-    required this.onLongPress,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cart = context.watch<CartProvider>();
-    final maxStock = item.isProcedure ? 9999 : (cart.isClinicalDispense ? item.medicine!.getNonExpiredMainStock() : item.medicine!.getNonExpiredStoreStock());
-
-    return GestureDetector(
-      onLongPress: onLongPress,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: context.borderColor.withValues(alpha: 0.05))),
-        ),
-        child: Row(
-          children: [
-            // Sleek Rounded Quantity Selector
-            Container(
-              decoration: BoxDecoration(
-                color: context.surfaceColor,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: context.borderColor.withValues(alpha: 0.15)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.remove_rounded, size: 16),
-                    onPressed: item.qty > 1
-                        ? () => cart.updateQty(item.id, item.qty - 1, isProcedure: item.isProcedure)
-                        : onRemove,
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                    color: AppTheme.primary,
-                  ),
-                  GestureDetector(
-                    onTap: () => _showManualQtyDialog(context, cart, maxStock),
-                    child: Container(
-                      constraints: const BoxConstraints(minWidth: 28),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '${item.qty}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 14,
-                          color: AppTheme.primary,
-                        ),
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add_rounded, size: 16),
-                    onPressed: (item.isProcedure || cart.isReturnMode || item.qty < maxStock)
-                        ? () => cart.updateQty(item.id, item.qty + 1, isProcedure: item.isProcedure)
-                        : null,
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                    color: AppTheme.primary,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.name.toUpperCase(),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                      letterSpacing: 0.3,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      _Tag(
-                        label: '₹${item.isProcedure ? (item.customPrice ?? item.procedure!.basePrice).toStringAsFixed(0) : item.medicine!.sellingPrice.toStringAsFixed(0)}',
-                        color: context.textMutedColor,
-                      ),
-                      const SizedBox(width: 4),
-                      _Tag(
-                        label: item.isProcedure
-                            ? 'PROCEDURE'
-                            : 'BATCH: ${(item.medicine!.getActiveBatch(cart.isClinicalDispense) ?? (item.medicine!.batches.isNotEmpty ? item.medicine!.batches.first : null))?.batchNo ?? "N/A"}',
-                        color: AppTheme.accent,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              '₹${item.lineTotal.toStringAsFixed(0)}',
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 15,
-                letterSpacing: -0.5,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showManualQtyDialog(BuildContext context, CartProvider cart, int maxStock) {
-    final ctrl = TextEditingController(text: item.qty.toString());
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Enter Quantity', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: TextInputType.number,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: 'Max: $maxStock',
-            suffixText: item.isProcedure ? '' : item.medicine!.unit,
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL')),
-          ElevatedButton(
-            onPressed: () {
-              final val = int.tryParse(ctrl.text);
-              if (val != null && val > 0) {
-                int finalQty = val;
-                if (!item.isProcedure && !cart.isReturnMode && finalQty > maxStock) {
-                  finalQty = maxStock;
-                }
-                cart.updateQty(item.id, finalQty, isProcedure: item.isProcedure);
-              }
-              Navigator.pop(ctx);
-            },
-            child: const Text('SET'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Tag extends StatelessWidget {
-  final String label;
-  final Color color;
-  const _Tag({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
-      ),
-      child: Text(label,
-          style: TextStyle(
-              color: color, fontSize: 10, fontWeight: FontWeight.w700)),
-    );
-  }
-}
-
-class _MixedField extends StatelessWidget {
-  final String label;
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final VoidCallback? onSubmitted;
-
-  const _MixedField({
-    required this.label,
-    required this.controller,
-    required this.focusNode,
-    this.onSubmitted,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      focusNode: focusNode,
-      keyboardType: TextInputType.number,
-      decoration: InputDecoration(
-        labelText: label,
-        isDense: true,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-      onSubmitted: (_) => onSubmitted?.call(),
     );
   }
 }

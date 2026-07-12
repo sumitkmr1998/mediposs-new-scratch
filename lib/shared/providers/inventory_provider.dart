@@ -9,6 +9,8 @@ import '../services/sync_queue_service.dart';
 import '../services/audit_service.dart';
 import 'dart:io';
 import '../services/local_server_service.dart';
+import '../utils/analytics_helper.dart';
+import '../models/sale.dart';
 import '../../objectbox.g.dart';
 
 class InventoryProvider extends ChangeNotifier {
@@ -36,6 +38,24 @@ class InventoryProvider extends ChangeNotifier {
   int get lowStockCount => _medicines.where((m) => m.isLowStock).length;
   List<Medicine> get lowStockMedicines =>
       _medicines.where((m) => m.isLowStock).toList();
+
+  bool isSmartLowStock(Medicine m, List<Sale> sales) {
+    if (m.totalStock <= 0) return true;
+    final daily = AnalyticsHelper.dailyConsumptionRate(m.id, sales, trendDays: 30);
+    if (daily > 0) {
+      final daysLeft = m.totalStock / daily;
+      return daysLeft < 30;
+    }
+    return m.isLowStock;
+  }
+
+  int getSmartLowStockCount(List<Sale> sales) {
+    return _medicines.where((m) => isSmartLowStock(m, sales)).length;
+  }
+
+  List<Medicine> getSmartLowStockMedicines(List<Sale> sales) {
+    return _medicines.where((m) => isSmartLowStock(m, sales)).toList();
+  }
 
   int get expiredCount => expiredMedicines.length;
   int get nearExpiryCount => nearExpiryMedicines.length;
@@ -73,6 +93,40 @@ class InventoryProvider extends ChangeNotifier {
       _box.put(m);
     }
     load();
+  }
+
+  List<Medicine> getFilteredMedicines(List<Sale> sales) {
+    var list = _medicines.where((m) {
+      final matchesQuery = _searchQuery.isEmpty ||
+          m.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          m.barcode.contains(_searchQuery);
+      final matchesFilter = _filterWarehouse == 'all' ||
+          (_filterWarehouse == 'low-stock' && isSmartLowStock(m, sales)) ||
+          (_filterWarehouse == 'main-empty' && m.mainStock == 0) ||
+          (_filterWarehouse == 'expired' &&
+              m.batches.any((b) =>
+                  b.expiryDate.isBefore(DateTime.now()) &&
+                  (b.mainStock > 0 || b.storeStock > 0))) ||
+          (_filterWarehouse == 'near-expiry' &&
+              m.batches.any((b) =>
+                  b.expiryDate.isAfter(DateTime.now()) &&
+                  b.expiryDate.isBefore(DateTime.now().add(Duration(
+                      days: ObjectBoxService
+                          .instance.settings.nearExpiryThresholdDays))) &&
+                  (b.mainStock > 0 || b.storeStock > 0)));
+      return matchesQuery && matchesFilter;
+    }).toList();
+
+    if (_sortBy == 'name') {
+      list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    } else if (_sortBy == 'price') {
+      list.sort((a, b) =>
+          b.sellingPrice.compareTo(a.sellingPrice)); // Highest price first
+    } else if (_sortBy == 'stock') {
+      list.sort((a, b) => (a.mainStock + a.storeStock)
+          .compareTo(b.mainStock + b.storeStock)); // Lowest config first
+    }
+    return list;
   }
 
   List<Medicine> _filtered() {
