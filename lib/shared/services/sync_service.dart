@@ -52,6 +52,10 @@ class SyncService extends ChangeNotifier {
       if (isHub) return;
 
       if (_isConnected) {
+        if (_isCloudMode) {
+          // In Cloud/Firebase mode, local Hub connectivity is not required.
+          return;
+        }
         if (_hubIp != null) {
           final isReachable = await testConnection(_hubIp!);
           if (!isReachable) {

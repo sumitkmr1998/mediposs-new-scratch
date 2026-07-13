@@ -24,6 +24,7 @@ import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
 import '../../shared/widgets/app_kpi_card.dart';
+import 'medicine_detail_android.dart';
 
 class AnalysisHubScreenAndroid extends StatefulWidget {
   const AnalysisHubScreenAndroid({super.key});
@@ -55,6 +56,31 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
   int _reorderTrendDays = 30;
   int _reorderDepletionDays = 90;
   int _reorderTargetDays = 365;
+
+  String _stockExplorerQuery = '';
+  String _stockExplorerSort = 'name';
+
+  int? _lastSalesLength;
+  final Map<int, double> _velocitiesCache = {};
+  final Map<int, double> _timelinesCache = {};
+
+  double _getVelocity(Medicine m, List<Sale> sales) {
+    if (_lastSalesLength != sales.length) {
+      _velocitiesCache.clear();
+      _timelinesCache.clear();
+      _lastSalesLength = sales.length;
+    }
+    return _velocitiesCache.putIfAbsent(m.id, () => AnalyticsHelper.dailyConsumptionRate(m.id, sales, trendDays: 30));
+  }
+
+  double _getTimeline(Medicine m, List<Sale> sales) {
+    if (_lastSalesLength != sales.length) {
+      _velocitiesCache.clear();
+      _timelinesCache.clear();
+      _lastSalesLength = sales.length;
+    }
+    return _timelinesCache.putIfAbsent(m.id, () => AnalyticsHelper.daysOfStockRemaining(m, sales, trendDays: 30));
+  }
 
   List<Sale> _getFilteredSalesForPerf(List<Sale> sales) {
     final auth = context.read<AuthProvider>();
@@ -140,7 +166,7 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
     if (auth.currentUser != null) {
       if (auth.canViewFinancialAnalytics) {
         _allowedTabTitles.add('Trends');
-        _allowedTabTitles.add('Categories');
+        _allowedTabTitles.add('Stock Explorer');
       }
       if (auth.canViewAnalytics) {
         _allowedTabTitles.add('Explorer');
@@ -214,9 +240,9 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
       if (title == 'Trends') {
         tabWidgets.add(const Tab(child: Text('Trends')));
         tabViews.add(_buildSalesTrendsTab(allSales, allMedicines));
-      } else if (title == 'Categories') {
-        tabWidgets.add(const Tab(child: Text('Categories')));
-        tabViews.add(_buildCategorySalesTab(allSales, allMedicines));
+      } else if (title == 'Stock Explorer') {
+        tabWidgets.add(const Tab(child: Text('Stock Explorer')));
+        tabViews.add(_buildMedicineStockExplorerTab(allSales, allMedicines));
       } else if (title == 'Explorer') {
         tabWidgets.add(const Tab(child: Text('Explorer')));
         tabViews.add(_buildProductPerformanceTab(allSales, allMedicines, allProcedures));
@@ -336,18 +362,34 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
     }
 
     final filteredSales = sales.where((s) => s.createdAt.isAfter(start)).toList();
-    final profitData = AnalyticsHelper.aggregateDailyProfit(filteredSales, medicines);
-
+    
+    final profitData = <DateTime, double>{};
     final medsRevenueData = <DateTime, double>{};
     final procedureRevenueData = <DateTime, double>{};
     final consultationRevenueData = <DateTime, double>{};
 
+    var tempDate = DateTime(start.year, start.month, start.day);
+    final endDate = DateTime(now.year, now.month, now.day);
+    while (tempDate.isBefore(endDate) || tempDate.isAtSameMomentAs(endDate)) {
+      profitData[tempDate] = 0.0;
+      medsRevenueData[tempDate] = 0.0;
+      procedureRevenueData[tempDate] = 0.0;
+      consultationRevenueData[tempDate] = 0.0;
+      tempDate = tempDate.add(const Duration(days: 1));
+    }
+
+    final dailyProfits = AnalyticsHelper.aggregateDailyProfit(filteredSales, medicines);
+    dailyProfits.forEach((day, profit) {
+      final normalizedDay = DateTime(day.year, day.month, day.day);
+      if (profitData.containsKey(normalizedDay)) {
+        profitData[normalizedDay] = profit;
+      }
+    });
+
     final salesProvider = context.read<SalesProvider>();
     for (final s in filteredSales) {
       final day = DateTime(s.createdAt.year, s.createdAt.month, s.createdAt.day);
-      if (!medsRevenueData.containsKey(day)) medsRevenueData[day] = 0.0;
-      if (!procedureRevenueData.containsKey(day)) procedureRevenueData[day] = 0.0;
-      if (!consultationRevenueData.containsKey(day)) consultationRevenueData[day] = 0.0;
+      if (!medsRevenueData.containsKey(day)) continue;
 
       final consultation = salesProvider.getConsultationTotal(s);
       final procedure = salesProvider.getProcedureTotal(s);
@@ -488,13 +530,10 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
             ),
           ),
           _buildSectionChart(
-            title: 'Meds Revenue & Profit Curve',
+            title: 'Medicine Sales Curve',
             data1: medsRevenueData,
             label1: 'Net Sales',
             color1: AppTheme.indigo,
-            data2: profitData,
-            label2: 'Profit',
-            color2: AppTheme.success,
           ),
           _buildSectionChart(
             title: 'Procedure Revenue Curve',
@@ -533,8 +572,12 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        Card(
-          margin: EdgeInsets.zero,
+        Container(
+          decoration: BoxDecoration(
+            color: context.surfaceColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: context.borderColor.withValues(alpha: 0.12)),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: SizedBox(
@@ -545,13 +588,42 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
                       LineChartData(
                         lineTouchData: LineTouchData(
                           handleBuiltInTouches: true,
+                          touchSpotThreshold: 50.0,
+                          getTouchedSpotIndicator: (LineChartBarData barData, List<int> spotIndexes) {
+                            return spotIndexes.map((index) {
+                              return TouchedSpotIndicatorData(
+                                FlLine(
+                                  color: Colors.blueGrey.withOpacity(0.25),
+                                  strokeWidth: 1.0,
+                                  dashArray: [4, 4],
+                                ),
+                                FlDotData(
+                                  show: true,
+                                  getDotPainter: (spot, percent, barData, index) {
+                                    return FlDotCirclePainter(
+                                      radius: 5,
+                                      color: barData.gradient?.colors.first ?? barData.color ?? Colors.blue,
+                                      strokeWidth: 1.5,
+                                      strokeColor: Colors.white,
+                                    );
+                                  },
+                                ),
+                              );
+                            }).toList();
+                          },
                           touchTooltipData: LineTouchTooltipData(
-                            getTooltipColor: (spot) => const Color(0xFF1E293B).withValues(alpha: 0.9),
+                            getTooltipColor: (spot) => const Color(0xFF1E293B).withValues(alpha: 0.95),
                             tooltipPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             getTooltipItems: (touchedSpots) {
                               return touchedSpots.map((spot) {
+                                final idx = spot.x.toInt();
+                                String dateStr = '';
+                                if (idx >= 0 && idx < sortedDates.length) {
+                                  final d = sortedDates[idx];
+                                  dateStr = '${d.day}/${d.month}: ';
+                                }
                                 return LineTooltipItem(
-                                  '₹${spot.y.toStringAsFixed(0)}',
+                                  '$dateStr₹${spot.y.toStringAsFixed(0)}',
                                   const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
@@ -567,9 +639,8 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
                           drawVerticalLine: false,
                           getDrawingHorizontalLine: (value) {
                             return FlLine(
-                              color: Colors.grey.withValues(alpha: 0.1),
-                              strokeWidth: 1,
-                              dashArray: [5, 5],
+                              color: context.borderColor.withValues(alpha: 0.04),
+                              strokeWidth: 0.8,
                             );
                           },
                         ),
@@ -578,12 +649,16 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
                             sideTitles: SideTitles(
                               showTitles: true,
                               reservedSize: 22,
-                              interval: (sortedDates.length / 4).clamp(1.0, double.infinity),
+                              interval: (sortedDates.length / 4).clamp(1.0, double.infinity).ceilToDouble(),
                               getTitlesWidget: (value, meta) {
                                 final idx = value.toInt();
                                 if (idx >= 0 && idx < sortedDates.length) {
                                   final date = sortedDates[idx];
-                                  return Text('${date.day}/${date.month}', style: const TextStyle(fontSize: 9));
+                                  return SideTitleWidget(
+                                    meta: meta,
+                                    space: 8,
+                                    child: Text('${date.day}/${date.month}', style: const TextStyle(fontSize: 9, color: Colors.grey)),
+                                  );
                                 }
                                 return const SizedBox();
                               },
@@ -595,9 +670,9 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
                               reservedSize: 32,
                               getTitlesWidget: (value, meta) {
                                 if (value >= 1000) {
-                                  return Text('${(value / 1000).toStringAsFixed(1)}K', style: const TextStyle(fontSize: 9));
+                                  return Text('${(value / 1000).toStringAsFixed(1)}K', style: const TextStyle(fontSize: 9, color: Colors.grey));
                                 }
-                                return Text(value.toStringAsFixed(0), style: const TextStyle(fontSize: 9));
+                                return Text(value.toStringAsFixed(0), style: const TextStyle(fontSize: 9, color: Colors.grey));
                               },
                             ),
                           ),
@@ -611,16 +686,17 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
                               return FlSpot(e.key.toDouble(), data1[e.value] ?? 0.0);
                             }).toList(),
                             isCurved: true,
+                            preventCurveOverShooting: true,
                             gradient: LinearGradient(
                               colors: [color1, color1.withValues(alpha: 0.7)],
                             ),
-                            barWidth: 3,
+                            barWidth: 2.2,
                             isStrokeCapRound: true,
                             dotData: const FlDotData(show: false),
                             belowBarData: BarAreaData(
                               show: true,
                               gradient: LinearGradient(
-                                colors: [color1.withValues(alpha: 0.2), color1.withValues(alpha: 0.0)],
+                                colors: [color1.withValues(alpha: 0.12), color1.withValues(alpha: 0.0)],
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
                               ),
@@ -632,16 +708,17 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
                                 return FlSpot(e.key.toDouble(), data2[e.value] ?? 0.0);
                               }).toList(),
                               isCurved: true,
+                              preventCurveOverShooting: true,
                               gradient: LinearGradient(
                                 colors: [color2, color2.withValues(alpha: 0.7)],
                               ),
-                              barWidth: 3,
+                              barWidth: 2.2,
                               isStrokeCapRound: true,
                               dotData: const FlDotData(show: false),
                               belowBarData: BarAreaData(
                                 show: true,
                                 gradient: LinearGradient(
-                                  colors: [color2.withValues(alpha: 0.2), color2.withValues(alpha: 0.0)],
+                                  colors: [color2.withValues(alpha: 0.12), color2.withValues(alpha: 0.0)],
                                   begin: Alignment.topCenter,
                                   end: Alignment.bottomCenter,
                                 ),
@@ -707,133 +784,201 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
     );
   }
 
-  // ==========================================
-  // 2. CATEGORY SALES TAB (Optimized for Mobile)
-  // ==========================================
-  Widget _buildCategorySalesTab(List<Sale> sales, List<Medicine> medicines) {
-    final catSales = AnalyticsHelper.getCategorySales(sales, medicines);
-    final sortedCats = catSales.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-    
-    double totalRevenue = catSales.values.fold(0.0, (sum, val) => sum + val);
+  Widget _buildMedicineStockExplorerTab(List<Sale> sales, List<Medicine> medicines) {
 
-    final List<Color> donutColors = [
-      AppTheme.primary,
-      AppTheme.indigo,
-      AppTheme.purple,
-      AppTheme.sky,
-      AppTheme.orange,
-      AppTheme.accent,
-      AppTheme.teal,
-      Colors.pinkAccent,
-      Colors.lightGreen,
-    ];
+    final filtered = medicines.where((m) {
+      final q = _stockExplorerQuery.toLowerCase().trim();
+      return m.name.toLowerCase().contains(q) || m.barcode.contains(q) || m.category.toLowerCase().contains(q);
+    }).toList();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          Card(
-            margin: EdgeInsets.zero,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    filtered.sort((a, b) {
+      if (_stockExplorerSort == 'stock') {
+        return b.totalStock.compareTo(a.totalStock);
+      } else if (_stockExplorerSort == 'velocity') {
+        final velA = _getVelocity(a, sales);
+        final velB = _getVelocity(b, sales);
+        return velB.compareTo(velA);
+      } else if (_stockExplorerSort == 'timeline') {
+        final daysA = _getTimeline(a, sales);
+        final daysB = _getTimeline(b, sales);
+        return daysA.compareTo(daysB);
+      } else {
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      }
+    });
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Column(
+            children: [
+              TextField(
+                onChanged: (val) => setState(() => _stockExplorerQuery = val),
+                decoration: InputDecoration(
+                  hintText: 'Search stock explorer...',
+                  prefixIcon: const Icon(Icons.search),
+                  filled: true,
+                  fillColor: context.surfaceColor,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: context.borderColor.withValues(alpha: 0.15)),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Category Sales Weight', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    height: 180,
-                    child: catSales.isEmpty
-                        ? const Center(child: Text('No categories with sales records.'))
-                        : PieChart(
-                            PieChartData(
-                              pieTouchData: PieTouchData(
-                                touchCallback: (FlTouchEvent event, pieTouchResponse) {
-                                  setState(() {
-                                    if (!event.isInterestedForInteractions ||
-                                        pieTouchResponse == null ||
-                                        pieTouchResponse.touchedSection == null) {
-                                      _touchedIndex = -1;
-                                      return;
-                                    }
-                                    _touchedIndex = pieTouchResponse.touchedSection!.touchedSectionIndex;
-                                  });
-                                },
-                              ),
-                              sectionsSpace: 2,
-                              centerSpaceRadius: 45,
-                              sections: List.generate(sortedCats.length, (i) {
-                                final entry = sortedCats[i];
-                                final percentage = totalRevenue > 0 ? (entry.value / totalRevenue) * 100 : 0.0;
-                                final isTouched = i == _touchedIndex;
-                                final radius = isTouched ? 35.0 : 25.0;
-                                return PieChartSectionData(
-                                  color: donutColors[i % donutColors.length],
-                                  value: entry.value,
-                                  title: '${percentage.toStringAsFixed(0)}%',
-                                  radius: radius,
-                                  titleStyle: TextStyle(
-                                    fontSize: isTouched ? 12 : 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                );
-                              }),
-                            ),
-                          ),
+                  const Text('Sort by:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
+                  Row(
+                    children: [
+                      _buildSortChip('Name', 'name'),
+                      const SizedBox(width: 6),
+                      _buildSortChip('Stock', 'stock'),
+                      const SizedBox(width: 6),
+                      _buildSortChip('Velocity', 'velocity'),
+                      const SizedBox(width: 6),
+                      _buildSortChip('Timeline', 'timeline'),
+                    ],
                   ),
                 ],
               ),
-            ),
+            ],
           ),
-          const SizedBox(height: 16),
-          Card(
-            margin: EdgeInsets.zero,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Ranked Category Yield', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  if (sortedCats.isEmpty)
-                    const Center(child: Text('No data.'))
-                  else
-                    ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: sortedCats.length,
-                      separatorBuilder: (_, __) => const Divider(),
-                      itemBuilder: (context, idx) {
-                        final entry = sortedCats[idx];
-                        final percentage = totalRevenue > 0 ? (entry.value / totalRevenue) * 100 : 0.0;
-                        final color = donutColors[idx % donutColors.length];
+        ),
+        Expanded(
+          child: filtered.isEmpty
+              ? const Center(child: Text('No medicines found.'))
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, idx) {
+                    final m = filtered[idx];
+                    final velocity = _getVelocity(m, sales);
+                    final daysLeft = _getTimeline(m, sales);
+                    
+                    Color timelineColor = Colors.green;
+                    String timelineText = 'Safe';
+                    if (velocity > 0) {
+                      if (daysLeft < 7) {
+                        timelineColor = AppTheme.danger;
+                        timelineText = '${daysLeft.toStringAsFixed(0)}d (Crit)';
+                      } else if (daysLeft < 15) {
+                        timelineColor = AppTheme.orange;
+                        timelineText = '${daysLeft.toStringAsFixed(0)}d (Urg)';
+                      } else if (daysLeft < 30) {
+                        timelineColor = AppTheme.warning;
+                        timelineText = '${daysLeft.toStringAsFixed(0)}d (Depl)';
+                      } else {
+                        timelineText = '${(daysLeft / 30).toStringAsFixed(1)}mo';
+                      }
+                    } else {
+                      timelineColor = Colors.grey;
+                      timelineText = 'Stable';
+                    }
 
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4.0),
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => AndroidMedicineDetailScreen(medicine: m),
+                            ),
+                          );
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
                           child: Row(
                             children: [
-                              Container(width: 12, height: 12, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primary.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(Icons.inventory_rounded, color: AppTheme.primary, size: 20),
+                              ),
                               const SizedBox(width: 12),
                               Expanded(
-                                child: Text(
-                                  entry.key,
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(m.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${m.category.isEmpty ? "General" : m.category} • ${m.unit}',
+                                      style: TextStyle(fontSize: 10, color: context.textMutedColor),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              Text('₹${entry.value.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                              const SizedBox(width: 12),
-                              Text('${percentage.toStringAsFixed(1)}%', style: TextStyle(color: context.textMutedColor, fontSize: 11)),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    '${m.totalStock} qty',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.indigo),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        'Rate: ${velocity.toStringAsFixed(1)}/d',
+                                        style: const TextStyle(fontSize: 9, color: Colors.grey),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: timelineColor.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          timelineText,
+                                          style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: timelineColor),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
-                        );
-                      },
-                    ),
-                ],
-              ),
-            ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSortChip(String label, String value) {
+    final isSelected = _stockExplorerSort == value;
+    return GestureDetector(
+      onTap: () => setState(() => _stockExplorerSort = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primary : context.surfaceColor,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: isSelected ? AppTheme.primary : context.borderColor.withValues(alpha: 0.15)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.bold,
+            color: isSelected ? Colors.white : context.textColor.withValues(alpha: 0.8),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -2128,8 +2273,12 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
             const SizedBox(height: 24),
             const Text('Sales Performance Trend', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            Card(
-              margin: EdgeInsets.zero,
+            Container(
+              decoration: BoxDecoration(
+                color: context.surfaceColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: context.borderColor.withValues(alpha: 0.12)),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: SizedBox(
@@ -2138,12 +2287,59 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
                       ? const Center(child: Text('No transaction timeline data.'))
                       : LineChart(
                           LineChartData(
-                            lineTouchData: const LineTouchData(handleBuiltInTouches: true),
+                            lineTouchData: LineTouchData(
+                              handleBuiltInTouches: true,
+                              touchSpotThreshold: 50.0,
+                              getTouchedSpotIndicator: (LineChartBarData barData, List<int> spotIndexes) {
+                                return spotIndexes.map((index) {
+                                  return TouchedSpotIndicatorData(
+                                    FlLine(
+                                      color: Colors.blueGrey.withOpacity(0.25),
+                                      strokeWidth: 1.0,
+                                      dashArray: [4, 4],
+                                    ),
+                                    FlDotData(
+                                      show: true,
+                                      getDotPainter: (spot, percent, barData, index) {
+                                        return FlDotCirclePainter(
+                                          radius: 5,
+                                          color: barData.gradient?.colors.first ?? barData.color ?? Colors.blue,
+                                          strokeWidth: 1.5,
+                                          strokeColor: Colors.white,
+                                        );
+                                      },
+                                    ),
+                                  );
+                                }).toList();
+                              },
+                              touchTooltipData: LineTouchTooltipData(
+                                getTooltipColor: (spot) => const Color(0xFF1E293B).withValues(alpha: 0.95),
+                                tooltipPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                getTooltipItems: (touchedSpots) {
+                                  return touchedSpots.map((spot) {
+                                    final sortedKeys = aggregatedDaily.keys.toList()..sort();
+                                    final idx = spot.x.toInt();
+                                    String dateStr = '';
+                                    if (idx >= 0 && idx < sortedKeys.length) {
+                                      final date = sortedKeys[idx];
+                                      dateStr = '${date.day}/${date.month}: ';
+                                    }
+                                    return LineTooltipItem(
+                                      '$dateStr${spot.y.toStringAsFixed(0)} qty',
+                                      const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
+                                    );
+                                  }).toList();
+                                },
+                              ),
+                            ),
                             gridData: FlGridData(
                               show: true,
                               drawVerticalLine: false,
                               getDrawingHorizontalLine: (value) {
-                                return FlLine(color: Colors.grey.withValues(alpha: 0.1), strokeWidth: 1, dashArray: [5, 5]);
+                                return FlLine(
+                                  color: context.borderColor.withValues(alpha: 0.04),
+                                  strokeWidth: 0.8,
+                                );
                               },
                             ),
                             titlesData: FlTitlesData(
@@ -2151,20 +2347,24 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
                                 sideTitles: SideTitles(
                                   showTitles: true,
                                   reservedSize: 24,
-                                  getTitlesWidget: (v, m) => Text(v.toInt().toString(), style: const TextStyle(fontSize: 8)),
+                                  getTitlesWidget: (v, m) => Text(v.toInt().toString(), style: const TextStyle(fontSize: 8, color: Colors.grey)),
                                 ),
                               ),
                               bottomTitles: AxisTitles(
                                 sideTitles: SideTitles(
                                   showTitles: true,
                                   reservedSize: 22,
-                                  interval: (aggregatedDaily.length / 4).clamp(1.0, double.infinity),
+                                  interval: (aggregatedDaily.length / 4).clamp(1.0, double.infinity).ceilToDouble(),
                                   getTitlesWidget: (val, meta) {
                                     final sortedKeys = aggregatedDaily.keys.toList()..sort();
                                     final idx = val.toInt();
                                     if (idx >= 0 && idx < sortedKeys.length) {
                                       final date = sortedKeys[idx];
-                                      return Text('${date.day}/${date.month}', style: const TextStyle(fontSize: 8));
+                                      return SideTitleWidget(
+                                        meta: meta,
+                                        space: 8,
+                                        child: Text('${date.day}/${date.month}', style: const TextStyle(fontSize: 8, color: Colors.grey)),
+                                      );
                                     }
                                     return const SizedBox();
                                   },
@@ -2180,10 +2380,22 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
                                   return FlSpot(e.key.toDouble(), (aggregatedDaily[e.value] ?? 0).toDouble());
                                 }).toList(),
                                 isCurved: true,
+                                preventCurveOverShooting: true,
                                 color: isClinical ? AppTheme.indigo : AppTheme.primary,
-                                barWidth: 3,
+                                barWidth: 2.2,
                                 isStrokeCapRound: true,
                                 dotData: const FlDotData(show: false),
+                                belowBarData: BarAreaData(
+                                  show: true,
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      (isClinical ? AppTheme.indigo : AppTheme.primary).withValues(alpha: 0.12),
+                                      (isClinical ? AppTheme.indigo : AppTheme.primary).withValues(alpha: 0.0),
+                                    ],
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                  ),
+                                ),
                               ),
                             ],
                           ),

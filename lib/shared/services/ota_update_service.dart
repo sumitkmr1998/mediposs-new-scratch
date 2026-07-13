@@ -354,31 +354,59 @@ class OtaUpdateService {
 
       final tempDir = File(zipPath).parent.path;
       final escapedTempDir = tempDir.replaceAll("'", "''");
+      final appPid = pid; // Get the actual Flutter app process ID
 
       final psCommand = 
           "Start-Sleep -s 2; "
-          "Wait-Process -Id $pid -Timeout 5 -ErrorAction SilentlyContinue; "
+          "Wait-Process -Id $appPid -Timeout 5 -ErrorAction SilentlyContinue; "
           "try { "
           "  Expand-Archive -Path '$escapedZipPath' -DestinationPath '$escapedDestPath' -Force; "
           "  Remove-Item -Path '$escapedZipPath' -Force; "
           "  Start-Process -FilePath '$escapedExePath' -WorkingDirectory '$escapedDestPath'; "
           "} catch { "
-          "  \$.Exception | Out-File -FilePath '$escapedTempDir/updater_error.log'; "
+          "  \$Error[0] | Out-File -FilePath '$escapedTempDir/updater_error.log'; "
           "}";
 
       debugPrint('Launching PowerShell updater script: $psCommand');
 
-      await Process.start(
-        'powershell.exe',
-        [
-          '-NoProfile',
-          '-ExecutionPolicy',
-          'Bypass',
-          '-Command',
-          psCommand,
-        ],
-        mode: ProcessStartMode.detached,
-      );
+      // Check if we have write access to the installation directory
+      bool hasWriteAccess = true;
+      try {
+        final testFile = File('$exeDir/.write_test');
+        testFile.writeAsStringSync('test');
+        testFile.deleteSync();
+      } catch (_) {
+        hasWriteAccess = false;
+      }
+
+      if (!hasWriteAccess) {
+        // Run PowerShell as Administrator (Verb: RunAs)
+        final escapedPsCommand = psCommand.replaceAll("'", "''");
+        await Process.start(
+          'powershell.exe',
+          [
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-Command',
+            "Start-Process powershell.exe -Verb RunAs -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', '$escapedPsCommand'",
+          ],
+          mode: ProcessStartMode.detached,
+        );
+      } else {
+        // Run normally
+        await Process.start(
+          'powershell.exe',
+          [
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-Command',
+            psCommand,
+          ],
+          mode: ProcessStartMode.detached,
+        );
+      }
 
       exit(0);
     } catch (e) {

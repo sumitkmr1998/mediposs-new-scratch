@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../theme/app_theme.dart';
 import 'analysis/tabs/sales_trends_tab.dart';
-import 'analysis/tabs/category_sales_tab.dart';
+import 'analysis/tabs/medicine_stock_explorer_tab.dart';
 import 'analysis/tabs/product_performance_tab.dart';
 import 'analysis/tabs/reorder_dead_stock_tab.dart';
 import 'analysis/tabs/patient_analytics_tab.dart';
@@ -104,15 +104,15 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.pie_chart_rounded, size: 16),
+                  Icon(Icons.inventory_rounded, size: 16),
                   SizedBox(width: 6),
-                  Text('Category Sales Weight'),
+                  Text('Stock Explorer'),
                 ],
               ),
             ),
           ),
         );
-        tabViews.add(const CategorySalesTab());
+        tabViews.add(const MedicineStockExplorerTab());
       } else if (title == 'Explorer') {
         tabWidgets.add(
           const Tab(

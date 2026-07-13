@@ -319,22 +319,31 @@ class _MediPossAppState extends State<MediPossApp> with WidgetsBindingObserver {
       final wsService = context.read<WebSocketService>();
       
       // Re-trigger sync and check WS
-      syncService.syncAll().then((_) {
-        context.read<InventoryProvider>().load();
-        context.read<SalesProvider>().load();
-        context.read<PatientProvider>().load();
-        context.read<OpdProvider>().loadAll();
-        context.read<PrescriptionProvider>().load();
-        context.read<TemplateProvider>().load();
-      });
+      if (syncService.isCloudMode) {
+        syncService.syncAllFromCloud().then((_) {
+          context.read<InventoryProvider>().load();
+          context.read<SalesProvider>().load();
+          context.read<PatientProvider>().load();
+          context.read<OpdProvider>().loadAll();
+          context.read<PrescriptionProvider>().load();
+          context.read<TemplateProvider>().load();
+        });
+      } else {
+        syncService.syncAll().then((_) {
+          context.read<InventoryProvider>().load();
+          context.read<SalesProvider>().load();
+          context.read<PatientProvider>().load();
+          context.read<OpdProvider>().loadAll();
+          context.read<PrescriptionProvider>().load();
+          context.read<TemplateProvider>().load();
+        });
 
-      if (!wsService.connected && syncService.hubIp != null) {
-        wsService.connect(syncService.hubIp!, syncService.secret);
+        if (!wsService.connected && syncService.hubIp != null) {
+          wsService.connect(syncService.hubIp!, syncService.secret);
+        }
       }
     }
   }
-
-
 
   @override
   Widget build(BuildContext context) {
