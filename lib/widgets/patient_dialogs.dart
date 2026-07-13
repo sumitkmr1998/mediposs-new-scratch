@@ -161,13 +161,37 @@ class _PatientDialogState extends State<PatientDialog> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               if (_nameCtrl.text.trim().isEmpty) return;
               final provider = context.read<PatientProvider>();
+              final name = _nameCtrl.text.trim();
+              final phone = _phoneCtrl.text.trim();
+
+              if (!isEdit) {
+                final duplicates = provider.findPotentialDuplicates(name, phone);
+                if (duplicates.isNotEmpty) {
+                  final result = await showDialog(
+                    context: context,
+                    builder: (context) => _DuplicateWarningDialog(duplicates: duplicates),
+                  );
+
+                  if (result == null || result == _DuplicateResolution.cancel) {
+                    // Do nothing, let them edit
+                    return;
+                  }
+
+                  if (result is Patient) {
+                    // Use the existing selected patient
+                    Navigator.pop(context, result);
+                    return;
+                  }
+                }
+              }
+
               final p =
                   widget.patient ?? Patient(uhid: '', name: '', gender: 'Male');
-              p.name = _nameCtrl.text.trim();
-              p.phone = _phoneCtrl.text.trim();
+              p.name = name;
+              p.phone = phone;
               p.gender = _gender;
               p.age = int.tryParse(_ageCtrl.text) ?? 0;
               p.address = _addressCtrl.text.trim();
@@ -186,6 +210,102 @@ class _PatientDialogState extends State<PatientDialog> {
           ),
         ],
       ),
+    );
+  }
+}
+
+enum _DuplicateResolution {
+  cancel,
+  registerAnyway,
+}
+
+class _DuplicateWarningDialog extends StatelessWidget {
+  final List<Patient> duplicates;
+
+  const _DuplicateWarningDialog({required this.duplicates});
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: AppTheme.warning, size: 28),
+          const SizedBox(width: 8),
+          Text(
+            'Similar Patient Found',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+        ],
+      ),
+      content: Container(
+        width: double.maxFinite,
+        constraints: const BoxConstraints(maxWidth: 450),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'A patient with a similar name or phone number already exists. Please verify if they are the same person to avoid duplicates:',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: duplicates.length,
+                separatorBuilder: (context, index) => const Divider(),
+                itemBuilder: (context, index) {
+                  final p = duplicates[index];
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      p.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      'UHID: ${p.uhid}\nPhone: ${p.phone.isEmpty ? "N/A" : p.phone} | Age: ${p.age} | ${p.gender}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    trailing: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context, p);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        backgroundColor: AppTheme.primary,
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.check, size: 14, color: Colors.white),
+                          SizedBox(width: 4),
+                          Text('Use This', style: TextStyle(color: Colors.white, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, _DuplicateResolution.cancel),
+          child: const Text('Go Back & Edit'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, _DuplicateResolution.registerAnyway),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.grey[300],
+            foregroundColor: Colors.black87,
+          ),
+          child: const Text('Register Anyway'),
+        ),
+      ],
     );
   }
 }

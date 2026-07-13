@@ -164,6 +164,41 @@ class PatientProvider extends ChangeNotifier {
     }).firstOrNull;
   }
 
+  List<Patient> findPotentialDuplicates(String name, String phone, {int? excludeId}) {
+    final n = name.trim().toLowerCase();
+    final p = phone.trim();
+    if (n.isEmpty) return [];
+
+    // Split name into lowercase words/tokens (length > 2 to ignore minor parts)
+    final nameTokens = n.split(RegExp(r'\s+')).where((t) => t.length > 2).toSet();
+
+    return _patients.where((pt) {
+      if (excludeId != null && pt.id == excludeId) return false;
+
+      // 1. Exact phone match (strong indicator)
+      if (p.isNotEmpty && pt.phone.trim() == p) return true;
+
+      final existingName = pt.name.trim().toLowerCase();
+
+      // 2. Exact name match
+      if (existingName == n) return true;
+
+      // 3. Token overlap match (e.g. "Ramesh Bind" & "Ramesh")
+      final existingTokens = existingName.split(RegExp(r'\s+')).where((t) => t.length > 2).toSet();
+      if (nameTokens.isNotEmpty && existingTokens.isNotEmpty) {
+        final intersection = nameTokens.intersection(existingTokens);
+        if (intersection.isNotEmpty) return true;
+      }
+
+      // 4. Substring match
+      if (n.length > 3 && existingName.length > 3) {
+        if (existingName.contains(n) || n.contains(existingName)) return true;
+      }
+
+      return false;
+    }).toList();
+  }
+
   // --- Photograph Management ---
 
   List<PatientImage> getPatientPhotos(int patientId) {
