@@ -164,6 +164,12 @@ class PatientProvider extends ChangeNotifier {
     }).firstOrNull;
   }
 
+  static const Set<String> _commonNames = {
+    'kumar', 'singh', 'devi', 'sharma', 'verma', 'yadav', 'gupta', 'khan', 
+    'begum', 'kaur', 'prasad', 'patel', 'das', 'bano', 'ali', 'choudhary', 
+    'sen', 'roy', 'dutta', 'shah', 'lal', 'ram', 'bai', 'mishra', 'joshi'
+  };
+
   List<Patient> findPotentialDuplicates(String name, String phone, {int? excludeId}) {
     final n = name.trim().toLowerCase();
     final p = phone.trim();
@@ -183,16 +189,29 @@ class PatientProvider extends ChangeNotifier {
       // 2. Exact name match
       if (existingName == n) return true;
 
-      // 3. Token overlap match (e.g. "Ramesh Bind" & "Ramesh")
+      // 3. Token overlap match (excluding common names to avoid false positives)
       final existingTokens = existingName.split(RegExp(r'\s+')).where((t) => t.length > 2).toSet();
       if (nameTokens.isNotEmpty && existingTokens.isNotEmpty) {
-        final intersection = nameTokens.intersection(existingTokens);
-        if (intersection.isNotEmpty) return true;
+        final uniqueNameTokens = nameTokens.difference(_commonNames);
+        final uniqueExistingTokens = existingTokens.difference(_commonNames);
+        
+        if (uniqueNameTokens.isNotEmpty && uniqueExistingTokens.isNotEmpty) {
+          // If we have unique tokens, require at least one unique token match
+          final uniqueIntersection = uniqueNameTokens.intersection(uniqueExistingTokens);
+          if (uniqueIntersection.isNotEmpty) return true;
+        } else {
+          // Fallback: If one or both names consist ONLY of common names, require at least 2 tokens to match
+          final intersection = nameTokens.intersection(existingTokens);
+          if (intersection.length >= 2) return true;
+        }
       }
 
-      // 4. Substring match
-      if (n.length > 3 && existingName.length > 3) {
-        if (existingName.contains(n) || n.contains(existingName)) return true;
+      // 4. Substring match (excluding common names to avoid substring matches on generic titles)
+      final cleanN = n.split(RegExp(r'\s+')).where((t) => !_commonNames.contains(t)).join(' ');
+      final cleanExisting = existingName.split(RegExp(r'\s+')).where((t) => !_commonNames.contains(t)).join(' ');
+
+      if (cleanN.length > 3 && cleanExisting.length > 3) {
+        if (cleanExisting.contains(cleanN) || cleanN.contains(cleanExisting)) return true;
       }
 
       return false;

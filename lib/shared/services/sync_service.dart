@@ -20,6 +20,7 @@ import '../models/stock_transfer.dart';
 import '../models/purchase_record.dart';
 import '../models/procedure.dart';
 import '../models/schedule_h1_record.dart';
+import '../models/attendance_record.dart';
 import '../services/objectbox_service.dart';
 import '../utils/date_helper.dart';
 import '../services/notification_service.dart';
@@ -186,12 +187,19 @@ class SyncService extends ChangeNotifier {
           // 2. Clear previous database data
           ObjectBoxService.instance.patientBox.removeAll();
           ObjectBoxService.instance.medicineBox.removeAll();
+          ObjectBoxService.instance.batchBox.removeAll();
+          ObjectBoxService.instance.purchaseBox.removeAll();
+          ObjectBoxService.instance.restockRequestBox.removeAll();
           ObjectBoxService.instance.saleBox.removeAll();
           ObjectBoxService.instance.prescriptionBox.removeAll();
           ObjectBoxService.instance.appointmentBox.removeAll();
           ObjectBoxService.instance.doctorBox.removeAll();
           ObjectBoxService.instance.transferBox.removeAll();
           ObjectBoxService.instance.templateBox.removeAll();
+          ObjectBoxService.instance.patientImageBox.removeAll();
+          ObjectBoxService.instance.procedureBox.removeAll();
+          ObjectBoxService.instance.procedureRecordBox.removeAll();
+          ObjectBoxService.instance.attendanceBox.removeAll();
           ObjectBoxService.instance.store.box<ScheduleH1Record>().removeAll();
           ObjectBoxService.instance.store.box<AuditLog>().removeAll();
 
@@ -291,7 +299,11 @@ class SyncService extends ChangeNotifier {
         // Fetch latest settings and users upon login
         await pullSettings();
         await pullUsers();
-        if (!isAutoLogin) {
+        if (settings.lastGlobalSync == null) {
+          // Await full sync if it's the first sync / different hub to ensure data is loaded before route transition
+          debugPrint('SyncService: Awaiting initial full syncAll on login...');
+          await syncAll();
+        } else {
           // Run syncAll asynchronously in the background so the user can log in instantly
           syncAll().then((_) {
             debugPrint('SyncService: Background syncAll on login completed.');
@@ -669,12 +681,19 @@ class SyncService extends ChangeNotifier {
         debugPrint('SyncService: Initial client sync. Wiping local database for a fresh start...');
         ObjectBoxService.instance.patientBox.removeAll();
         ObjectBoxService.instance.medicineBox.removeAll();
+        ObjectBoxService.instance.batchBox.removeAll();
+        ObjectBoxService.instance.purchaseBox.removeAll();
+        ObjectBoxService.instance.restockRequestBox.removeAll();
         ObjectBoxService.instance.saleBox.removeAll();
         ObjectBoxService.instance.prescriptionBox.removeAll();
         ObjectBoxService.instance.appointmentBox.removeAll();
         ObjectBoxService.instance.doctorBox.removeAll();
         ObjectBoxService.instance.transferBox.removeAll();
         ObjectBoxService.instance.templateBox.removeAll();
+        ObjectBoxService.instance.patientImageBox.removeAll();
+        ObjectBoxService.instance.procedureBox.removeAll();
+        ObjectBoxService.instance.procedureRecordBox.removeAll();
+        ObjectBoxService.instance.attendanceBox.removeAll();
         ObjectBoxService.instance.store.box<ScheduleH1Record>().removeAll();
         ObjectBoxService.instance.store.box<AuditLog>().removeAll();
       }
@@ -701,6 +720,7 @@ class SyncService extends ChangeNotifier {
       await pullPurchases();
       await pullTemplates();
       await pullH1Records(since: sinceStr);
+      await pullAttendance();
 
       // Update sync timestamp using the Hub's reported time if available
       final serverTime = t1 ?? t2 ?? t3;
@@ -729,12 +749,19 @@ class SyncService extends ChangeNotifier {
     // Wipe all transactional/entity boxes
     ObjectBoxService.instance.patientBox.removeAll();
     ObjectBoxService.instance.medicineBox.removeAll();
+    ObjectBoxService.instance.batchBox.removeAll();
+    ObjectBoxService.instance.purchaseBox.removeAll();
+    ObjectBoxService.instance.restockRequestBox.removeAll();
     ObjectBoxService.instance.saleBox.removeAll();
     ObjectBoxService.instance.prescriptionBox.removeAll();
     ObjectBoxService.instance.appointmentBox.removeAll();
     ObjectBoxService.instance.doctorBox.removeAll();
     ObjectBoxService.instance.transferBox.removeAll();
     ObjectBoxService.instance.templateBox.removeAll();
+    ObjectBoxService.instance.patientImageBox.removeAll();
+    ObjectBoxService.instance.procedureBox.removeAll();
+    ObjectBoxService.instance.procedureRecordBox.removeAll();
+    ObjectBoxService.instance.attendanceBox.removeAll();
     ObjectBoxService.instance.store.box<ScheduleH1Record>().removeAll();
     // Do NOT wipe settings or users (critical for session)
 
@@ -2261,9 +2288,72 @@ class SyncService extends ChangeNotifier {
         entity: 'procedure', action: 'delete');
   }
 
-  Future<bool> pushMedicine(Medicine m) async {
+   Future<bool> pushMedicine(Medicine m) async {
     return await _unifiedPush('/api/medicines/push', m.toJson(),
         entity: 'medicine', action: 'create');
+  }
+
+  Future<bool> pushAttendance(AttendanceRecord record) async {
+    return await _unifiedPush('/api/attendance/push', record.toJson(),
+        entity: 'attendance', action: 'create');
+  }
+
+  Future<bool> pushAttendanceDelete(int userId, String date) async {
+    return await _unifiedPush('/api/attendance/delete', {'userId': userId, 'date': date},
+        entity: 'attendance', action: 'delete');
+  }
+
+  Future<void> pullAttendance() async {
+    if (!_isConnected || _jwtToken == null) return;
+    debugPrint('SyncService: pullAttendance starting...');
+    try {
+      final url = Uri.parse('$_baseUrl/api/attendance');
+      final res = await http.get(url, headers: _authHeaders());
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body)['data'] as List;
+        final box = ObjectBoxService.instance.attendanceBox;
+        final allLocal = box.getAll();
+
+        final Map<String, AttendanceRecord> localMap = {
+          for (final r in allLocal) '${r.userId}_${r.date}': r
+        };
+
+        final hubKeys = <String>{};
+        final List<AttendanceRecord> recordsToPut = [];
+
+        for (final item in data) {
+          final record = AttendanceRecord.fromJson(item as Map<String, dynamic>);
+          final key = '${record.userId}_${record.date}';
+          hubKeys.add(key);
+
+          final existing = localMap[key];
+          if (existing != null) {
+            record.id = existing.id;
+          } else {
+            record.id = 0;
+          }
+          recordsToPut.add(record);
+        }
+
+        if (recordsToPut.isNotEmpty) {
+          box.putMany(recordsToPut);
+        }
+
+        final List<int> toRemoveIds = [];
+        for (final r in allLocal) {
+          final key = '${r.userId}_${r.date}';
+          if (!hubKeys.contains(key)) {
+            toRemoveIds.add(r.id);
+          }
+        }
+        if (toRemoveIds.isNotEmpty) {
+          box.removeMany(toRemoveIds);
+        }
+        debugPrint('SyncService: pullAttendance synced ${data.length} records.');
+      }
+    } catch (e) {
+      debugPrint('pullAttendance err: $e');
+    }
   }
 
   void disconnect() {

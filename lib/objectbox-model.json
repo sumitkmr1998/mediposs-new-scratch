@@ -1612,9 +1612,48 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "20:757739913819245552",
+      "lastPropertyId": "6:5405178436646870808",
+      "name": "AttendanceRecord",
+      "properties": [
+        {
+          "id": "1:3303301435797902383",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:6063629964618775876",
+          "name": "userId",
+          "type": 6
+        },
+        {
+          "id": "3:5830912510053562906",
+          "name": "userName",
+          "type": 9
+        },
+        {
+          "id": "4:2067078953931554318",
+          "name": "checkIn",
+          "type": 10
+        },
+        {
+          "id": "5:7817291094037708078",
+          "name": "date",
+          "type": 9
+        },
+        {
+          "id": "6:5405178436646870808",
+          "name": "status",
+          "type": 9
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "19:1422203774714998139",
+  "lastEntityId": "20:757739913819245552",
   "lastIndexId": "1:5015225040438721990",
   "lastRelationId": "1:2143695166283597161",
   "lastSequenceId": "0:0",

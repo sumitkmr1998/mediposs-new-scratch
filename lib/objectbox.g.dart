@@ -16,6 +16,7 @@ import 'package:objectbox_flutter_libs/objectbox_flutter_libs.dart';
 
 import 'shared/models/app_user.dart';
 import 'shared/models/appointment.dart';
+import 'shared/models/attendance_record.dart';
 import 'shared/models/audit_log.dart';
 import 'shared/models/doctor.dart';
 import 'shared/models/medicine.dart';
@@ -1641,6 +1642,45 @@ final _entities = <obx_int.ModelEntity>[
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
+      backlinks: <obx_int.ModelBacklink>[]),
+  obx_int.ModelEntity(
+      id: const obx_int.IdUid(20, 757739913819245552),
+      name: 'AttendanceRecord',
+      lastPropertyId: const obx_int.IdUid(6, 5405178436646870808),
+      flags: 0,
+      properties: <obx_int.ModelProperty>[
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(1, 3303301435797902383),
+            name: 'id',
+            type: 6,
+            flags: 1),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(2, 6063629964618775876),
+            name: 'userId',
+            type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(3, 5830912510053562906),
+            name: 'userName',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(4, 2067078953931554318),
+            name: 'checkIn',
+            type: 10,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(5, 7817291094037708078),
+            name: 'date',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(6, 5405178436646870808),
+            name: 'status',
+            type: 9,
+            flags: 0)
+      ],
+      relations: <obx_int.ModelRelation>[],
       backlinks: <obx_int.ModelBacklink>[])
 ];
 
@@ -1679,7 +1719,7 @@ Future<obx.Store> openStore(
 obx_int.ModelDefinition getObjectBoxModel() {
   final model = obx_int.ModelInfo(
       entities: _entities,
-      lastEntityId: const obx_int.IdUid(19, 1422203774714998139),
+      lastEntityId: const obx_int.IdUid(20, 757739913819245552),
       lastIndexId: const obx_int.IdUid(1, 5015225040438721990),
       lastRelationId: const obx_int.IdUid(1, 2143695166283597161),
       lastSequenceId: const obx_int.IdUid(0, 0),
@@ -3432,6 +3472,53 @@ obx_int.ModelDefinition getObjectBoxModel() {
               isSynced: isSyncedParam);
 
           return object;
+        }),
+    AttendanceRecord: obx_int.EntityDefinition<AttendanceRecord>(
+        model: _entities[19],
+        toOneRelations: (AttendanceRecord object) => [],
+        toManyRelations: (AttendanceRecord object) => {},
+        getId: (AttendanceRecord object) => object.id,
+        setId: (AttendanceRecord object, int id) {
+          object.id = id;
+        },
+        objectToFB: (AttendanceRecord object, fb.Builder fbb) {
+          final userNameOffset = fbb.writeString(object.userName);
+          final dateOffset = fbb.writeString(object.date);
+          final statusOffset = fbb.writeString(object.status);
+          fbb.startTable(7);
+          fbb.addInt64(0, object.id);
+          fbb.addInt64(1, object.userId);
+          fbb.addOffset(2, userNameOffset);
+          fbb.addInt64(3, object.checkIn.millisecondsSinceEpoch);
+          fbb.addOffset(4, dateOffset);
+          fbb.addOffset(5, statusOffset);
+          fbb.finish(fbb.endTable());
+          return object.id;
+        },
+        objectFromFB: (obx.Store store, ByteData fbData) {
+          final buffer = fb.BufferContext(fbData);
+          final rootOffset = buffer.derefObject(0);
+          final idParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0);
+          final userIdParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 6, 0);
+          final userNameParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 8, '');
+          final checkInParam = DateTime.fromMillisecondsSinceEpoch(
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 10, 0));
+          final dateParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 12, '');
+          final statusParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 14, '');
+          final object = AttendanceRecord(
+              id: idParam,
+              userId: userIdParam,
+              userName: userNameParam,
+              checkIn: checkInParam,
+              date: dateParam,
+              status: statusParam);
+
+          return object;
         })
   };
 
@@ -4640,4 +4727,31 @@ class AuditLog_ {
   /// See [AuditLog.isSynced].
   static final isSynced =
       obx.QueryBooleanProperty<AuditLog>(_entities[18].properties[9]);
+}
+
+/// [AttendanceRecord] entity fields to define ObjectBox queries.
+class AttendanceRecord_ {
+  /// See [AttendanceRecord.id].
+  static final id =
+      obx.QueryIntegerProperty<AttendanceRecord>(_entities[19].properties[0]);
+
+  /// See [AttendanceRecord.userId].
+  static final userId =
+      obx.QueryIntegerProperty<AttendanceRecord>(_entities[19].properties[1]);
+
+  /// See [AttendanceRecord.userName].
+  static final userName =
+      obx.QueryStringProperty<AttendanceRecord>(_entities[19].properties[2]);
+
+  /// See [AttendanceRecord.checkIn].
+  static final checkIn =
+      obx.QueryDateProperty<AttendanceRecord>(_entities[19].properties[3]);
+
+  /// See [AttendanceRecord.date].
+  static final date =
+      obx.QueryStringProperty<AttendanceRecord>(_entities[19].properties[4]);
+
+  /// See [AttendanceRecord.status].
+  static final status =
+      obx.QueryStringProperty<AttendanceRecord>(_entities[19].properties[5]);
 }

@@ -1,8 +1,12 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../models/app_user.dart';
+import '../models/attendance_record.dart';
 import '../services/objectbox_service.dart';
 import '../services/sync_service.dart';
 import '../services/audit_service.dart';
+import '../services/sync_queue_service.dart';
+import '../../objectbox.g.dart';
 
 class AuthProvider extends ChangeNotifier {
   AppUser? _currentUser;
@@ -90,6 +94,7 @@ class AuthProvider extends ChangeNotifier {
     if (match != null) {
       _currentUser = match;
       _isAuthenticated = true;
+      _triggerAutoCheckIn(match);
       AuditService.instance.log(
         action: 'LOGIN',
         entityType: 'User',
@@ -110,6 +115,7 @@ class AuthProvider extends ChangeNotifier {
     if (user.pin == pin && user.isActive) {
       _currentUser = user;
       _isAuthenticated = true;
+      _triggerAutoCheckIn(user);
       AuditService.instance.log(
         action: 'LOGIN',
         entityType: 'User',
@@ -128,6 +134,7 @@ class AuthProvider extends ChangeNotifier {
     debugPrint('AuthProvider: forceLogin for ${user.name}');
     _currentUser = user;
     _isAuthenticated = true;
+    _triggerAutoCheckIn(user);
     notifyListeners();
   }
 
@@ -197,6 +204,43 @@ class AuthProvider extends ChangeNotifier {
         syncService.pushUser(user);
       }
       notifyListeners();
+    }
+  }
+
+  void _triggerAutoCheckIn(AppUser user) {
+    if (user.role.toLowerCase() == 'admin') return;
+    try {
+      final dateStr = DateTime.now().toIso8601String().substring(0, 10);
+      final box = ObjectBoxService.instance.attendanceBox;
+      final query = box.query(
+        AttendanceRecord_.userId.equals(user.id)
+        .and(AttendanceRecord_.date.equals(dateStr))
+      ).build();
+      final existing = query.findFirst();
+      query.close();
+
+      if (existing == null) {
+        final record = AttendanceRecord(
+          userId: user.id,
+          userName: user.name,
+          checkIn: DateTime.now(),
+          date: dateStr,
+          status: 'present',
+        );
+        box.put(record);
+        debugPrint('AuthProvider: Auto check-in logged for ${user.name}');
+
+        final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
+        if (isClient) {
+          SyncQueueService.instance.addToQueue(
+            entity: 'attendance',
+            action: 'create',
+            data: record.toJson(),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('AuthProvider: autoCheckIn failed: $e');
     }
   }
 }

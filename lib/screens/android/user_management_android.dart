@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../../shared/providers/auth_provider.dart';
+import '../../shared/providers/attendance_provider.dart';
 import '../../shared/models/app_user.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/android/user_dialog_android.dart';
@@ -12,7 +14,73 @@ class UserManagementAndroid extends StatefulWidget {
   State<UserManagementAndroid> createState() => _UserManagementAndroidState();
 }
 
-class _UserManagementAndroidState extends State<UserManagementAndroid> {
+class _UserManagementAndroidState extends State<UserManagementAndroid> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  DateTime _selectedMonth = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  void _changeMonth(int delta) {
+    setState(() {
+      _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + delta, 1);
+    });
+  }
+
+  void _showStatusDialog(AppUser user, DateTime dayDate, String currentStatus) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Mark Attendance for ${user.name}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Date: ${DateFormat('EEEE, d MMMM yyyy').format(dayDate)}', 
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.check_circle_rounded, color: AppTheme.success),
+              title: const Text('Mark Present'),
+              subtitle: const Text('Logs attendance as Present for this day'),
+              onTap: () {
+                context.read<AttendanceProvider>().markStatus(user, dayDate, 'present');
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.cancel_rounded, color: AppTheme.danger),
+              title: const Text('Mark Absent'),
+              subtitle: const Text('Logs attendance as Absent for this day'),
+              onTap: () {
+                context.read<AttendanceProvider>().markStatus(user, dayDate, 'absent');
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.restart_alt_rounded, color: Colors.grey),
+              title: const Text('Reset / Clear Log'),
+              subtitle: const Text('Removes manual entries and restores automatic status'),
+              onTap: () {
+                context.read<AttendanceProvider>().markStatus(user, dayDate, 'clear');
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -38,63 +106,236 @@ class _UserManagementAndroidState extends State<UserManagementAndroid> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: context.surfaceColor,
-      body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) => [
-          SliverAppBar(
-            title: const Text('Staff Management'),
-            pinned: true,
-            floating: true,
-            forceElevated: innerBoxIsScrolled,
-            elevation: innerBoxIsScrolled ? 4 : 0,
-            actions: [
-              if (canManage)
-                IconButton(
-                  icon: const Icon(Icons.person_add),
-                  tooltip: 'Add New Staff',
-                  onPressed: () {
-                    AndroidUserDialog.showUserSheet(context);
-                  },
+    final registryContent = users.isEmpty
+        ? Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.people_outline, size: 72, color: context.textMutedColor),
+                const SizedBox(height: 16),
+                Text('No staff found',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(color: context.textMutedColor, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          )
+        : ListView.builder(
+            padding: const EdgeInsets.all(20).copyWith(bottom: 100),
+            itemCount: users.length,
+            itemBuilder: (ctx, i) => _buildUserCard(context, users[i], auth),
+          );
+
+    // Compute month details
+    final year = _selectedMonth.year;
+    final month = _selectedMonth.month;
+    final daysInMonth = DateTime(year, month + 1, 0).day;
+    final staffUsers = users.where((u) => u.role.toLowerCase() != 'admin').toList();
+    final records = context.watch<AttendanceProvider>().getMonthRecords(_selectedMonth);
+
+    final columns = <DataColumn>[
+      const DataColumn(label: Text('Staff Member', style: TextStyle(fontWeight: FontWeight.bold))),
+      for (int day = 1; day <= daysInMonth; day++)
+        DataColumn(
+          label: Center(
+            child: Text(
+              '$day',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+            ),
+          ),
+        ),
+      const DataColumn(label: Text('Present', style: TextStyle(color: AppTheme.success, fontWeight: FontWeight.bold))),
+      const DataColumn(label: Text('Absent', style: TextStyle(color: AppTheme.danger, fontWeight: FontWeight.bold))),
+    ];
+
+    final rows = staffUsers.map((user) {
+      int presentCount = 0;
+      int absentCount = 0;
+
+      final cells = <DataCell>[
+        DataCell(
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 12,
+                backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                child: Text(
+                  user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                  style: const TextStyle(fontSize: 10, color: AppTheme.primary, fontWeight: FontWeight.bold),
                 ),
-              const SizedBox(width: 8),
+              ),
+              const SizedBox(width: 6),
+              Text(user.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
             ],
           ),
-        ],
-        body: users.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.people_outline,
-                        size: 72, color: context.textMutedColor),
-                    const SizedBox(height: 16),
-                    Text('No staff found',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(
-                                color: context.textMutedColor,
-                                fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              )
-            : ListView.builder(
-                padding: const EdgeInsets.all(20).copyWith(bottom: 100),
-                itemCount: users.length,
-                itemBuilder: (ctx, i) =>
-                    _buildUserCard(context, users[i], auth),
+        ),
+      ];
+
+      for (int day = 1; day <= daysInMonth; day++) {
+        final dayDate = DateTime(year, month, day);
+        final dateStr = DateFormat('yyyy-MM-dd').format(dayDate);
+        final isFuture = dayDate.isAfter(DateTime.now());
+        final record = records.where((r) => r.userId == user.id && r.date == dateStr).firstOrNull;
+
+        String status = '';
+        Widget cellChild;
+
+        if (isFuture) {
+          status = 'future';
+          cellChild = const Text('-', style: TextStyle(color: Colors.grey));
+        } else {
+          if (record != null) {
+            status = record.status;
+            if (status == 'present') {
+              presentCount++;
+              cellChild = Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(color: AppTheme.success, shape: BoxShape.circle),
+                child: const Text('P', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+              );
+            } else {
+              absentCount++;
+              cellChild = Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(color: AppTheme.danger, shape: BoxShape.circle),
+                child: const Text('A', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+              );
+            }
+          } else {
+            absentCount++;
+            cellChild = Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(color: AppTheme.danger.withValues(alpha: 0.2), shape: BoxShape.circle),
+              child: const Text('A', style: TextStyle(color: AppTheme.danger, fontSize: 8, fontWeight: FontWeight.bold)),
+            );
+          }
+        }
+
+        cells.add(
+          DataCell(
+            Center(child: cellChild),
+            onTap: isFuture ? null : () => _showStatusDialog(user, dayDate, status),
+          ),
+        );
+      }
+
+      cells.add(DataCell(Center(child: Text('$presentCount', style: const TextStyle(color: AppTheme.success, fontWeight: FontWeight.bold, fontSize: 12)))));
+      cells.add(DataCell(Center(child: Text('$absentCount', style: const TextStyle(color: AppTheme.danger, fontWeight: FontWeight.bold, fontSize: 12)))));
+
+      return DataRow(cells: cells);
+    }).toList();
+
+    final attendanceContent = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left_rounded),
+                    onPressed: () => _changeMonth(-1),
+                  ),
+                  Text(
+                    DateFormat('MMMM yyyy').format(_selectedMonth),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right_rounded),
+                    onPressed: () => _changeMonth(1),
+                  ),
+                ],
               ),
+              Text(
+                'Staff: ${staffUsers.length}',
+                style: TextStyle(color: context.textMutedColor, fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: staffUsers.isEmpty
+              ? const Center(
+                  child: Text('No staff members registered for attendance tracking.'),
+                )
+              : Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: context.surfaceColor,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: context.borderColor),
+                    ),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.vertical,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Theme(
+                          data: Theme.of(context).copyWith(
+                            dividerColor: context.borderColor,
+                          ),
+                          child: DataTable(
+                            columnSpacing: 12,
+                            horizontalMargin: 8,
+                            columns: columns,
+                            rows: rows,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+        ),
+      ],
+    );
+
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: context.surfaceColor,
+        appBar: AppBar(
+          title: const Text('Staff Management'),
+          bottom: const TabBar(
+            labelColor: AppTheme.primary,
+            indicatorColor: AppTheme.primary,
+            tabs: [
+              Tab(icon: Icon(Icons.people_alt_rounded), text: 'Registry'),
+              Tab(icon: Icon(Icons.calendar_month_rounded), text: 'Attendance'),
+            ],
+          ),
+          actions: [
+            if (canManage)
+              IconButton(
+                icon: const Icon(Icons.person_add),
+                tooltip: 'Add New Staff',
+                onPressed: () {
+                  AndroidUserDialog.showUserSheet(context);
+                },
+              ),
+            const SizedBox(width: 8),
+          ],
+        ),
+        body: TabBarView(
+          children: [
+            registryContent,
+            attendanceContent,
+          ],
+        ),
+        floatingActionButton: canManage 
+            ? FloatingActionButton(
+                onPressed: () {
+                  AndroidUserDialog.showUserSheet(context);
+                },
+                backgroundColor: AppTheme.primary,
+                child: const Icon(Icons.person_add, color: Colors.white),
+              )
+            : null,
       ),
-      floatingActionButton: canManage 
-          ? FloatingActionButton(
-              onPressed: () {
-                AndroidUserDialog.showUserSheet(context);
-              },
-              backgroundColor: AppTheme.primary,
-              child: const Icon(Icons.person_add, color: Colors.white),
-            )
-          : null,
     );
   }
 

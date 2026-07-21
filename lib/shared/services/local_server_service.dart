@@ -25,6 +25,7 @@ import '../models/procedure.dart';
 import '../models/audit_log.dart';
 import '../models/schedule_h1_record.dart';
 import '../models/purchase_record.dart';
+import '../models/attendance_record.dart';
 import '../../objectbox.g.dart';
 import '../domain/stock_rules.dart';
 import 'package:flutter/foundation.dart';
@@ -100,6 +101,9 @@ class LocalServerService {
     router.post('/api/settings', _withAuth(_settingsGetHandler)); // Allow GET settings via POST for some clients
     router.get('/api/settings', _withAuth(_settingsGetHandler));
     router.post('/api/users/push', _withAuth(_usersPushHandler));
+    router.get('/api/attendance', _withAuth(_attendanceGetHandler));
+    router.post('/api/attendance/push', _withAuth(_attendancePushHandler));
+    router.post('/api/attendance/delete', _withAuth(_attendanceDeleteHandler));
     router.get('/api/procedures', _withAuth(_proceduresGetHandler));
     router.post('/api/procedures/push', _withAuth(_proceduresPushHandler));
     router.post('/api/procedures/delete', _withAuth(_proceduresDeleteHandler));
@@ -300,6 +304,8 @@ class LocalServerService {
       },
       actor: user,
     );
+
+    _triggerAutoCheckIn(user);
 
     return Response.ok(
       jsonEncode({
@@ -569,6 +575,8 @@ class LocalServerService {
 
           // Sync batches
           if (item['batches'] != null) {
+            final batchBox = ObjectBoxService.instance.batchBox;
+            batchBox.removeMany(existing.batches.map((b) => b.id).toList());
             existing.batches.clear();
             for (var bItem in item['batches']) {
               existing.batches.add(MedicineBatch(
@@ -662,6 +670,8 @@ class LocalServerService {
           ..updatedAt = DateTime.now();
 
         if (item['batches'] != null) {
+          final batchBox = ObjectBoxService.instance.batchBox;
+          batchBox.removeMany(existing.batches.map((b) => b.id).toList());
           existing.batches.clear();
           for (var bItem in item['batches']) {
             existing.batches.add(MedicineBatch(
@@ -2597,6 +2607,105 @@ class LocalServerService {
         body: jsonEncode({'error': e.toString()}),
         headers: {'content-type': 'application/json'},
       );
+    }
+  }
+
+  void _triggerAutoCheckIn(AppUser user) {
+    if (user.role.toLowerCase() == 'admin') return;
+    try {
+      final dateStr = DateTime.now().toIso8601String().substring(0, 10);
+      final box = ObjectBoxService.instance.attendanceBox;
+      final query = box.query(
+        AttendanceRecord_.userId.equals(user.id)
+        .and(AttendanceRecord_.date.equals(dateStr))
+      ).build();
+      final existing = query.findFirst();
+      query.close();
+
+      if (existing == null) {
+        final record = AttendanceRecord(
+          userId: user.id,
+          userName: user.name,
+          checkIn: DateTime.now(),
+          date: dateStr,
+          status: 'present',
+        );
+        box.put(record);
+        debugPrint('Hub Server: Auto check-in logged for client ${user.name}');
+      }
+    } catch (e) {
+      debugPrint('Hub Server: _triggerAutoCheckIn failed: $e');
+    }
+  }
+
+  Response _attendanceGetHandler(Request req) {
+    final list = ObjectBoxService.instance.attendanceBox.getAll();
+    final json = list.map((e) => e.toJson()).toList();
+    return Response.ok(
+      jsonEncode({'data': json, 'count': list.length}),
+      headers: {'content-type': 'application/json'},
+    );
+  }
+
+  Future<Response> _attendancePushHandler(Request req) async {
+    try {
+      final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      final record = AttendanceRecord.fromJson(body);
+      final box = ObjectBoxService.instance.attendanceBox;
+      
+      final existing = box.query(
+        AttendanceRecord_.userId.equals(record.userId)
+        .and(AttendanceRecord_.date.equals(record.date))
+      ).build().findFirst();
+
+      if (existing != null) {
+        existing.status = record.status;
+        existing.checkIn = record.checkIn;
+        box.put(existing);
+      } else {
+        record.id = 0;
+        box.put(record);
+      }
+
+      broadcast({'event': 'sync_received'});
+      _incomingDataController.add('attendance');
+
+      return Response.ok(
+        jsonEncode({'status': 'success'}),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      debugPrint('Hub Server: Attendance Push Err: $e');
+      return Response.internalServerError();
+    }
+  }
+
+  Future<Response> _attendanceDeleteHandler(Request req) async {
+    try {
+      final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      final userId = body['userId'] as int;
+      final date = body['date'] as String;
+      final box = ObjectBoxService.instance.attendanceBox;
+      
+      final existing = box.query(
+        AttendanceRecord_.userId.equals(userId)
+        .and(AttendanceRecord_.date.equals(date))
+      ).build().findFirst();
+
+      if (existing != null) {
+        box.remove(existing.id);
+      }
+
+      broadcast({'event': 'sync_received'});
+      _incomingDataController.add('attendance');
+
+      return Response.ok(
+        jsonEncode({'status': 'success'}),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      debugPrint('Hub Server: Attendance Delete Err: $e');
+      return Response.internalServerError();
     }
   }
 }

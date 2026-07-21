@@ -1,0 +1,16 @@
+# Block giant build and platform directories from AI context
+.git/
+.idea/
+.vscode/
+.dart_tool/
+build/
+android/
+ios/
+windows/
+*.zip
+*.apk
+*.exe
+*.rar
+*.xlsx
+*.log
+node_modules/

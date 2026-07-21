@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../../shared/providers/auth_provider.dart';
+import '../../shared/providers/attendance_provider.dart';
 import '../../shared/models/app_user.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/user_form_dialog.dart';
@@ -13,7 +15,73 @@ class UserManagementWindows extends StatefulWidget {
   State<UserManagementWindows> createState() => _UserManagementWindowsState();
 }
 
-class _UserManagementWindowsState extends State<UserManagementWindows> {
+class _UserManagementWindowsState extends State<UserManagementWindows> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  DateTime _selectedMonth = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  void _changeMonth(int delta) {
+    setState(() {
+      _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + delta, 1);
+    });
+  }
+
+  void _showStatusDialog(AppUser user, DateTime dayDate, String currentStatus) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Mark Attendance for ${user.name}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Date: ${DateFormat('EEEE, d MMMM yyyy').format(dayDate)}', 
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.check_circle_rounded, color: AppTheme.success),
+              title: const Text('Mark Present'),
+              subtitle: const Text('Logs attendance as Present for this day'),
+              onTap: () {
+                context.read<AttendanceProvider>().markStatus(user, dayDate, 'present');
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.cancel_rounded, color: AppTheme.danger),
+              title: const Text('Mark Absent'),
+              subtitle: const Text('Logs attendance as Absent for this day'),
+              onTap: () {
+                context.read<AttendanceProvider>().markStatus(user, dayDate, 'absent');
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.restart_alt_rounded, color: Colors.grey),
+              title: const Text('Reset / Clear Log'),
+              subtitle: const Text('Removes manual entries and restores automatic status'),
+              onTap: () {
+                context.read<AttendanceProvider>().markStatus(user, dayDate, 'clear');
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -38,7 +106,7 @@ class _UserManagementWindowsState extends State<UserManagementWindows> {
       );
     }
 
-    final content = GridView.builder(
+    final registryContent = GridView.builder(
       padding: widget.isEmbedded ? EdgeInsets.zero : const EdgeInsets.all(24),
       shrinkWrap: widget.isEmbedded,
       physics: widget.isEmbedded ? const NeverScrollableScrollPhysics() : null,
@@ -52,42 +120,229 @@ class _UserManagementWindowsState extends State<UserManagementWindows> {
       itemBuilder: (ctx, i) => _UserCard(user: users[i], auth: auth),
     );
 
-    if (widget.isEmbedded) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    // Compute month details
+    final year = _selectedMonth.year;
+    final month = _selectedMonth.month;
+    final daysInMonth = DateTime(year, month + 1, 0).day;
+    final staffUsers = users.where((u) => u.role.toLowerCase() != 'admin').toList();
+    final records = context.watch<AttendanceProvider>().getMonthRecords(_selectedMonth);
+
+    final columns = <DataColumn>[
+      const DataColumn(label: Text('Staff Member', style: TextStyle(fontWeight: FontWeight.bold))),
+      for (int day = 1; day <= daysInMonth; day++)
+        DataColumn(
+          label: Center(
+            child: Text(
+              '$day',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+            ),
+          ),
+        ),
+      const DataColumn(label: Text('Present', style: TextStyle(color: AppTheme.success, fontWeight: FontWeight.bold))),
+      const DataColumn(label: Text('Absent', style: TextStyle(color: AppTheme.danger, fontWeight: FontWeight.bold))),
+    ];
+
+    final rows = staffUsers.map((user) {
+      int presentCount = 0;
+      int absentCount = 0;
+
+      final cells = <DataCell>[
+        DataCell(
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                   const Text('Staff Registry', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                   Text('Manage permissions and credentials for ${users.length} staff members', style: TextStyle(color: context.textMutedColor)),
-                ],
-              ),
-              if (canManage)
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  icon: const Icon(Icons.person_add_rounded, size: 18),
-                  label: const Text('Add Staff'),
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      barrierDismissible: false,
-                      builder: (_) => const UserFormDialog(),
-                    );
-                  },
+              CircleAvatar(
+                radius: 14,
+                backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                child: Text(
+                  user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                  style: const TextStyle(fontSize: 12, color: AppTheme.primary, fontWeight: FontWeight.bold),
                 ),
+              ),
+              const SizedBox(width: 8),
+              Text(user.name, style: const TextStyle(fontWeight: FontWeight.bold)),
             ],
           ),
-          const SizedBox(height: 32),
-          content,
-        ],
+        ),
+      ];
+
+      for (int day = 1; day <= daysInMonth; day++) {
+        final dayDate = DateTime(year, month, day);
+        final dateStr = DateFormat('yyyy-MM-dd').format(dayDate);
+        final isFuture = dayDate.isAfter(DateTime.now());
+        final record = records.where((r) => r.userId == user.id && r.date == dateStr).firstOrNull;
+
+        String status = '';
+        Widget cellChild;
+
+        if (isFuture) {
+          status = 'future';
+          cellChild = const Text('-', style: TextStyle(color: Colors.grey));
+        } else {
+          if (record != null) {
+            status = record.status;
+            if (status == 'present') {
+              presentCount++;
+              cellChild = Container(
+                padding: const EdgeInsets.all(6),
+                decoration: const BoxDecoration(color: AppTheme.success, shape: BoxShape.circle),
+                child: const Text('P', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+              );
+            } else {
+              absentCount++;
+              cellChild = Container(
+                padding: const EdgeInsets.all(6),
+                decoration: const BoxDecoration(color: AppTheme.danger, shape: BoxShape.circle),
+                child: const Text('A', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+              );
+            }
+          } else {
+            absentCount++;
+            cellChild = Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(color: AppTheme.danger.withValues(alpha: 0.2), shape: BoxShape.circle),
+              child: const Text('A', style: TextStyle(color: AppTheme.danger, fontSize: 10, fontWeight: FontWeight.bold)),
+            );
+          }
+        }
+
+        cells.add(
+          DataCell(
+            Center(child: cellChild),
+            onTap: isFuture ? null : () => _showStatusDialog(user, dayDate, status),
+          ),
+        );
+      }
+
+      cells.add(DataCell(Center(child: Text('$presentCount', style: const TextStyle(color: AppTheme.success, fontWeight: FontWeight.bold)))));
+      cells.add(DataCell(Center(child: Text('$absentCount', style: const TextStyle(color: AppTheme.danger, fontWeight: FontWeight.bold)))));
+
+      return DataRow(cells: cells);
+    }).toList();
+
+    final attendanceContent = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left_rounded),
+                    onPressed: () => _changeMonth(-1),
+                  ),
+                  Text(
+                    DateFormat('MMMM yyyy').format(_selectedMonth),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right_rounded),
+                    onPressed: () => _changeMonth(1),
+                  ),
+                ],
+              ),
+              Text(
+                'Total Staff: ${staffUsers.length}',
+                style: TextStyle(color: context.textMutedColor, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: staffUsers.isEmpty
+              ? const Center(
+                  child: Text('No staff members registered for attendance tracking.'),
+                )
+              : Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: context.surfaceColor,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: context.borderColor),
+                    ),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.vertical,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Theme(
+                          data: Theme.of(context).copyWith(
+                            dividerColor: context.borderColor,
+                          ),
+                          child: DataTable(
+                            columnSpacing: 16,
+                            columns: columns,
+                            rows: rows,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+        ),
+      ],
+    );
+
+    if (widget.isEmbedded) {
+      return DefaultTabController(
+        length: 2,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                     const Text('Staff & Attendance', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                     Text('Manage profiles, roles, permissions, and log staff attendance', style: TextStyle(color: context.textMutedColor)),
+                  ],
+                ),
+                if (canManage)
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppTheme.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.person_add_rounded, size: 18),
+                    label: const Text('Add Staff'),
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (_) => const UserFormDialog(),
+                      );
+                    },
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            TabBar(
+              labelColor: AppTheme.primary,
+              unselectedLabelColor: context.textMutedColor,
+              indicatorColor: AppTheme.primary,
+              tabs: const [
+                Tab(icon: Icon(Icons.people_alt_rounded), text: 'Staff Registry'),
+                Tab(icon: Icon(Icons.calendar_month_rounded), text: 'Attendance Logs'),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 500,
+              child: TabBarView(
+                children: [
+                  registryContent,
+                  attendanceContent,
+                ],
+              ),
+            ),
+          ],
+        ),
       );
     }
 
@@ -122,7 +377,33 @@ class _UserManagementWindowsState extends State<UserManagementWindows> {
             ),
         ],
       ),
-      body: content,
+      body: DefaultTabController(
+        length: 2,
+        child: Column(
+          children: [
+            Container(
+              color: context.surfaceColor,
+              child: TabBar(
+                labelColor: AppTheme.primary,
+                unselectedLabelColor: context.textMutedColor,
+                indicatorColor: AppTheme.primary,
+                tabs: const [
+                  Tab(icon: Icon(Icons.people_alt_rounded), text: 'Staff Registry'),
+                  Tab(icon: Icon(Icons.calendar_month_rounded), text: 'Attendance Logs'),
+                ],
+              ),
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  registryContent,
+                  attendanceContent,
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

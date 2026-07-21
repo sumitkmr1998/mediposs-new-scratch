@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'objectbox_service.dart';
 import '../models/sync_queue_item.dart';
+import '../models/attendance_record.dart';
 import '../models/sale.dart';
 import '../models/patient.dart';
 import '../models/appointment.dart';
@@ -177,6 +178,11 @@ class SyncQueueService extends ChangeNotifier {
             return await syncService.pushProcedureDelete(data['name'] ?? '');
           }
           return await syncService.pushProcedure(Procedure.fromJson(data));
+        case 'attendance':
+          if (item.action == 'delete') {
+            return await syncService.pushAttendanceDelete(data['userId'], data['date']);
+          }
+          return await syncService.pushAttendance(AttendanceRecord.fromJson(data));
         default:
           return true; // Ignore unknown entities
       }

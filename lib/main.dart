@@ -17,6 +17,7 @@ import 'shared/providers/opd_provider.dart';
 import 'shared/providers/prescription_provider.dart';
 import 'shared/providers/template_provider.dart';
 import 'shared/providers/procedure_provider.dart';
+import 'shared/providers/attendance_provider.dart';
 import 'theme/app_theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/app_shell.dart';
@@ -134,6 +135,7 @@ void main(List<String> args) async {
       inventoryProvider, salesProvider, prescriptionProvider, opdProvider);
 
   final settingsProvider = SettingsProvider();
+  final attendanceProvider = AttendanceProvider();
 
   final syncService = SyncService();
   final wsService = WebSocketService();
@@ -265,6 +267,7 @@ void main(List<String> args) async {
   opdProvider.loadAll();
   prescriptionProvider.load();
   templateProvider.load();
+  attendanceProvider.load();
 
   runApp(
     MultiProvider(
@@ -283,6 +286,7 @@ void main(List<String> args) async {
         ChangeNotifierProvider.value(value: opdProvider),
         ChangeNotifierProvider.value(value: prescriptionProvider),
         ChangeNotifierProvider.value(value: templateProvider),
+        ChangeNotifierProvider.value(value: attendanceProvider),
         ChangeNotifierProvider(create: (_) => ProcedureProvider()),
       ],
       child: const MediPossApp(),
