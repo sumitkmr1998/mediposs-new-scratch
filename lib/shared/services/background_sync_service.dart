@@ -185,15 +185,22 @@ void onStart(ServiceInstance service) async {
       final event = msg['event'];
       debugPrint('Background WebSocket Event: $event');
       
-      if (event == 'sync_received' || 
-          event == 'medicines_updated' || 
-          event == 'sales_updated' ||
-          event == 'patients_updated' ||
-          event == 'appointments_updated') {
-        
-        await syncService.syncAll();
+      if (event == 'medicines_updated') {
+        await syncService.pullMedicines();
         notifyForeground(event, msg);
-        
+      } else if (event == 'sales_updated') {
+        await syncService.pullSales();
+        notifyForeground(event, msg);
+      } else if (event == 'patients_updated' || event == 'new_patient') {
+        await syncService.pullPatients();
+        notifyForeground(event, msg);
+      } else if (event == 'appointments_updated') {
+        await syncService.pullAppointments();
+        notifyForeground(event, msg);
+      } else if (event == 'sync_received') {
+        await syncService.pullAppointments();
+        await syncService.pullSales();
+        notifyForeground(event, msg);
       } else if (event == 'settings_updated') {
         await syncService.pullSettings();
         notifyForeground(event, msg);
@@ -311,12 +318,28 @@ void setupForegroundSyncListeners(
   }
 
   FlutterBackgroundService().on('data_synced').listen((event) {
-    debugPrint('Foreground: Received sync notification from Background Service');
-    inventoryProvider.load();
-    salesProvider.load();
-    patientProvider.load();
-    opdProvider.loadAll();
-    prescriptionProvider.load();
-    templateProvider.load();
+    final String eventName = (event != null && event['event'] != null) ? event['event'].toString() : '';
+    debugPrint('Foreground: Received sync notification ($eventName) from Background Service');
+
+    if (eventName == 'medicines_updated' || eventName == 'medicine_deleted') {
+      inventoryProvider.load();
+    } else if (eventName == 'sales_updated' || eventName == 'sale_deleted') {
+      salesProvider.load();
+      inventoryProvider.load();
+    } else if (eventName == 'patients_updated' || eventName == 'patient_deleted' || eventName == 'new_patient') {
+      patientProvider.load();
+    } else if (eventName == 'appointments_updated') {
+      opdProvider.loadAll();
+    } else if (eventName == 'prescriptions_updated') {
+      prescriptionProvider.load();
+    } else {
+      // General fallback
+      inventoryProvider.load();
+      salesProvider.load();
+      patientProvider.load();
+      opdProvider.loadAll();
+      prescriptionProvider.load();
+      templateProvider.load();
+    }
   });
 }

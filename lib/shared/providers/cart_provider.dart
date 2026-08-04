@@ -839,6 +839,7 @@ class CartProvider extends ChangeNotifier {
               .build()
               .find();
           existingOpdSale = candidateSales.where((sale) {
+            if (appt.patientId > 0 && sale.patientId == appt.patientId) return true;
             if (apptPhone.isNotEmpty && sale.patientPhone == apptPhone) return true;
             if (apptName.toLowerCase().trim() == sale.patientName.toLowerCase().trim()) return true;
             return false;

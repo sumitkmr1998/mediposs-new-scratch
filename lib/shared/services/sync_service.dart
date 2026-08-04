@@ -1697,6 +1697,7 @@ class SyncService extends ChangeNotifier {
                 ..isClinicalDispense = item['isClinicalDispense'] ?? false
                 ..linkedAppointmentId = item['linkedAppointmentId'] ?? 0
                 ..linkedProcedureId = item['linkedProcedureId'] ?? 0
+                ..opdInvoiceNo = item['opdInvoiceNo'] ?? ''
                 ..itemsJson = item['itemsJson'] ?? '[]';
               salesToPut.add(existing);
             } else {
@@ -1723,6 +1724,7 @@ class SyncService extends ChangeNotifier {
                 isClinicalDispense: item['isClinicalDispense'] ?? false,
                 linkedAppointmentId: item['linkedAppointmentId'] ?? 0,
                 linkedProcedureId: item['linkedProcedureId'] ?? 0,
+                opdInvoiceNo: item['opdInvoiceNo'] ?? '',
                 itemsJson: item['itemsJson'] ?? '[]',
               ));
             }

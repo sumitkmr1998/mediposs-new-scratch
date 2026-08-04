@@ -767,6 +767,7 @@ class LocalServerService {
               'isClinicalDispense': s.isClinicalDispense,
               'linkedAppointmentId': s.linkedAppointmentId,
               'linkedProcedureId': s.linkedProcedureId,
+              'opdInvoiceNo': s.opdInvoiceNo,
               'itemsJson': s.itemsJson,
             })
         .toList();
@@ -843,6 +844,9 @@ class LocalServerService {
         synced: true,
         isReturn: body['isReturn'] ?? false,
         isClinicalDispense: body['isClinicalDispense'] ?? false,
+        linkedAppointmentId: (body['linkedAppointmentId'] as num?)?.toInt() ?? 0,
+        linkedProcedureId: (body['linkedProcedureId'] as num?)?.toInt() ?? 0,
+        opdInvoiceNo: body['opdInvoiceNo'] as String? ?? '',
         itemsJson: body['itemsJson'] ?? '[]',
       );
 
@@ -875,6 +879,9 @@ class LocalServerService {
           ..updatedAt = DateTime.now()
           ..isReturn = sale.isReturn
           ..isClinicalDispense = sale.isClinicalDispense
+          ..linkedAppointmentId = sale.linkedAppointmentId
+          ..linkedProcedureId = sale.linkedProcedureId
+          ..opdInvoiceNo = sale.opdInvoiceNo
           ..itemsJson = sale.itemsJson;
 
         ObjectBoxService.instance.saleBox.put(existing);

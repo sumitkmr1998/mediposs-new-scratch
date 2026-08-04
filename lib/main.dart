@@ -166,24 +166,30 @@ void main(List<String> args) async {
       prescriptionProvider,
       templateProvider);
 
+  Timer? syncDebounceTimer;
   wsService.eventStream.listen((msg) {
     final event = msg['event'];
-    debugPrint('Mobile WebSocket Event: $event');
+    debugPrint('WebSocket Event: $event');
     if (event == 'remote_camera_trigger') {
       GlobalNavigationService.handleRemoteCameraTrigger(msg);
-    } else if (event == 'sync_received' || 
-               event == 'medicines_updated' || 
-               event == 'sales_updated' ||
-               event == 'patients_updated' ||
-               event == 'appointments_updated' ||
-               event == 'audit_logs_updated') {
-      syncService.syncAll().then((_) {
-        inventoryProvider.load();
+    } else if (event == 'medicines_updated') {
+      syncService.pullMedicines().then((_) => inventoryProvider.load());
+    } else if (event == 'sales_updated') {
+      syncService.pullSales().then((_) {
         salesProvider.load();
-        patientProvider.load();
-        opdProvider.loadAll();
-        prescriptionProvider.load();
-        templateProvider.load();
+        inventoryProvider.load();
+      });
+    } else if (event == 'patients_updated' || event == 'new_patient') {
+      syncService.pullPatients().then((_) => patientProvider.load());
+    } else if (event == 'appointments_updated') {
+      syncService.pullAppointments().then((_) => opdProvider.loadAll());
+    } else if (event == 'prescriptions_updated') {
+      syncService.pullPrescriptions().then((_) => prescriptionProvider.load());
+    } else if (event == 'sync_received' || event == 'audit_logs_updated') {
+      syncDebounceTimer?.cancel();
+      syncDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+        syncService.pullAppointments().then((_) => opdProvider.loadAll());
+        syncService.pullSales().then((_) => salesProvider.load());
       });
     } else if (event == 'settings_updated') {
       syncService.pullSettings().then((_) => settingsProvider.load());
