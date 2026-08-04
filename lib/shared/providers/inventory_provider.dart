@@ -171,7 +171,73 @@ class InventoryProvider extends ChangeNotifier {
     }
   }
 
+  bool _hasDeduplicated = false;
+
+  void _deduplicateBatchesInDatabase() {
+    try {
+      final allMeds = _box.getAll();
+      bool changedAny = false;
+      final List<MedicineBatch> batchesToDelete = [];
+      final List<MedicineBatch> batchesToUpdate = [];
+
+      for (final m in allMeds) {
+        if (m.batches.length < 2) continue;
+
+        final Map<String, MedicineBatch> uniqueBatches = {};
+        bool medicineChanged = false;
+
+        for (final b in m.batches) {
+          final key = b.batchNo.trim().toUpperCase();
+          if (key.isEmpty) continue;
+
+          if (!uniqueBatches.containsKey(key)) {
+            uniqueBatches[key] = b;
+          } else {
+            // Merge stocks into the first encountered batch with same batch number
+            final target = uniqueBatches[key]!;
+            target.mainStock += b.mainStock;
+            target.storeStock += b.storeStock;
+            target.bulkClinicStock += b.bulkClinicStock;
+            target.bulkStoreStock += b.bulkStoreStock;
+
+            batchesToUpdate.add(target);
+            batchesToDelete.add(b);
+
+            medicineChanged = true;
+            changedAny = true;
+          }
+        }
+
+        if (medicineChanged) {
+          // Recalculate medicine total stock
+          m.recalculateStockFromBatches();
+          _box.put(m);
+        }
+      }
+
+      if (batchesToUpdate.isNotEmpty) {
+        _batchBox.putMany(batchesToUpdate);
+      }
+      if (batchesToDelete.isNotEmpty) {
+        for (final b in batchesToDelete) {
+          b.medicine.target = null;
+          _batchBox.remove(b.id);
+        }
+      }
+
+      if (changedAny) {
+        debugPrint('InventoryProvider: Auto-merged and purged duplicate batch entries in database.');
+      }
+    } catch (e) {
+      debugPrint('InventoryProvider: Error during batch deduplication: $e');
+    }
+  }
+
   void load() {
+    if (!_hasDeduplicated) {
+      _hasDeduplicated = true;
+      _deduplicateBatchesInDatabase();
+    }
     _medicines = _box.getAll();
     _purchaseHistory = _purchaseBox.getAll();
     _purchaseHistory.sort((a, b) => b.purchasedAt.compareTo(a.purchasedAt));
@@ -670,10 +736,28 @@ class InventoryProvider extends ChangeNotifier {
 
         // Update or create batch
         if (batchNo.isNotEmpty && expiryDate != null) {
-          var batch = m.batches.where((b) => b.batchNo == batchNo).firstOrNull;
+          final cleanBatchNo = batchNo.trim().toUpperCase();
+          var batch = m.batches
+              .where((b) => b.batchNo.trim().toUpperCase() == cleanBatchNo)
+              .firstOrNull;
+
+          if (batch == null) {
+            // Check the database directly to prevent duplicates if relation list is stale/uncached
+            final dbBatch = _batchBox
+                .query(MedicineBatch_.batchNo.equals(batchNo.trim(), caseSensitive: false)
+                    .and(MedicineBatch_.medicine.equals(m.id)))
+                .build()
+                .findFirst();
+            if (dbBatch != null) {
+              batch = dbBatch;
+              // Make sure it is added to the relation list
+              m.batches.add(batch);
+            }
+          }
+
           if (batch == null) {
             batch = MedicineBatch(
-              batchNo: batchNo,
+              batchNo: batchNo.trim(),
               expiryDate: expiryDate,
               mainStock: mainQty,
               storeStock: storeQty,
