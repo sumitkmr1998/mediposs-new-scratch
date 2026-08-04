@@ -4,7 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../shared/models/medicine.dart';
-import '../shared/models/audit_log.dart';
+import '../shared/models/purchase_record.dart';
 import '../shared/providers/inventory_provider.dart';
 import '../shared/providers/auth_provider.dart';
 import '../shared/services/objectbox_service.dart';
@@ -50,14 +50,14 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
         final List<_EditablePurchaseRow> newRows = [];
         final Set<String> dupes = {};
 
-        // Find already imported invoice numbers from Audit Logs
-        final logs = ObjectBoxService.instance.auditLogBox.getAll();
-        final pastInvoiceNos = <String>{};
-        for (var log in logs) {
-          if (log.description.contains('PDF Invoice')) {
-            final match = RegExp(r'PDF Invoice ([A-Z0-9-]+)').firstMatch(log.description);
+        // Query active PurchaseRecords to check if invoice entry is currently active in purchase logs
+        final activePurchases = ObjectBoxService.instance.purchaseBox.getAll();
+        final pastInvoiceNosInLogs = <String>{};
+        for (var p in activePurchases) {
+          if (p.note.isNotEmpty && p.note.contains('Invoice')) {
+            final match = RegExp(r'Invoice\s+([A-Z0-9-]+)').firstMatch(p.note);
             if (match != null && match.group(1) != null) {
-              pastInvoiceNos.add(match.group(1)!);
+              pastInvoiceNosInLogs.add(match.group(1)!);
             }
           }
         }
@@ -75,7 +75,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
             final invoice = PdfPurchaseParserService.parsePdfBytes(bytes);
             invoices.add(invoice);
 
-            if (pastInvoiceNos.contains(invoice.invoiceNo)) {
+            if (pastInvoiceNosInLogs.contains(invoice.invoiceNo)) {
               dupes.add(invoice.invoiceNo);
             }
 
@@ -252,6 +252,43 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
   Future<void> _confirmAndImport() async {
     if (_rows.isEmpty) return;
 
+    // Show Confirmation Warning Dialog if any invoice is duplicate in active Purchase Logs
+    if (_duplicateInvoices.isNotEmpty) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: const [
+              Icon(Icons.warning_amber_rounded, color: AppTheme.warning, size: 28),
+              SizedBox(width: 10),
+              Text('Duplicate Purchase Invoice Warning'),
+            ],
+          ),
+          content: Text(
+            'Purchase entry for Invoice(s) "${_duplicateInvoices.join(', ')}" has already been made in active purchase logs.\n\nAre you sure you want to add duplicate stock entry for this invoice?',
+            style: const TextStyle(fontSize: 14),
+          ),
+          actions: [
+            OutlinedButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.warning,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Yes, Duplicate Entry'),
+            ),
+          ],
+        ),
+      );
+
+      if (proceed != true) return;
+    }
+
     setState(() => _isLoading = true);
     try {
       final invProvider = context.read<InventoryProvider>();
@@ -298,7 +335,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
           ObjectBoxService.instance.medicineBox.put(medicine);
         }
 
-        // Apply batch stock directly via InventoryProvider
+        // Apply batch stock directly via InventoryProvider (Creates active PurchaseRecord entry)
         invProvider.addBatchStock(
           {medicine.id: 0},
           bulkClinicUpdates: row.targetLocation == 'bulkClinic' ? {medicine.id: qty} : {},
@@ -403,7 +440,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        '⚠️ WARNING: Invoice(s) ${_duplicateInvoices.join(', ')} may have already been imported into stock! Verify to prevent duplicate stock entry.',
+                        '⚠️ WARNING: Invoice "${_duplicateInvoices.join(', ')}" entry has already been made in active purchase logs! Are you sure you want to duplicate it?',
                         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange),
                       ),
                     ),
@@ -497,7 +534,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
               ),
               const SizedBox(height: 8),
 
-              // Optimized Multi-Invoice Line Items Table with Spacious Columns
+              // Optimized Multi-Invoice Line Items Table
               Expanded(
                 child: SingleChildScrollView(
                   scrollDirection: Axis.vertical,
@@ -524,7 +561,6 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
 
                         return DataRow(
                           cells: [
-                            // Invoice & Target Location Column
                             DataCell(
                               SizedBox(
                                 width: 130,
@@ -550,7 +586,6 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                                 ),
                               ),
                             ),
-                            // Item Name & Match Status Column
                             DataCell(
                               SizedBox(
                                 width: 230,
@@ -597,7 +632,6 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                                 ),
                               ),
                             ),
-                            // HSN Column
                             DataCell(
                               SizedBox(
                                 width: 95,
@@ -612,7 +646,6 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                                 ),
                               ),
                             ),
-                            // Batch Column
                             DataCell(
                               SizedBox(
                                 width: 110,
@@ -627,7 +660,6 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                                 ),
                               ),
                             ),
-                            // Expiry Date Column
                             DataCell(
                               SizedBox(
                                 width: 90,
@@ -644,7 +676,6 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                                 ),
                               ),
                             ),
-                            // MRP Column
                             DataCell(
                               SizedBox(
                                 width: 90,
@@ -660,7 +691,6 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                                 ),
                               ),
                             ),
-                            // Cost Rate Column
                             DataCell(
                               SizedBox(
                                 width: 95,
@@ -676,7 +706,6 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                                 ),
                               ),
                             ),
-                            // Qty Column
                             DataCell(
                               SizedBox(
                                 width: 70,
