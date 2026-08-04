@@ -265,9 +265,35 @@ class SalesProvider extends ChangeNotifier {
           box.query().order(Sale_.createdAt, flags: Order.descending).build();
     }
 
-    _sales = query.find();
-    _loadedCount = pageSize;
+    final rawList = query.find();
     query.close();
+
+    // Deduplicate sales by invoiceNo to prevent duplicate display in Android & Windows
+    final Map<String, Sale> uniqueMap = {};
+    final List<int> duplicateIdsToDelete = [];
+
+    for (var s in rawList) {
+      if (!uniqueMap.containsKey(s.invoiceNo)) {
+        uniqueMap[s.invoiceNo] = s;
+      } else {
+        // Keep the record with highest ID (most recent) and mark duplicate for deletion
+        final existing = uniqueMap[s.invoiceNo]!;
+        if (s.id > existing.id) {
+          duplicateIdsToDelete.add(existing.id);
+          uniqueMap[s.invoiceNo] = s;
+        } else {
+          duplicateIdsToDelete.add(s.id);
+        }
+      }
+    }
+
+    if (duplicateIdsToDelete.isNotEmpty) {
+      box.removeMany(duplicateIdsToDelete);
+      debugPrint('SalesProvider: Purged ${duplicateIdsToDelete.length} duplicate sale records from ObjectBox.');
+    }
+
+    _sales = uniqueMap.values.toList();
+    _loadedCount = pageSize;
     _recalculateTotals();
 
     try {

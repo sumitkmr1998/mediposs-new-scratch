@@ -35,6 +35,32 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
 
   List<_EditablePurchaseRow> _rows = [];
 
+  void _removeInvoice(String invoiceNo) {
+    setState(() {
+      _parsedInvoices.removeWhere((inv) => inv.invoiceNo == invoiceNo);
+      _rows.removeWhere((row) => row.invoiceNo == invoiceNo);
+      _duplicateInvoices.remove(invoiceNo);
+      _selectedSummaryText = _parsedInvoices.isEmpty
+          ? ''
+          : 'Importing ${_parsedInvoices.length} PDF Invoices (${_rows.length} Items Total)';
+    });
+  }
+
+  void _removeRow(_EditablePurchaseRow row) {
+    setState(() {
+      _rows.remove(row);
+      // Check if invoice has any remaining rows
+      final invNo = row.invoiceNo;
+      if (!_rows.any((r) => r.invoiceNo == invNo)) {
+        _parsedInvoices.removeWhere((inv) => inv.invoiceNo == invNo);
+        _duplicateInvoices.remove(invNo);
+      }
+      _selectedSummaryText = _parsedInvoices.isEmpty
+          ? ''
+          : 'Importing ${_parsedInvoices.length} PDF Invoices (${_rows.length} Items Total)';
+    });
+  }
+
   Future<void> _pickAndParsePdf() async {
     setState(() => _isLoading = true);
     try {
@@ -375,15 +401,17 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
-    final dialogWidth = (screenSize.width * 0.94).clamp(900.0, 1250.0);
-    final dialogHeight = (screenSize.height * 0.90).clamp(600.0, 850.0);
+    final isMobile = screenSize.width < 700;
+    final dialogWidth = isMobile ? screenSize.width * 0.96 : (screenSize.width * 0.94).clamp(900.0, 1250.0);
+    final dialogHeight = isMobile ? screenSize.height * 0.95 : (screenSize.height * 0.90).clamp(600.0, 850.0);
 
     return Dialog(
+      insetPadding: isMobile ? const EdgeInsets.symmetric(horizontal: 8, vertical: 12) : const EdgeInsets.all(24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         width: dialogWidth,
         height: dialogHeight,
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(isMobile ? 12 : 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -398,20 +426,20 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                   ),
                   child: const Icon(Icons.picture_as_pdf_rounded, color: AppTheme.primary),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Upload PDF Purchase Invoices (Multi-PDF)',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      Text(
+                        'Upload PDF Invoices (Multi-PDF)',
+                        style: TextStyle(fontSize: isMobile ? 15 : 18, fontWeight: FontWeight.bold),
                       ),
                       Text(
                         _selectedSummaryText.isEmpty
-                            ? 'Select one or multiple tax invoice PDFs (e.g. Tridha Pharmaceuticals)'
+                            ? 'Select tax invoice PDFs (e.g. Tridha Pharma)'
                             : _selectedSummaryText,
-                        style: TextStyle(fontSize: 12, color: context.textMutedColor),
+                        style: TextStyle(fontSize: isMobile ? 11 : 12, color: context.textMutedColor),
                       ),
                     ],
                   ),
@@ -424,25 +452,44 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
             ),
             const Divider(height: 16),
 
-            // Duplicate Invoice Warning Banner
+            // Duplicate Invoice Warning Banner with Remove Cross Button
             if (_duplicateInvoices.isNotEmpty) ...[
               Container(
                 margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: AppTheme.warning.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: AppTheme.warning),
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.warning_amber_rounded, color: AppTheme.warning, size: 22),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        '⚠️ WARNING: Invoice "${_duplicateInvoices.join(', ')}" entry has already been made in active purchase logs! Are you sure you want to duplicate it?',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange),
-                      ),
+                    Row(
+                      children: const [
+                        Icon(Icons.warning_amber_rounded, color: AppTheme.warning, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          '⚠️ WARNING: Invoice Entry Already Made!',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: _duplicateInvoices.map((invNo) {
+                        return Chip(
+                          backgroundColor: Colors.orange.withValues(alpha: 0.2),
+                          label: Text(
+                            'Invoice $invNo [Remove]',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.orange),
+                          ),
+                          deleteIcon: const Icon(Icons.close, size: 14, color: AppTheme.danger),
+                          onDeleted: () => _removeInvoice(invNo),
+                        );
+                      }).toList(),
                     ),
                   ],
                 ),
@@ -496,7 +543,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                 ),
               ),
             ] else ...[
-              // Invoice Summary Header Badges
+              // Invoice Summary Header Badges with Remove Cross Button
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -505,26 +552,42 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                     final isDupe = _duplicateInvoices.contains(inv.invoiceNo);
 
                     return Container(
-                      margin: const EdgeInsets.only(right: 12, bottom: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      margin: const EdgeInsets.only(right: 8, bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         color: (isDupe ? AppTheme.warning : (isClinic ? AppTheme.success : AppTheme.primary)).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: isDupe ? AppTheme.warning : (isClinic ? AppTheme.success : AppTheme.primary).withValues(alpha: 0.4)),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Row(
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Invoice ${inv.invoiceNo} (${inv.items.length} items)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                              if (isDupe) const Text(' [DUPLICATE]', style: TextStyle(color: AppTheme.warning, fontWeight: FontWeight.bold, fontSize: 10)),
+                              Row(
+                                children: [
+                                  Text('Invoice ${inv.invoiceNo}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                  if (isDupe) const Text(' [DUPLICATE]', style: TextStyle(color: AppTheme.warning, fontWeight: FontWeight.bold, fontSize: 9)),
+                                ],
+                              ),
+                              Text(
+                                isClinic ? '➔ CLINIC BULK' : '➔ STORE BULK',
+                                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: isClinic ? AppTheme.success : AppTheme.primary),
+                              ),
                             ],
                           ),
-                          Text('Bill To: ${inv.billToName}', style: TextStyle(fontSize: 10, color: context.textMutedColor)),
-                          Text(
-                            isClinic ? '➔ CLINIC BULK' : '➔ STORE BULK',
-                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isClinic ? AppTheme.success : AppTheme.primary),
+                          const SizedBox(width: 8),
+                          InkWell(
+                            onTap: () => _removeInvoice(inv.invoiceNo),
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                color: AppTheme.danger.withValues(alpha: 0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.close, size: 14, color: AppTheme.danger),
+                            ),
                           ),
                         ],
                       ),
@@ -532,201 +595,389 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                   }).toList(),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
 
-              // Optimized Multi-Invoice Line Items Table
+              // Responsive Content: Android Card List vs Desktop DataTable
               Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.vertical,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columnSpacing: 14,
-                      headingRowHeight: 42,
-                      dataRowMinHeight: 60,
-                      dataRowMaxHeight: 68,
-                      columns: const [
-                        DataColumn(label: SizedBox(width: 130, child: Text('Invoice / Target', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
-                        DataColumn(label: SizedBox(width: 230, child: Text('Item Name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
-                        DataColumn(label: SizedBox(width: 95, child: Text('HSN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
-                        DataColumn(label: SizedBox(width: 110, child: Text('Batch No.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
-                        DataColumn(label: SizedBox(width: 90, child: Text('Exp Date', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
-                        DataColumn(label: SizedBox(width: 90, child: Text('MRP ₹', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
-                        DataColumn(label: SizedBox(width: 95, child: Text('Cost Rate ₹', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
-                        DataColumn(label: SizedBox(width: 70, child: Text('Qty', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
-                      ],
-                      rows: _rows.map((row) {
-                        final isMatched = row.matchedMedicine != null;
-                        final isClinic = row.targetLocation == 'bulkClinic';
+                child: isMobile
+                    ? ListView.builder(
+                        itemCount: _rows.length,
+                        itemBuilder: (ctx, idx) {
+                          final row = _rows[idx];
+                          final isMatched = row.matchedMedicine != null;
+                          final isClinic = row.targetLocation == 'bulkClinic';
 
-                        return DataRow(
-                          cells: [
-                            DataCell(
-                              SizedBox(
-                                width: 130,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(row.invoiceNo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                                    DropdownButton<String>(
-                                      value: row.targetLocation,
-                                      isDense: true,
-                                      underline: const SizedBox(),
-                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isClinic ? AppTheme.success : AppTheme.primary),
-                                      items: const [
-                                        DropdownMenuItem(value: 'bulkClinic', child: Text('Clinic Bulk')),
-                                        DropdownMenuItem(value: 'bulkStore', child: Text('Store Bulk')),
-                                      ],
-                                      onChanged: (val) {
-                                        if (val != null) setState(() => row.targetLocation = val);
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              side: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
                             ),
-                            DataCell(
-                              SizedBox(
-                                width: 230,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: TextField(
-                                            controller: row.nameCtrl,
-                                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                            decoration: InputDecoration(
-                                              isDense: true,
-                                              contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
-                                            ),
-                                          ),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(Icons.search, size: 18, color: AppTheme.primary),
-                                          tooltip: 'Select / Link Existing Medicine',
-                                          onPressed: () => _showMedicinePickerModal(row),
-                                        ),
-                                      ],
-                                    ),
-                                    InkWell(
-                                      onTap: () => _showMedicinePickerModal(row),
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(top: 2),
-                                        child: Text(
-                                          isMatched ? '✓ Matched: ${row.matchedMedicine!.name}' : '+ New Item (Tap to Link)',
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: isMatched ? AppTheme.success : AppTheme.warning,
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Invoice & Location Header
+                                  Row(
+                                    children: [
+                                      Text(
+                                        'Invoice ${row.invoiceNo}',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      DropdownButton<String>(
+                                        value: row.targetLocation,
+                                        isDense: true,
+                                        underline: const SizedBox(),
+                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isClinic ? AppTheme.success : AppTheme.primary),
+                                        items: const [
+                                          DropdownMenuItem(value: 'bulkClinic', child: Text('Clinic Bulk')),
+                                          DropdownMenuItem(value: 'bulkStore', child: Text('Store Bulk')),
+                                        ],
+                                        onChanged: (val) {
+                                          if (val != null) setState(() => row.targetLocation = val);
+                                        },
+                                      ),
+                                      const Spacer(),
+                                      IconButton(
+                                        icon: const Icon(Icons.close, size: 16, color: AppTheme.danger),
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        tooltip: 'Remove Item',
+                                        onPressed: () => _removeRow(row),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  // Item Name Input
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: row.nameCtrl,
+                                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                          decoration: InputDecoration(
+                                            labelText: 'Medicine Name',
+                                            isDense: true,
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
                                           ),
                                         ),
                                       ),
+                                      IconButton(
+                                        icon: const Icon(Icons.search, color: AppTheme.primary),
+                                        onPressed: () => _showMedicinePickerModal(row),
+                                      ),
+                                    ],
+                                  ),
+                                  InkWell(
+                                    onTap: () => _showMedicinePickerModal(row),
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(top: 4, bottom: 8),
+                                      child: Text(
+                                        isMatched ? '✓ Matched: ${row.matchedMedicine!.name}' : '+ New Item (Tap to Link)',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: isMatched ? AppTheme.success : AppTheme.warning,
+                                        ),
+                                      ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                  // Touch Input Fields Grid (2-Column)
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: row.hsnCtrl,
+                                          style: const TextStyle(fontSize: 11),
+                                          decoration: InputDecoration(
+                                            labelText: 'HSN',
+                                            isDense: true,
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: TextField(
+                                          controller: row.batchCtrl,
+                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                                          decoration: InputDecoration(
+                                            labelText: 'Batch',
+                                            isDense: true,
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          'Exp: ${row.expiryDate.month.toString().padLeft(2, '0')}/${row.expiryDate.year}',
+                                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: row.mrpCtrl,
+                                          keyboardType: TextInputType.number,
+                                          style: const TextStyle(fontSize: 11),
+                                          decoration: InputDecoration(
+                                            labelText: 'MRP ₹',
+                                            isDense: true,
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: TextField(
+                                          controller: row.priceCtrl,
+                                          keyboardType: TextInputType.number,
+                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primary),
+                                          decoration: InputDecoration(
+                                            labelText: 'Cost Rate ₹',
+                                            isDense: true,
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: TextField(
+                                          controller: row.qtyCtrl,
+                                          keyboardType: TextInputType.number,
+                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                                          decoration: InputDecoration(
+                                            labelText: 'Qty',
+                                            isDense: true,
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ),
-                            DataCell(
-                              SizedBox(
-                                width: 95,
-                                child: TextField(
-                                  controller: row.hsnCtrl,
-                                  style: const TextStyle(fontSize: 12),
-                                  decoration: InputDecoration(
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                          );
+                        },
+                      )
+                    : SingleChildScrollView(
+                        scrollDirection: Axis.vertical,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: DataTable(
+                            columnSpacing: 14,
+                            headingRowHeight: 42,
+                            dataRowMinHeight: 60,
+                            dataRowMaxHeight: 68,
+                            columns: const [
+                              DataColumn(label: SizedBox(width: 130, child: Text('Invoice / Target', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+                              DataColumn(label: SizedBox(width: 230, child: Text('Item Name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+                              DataColumn(label: SizedBox(width: 95, child: Text('HSN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+                              DataColumn(label: SizedBox(width: 110, child: Text('Batch No.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+                              DataColumn(label: SizedBox(width: 90, child: Text('Exp Date', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+                              DataColumn(label: SizedBox(width: 90, child: Text('MRP ₹', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+                              DataColumn(label: SizedBox(width: 95, child: Text('Cost Rate ₹', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+                              DataColumn(label: SizedBox(width: 70, child: Text('Qty', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+                              DataColumn(label: SizedBox(width: 40, child: Text('', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+                            ],
+                            rows: _rows.map((row) {
+                              final isMatched = row.matchedMedicine != null;
+                              final isClinic = row.targetLocation == 'bulkClinic';
+
+                              return DataRow(
+                                cells: [
+                                  DataCell(
+                                    SizedBox(
+                                      width: 130,
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(row.invoiceNo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                          DropdownButton<String>(
+                                            value: row.targetLocation,
+                                            isDense: true,
+                                            underline: const SizedBox(),
+                                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isClinic ? AppTheme.success : AppTheme.primary),
+                                            items: const [
+                                              DropdownMenuItem(value: 'bulkClinic', child: Text('Clinic Bulk')),
+                                              DropdownMenuItem(value: 'bulkStore', child: Text('Store Bulk')),
+                                            ],
+                                            onChanged: (val) {
+                                              if (val != null) setState(() => row.targetLocation = val);
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              SizedBox(
-                                width: 110,
-                                child: TextField(
-                                  controller: row.batchCtrl,
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                  decoration: InputDecoration(
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                  DataCell(
+                                    SizedBox(
+                                      width: 230,
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: TextField(
+                                                  controller: row.nameCtrl,
+                                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                                  decoration: InputDecoration(
+                                                    isDense: true,
+                                                    contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                                  ),
+                                                ),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(Icons.search, size: 18, color: AppTheme.primary),
+                                                tooltip: 'Select / Link Existing Medicine',
+                                                onPressed: () => _showMedicinePickerModal(row),
+                                              ),
+                                            ],
+                                          ),
+                                          InkWell(
+                                            onTap: () => _showMedicinePickerModal(row),
+                                            child: Padding(
+                                              padding: const EdgeInsets.only(top: 2),
+                                              child: Text(
+                                                isMatched ? '✓ Matched: ${row.matchedMedicine!.name}' : '+ New Item (Tap to Link)',
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: isMatched ? AppTheme.success : AppTheme.warning,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              SizedBox(
-                                width: 90,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(4),
+                                  DataCell(
+                                    SizedBox(
+                                      width: 95,
+                                      child: TextField(
+                                        controller: row.hsnCtrl,
+                                        style: const TextStyle(fontSize: 12),
+                                        decoration: InputDecoration(
+                                          isDense: true,
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                  child: Text(
-                                    '${row.expiryDate.month.toString().padLeft(2, '0')}/${row.expiryDate.year}',
-                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                  DataCell(
+                                    SizedBox(
+                                      width: 110,
+                                      child: TextField(
+                                        controller: row.batchCtrl,
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                        decoration: InputDecoration(
+                                          isDense: true,
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              SizedBox(
-                                width: 90,
-                                child: TextField(
-                                  controller: row.mrpCtrl,
-                                  keyboardType: TextInputType.number,
-                                  style: const TextStyle(fontSize: 12),
-                                  decoration: InputDecoration(
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                  DataCell(
+                                    SizedBox(
+                                      width: 90,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          '${row.expiryDate.month.toString().padLeft(2, '0')}/${row.expiryDate.year}',
+                                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              SizedBox(
-                                width: 95,
-                                child: TextField(
-                                  controller: row.priceCtrl,
-                                  keyboardType: TextInputType.number,
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primary),
-                                  decoration: InputDecoration(
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                  DataCell(
+                                    SizedBox(
+                                      width: 90,
+                                      child: TextField(
+                                        controller: row.mrpCtrl,
+                                        keyboardType: TextInputType.number,
+                                        style: const TextStyle(fontSize: 12),
+                                        decoration: InputDecoration(
+                                          isDense: true,
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              SizedBox(
-                                width: 70,
-                                child: TextField(
-                                  controller: row.qtyCtrl,
-                                  keyboardType: TextInputType.number,
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                  decoration: InputDecoration(
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                  DataCell(
+                                    SizedBox(
+                                      width: 95,
+                                      child: TextField(
+                                        controller: row.priceCtrl,
+                                        keyboardType: TextInputType.number,
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primary),
+                                        decoration: InputDecoration(
+                                          isDense: true,
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
+                                  DataCell(
+                                    SizedBox(
+                                      width: 70,
+                                      child: TextField(
+                                        controller: row.qtyCtrl,
+                                        keyboardType: TextInputType.number,
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                        decoration: InputDecoration(
+                                          isDense: true,
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    IconButton(
+                                      icon: const Icon(Icons.close, size: 16, color: AppTheme.danger),
+                                      tooltip: 'Remove Item',
+                                      onPressed: () => _removeRow(row),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
               ),
 
               const Divider(),
@@ -736,17 +987,17 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                   OutlinedButton.icon(
                     onPressed: _pickAndParsePdf,
                     icon: const Icon(Icons.file_open_rounded, size: 16),
-                    label: const Text('Select More PDFs'),
+                    label: Text(isMobile ? 'More' : 'Select More PDFs'),
                   ),
                   const Spacer(),
                   ElevatedButton.icon(
                     onPressed: _confirmAndImport,
                     icon: const Icon(Icons.check_circle_rounded),
-                    label: Text('Confirm & Add All ${_rows.length} Items to Stock'),
+                    label: Text(isMobile ? 'Confirm (${_rows.length})' : 'Confirm & Add All ${_rows.length} Items to Stock'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primary,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: 12),
                     ),
                   ),
                 ],
