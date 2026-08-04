@@ -178,20 +178,11 @@ class PdfPurchaseParserService {
       final endLookforward = (hsnPos + 250).clamp(0, text.length);
       final afterHsn = text.substring(hsnPos + hsn.length, endLookforward);
 
-      // Match Batch (alphanumeric e.g. CC260180, BM6-120, O26L9001, CFZ01ABB)
+      // Extract Batch & Exp Date (MM/YYYY)
       String batchNo = '';
-      final batchReg = RegExp(r'\b([A-Z0-9-]{5,12})\b');
-      final batchMatches = batchReg.allMatches(afterHsn);
-      for (var b in batchMatches) {
-        final val = b.group(1)!;
-        if (!val.contains('/') && !RegExp(r'^\d+$').hasMatch(val)) {
-          batchNo = val;
-          break;
-        }
-      }
-
-      // Match Exp Date (MM/YYYY)
       DateTime expiryDate = DateTime.now().add(const Duration(days: 365));
+      int expEndPos = 0;
+
       final expReg = RegExp(r'\b(\d{2}/\d{4})\b');
       final expMatch = expReg.firstMatch(afterHsn);
       if (expMatch != null) {
@@ -199,39 +190,62 @@ class PdfPurchaseParserService {
         final m = int.tryParse(expParts[0]) ?? 1;
         final y = int.tryParse(expParts[1]) ?? DateTime.now().year + 1;
         expiryDate = DateTime(y, m, 1);
+        expEndPos = expMatch.end;
+
+        // Batch number is the token between HSN and Exp Date
+        String betweenHsnAndExp = afterHsn.substring(0, expMatch.start).trim();
+        final bTokens = betweenHsnAndExp.split(RegExp(r'\s+')).where((t) => t.length >= 3).toList();
+        if (bTokens.isNotEmpty) {
+          batchNo = bTokens.last;
+        }
       }
 
-      // Extract numbers: MRP, Qty, Purchase Rate
+      if (batchNo.isEmpty) {
+        final batchReg = RegExp(r'\b([A-Z0-9-]{5,12})\b');
+        final batchMatch = batchReg.firstMatch(afterHsn);
+        if (batchMatch != null && batchMatch.group(1) != hsn) {
+          batchNo = batchMatch.group(1)!;
+        }
+      }
+
+      // ONLY parse numbers AFTER the expiry date string to avoid picking up 2028 / year as quantity!
+      String numbersSection = expEndPos > 0 ? afterHsn.substring(expEndPos) : afterHsn;
+
       double mrp = 0.0;
       int qty = 0;
       double purchasePrice = 0.0;
 
-      // Extract decimals (prices) and integers (quantities)
-      final numTokens = RegExp(r'₹?\s*([\d,]+\.\d{2})|\b(\d{1,4})\s+(?:Pcs|Pcs\.|Box|Nos|Pack)?\b')
-          .allMatches(afterHsn)
+      // Extract MRP (first decimal)
+      final decimalMatches = RegExp(r'[\d,]+\.\d{2}')
+          .allMatches(numbersSection)
+          .map((m) => double.tryParse(m.group(0)!.replaceAll(',', '')) ?? 0.0)
+          .where((d) => d > 0)
           .toList();
 
-      List<double> decimals = [];
-      List<int> integers = [];
+      if (decimalMatches.isNotEmpty) {
+        mrp = decimalMatches[0];
+      }
 
-      for (var nt in numTokens) {
-        if (nt.group(1) != null) {
-          final val = double.tryParse(nt.group(1)!.replaceAll(',', ''));
-          if (val != null && val > 0) decimals.add(val);
-        }
-        if (nt.group(2) != null) {
-          final val = int.tryParse(nt.group(2)!);
-          if (val != null && val > 0 && val != int.parse(hsn.substring(0, 4))) integers.add(val);
+      // Extract Quantity (integer preceding 'Pcs', 'Box', 'Nos', 'Pack', or plain integer after MRP)
+      final qtyMatch = RegExp(r'\b(\d{1,5})\s*(?:Pcs|Pcs\.|Box|Nos|Pack)?\b', caseSensitive: false).firstMatch(numbersSection);
+      if (qtyMatch != null && qtyMatch.group(1) != null) {
+        final qVal = int.tryParse(qtyMatch.group(1)!);
+        if (qVal != null && qVal > 0 && qVal < 50000) {
+          qty = qVal;
         }
       }
 
-      if (decimals.isNotEmpty) mrp = decimals[0];
-      if (decimals.length >= 2) purchasePrice = decimals[1];
-      if (integers.isNotEmpty) qty = integers[0];
-
-      if (purchasePrice == 0.0 && decimals.length >= 3) {
-        purchasePrice = decimals.firstWhere((d) => d < mrp, orElse: () => mrp * 0.7);
+      // Extract Purchase Price (Cost Rate): look for rate after unit or second decimal < MRP
+      final rateMatch = RegExp(r'₹\s*([\d,]+\.\d{2})').firstMatch(numbersSection);
+      if (rateMatch != null && rateMatch.group(1) != null) {
+        final rVal = double.tryParse(rateMatch.group(1)!.replaceAll(',', ''));
+        if (rVal != null && rVal > 0) purchasePrice = rVal;
       }
+
+      if (purchasePrice == 0.0 && decimalMatches.length >= 2) {
+        purchasePrice = decimalMatches.firstWhere((d) => d > 0 && d < mrp, orElse: () => decimalMatches[1]);
+      }
+
       if (purchasePrice == 0.0) purchasePrice = mrp > 0 ? mrp * 0.7 : 100.0;
       if (qty == 0) qty = 1;
 
