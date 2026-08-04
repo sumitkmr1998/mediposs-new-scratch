@@ -95,36 +95,25 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
     final search = item.name.toLowerCase().trim();
     if (search.isEmpty) return null;
 
-    // 1. Exact Name match
+    // Strict Exact Name match only
     for (var m in all) {
       if (m.name.toLowerCase().trim() == search) return m;
     }
 
-    // 2. HSN Match
+    // Exact HSN Match if present
     if (item.hsn.isNotEmpty) {
       for (var m in all) {
         if (m.hsnCode.isNotEmpty && m.hsnCode == item.hsn) return m;
       }
     }
 
-    // 3. Partial / Word Match
-    final words = search.split(RegExp(r'\s+')).where((w) => w.length > 2).toList();
-    if (words.isNotEmpty) {
-      for (var m in all) {
-        final mName = m.name.toLowerCase();
-        int matches = words.where((w) => mName.contains(w)).length;
-        if (matches >= (words.length * 0.6).ceil()) {
-          return m;
-        }
-      }
-    }
-
+    // If name is different, return null by default so user can manually link or keep original name
     return null;
   }
 
   void _showMedicinePickerModal(_EditablePurchaseRow row) {
     final allMedicines = context.read<InventoryProvider>().medicines;
-    final searchCtrl = TextEditingController(text: row.nameCtrl.text);
+    final searchCtrl = TextEditingController(text: row.originalItem.name);
 
     showDialog(
       context: context,
@@ -132,7 +121,8 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
         builder: (ctx, setModalState) {
           final query = searchCtrl.text.toLowerCase().trim();
           final filtered = allMedicines.where((m) {
-            return m.name.toLowerCase().contains(query) ||
+            return query.isEmpty ||
+                m.name.toLowerCase().contains(query) ||
                 m.barcode.contains(query) ||
                 m.hsnCode.contains(query);
           }).toList();
@@ -144,7 +134,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Match Existing Medicine for "${row.originalItem.name}"',
+                    'Link Medicine for "${row.originalItem.name}"',
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -158,23 +148,25 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                   TextField(
                     controller: searchCtrl,
                     decoration: const InputDecoration(
-                      hintText: 'Search by medicine name, HSN, or barcode...',
+                      hintText: 'Type to search existing inventory medicines...',
                       prefixIcon: Icon(Icons.search),
                       border: OutlineInputBorder(),
                     ),
                     onChanged: (_) => setModalState(() {}),
                   ),
                   const SizedBox(height: 12),
-                  // Option to Create as New Medicine
+                  // Option to Create as New Medicine using original PDF name
                   ListTile(
                     tileColor: AppTheme.warning.withValues(alpha: 0.1),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     leading: const Icon(Icons.add_circle_outline, color: AppTheme.warning),
-                    title: Text('Create as New Medicine ("${row.nameCtrl.text}")', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: const Text('Will register a new medicine entry in ObjectBox'),
+                    title: Text('Create as New Medicine ("${row.originalItem.name}")', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: const Text('Will register a new medicine entry with the original PDF product name'),
                     onTap: () {
                       setState(() {
                         row.matchedMedicine = null;
+                        row.nameCtrl.text = row.originalItem.name;
+                        row.hsnCtrl.text = row.originalItem.hsn;
                       });
                       Navigator.pop(ctx);
                     },
