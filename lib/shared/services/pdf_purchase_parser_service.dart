@@ -51,7 +51,7 @@ class ParsedPurchaseInvoice {
 
 class PdfPurchaseParserService {
   static ParsedPurchaseInvoice parsePdfBytes(Uint8List bytes) {
-    final document = PdfLoadedDocument(bytes);
+    final document = PdfDocument(inputBytes: bytes);
     final extractor = PdfTextExtractor(document);
     final String fullText = extractor.extractText();
     document.dispose();

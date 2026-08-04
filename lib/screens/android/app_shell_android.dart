@@ -284,7 +284,7 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
               'AppShellAndroid [Android]: Auto-connect succeeded, starting WebSocket to ${sync.hubIp}');
           context.read<WebSocketService>().connect(sync.hubIp!, sync.secret);
         }
-      }      }
+      }
     });
   }
 
