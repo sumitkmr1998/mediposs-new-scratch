@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../shared/models/medicine.dart';
+import '../shared/models/audit_log.dart';
 import '../shared/providers/inventory_provider.dart';
 import '../shared/providers/auth_provider.dart';
 import '../shared/services/objectbox_service.dart';
@@ -30,6 +31,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
   List<ParsedPurchaseInvoice> _parsedInvoices = [];
   bool _isLoading = false;
   String _selectedSummaryText = '';
+  Set<String> _duplicateInvoices = {};
 
   List<_EditablePurchaseRow> _rows = [];
 
@@ -46,6 +48,19 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
       if (result != null && result.files.isNotEmpty) {
         final List<ParsedPurchaseInvoice> invoices = [];
         final List<_EditablePurchaseRow> newRows = [];
+        final Set<String> dupes = {};
+
+        // Find already imported invoice numbers from Audit Logs
+        final logs = ObjectBoxService.instance.auditLogBox.getAll();
+        final pastInvoiceNos = <String>{};
+        for (var log in logs) {
+          if (log.description.contains('PDF Invoice')) {
+            final match = RegExp(r'PDF Invoice ([A-Z0-9-]+)').firstMatch(log.description);
+            if (match != null && match.group(1) != null) {
+              pastInvoiceNos.add(match.group(1)!);
+            }
+          }
+        }
 
         if (!mounted) return;
         final allMedicines = context.read<InventoryProvider>().medicines;
@@ -59,6 +74,10 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
           if (bytes != null) {
             final invoice = PdfPurchaseParserService.parsePdfBytes(bytes);
             invoices.add(invoice);
+
+            if (pastInvoiceNos.contains(invoice.invoiceNo)) {
+              dupes.add(invoice.invoiceNo);
+            }
 
             for (var item in invoice.items) {
               final match = _findBestMatch(item, allMedicines);
@@ -84,6 +103,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
 
         _parsedInvoices = invoices;
         _rows = newRows;
+        _duplicateInvoices = dupes;
         _selectedSummaryText = 'Importing ${invoices.length} PDF Invoices (${newRows.length} Items Total)';
       }
     } catch (e) {
@@ -99,21 +119,21 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
 
   Medicine? _findBestMatch(ParsedPurchaseItem item, List<Medicine> all) {
     final search = item.name.toLowerCase().trim();
-    if (search.isEmpty) return null;
 
-    // Strict Exact Name match only
-    for (var m in all) {
-      if (m.name.toLowerCase().trim() == search) return m;
+    // 1. Strict Exact Name match
+    if (search.isNotEmpty) {
+      for (var m in all) {
+        if (m.name.toLowerCase().trim() == search) return m;
+      }
     }
 
-    // Exact HSN Match if present
+    // 2. Exact HSN Code Match (Matches medicines that were previously saved/linked with this HSN!)
     if (item.hsn.isNotEmpty) {
       for (var m in all) {
         if (m.hsnCode.isNotEmpty && m.hsnCode == item.hsn) return m;
       }
     }
 
-    // Default to null if name is different
     return null;
   }
 
@@ -147,8 +167,8 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
               ],
             ),
             content: SizedBox(
-              width: 500,
-              height: 450,
+              width: 550,
+              height: 480,
               child: Column(
                 children: [
                   TextField(
@@ -195,7 +215,16 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                                   setState(() {
                                     row.matchedMedicine = m;
                                     row.nameCtrl.text = m.name;
-                                    if (m.hsnCode.isNotEmpty) row.hsnCtrl.text = m.hsnCode;
+
+                                    // Save HSN Code to medicine object so future invoices auto-match!
+                                    if (row.originalItem.hsn.isNotEmpty) {
+                                      m.hsnCode = row.originalItem.hsn;
+                                      row.hsnCtrl.text = m.hsnCode;
+                                      ObjectBoxService.instance.medicineBox.put(m);
+                                    } else if (m.hsnCode.isNotEmpty) {
+                                      row.hsnCtrl.text = m.hsnCode;
+                                    }
+
                                     row.mrpCtrl.text = m.sellingPrice.toStringAsFixed(2);
                                     row.priceCtrl.text = m.purchasePrice.toStringAsFixed(2);
                                   });
@@ -262,7 +291,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
           );
           ObjectBoxService.instance.medicineBox.put(medicine);
         } else {
-          // Update HSN, purchase price and MRP if changed
+          // Update HSN, purchase price and MRP
           medicine.purchasePrice = purchasePrice;
           medicine.sellingPrice = mrp;
           if (hsn.isNotEmpty) medicine.hsnCode = hsn;
@@ -308,13 +337,15 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.of(context).size.width > 700;
+    final screenSize = MediaQuery.of(context).size;
+    final dialogWidth = (screenSize.width * 0.94).clamp(900.0, 1250.0);
+    final dialogHeight = (screenSize.height * 0.90).clamp(600.0, 850.0);
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        width: isDesktop ? 1000 : double.infinity,
-        height: isDesktop ? 700 : MediaQuery.of(context).size.height * 0.9,
+        width: dialogWidth,
+        height: dialogHeight,
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -354,7 +385,32 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                 ),
               ],
             ),
-            const Divider(height: 24),
+            const Divider(height: 16),
+
+            // Duplicate Invoice Warning Banner
+            if (_duplicateInvoices.isNotEmpty) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppTheme.warning.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppTheme.warning),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: AppTheme.warning, size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '⚠️ WARNING: Invoice(s) ${_duplicateInvoices.join(', ')} may have already been imported into stock! Verify to prevent duplicate stock entry.',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             if (_parsedInvoices.isEmpty && !_isLoading) ...[
               Expanded(
@@ -403,24 +459,31 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                 ),
               ),
             ] else ...[
-              // Invoice Summary Header Cards
+              // Invoice Summary Header Badges
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: _parsedInvoices.map((inv) {
                     final isClinic = inv.targetLocation == 'bulkClinic';
+                    final isDupe = _duplicateInvoices.contains(inv.invoiceNo);
+
                     return Container(
                       margin: const EdgeInsets.only(right: 12, bottom: 8),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: (isClinic ? AppTheme.success : AppTheme.primary).withValues(alpha: 0.08),
+                        color: (isDupe ? AppTheme.warning : (isClinic ? AppTheme.success : AppTheme.primary)).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: (isClinic ? AppTheme.success : AppTheme.primary).withValues(alpha: 0.3)),
+                        border: Border.all(color: isDupe ? AppTheme.warning : (isClinic ? AppTheme.success : AppTheme.primary).withValues(alpha: 0.4)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Invoice ${inv.invoiceNo} (${inv.items.length} items)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          Row(
+                            children: [
+                              Text('Invoice ${inv.invoiceNo} (${inv.items.length} items)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              if (isDupe) const Text(' [DUPLICATE]', style: TextStyle(color: AppTheme.warning, fontWeight: FontWeight.bold, fontSize: 10)),
+                            ],
+                          ),
                           Text('Bill To: ${inv.billToName}', style: TextStyle(fontSize: 10, color: context.textMutedColor)),
                           Text(
                             isClinic ? '➔ CLINIC BULK' : '➔ STORE BULK',
@@ -434,161 +497,205 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
               ),
               const SizedBox(height: 8),
 
-              // Multi-Invoice Line Items Table
+              // Optimized Multi-Invoice Line Items Table with Spacious Columns
               Expanded(
                 child: SingleChildScrollView(
-                  child: DataTable(
-                    columnSpacing: 10,
-                    headingRowHeight: 40,
-                    dataRowMinHeight: 56,
-                    dataRowMaxHeight: 64,
-                    columns: const [
-                      DataColumn(label: Text('Invoice / Target', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-                      DataColumn(label: Text('Item Name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-                      DataColumn(label: Text('HSN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-                      DataColumn(label: Text('Batch', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-                      DataColumn(label: Text('Exp Date', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-                      DataColumn(label: Text('MRP ₹', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-                      DataColumn(label: Text('Cost Rate ₹', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-                      DataColumn(label: Text('Qty', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-                    ],
-                    rows: _rows.map((row) {
-                      final isMatched = row.matchedMedicine != null;
-                      final isClinic = row.targetLocation == 'bulkClinic';
+                  scrollDirection: Axis.vertical,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      columnSpacing: 14,
+                      headingRowHeight: 42,
+                      dataRowMinHeight: 60,
+                      dataRowMaxHeight: 68,
+                      columns: const [
+                        DataColumn(label: SizedBox(width: 130, child: Text('Invoice / Target', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+                        DataColumn(label: SizedBox(width: 230, child: Text('Item Name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+                        DataColumn(label: SizedBox(width: 95, child: Text('HSN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+                        DataColumn(label: SizedBox(width: 110, child: Text('Batch No.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+                        DataColumn(label: SizedBox(width: 90, child: Text('Exp Date', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+                        DataColumn(label: SizedBox(width: 90, child: Text('MRP ₹', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+                        DataColumn(label: SizedBox(width: 95, child: Text('Cost Rate ₹', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+                        DataColumn(label: SizedBox(width: 70, child: Text('Qty', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+                      ],
+                      rows: _rows.map((row) {
+                        final isMatched = row.matchedMedicine != null;
+                        final isClinic = row.targetLocation == 'bulkClinic';
 
-                      return DataRow(
-                        cells: [
-                          // Invoice & Target Location Column
-                          DataCell(
-                            SizedBox(
-                              width: 110,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(row.invoiceNo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                                  DropdownButton<String>(
-                                    value: row.targetLocation,
-                                    isDense: true,
-                                    underline: const SizedBox(),
-                                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isClinic ? AppTheme.success : AppTheme.primary),
-                                    items: const [
-                                      DropdownMenuItem(value: 'bulkClinic', child: Text('Clinic Bulk')),
-                                      DropdownMenuItem(value: 'bulkStore', child: Text('Store Bulk')),
-                                    ],
-                                    onChanged: (val) {
-                                      if (val != null) setState(() => row.targetLocation = val);
-                                    },
-                                  ),
-                                ],
+                        return DataRow(
+                          cells: [
+                            // Invoice & Target Location Column
+                            DataCell(
+                              SizedBox(
+                                width: 130,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(row.invoiceNo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                    DropdownButton<String>(
+                                      value: row.targetLocation,
+                                      isDense: true,
+                                      underline: const SizedBox(),
+                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isClinic ? AppTheme.success : AppTheme.primary),
+                                      items: const [
+                                        DropdownMenuItem(value: 'bulkClinic', child: Text('Clinic Bulk')),
+                                        DropdownMenuItem(value: 'bulkStore', child: Text('Store Bulk')),
+                                      ],
+                                      onChanged: (val) {
+                                        if (val != null) setState(() => row.targetLocation = val);
+                                      },
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                          // Item Name & Match Status Column
-                          DataCell(
-                            SizedBox(
-                              width: 210,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: TextField(
-                                          controller: row.nameCtrl,
-                                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                          decoration: const InputDecoration(isDense: true, border: InputBorder.none),
+                            // Item Name & Match Status Column
+                            DataCell(
+                              SizedBox(
+                                width: 230,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: TextField(
+                                            controller: row.nameCtrl,
+                                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                            decoration: InputDecoration(
+                                              isDense: true,
+                                              contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                            ),
+                                          ),
                                         ),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.search, size: 16, color: AppTheme.primary),
-                                        tooltip: 'Select / Link Existing Medicine',
-                                        onPressed: () => _showMedicinePickerModal(row),
-                                      ),
-                                    ],
-                                  ),
-                                  InkWell(
-                                    onTap: () => _showMedicinePickerModal(row),
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(top: 2),
-                                      child: Text(
-                                        isMatched ? '✓ Matched: ${row.matchedMedicine!.name}' : '+ New Item (Tap to Link)',
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          color: isMatched ? AppTheme.success : AppTheme.warning,
+                                        IconButton(
+                                          icon: const Icon(Icons.search, size: 18, color: AppTheme.primary),
+                                          tooltip: 'Select / Link Existing Medicine',
+                                          onPressed: () => _showMedicinePickerModal(row),
+                                        ),
+                                      ],
+                                    ),
+                                    InkWell(
+                                      onTap: () => _showMedicinePickerModal(row),
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(top: 2),
+                                        child: Text(
+                                          isMatched ? '✓ Matched: ${row.matchedMedicine!.name}' : '+ New Item (Tap to Link)',
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: isMatched ? AppTheme.success : AppTheme.warning,
+                                          ),
                                         ),
                                       ),
                                     ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            // HSN Column
+                            DataCell(
+                              SizedBox(
+                                width: 95,
+                                child: TextField(
+                                  controller: row.hsnCtrl,
+                                  style: const TextStyle(fontSize: 12),
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
                                   ),
-                                ],
+                                ),
                               ),
                             ),
-                          ),
-                          DataCell(
-                            SizedBox(
-                              width: 70,
-                              child: TextField(
-                                controller: row.hsnCtrl,
-                                style: const TextStyle(fontSize: 11),
-                                decoration: const InputDecoration(isDense: true, border: InputBorder.none),
+                            // Batch Column
+                            DataCell(
+                              SizedBox(
+                                width: 110,
+                                child: TextField(
+                                  controller: row.batchCtrl,
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                          DataCell(
-                            SizedBox(
-                              width: 85,
-                              child: TextField(
-                                controller: row.batchCtrl,
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                                decoration: const InputDecoration(isDense: true, border: InputBorder.none),
+                            // Expiry Date Column
+                            DataCell(
+                              SizedBox(
+                                width: 90,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    '${row.expiryDate.month.toString().padLeft(2, '0')}/${row.expiryDate.year}',
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                          DataCell(
-                            Text(
-                              '${row.expiryDate.month.toString().padLeft(2, '0')}/${row.expiryDate.year}',
-                              style: const TextStyle(fontSize: 11),
-                            ),
-                          ),
-                          DataCell(
-                            SizedBox(
-                              width: 60,
-                              child: TextField(
-                                controller: row.mrpCtrl,
-                                keyboardType: TextInputType.number,
-                                style: const TextStyle(fontSize: 11),
-                                decoration: const InputDecoration(isDense: true, border: InputBorder.none),
+                            // MRP Column
+                            DataCell(
+                              SizedBox(
+                                width: 90,
+                                child: TextField(
+                                  controller: row.mrpCtrl,
+                                  keyboardType: TextInputType.number,
+                                  style: const TextStyle(fontSize: 12),
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                          DataCell(
-                            SizedBox(
-                              width: 60,
-                              child: TextField(
-                                controller: row.priceCtrl,
-                                keyboardType: TextInputType.number,
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primary),
-                                decoration: const InputDecoration(isDense: true, border: InputBorder.none),
+                            // Cost Rate Column
+                            DataCell(
+                              SizedBox(
+                                width: 95,
+                                child: TextField(
+                                  controller: row.priceCtrl,
+                                  keyboardType: TextInputType.number,
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primary),
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                          DataCell(
-                            SizedBox(
-                              width: 45,
-                              child: TextField(
-                                controller: row.qtyCtrl,
-                                keyboardType: TextInputType.number,
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                                decoration: const InputDecoration(isDense: true, border: InputBorder.none),
+                            // Qty Column
+                            DataCell(
+                              SizedBox(
+                                width: 70,
+                                child: TextField(
+                                  controller: row.qtyCtrl,
+                                  keyboardType: TextInputType.number,
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ],
-                      );
-                    }).toList(),
+                          ],
+                        );
+                      }).toList(),
+                    ),
                   ),
                 ),
               ),
