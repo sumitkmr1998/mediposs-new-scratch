@@ -1,0 +1,67 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Determine Version
+        id: prep
+        shell: bash
+        run: |
+          VERSION=$(grep 'version: ' pubspec.yaml | head -n 1 | sed 's/version: //' | cut -d'+' -f1 | tr -d '[:space:]')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version determined: $VERSION"
+
+      - name: Build Universal Android APK (Not Split)
+        run: flutter build apk --release
+
+      - name: Build Windows App
+        run: flutter build windows --release
+
+      - name: Package Windows Build
+        shell: pwsh
+        run: |
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath build/mediposs-windows-v${{ steps.prep.outputs.version }}.zip
+
+      - name: Prepare APK Asset
+        shell: pwsh
+        run: |
+          Copy-Item -Path build/app/outputs/flutter-apk/app-release.apk -Destination build/mediposs-universal-v${{ steps.prep.outputs.version }}.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "MediPoss v${{ steps.prep.outputs.version }}"
+          draft: false
+          prerelease: false
+          files: |
+            build/mediposs-windows-v${{ steps.prep.outputs.version }}.zip
+            build/mediposs-universal-v${{ steps.prep.outputs.version }}.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
