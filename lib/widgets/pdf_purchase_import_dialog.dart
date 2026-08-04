@@ -179,7 +179,10 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                 m.hsnCode.contains(query);
           }).toList();
 
+          final isMobile = MediaQuery.of(context).size.width < 700;
+
           return AlertDialog(
+            insetPadding: isMobile ? const EdgeInsets.symmetric(horizontal: 10, vertical: 16) : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
             title: Row(
               children: [
                 const Icon(Icons.compare_arrows_rounded, color: AppTheme.primary),
@@ -187,32 +190,42 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                 Expanded(
                   child: Text(
                     'Link Medicine for "${row.originalItem.name}"',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: isMobile ? 14 : 16, fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
             ),
             content: SizedBox(
-              width: 550,
-              height: 480,
+              width: isMobile ? MediaQuery.of(context).size.width * 0.95 : 550,
+              height: isMobile ? MediaQuery.of(context).size.height * 0.75 : 480,
               child: Column(
                 children: [
                   TextField(
                     controller: searchCtrl,
-                    decoration: const InputDecoration(
-                      hintText: 'Type to search existing inventory medicines...',
-                      prefixIcon: Icon(Icons.search),
-                      border: OutlineInputBorder(),
+                    style: TextStyle(fontSize: isMobile ? 12 : 14),
+                    decoration: InputDecoration(
+                      hintText: 'Type to search existing medicines...',
+                      prefixIcon: const Icon(Icons.search, size: 20),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      border: const OutlineInputBorder(),
                     ),
                     onChanged: (_) => setModalState(() {}),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   ListTile(
+                    dense: isMobile,
                     tileColor: AppTheme.warning.withValues(alpha: 0.1),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     leading: const Icon(Icons.add_circle_outline, color: AppTheme.warning),
-                    title: Text('Create as New Medicine ("${row.originalItem.name}")', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: const Text('Will register a new medicine entry with the original PDF product name'),
+                    title: Text(
+                      'Create as New Medicine ("${row.originalItem.name}")',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: isMobile ? 11 : 13),
+                    ),
+                    subtitle: Text(
+                      'Will register a new medicine entry with the original PDF product name',
+                      style: TextStyle(fontSize: isMobile ? 9 : 11),
+                    ),
                     onTap: () {
                       setState(() {
                         row.matchedMedicine = null;
@@ -222,9 +235,12 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                       Navigator.pop(ctx);
                     },
                   ),
-                  const Divider(height: 16),
-                  const Text('OR Select an Existing Medicine to Link Stock:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
-                  const SizedBox(height: 8),
+                  const Divider(height: 12),
+                  Text(
+                    'OR Select an Existing Medicine to Link Stock:',
+                    style: TextStyle(fontSize: isMobile ? 10 : 12, fontWeight: FontWeight.bold, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 6),
                   Expanded(
                     child: filtered.isEmpty
                         ? const Center(child: Text('No existing medicines found'))
@@ -232,30 +248,46 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                             itemCount: filtered.length,
                             itemBuilder: (ctx, i) {
                               final m = filtered[i];
-                              return ListTile(
-                                leading: const Icon(Icons.medication_outlined, color: AppTheme.primary),
-                                title: Text(m.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                subtitle: Text('HSN: ${m.hsnCode.isEmpty ? 'N/A' : m.hsnCode} | Price: ₹${m.sellingPrice} | Stock: ${m.mainStock + m.storeStock} Pcs'),
-                                trailing: const Icon(Icons.check_circle_outline, color: AppTheme.success),
-                                onTap: () {
-                                  setState(() {
-                                    row.matchedMedicine = m;
-                                    row.nameCtrl.text = m.name;
+                              return Card(
+                                elevation: 0.5,
+                                margin: const EdgeInsets.only(bottom: 6),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  side: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
+                                ),
+                                child: ListTile(
+                                  dense: isMobile,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  leading: const Icon(Icons.medication_outlined, color: AppTheme.primary, size: 20),
+                                  title: Text(
+                                    m.name,
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: isMobile ? 11 : 13),
+                                  ),
+                                  subtitle: Text(
+                                    'HSN: ${m.hsnCode.isEmpty ? 'N/A' : m.hsnCode} | Price: ₹${m.sellingPrice} | Stock: ${m.mainStock + m.storeStock} Pcs',
+                                    style: TextStyle(fontSize: isMobile ? 9 : 11),
+                                  ),
+                                  trailing: const Icon(Icons.check_circle_outline, color: AppTheme.success, size: 18),
+                                  onTap: () {
+                                    setState(() {
+                                      row.matchedMedicine = m;
+                                      row.nameCtrl.text = m.name;
 
-                                    // Save HSN Code to medicine object so future invoices auto-match!
-                                    if (row.originalItem.hsn.isNotEmpty) {
-                                      m.hsnCode = row.originalItem.hsn;
-                                      row.hsnCtrl.text = m.hsnCode;
-                                      ObjectBoxService.instance.medicineBox.put(m);
-                                    } else if (m.hsnCode.isNotEmpty) {
-                                      row.hsnCtrl.text = m.hsnCode;
-                                    }
+                                      // Save HSN Code to medicine object so future invoices auto-match!
+                                      if (row.originalItem.hsn.isNotEmpty) {
+                                        m.hsnCode = row.originalItem.hsn;
+                                        row.hsnCtrl.text = m.hsnCode;
+                                        ObjectBoxService.instance.medicineBox.put(m);
+                                      } else if (m.hsnCode.isNotEmpty) {
+                                        row.hsnCtrl.text = m.hsnCode;
+                                      }
 
-                                    row.mrpCtrl.text = m.sellingPrice.toStringAsFixed(2);
-                                    row.priceCtrl.text = m.purchasePrice.toStringAsFixed(2);
-                                  });
-                                  Navigator.pop(ctx);
-                                },
+                                      row.mrpCtrl.text = m.sellingPrice.toStringAsFixed(2);
+                                      row.priceCtrl.text = m.purchasePrice.toStringAsFixed(2);
+                                    });
+                                    Navigator.pop(ctx);
+                                  },
+                                ),
                               );
                             },
                           ),
