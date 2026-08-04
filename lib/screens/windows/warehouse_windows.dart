@@ -8,6 +8,7 @@ import '../../shared/providers/warehouse_provider.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/models/medicine.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/pdf_purchase_import_dialog.dart';
 import '../../widgets/medicine_dialog.dart';
 import 'warehouse/tabs/inventory_tab.dart';
 import 'warehouse/tabs/stock_report_tab.dart';
@@ -426,7 +427,22 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
         elevation: 0,
         backgroundColor: context.surfaceColor,
         actions: [
-          if (auth.hasInventoryWriteAccess || auth.canAddStock)
+          if (auth.hasInventoryWriteAccess || auth.canAddStock) ...[
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () => PdfPurchaseImportDialog.show(context),
+                icon: const Icon(Icons.picture_as_pdf_rounded, size: 18),
+                label: const Text('Upload PDF Invoice'),
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: FilledButton.icon(
@@ -443,6 +459,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
                 label: const Text('Import Excel'),
               ),
             ),
+          ],
           if (auth.hasWarehouseWriteAccess)
             Padding(
               padding: const EdgeInsets.only(right: 8),

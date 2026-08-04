@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../shared/providers/inventory_provider.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/models/medicine.dart';
-import '../../theme/app_theme.dart';
+import '../pdf_purchase_import_dialog.dart';
 
 class _BulkItem {
   final Medicine medicine;
@@ -114,6 +114,14 @@ class _AndroidBulkPurchaseDialogState extends State<AndroidBulkPurchaseDialog> {
                   const SizedBox(width: 12),
                   const Text('Bulk Purchase Receipt', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const Spacer(),
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      PdfPurchaseImportDialog.show(context);
+                    },
+                    icon: const Icon(Icons.picture_as_pdf_rounded, size: 18, color: AppTheme.primary),
+                    label: const Text('UPLOAD PDF', style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary)),
+                  ),
                   IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: () => Navigator.pop(context),
