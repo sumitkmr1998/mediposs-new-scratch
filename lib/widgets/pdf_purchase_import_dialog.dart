@@ -27,12 +27,9 @@ class PdfPurchaseImportDialog extends StatefulWidget {
 }
 
 class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
-  ParsedPurchaseInvoice? _parsedInvoice;
+  List<ParsedPurchaseInvoice> _parsedInvoices = [];
   bool _isLoading = false;
-  String _targetLocation = 'bulkStore'; // 'bulkClinic' or 'bulkStore'
-  String _selectedFileName = '';
-  final TextEditingController _invoiceNoCtrl = TextEditingController();
-  final TextEditingController _supplierCtrl = TextEditingController();
+  String _selectedSummaryText = '';
 
   List<_EditablePurchaseRow> _rows = [];
 
@@ -42,48 +39,57 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf'],
+        allowMultiple: true,
         withData: true,
       );
 
       if (result != null && result.files.isNotEmpty) {
-        final file = result.files.first;
-        _selectedFileName = file.name;
-        Uint8List? bytes = file.bytes;
-        if (bytes == null && file.path != null) {
-          bytes = await File(file.path!).readAsBytes();
+        final List<ParsedPurchaseInvoice> invoices = [];
+        final List<_EditablePurchaseRow> newRows = [];
+
+        if (!mounted) return;
+        final allMedicines = context.read<InventoryProvider>().medicines;
+
+        for (var file in result.files) {
+          Uint8List? bytes = file.bytes;
+          if (bytes == null && file.path != null) {
+            bytes = await File(file.path!).readAsBytes();
+          }
+
+          if (bytes != null) {
+            final invoice = PdfPurchaseParserService.parsePdfBytes(bytes);
+            invoices.add(invoice);
+
+            for (var item in invoice.items) {
+              final match = _findBestMatch(item, allMedicines);
+
+              newRows.add(_EditablePurchaseRow(
+                invoiceNo: invoice.invoiceNo,
+                supplierName: invoice.supplierName,
+                billTo: invoice.billToName,
+                targetLocation: invoice.targetLocation,
+                originalItem: item,
+                matchedMedicine: match,
+                nameCtrl: TextEditingController(text: match?.name ?? item.name),
+                hsnCtrl: TextEditingController(text: match?.hsnCode.isNotEmpty == true ? match!.hsnCode : item.hsn),
+                batchCtrl: TextEditingController(text: item.batchNo),
+                mrpCtrl: TextEditingController(text: (match?.sellingPrice ?? item.mrp).toStringAsFixed(2)),
+                priceCtrl: TextEditingController(text: (match?.purchasePrice ?? item.purchasePrice).toStringAsFixed(2)),
+                qtyCtrl: TextEditingController(text: item.qty.toString()),
+                expiryDate: item.expiryDate,
+              ));
+            }
+          }
         }
 
-        if (bytes != null) {
-          final invoice = PdfPurchaseParserService.parsePdfBytes(bytes);
-          _parsedInvoice = invoice;
-          _targetLocation = invoice.targetLocation;
-          _invoiceNoCtrl.text = invoice.invoiceNo;
-          _supplierCtrl.text = invoice.supplierName;
-
-          if (!mounted) return;
-          final allMedicines = context.read<InventoryProvider>().medicines;
-
-          _rows = invoice.items.map((item) {
-            final match = _findBestMatch(item, allMedicines);
-
-            return _EditablePurchaseRow(
-              originalItem: item,
-              matchedMedicine: match,
-              nameCtrl: TextEditingController(text: match?.name ?? item.name),
-              hsnCtrl: TextEditingController(text: match?.hsnCode.isNotEmpty == true ? match!.hsnCode : item.hsn),
-              batchCtrl: TextEditingController(text: item.batchNo),
-              mrpCtrl: TextEditingController(text: (match?.sellingPrice ?? item.mrp).toStringAsFixed(2)),
-              priceCtrl: TextEditingController(text: (match?.purchasePrice ?? item.purchasePrice).toStringAsFixed(2)),
-              qtyCtrl: TextEditingController(text: item.qty.toString()),
-              expiryDate: item.expiryDate,
-            );
-          }).toList();
-        }
+        _parsedInvoices = invoices;
+        _rows = newRows;
+        _selectedSummaryText = 'Importing ${invoices.length} PDF Invoices (${newRows.length} Items Total)';
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to parse PDF: $e'), backgroundColor: AppTheme.danger),
+          SnackBar(content: Text('Failed to parse PDFs: $e'), backgroundColor: AppTheme.danger),
         );
       }
     } finally {
@@ -107,7 +113,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
       }
     }
 
-    // If name is different, return null by default so user can manually link or keep original name
+    // Default to null if name is different
     return null;
   }
 
@@ -155,7 +161,6 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                     onChanged: (_) => setModalState(() {}),
                   ),
                   const SizedBox(height: 12),
-                  // Option to Create as New Medicine using original PDF name
                   ListTile(
                     tileColor: AppTheme.warning.withValues(alpha: 0.1),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -222,8 +227,8 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
     try {
       final invProvider = context.read<InventoryProvider>();
       final actor = context.read<AuthProvider>().currentUser;
-      final supplierName = _supplierCtrl.text.trim();
-      final invoiceNo = _invoiceNoCtrl.text.trim();
+
+      int importedCount = 0;
 
       for (var row in _rows) {
         final name = row.nameCtrl.text.trim();
@@ -267,14 +272,16 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
         // Apply batch stock directly via InventoryProvider
         invProvider.addBatchStock(
           {medicine.id: 0},
-          bulkClinicUpdates: _targetLocation == 'bulkClinic' ? {medicine.id: qty} : {},
-          bulkStoreUpdates: _targetLocation == 'bulkStore' ? {medicine.id: qty} : {},
+          bulkClinicUpdates: row.targetLocation == 'bulkClinic' ? {medicine.id: qty} : {},
+          bulkStoreUpdates: row.targetLocation == 'bulkStore' ? {medicine.id: qty} : {},
           batchNo: batchNo,
           expiryDate: row.expiryDate,
-          supplier: supplierName,
-          note: 'PDF Invoice $invoiceNo (${_targetLocation == 'bulkClinic' ? 'Clinic Bulk' : 'Store Bulk'})',
+          supplier: row.supplierName,
+          note: 'PDF Invoice ${row.invoiceNo} (${row.targetLocation == 'bulkClinic' ? 'Clinic Bulk' : 'Store Bulk'})',
           actor: actor,
         );
+
+        importedCount++;
       }
 
       invProvider.load();
@@ -282,7 +289,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Successfully imported purchase invoice $invoiceNo to ${_targetLocation == 'bulkClinic' ? 'Clinic Bulk' : 'Store Bulk'}!'),
+            content: Text('Successfully imported $importedCount items from ${_parsedInvoices.length} PDF Invoices!'),
             backgroundColor: AppTheme.success,
           ),
         );
@@ -306,8 +313,8 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        width: isDesktop ? 950 : double.infinity,
-        height: isDesktop ? 680 : MediaQuery.of(context).size.height * 0.9,
+        width: isDesktop ? 1000 : double.infinity,
+        height: isDesktop ? 700 : MediaQuery.of(context).size.height * 0.9,
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -329,13 +336,13 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Upload PDF Purchase Invoice',
+                        'Upload PDF Purchase Invoices (Multi-PDF)',
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       Text(
-                        _selectedFileName.isEmpty
-                            ? 'Select a tax invoice PDF (e.g. Tridha Pharmaceuticals)'
-                            : _selectedFileName,
+                        _selectedSummaryText.isEmpty
+                            ? 'Select one or multiple tax invoice PDFs (e.g. Tridha Pharmaceuticals)'
+                            : _selectedSummaryText,
                         style: TextStyle(fontSize: 12, color: context.textMutedColor),
                       ),
                     ],
@@ -349,7 +356,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
             ),
             const Divider(height: 24),
 
-            if (_parsedInvoice == null && !_isLoading) ...[
+            if (_parsedInvoices.isEmpty && !_isLoading) ...[
               Expanded(
                 child: Center(
                   child: Column(
@@ -358,12 +365,12 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                       Icon(Icons.cloud_upload_outlined, size: 64, color: AppTheme.primary.withValues(alpha: 0.5)),
                       const SizedBox(height: 16),
                       const Text(
-                        'Upload Supplier Purchase Invoice PDF',
+                        'Upload One or Multiple Purchase Invoice PDFs',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Automatically parses line items, batches, expiry dates, purchase rates, and routes stock to Clinic Bulk or Store Bulk based on Bill To.',
+                        'Select multiple PDFs at once. Automatically parses invoice line items, batches, expiry dates, rates, and routes stock to Clinic Bulk or Store Bulk per invoice.',
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 12, color: context.textMutedColor),
                       ),
@@ -371,7 +378,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                       ElevatedButton.icon(
                         onPressed: _pickAndParsePdf,
                         icon: const Icon(Icons.file_open_rounded),
-                        label: const Text('Select PDF File'),
+                        label: const Text('Select PDF Files (Multi-Select)'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.primary,
                           foregroundColor: Colors.white,
@@ -390,98 +397,97 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                     children: [
                       CircularProgressIndicator(),
                       SizedBox(height: 16),
-                      Text('Parsing PDF Invoice & Matching Batches...'),
+                      Text('Parsing Multiple PDF Invoices & Matching Batches...'),
                     ],
                   ),
                 ),
               ),
             ] else ...[
-              // Invoice Summary Bar & Target Location Selector
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppTheme.primary.withValues(alpha: 0.2)),
-                ),
+              // Invoice Summary Header Cards
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
                 child: Row(
-                  children: [
-                    Expanded(
-                      flex: 2,
+                  children: _parsedInvoices.map((inv) {
+                    final isClinic = inv.targetLocation == 'bulkClinic';
+                    return Container(
+                      margin: const EdgeInsets.only(right: 12, bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: (isClinic ? AppTheme.success : AppTheme.primary).withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: (isClinic ? AppTheme.success : AppTheme.primary).withValues(alpha: 0.3)),
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('SUPPLIER: ${_parsedInvoice!.supplierName}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                          Text('Bill To: ${_parsedInvoice!.billToName}', style: TextStyle(fontSize: 11, color: context.textMutedColor)),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2,
-                      child: DropdownButtonFormField<String>(
-                        initialValue: _targetLocation,
-                        decoration: const InputDecoration(
-                          labelText: 'Stock Target Bulk Location',
-                          isDense: true,
-                          border: OutlineInputBorder(),
-                        ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'bulkClinic',
-                            child: Row(
-                              children: [
-                                Icon(Icons.medical_services_outlined, size: 16, color: AppTheme.success),
-                                SizedBox(width: 6),
-                                Text('CLINIC BULK (Dispense)', style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.success)),
-                              ],
-                            ),
-                          ),
-                          DropdownMenuItem(
-                            value: 'bulkStore',
-                            child: Row(
-                              children: [
-                                Icon(Icons.storefront_outlined, size: 16, color: AppTheme.primary),
-                                SizedBox(width: 6),
-                                Text('STORE BULK (Retail)', style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary)),
-                              ],
-                            ),
+                          Text('Invoice ${inv.invoiceNo} (${inv.items.length} items)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          Text('Bill To: ${inv.billToName}', style: TextStyle(fontSize: 10, color: context.textMutedColor)),
+                          Text(
+                            isClinic ? '➔ CLINIC BULK' : '➔ STORE BULK',
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isClinic ? AppTheme.success : AppTheme.primary),
                           ),
                         ],
-                        onChanged: (val) {
-                          if (val != null) setState(() => _targetLocation = val);
-                        },
                       ),
-                    ),
-                  ],
+                    );
+                  }).toList(),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
 
-              // Parsed Line Items Table
+              // Multi-Invoice Line Items Table
               Expanded(
                 child: SingleChildScrollView(
                   child: DataTable(
-                    columnSpacing: 12,
+                    columnSpacing: 10,
                     headingRowHeight: 40,
                     dataRowMinHeight: 56,
                     dataRowMaxHeight: 64,
                     columns: const [
-                      DataColumn(label: Text('Item Name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                      DataColumn(label: Text('HSN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                      DataColumn(label: Text('Batch', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                      DataColumn(label: Text('Exp Date', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                      DataColumn(label: Text('MRP ₹', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                      DataColumn(label: Text('Cost Rate ₹', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                      DataColumn(label: Text('Qty', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                      DataColumn(label: Text('Invoice / Target', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+                      DataColumn(label: Text('Item Name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+                      DataColumn(label: Text('HSN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+                      DataColumn(label: Text('Batch', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+                      DataColumn(label: Text('Exp Date', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+                      DataColumn(label: Text('MRP ₹', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+                      DataColumn(label: Text('Cost Rate ₹', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+                      DataColumn(label: Text('Qty', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
                     ],
                     rows: _rows.map((row) {
                       final isMatched = row.matchedMedicine != null;
+                      final isClinic = row.targetLocation == 'bulkClinic';
+
                       return DataRow(
                         cells: [
+                          // Invoice & Target Location Column
                           DataCell(
                             SizedBox(
-                              width: 220,
+                              width: 110,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(row.invoiceNo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                  DropdownButton<String>(
+                                    value: row.targetLocation,
+                                    isDense: true,
+                                    underline: const SizedBox(),
+                                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isClinic ? AppTheme.success : AppTheme.primary),
+                                    items: const [
+                                      DropdownMenuItem(value: 'bulkClinic', child: Text('Clinic Bulk')),
+                                      DropdownMenuItem(value: 'bulkStore', child: Text('Store Bulk')),
+                                    ],
+                                    onChanged: (val) {
+                                      if (val != null) setState(() => row.targetLocation = val);
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          // Item Name & Match Status Column
+                          DataCell(
+                            SizedBox(
+                              width: 210,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -497,7 +503,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                                       ),
                                       IconButton(
                                         icon: const Icon(Icons.search, size: 16, color: AppTheme.primary),
-                                        tooltip: 'Select / Match Existing Medicine',
+                                        tooltip: 'Select / Link Existing Medicine',
                                         onPressed: () => _showMedicinePickerModal(row),
                                       ),
                                     ],
@@ -507,7 +513,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                                     child: Padding(
                                       padding: const EdgeInsets.only(top: 2),
                                       child: Text(
-                                        isMatched ? '✓ Matched: ${row.matchedMedicine!.name}' : '+ New Item (Tap to Match)',
+                                        isMatched ? '✓ Matched: ${row.matchedMedicine!.name}' : '+ New Item (Tap to Link)',
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
                                           fontSize: 10,
@@ -523,20 +529,20 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                           ),
                           DataCell(
                             SizedBox(
-                              width: 75,
+                              width: 70,
                               child: TextField(
                                 controller: row.hsnCtrl,
-                                style: const TextStyle(fontSize: 12),
+                                style: const TextStyle(fontSize: 11),
                                 decoration: const InputDecoration(isDense: true, border: InputBorder.none),
                               ),
                             ),
                           ),
                           DataCell(
                             SizedBox(
-                              width: 90,
+                              width: 85,
                               child: TextField(
                                 controller: row.batchCtrl,
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                                 decoration: const InputDecoration(isDense: true, border: InputBorder.none),
                               ),
                             ),
@@ -544,38 +550,38 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                           DataCell(
                             Text(
                               '${row.expiryDate.month.toString().padLeft(2, '0')}/${row.expiryDate.year}',
-                              style: const TextStyle(fontSize: 12),
+                              style: const TextStyle(fontSize: 11),
                             ),
                           ),
                           DataCell(
                             SizedBox(
-                              width: 65,
+                              width: 60,
                               child: TextField(
                                 controller: row.mrpCtrl,
                                 keyboardType: TextInputType.number,
-                                style: const TextStyle(fontSize: 12),
+                                style: const TextStyle(fontSize: 11),
                                 decoration: const InputDecoration(isDense: true, border: InputBorder.none),
                               ),
                             ),
                           ),
                           DataCell(
                             SizedBox(
-                              width: 65,
+                              width: 60,
                               child: TextField(
                                 controller: row.priceCtrl,
                                 keyboardType: TextInputType.number,
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primary),
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primary),
                                 decoration: const InputDecoration(isDense: true, border: InputBorder.none),
                               ),
                             ),
                           ),
                           DataCell(
                             SizedBox(
-                              width: 50,
+                              width: 45,
                               child: TextField(
                                 controller: row.qtyCtrl,
                                 keyboardType: TextInputType.number,
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                                 decoration: const InputDecoration(isDense: true, border: InputBorder.none),
                               ),
                             ),
@@ -594,13 +600,13 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                   OutlinedButton.icon(
                     onPressed: _pickAndParsePdf,
                     icon: const Icon(Icons.file_open_rounded, size: 16),
-                    label: const Text('Choose Another PDF'),
+                    label: const Text('Select More PDFs'),
                   ),
                   const Spacer(),
                   ElevatedButton.icon(
                     onPressed: _confirmAndImport,
                     icon: const Icon(Icons.check_circle_rounded),
-                    label: Text('Confirm & Add to ${_targetLocation == 'bulkClinic' ? 'Clinic Bulk' : 'Store Bulk'}'),
+                    label: Text('Confirm & Add All ${_rows.length} Items to Stock'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primary,
                       foregroundColor: Colors.white,
@@ -618,6 +624,10 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
 }
 
 class _EditablePurchaseRow {
+  final String invoiceNo;
+  final String supplierName;
+  final String billTo;
+  String targetLocation; // 'bulkClinic' or 'bulkStore'
   final ParsedPurchaseItem originalItem;
   Medicine? matchedMedicine;
   final TextEditingController nameCtrl;
@@ -629,6 +639,10 @@ class _EditablePurchaseRow {
   DateTime expiryDate;
 
   _EditablePurchaseRow({
+    required this.invoiceNo,
+    required this.supplierName,
+    required this.billTo,
+    required this.targetLocation,
     required this.originalItem,
     this.matchedMedicine,
     required this.nameCtrl,

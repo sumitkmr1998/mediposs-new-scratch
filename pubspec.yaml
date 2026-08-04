@@ -1,7 +1,7 @@
 name: medipos
 description: MediPoss - Medical Store POS with Dual Warehouse & Real-time Sync
 publish_to: 'none'
-version: 3.0.7+10
+version: 3.0.6+9
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
