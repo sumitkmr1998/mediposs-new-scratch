@@ -649,7 +649,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(5, 3743056661326749831),
       name: 'Medicine',
-      lastPropertyId: const obx_int.IdUid(16, 8917642589792895213),
+      lastPropertyId: const obx_int.IdUid(17, 7166723761321217202),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -731,6 +731,11 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(16, 8917642589792895213),
             name: 'isScheduleH1',
             type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(17, 7166723761321217202),
+            name: 'hsnCode',
+            type: 9,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[
@@ -2383,7 +2388,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final barcodeOffset = fbb.writeString(object.barcode);
           final categoryOffset = fbb.writeString(object.category);
           final unitOffset = fbb.writeString(object.unit);
-          fbb.startTable(17);
+          final hsnCodeOffset = fbb.writeString(object.hsnCode);
+          fbb.startTable(18);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, nameOffset);
           fbb.addOffset(2, barcodeOffset);
@@ -2400,6 +2406,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addInt64(13, object.bulkClinicStock);
           fbb.addInt64(14, object.bulkStoreStock);
           fbb.addBool(15, object.isScheduleH1);
+          fbb.addOffset(16, hsnCodeOffset);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -2412,6 +2419,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               .vTableGet(buffer, rootOffset, 6, '');
           final barcodeParam = const fb.StringReader(asciiOptimization: true)
               .vTableGet(buffer, rootOffset, 8, '');
+          final hsnCodeParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 36, '');
           final categoryParam = const fb.StringReader(asciiOptimization: true)
               .vTableGet(buffer, rootOffset, 10, '');
           final unitParam = const fb.StringReader(asciiOptimization: true)
@@ -2442,6 +2451,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
               id: idParam,
               name: nameParam,
               barcode: barcodeParam,
+              hsnCode: hsnCodeParam,
               category: categoryParam,
               unit: unitParam,
               purchasePrice: purchasePriceParam,
@@ -4062,6 +4072,10 @@ class Medicine_ {
   /// See [Medicine.isScheduleH1].
   static final isScheduleH1 =
       obx.QueryBooleanProperty<Medicine>(_entities[4].properties[15]);
+
+  /// See [Medicine.hsnCode].
+  static final hsnCode =
+      obx.QueryStringProperty<Medicine>(_entities[4].properties[16]);
 
   /// see [Medicine.batches]
   static final batches = obx.QueryRelationToMany<Medicine, MedicineBatch>(

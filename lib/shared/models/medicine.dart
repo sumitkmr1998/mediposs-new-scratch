@@ -8,6 +8,7 @@ class Medicine {
 
   String name;
   String barcode;
+  String hsnCode;
   String category;
   String unit; // tablet, ml, capsule, syrup, etc.
 
@@ -38,6 +39,7 @@ class Medicine {
     this.id = 0,
     required this.name,
     this.barcode = '',
+    this.hsnCode = '',
     this.category = 'General',
     this.unit = 'Pcs',
     required this.purchasePrice,
@@ -58,6 +60,7 @@ class Medicine {
         'id': id,
         'name': name,
         'barcode': barcode,
+        'hsnCode': hsnCode,
         'category': category,
         'unit': unit,
         'purchasePrice': purchasePrice,
@@ -79,6 +82,7 @@ class Medicine {
       id: json['id'] ?? 0,
       name: json['name'],
       barcode: json['barcode'] ?? '',
+      hsnCode: json['hsnCode'] ?? '',
       category: json['category'] ?? 'General',
       unit: json['unit'] ?? 'Pcs',
       purchasePrice: (json['purchasePrice'] as num).toDouble(),

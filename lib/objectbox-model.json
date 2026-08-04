@@ -616,7 +616,7 @@
     },
     {
       "id": "5:3743056661326749831",
-      "lastPropertyId": "16:8917642589792895213",
+      "lastPropertyId": "17:7166723761321217202",
       "name": "Medicine",
       "properties": [
         {
@@ -699,6 +699,11 @@
           "id": "16:8917642589792895213",
           "name": "isScheduleH1",
           "type": 1
+        },
+        {
+          "id": "17:7166723761321217202",
+          "name": "hsnCode",
+          "type": 9
         }
       ],
       "relations": [
