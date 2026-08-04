@@ -62,10 +62,11 @@ class PdfPurchaseParserService {
   }
 
   static ParsedPurchaseInvoice parseInvoiceText(String text) {
+    final rawLines = text.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+
     // 1. Supplier Name
     String supplierName = 'TRIDHA PHARMACEUTICALS';
-    final lines = text.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
-    for (var line in lines.take(10)) {
+    for (var line in rawLines.take(10)) {
       if (line.toUpperCase().contains('PHARMA') ||
           line.toUpperCase().contains('TRIDHA') ||
           line.toUpperCase().contains('LIMITED') ||
@@ -143,125 +144,109 @@ class PdfPurchaseParserService {
       freightCharge = double.tryParse(freightMatch.group(3)?.replaceAll(',', '') ?? '0') ?? 1200.0;
     }
 
-    // HSN-anchored Relative Token Extractor
-    // Matches 6 to 8 digit HSN codes in text
-    final hsnRegex = RegExp(r'\b(3\d{7}|3\d{5}|8\d{7})\b');
-    final hsnMatches = hsnRegex.allMatches(text).toList();
+    // Parse each line individually
+    for (var line in rawLines) {
+      if (line.toUpperCase().contains('FREIGHT') ||
+          line.toUpperCase().contains('TAX INVOICE') ||
+          line.contains('Sub Total') ||
+          line.contains('Round off')) {
+        continue;
+      }
 
-    for (var match in hsnMatches) {
-      final hsn = match.group(0)!;
-      if (hsn == '84145140') continue; // Skip freight HSN
+      // Check if line contains an HSN code (6-8 digits) AND an Expiry Date (MM/YYYY)
+      final hsnMatch = RegExp(r'\b(3\d{7}|3\d{5}|8\d{7}|\d{6,8})\b').firstMatch(line);
+      final expMatch = RegExp(r'\b(\d{2}/\d{4})\b').firstMatch(line);
 
-      final hsnPos = match.start;
+      if (hsnMatch != null && expMatch != null) {
+        final hsn = hsnMatch.group(1)!;
+        final expStr = expMatch.group(1)!;
 
-      // Extract Name (look back 120 chars before HSN)
-      final startLookback = (hsnPos - 120).clamp(0, text.length);
-      final beforeHsn = text.substring(startLookback, hsnPos);
-      
-      String name = '';
-      // Find item index e.g. "1 ", "2 ", "3 "
-      final nameReg = RegExp(r'(?:\b\d+\s+|^)([A-Z0-9\s&\-\.]{3,40})$', caseSensitive: false);
-      final nameLines = beforeHsn.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-      if (nameLines.isNotEmpty) {
-        String candidate = nameLines.last;
-        candidate = candidate.replaceAll(RegExp(r'^\d+\s+'), '').trim();
-        if (candidate.length > 2 && !candidate.contains('Bill To') && !candidate.contains('Item Name')) {
-          name = candidate;
+        int hsnPos = line.indexOf(hsn);
+        int expPos = line.indexOf(expStr);
+
+        // 1. Item Name: Everything before HSN (strip leading row index number e.g. "1 ", "2 ")
+        String beforeHsn = line.substring(0, hsnPos).trim();
+        String name = beforeHsn.replaceAll(RegExp(r'^\d+\s+'), '').trim();
+        if (name.isEmpty) {
+          name = 'MEDICINE ${items.length + 1}';
         }
-      }
 
-      if (name.isEmpty) {
-        name = 'MEDICINE ${items.length + 1}';
-      }
+        // 2. Batch Number: Everything between HSN and Exp Date
+        String batchNo = '';
+        if (expPos > hsnPos + hsn.length) {
+          String between = line.substring(hsnPos + hsn.length, expPos).trim();
+          final bTokens = between.split(RegExp(r'\s+')).where((t) => t.length >= 3).toList();
+          if (bTokens.isNotEmpty) {
+            batchNo = bTokens.last;
+          }
+        }
+        if (batchNo.isEmpty) {
+          batchNo = 'BATCH-${items.length + 1}';
+        }
 
-      // Extract Batch, Exp Date, MRP, Qty, Cost Rate (look forward 250 chars after HSN)
-      final endLookforward = (hsnPos + 250).clamp(0, text.length);
-      final afterHsn = text.substring(hsnPos + hsn.length, endLookforward);
-
-      // Extract Batch & Exp Date (MM/YYYY)
-      String batchNo = '';
-      DateTime expiryDate = DateTime.now().add(const Duration(days: 365));
-      int expEndPos = 0;
-
-      final expReg = RegExp(r'\b(\d{2}/\d{4})\b');
-      final expMatch = expReg.firstMatch(afterHsn);
-      if (expMatch != null) {
-        final expParts = expMatch.group(1)!.split('/');
+        // 3. Expiry Date
+        final expParts = expStr.split('/');
         final m = int.tryParse(expParts[0]) ?? 1;
         final y = int.tryParse(expParts[1]) ?? DateTime.now().year + 1;
-        expiryDate = DateTime(y, m, 1);
-        expEndPos = expMatch.end;
+        final expiryDate = DateTime(y, m, 1);
 
-        // Batch number is the token between HSN and Exp Date
-        String betweenHsnAndExp = afterHsn.substring(0, expMatch.start).trim();
-        final bTokens = betweenHsnAndExp.split(RegExp(r'\s+')).where((t) => t.length >= 3).toList();
-        if (bTokens.isNotEmpty) {
-          batchNo = bTokens.last;
+        // 4. Numbers Section: Everything AFTER Exp Date
+        String afterExp = line.substring(expPos + expStr.length).trim();
+
+        double mrp = 0.0;
+        int qty = 0;
+        double purchasePrice = 0.0;
+
+        // Extract MRP: First decimal value after exp date
+        final mrpMatch = RegExp(r'([\d,]+\.\d{2})').firstMatch(afterExp);
+        if (mrpMatch != null) {
+          mrp = double.tryParse(mrpMatch.group(1)!.replaceAll(',', '')) ?? 0.0;
         }
-      }
 
-      if (batchNo.isEmpty) {
-        final batchReg = RegExp(r'\b([A-Z0-9-]{5,12})\b');
-        final batchMatch = batchReg.firstMatch(afterHsn);
-        if (batchMatch != null && batchMatch.group(1) != hsn) {
-          batchNo = batchMatch.group(1)!;
+        // Extract Quantity: Integer preceding "Pcs", "Box", "Nos", "Pack" OR standalone integer after MRP
+        final qtyMatch = RegExp(r'\b(\d{1,5})\s*(?:Pcs|Pcs\.|Box|Nos|Pack)?\b', caseSensitive: false).firstMatch(afterExp);
+        if (qtyMatch != null && qtyMatch.group(1) != null) {
+          final qVal = int.tryParse(qtyMatch.group(1)!);
+          if (qVal != null && qVal > 0 && qVal < 50000) {
+            qty = qVal;
+          }
         }
-      }
 
-      // ONLY parse numbers AFTER the expiry date string to avoid picking up 2028 / year as quantity!
-      String numbersSection = expEndPos > 0 ? afterHsn.substring(expEndPos) : afterHsn;
-
-      double mrp = 0.0;
-      int qty = 0;
-      double purchasePrice = 0.0;
-
-      // Extract MRP (first decimal)
-      final decimalMatches = RegExp(r'[\d,]+\.\d{2}')
-          .allMatches(numbersSection)
-          .map((m) => double.tryParse(m.group(0)!.replaceAll(',', '')) ?? 0.0)
-          .where((d) => d > 0)
-          .toList();
-
-      if (decimalMatches.isNotEmpty) {
-        mrp = decimalMatches[0];
-      }
-
-      // Extract Quantity (integer preceding 'Pcs', 'Box', 'Nos', 'Pack', or plain integer after MRP)
-      final qtyMatch = RegExp(r'\b(\d{1,5})\s*(?:Pcs|Pcs\.|Box|Nos|Pack)?\b', caseSensitive: false).firstMatch(numbersSection);
-      if (qtyMatch != null && qtyMatch.group(1) != null) {
-        final qVal = int.tryParse(qtyMatch.group(1)!);
-        if (qVal != null && qVal > 0 && qVal < 50000) {
-          qty = qVal;
+        // Extract Purchase Price (Cost Rate): decimal after '₹' or second decimal
+        final priceMatch = RegExp(r'₹\s*([\d,]+\.\d{2})').firstMatch(afterExp);
+        if (priceMatch != null && priceMatch.group(1) != null) {
+          final pVal = double.tryParse(priceMatch.group(1)!.replaceAll(',', ''));
+          if (pVal != null && pVal > 0) purchasePrice = pVal;
         }
-      }
 
-      // Extract Purchase Price (Cost Rate): look for rate after unit or second decimal < MRP
-      final rateMatch = RegExp(r'₹\s*([\d,]+\.\d{2})').firstMatch(numbersSection);
-      if (rateMatch != null && rateMatch.group(1) != null) {
-        final rVal = double.tryParse(rateMatch.group(1)!.replaceAll(',', ''));
-        if (rVal != null && rVal > 0) purchasePrice = rVal;
-      }
+        if (purchasePrice == 0.0) {
+          final allDecimals = RegExp(r'[\d,]+\.\d{2}')
+              .allMatches(afterExp)
+              .map((m) => double.tryParse(m.group(0)!.replaceAll(',', '')) ?? 0.0)
+              .where((d) => d > 0)
+              .toList();
+          if (allDecimals.length >= 2) {
+            purchasePrice = allDecimals[1];
+          }
+        }
 
-      if (purchasePrice == 0.0 && decimalMatches.length >= 2) {
-        purchasePrice = decimalMatches.firstWhere((d) => d > 0 && d < mrp, orElse: () => decimalMatches[1]);
-      }
+        if (purchasePrice == 0.0) purchasePrice = mrp > 0 ? mrp * 0.7 : 100.0;
+        if (qty == 0) qty = 1;
 
-      if (purchasePrice == 0.0) purchasePrice = mrp > 0 ? mrp * 0.7 : 100.0;
-      if (qty == 0) qty = 1;
+        double lineTotal = purchasePrice * qty;
 
-      double lineTotal = purchasePrice * qty;
-
-      if (!items.any((it) => it.batchNo == batchNo && it.name == name)) {
-        items.add(ParsedPurchaseItem(
-          name: name,
-          hsn: hsn,
-          batchNo: batchNo.isNotEmpty ? batchNo : 'BATCH-${items.length + 1}',
-          expiryDate: expiryDate,
-          mrp: mrp,
-          qty: qty,
-          purchasePrice: purchasePrice,
-          lineTotal: lineTotal,
-        ));
+        if (!items.any((it) => it.batchNo == batchNo && it.name == name)) {
+          items.add(ParsedPurchaseItem(
+            name: name,
+            hsn: hsn,
+            batchNo: batchNo,
+            expiryDate: expiryDate,
+            mrp: mrp,
+            qty: qty,
+            purchasePrice: purchasePrice,
+            lineTotal: lineTotal,
+          ));
+        }
       }
     }
 
