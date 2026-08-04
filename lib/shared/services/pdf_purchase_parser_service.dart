@@ -191,7 +191,7 @@ class PdfPurchaseParserService {
         if (name.isEmpty) name = 'MEDICINE ${items.length + 1}';
 
         // 2. Batch, Expiry, MRP, Qty, Cost Rate: Look forward line-by-line
-        for (int k = i + 1; k < (i + 12).clamp(0, rawLines.length); k--) {
+        for (int k = i + 1; k < (i + 12).clamp(0, rawLines.length); k++) {
           final fLine = rawLines[k];
 
           // Batch No
