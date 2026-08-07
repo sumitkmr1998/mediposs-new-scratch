@@ -6,7 +6,9 @@ class Prescription {
   @Id()
   int id = 0;
 
+  @Index()
   int appointmentId;
+  @Index()
   int patientId;
   String patientName; // Denormalized
   int doctorId;
@@ -23,8 +25,10 @@ class Prescription {
   String imagesJson; // List<String> — paths to attached images
   String proceduresJson; // List<String> — procedures recommended (e.g. "Pico Laser")
 
+  @Index()
   bool dispensed; // Whether pharmacy has fulfilled this prescription
 
+  @Index()
   @Property(type: PropertyType.date)
   DateTime createdAt;
 

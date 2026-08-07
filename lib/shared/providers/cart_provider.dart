@@ -8,6 +8,7 @@ import '../models/app_user.dart';
 import '../services/objectbox_service.dart';
 import '../services/time_service.dart';
 import '../services/audit_service.dart';
+import '../services/sales_fact_service.dart';
 import 'inventory_provider.dart';
 import 'sales_provider.dart';
 import 'prescription_provider.dart';
@@ -394,13 +395,22 @@ class CartProvider extends ChangeNotifier {
       procedures = decoded.cast<String>();
     } catch (_) {}
 
-    for (final pName in procedures) {
+    for (final pEntry in procedures) {
+      final parts = pEntry.split('||');
+      final pName = parts[0];
+      final price = parts.length > 1 ? double.tryParse(parts[1]) : null;
       final proc = ObjectBoxService.instance.procedureBox
           .query(Procedure_.name.equals(pName, caseSensitive: false))
           .build()
           .findFirst();
       if (proc != null) {
-        addProcedure(proc);
+        addProcedure(proc, price: price);
+      } else {
+        // Fallback for custom/unregistered procedure names
+        addProcedure(
+          Procedure(name: pName, basePrice: price ?? 0.0),
+          price: price,
+        );
       }
     }
   }
@@ -562,10 +572,18 @@ class CartProvider extends ChangeNotifier {
     }
 
     final procedures = pProvider.getProcedures(prescription);
-    for (final pName in procedures) {
+    for (final pEntry in procedures) {
+      final parts = pEntry.split('||');
+      final pName = parts[0];
+      final price = parts.length > 1 ? double.tryParse(parts[1]) : null;
       final proc = procProv.procedures.where((p) => p.name.toLowerCase() == pName.toLowerCase()).firstOrNull;
       if (proc != null) {
-        addProcedure(proc);
+        addProcedure(proc, price: price);
+      } else {
+        addProcedure(
+          Procedure(name: pName, basePrice: price ?? 0.0),
+          price: price,
+        );
       }
     }
   }
@@ -877,6 +895,7 @@ class CartProvider extends ChangeNotifier {
     );
 
     db.saleBox.put(sale);
+    _applySalesFacts(sale, isEdit: _editingSaleId != null, oldSaleJson: oldSaleJson);
 
     // Log the transaction
     if (_editingSaleId != null) {
@@ -1066,6 +1085,22 @@ class CartProvider extends ChangeNotifier {
     } finally {
       _isCheckingOut = false;
       notifyListeners();
+    }
+  }
+
+  void _applySalesFacts(
+    Sale sale, {
+    required bool isEdit,
+    required Map<String, dynamic> oldSaleJson,
+  }) {
+    try {
+      final facts = SalesFactService.instance;
+      if (isEdit && oldSaleJson.isNotEmpty) {
+        facts.reverseSale(Sale.fromJson(oldSaleJson));
+      }
+      facts.applySale(sale);
+    } catch (e) {
+      debugPrint('CartProvider: sales fact update failed: $e');
     }
   }
 }

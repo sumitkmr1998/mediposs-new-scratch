@@ -11,34 +11,33 @@ import '../services/local_server_service.dart';
 import '../services/sync_service.dart';
 import '../services/sync_queue_service.dart';
 import '../services/audit_service.dart';
+import '../services/mutation_service.dart';
+import '../repositories/patient_repository.dart';
 
 class PatientProvider extends ChangeNotifier {
+  final PatientRepository _repo = PatientRepository();
+
   List<Patient> _patients = [];
   String _search = '';
 
   List<Patient> get patients => _patients;
 
-  List<Patient> get filtered {
-    if (_search.isEmpty) return _patients;
-    final q = _search.toLowerCase();
-    return _patients
-        .where(
-          (p) =>
-              p.name.toLowerCase().contains(q) ||
-              p.phone.contains(q) ||
-              p.uhid.toLowerCase().contains(q),
-        )
-        .toList();
-  }
+  /// Already limited by DB query — no full-table filter in Dart.
+  List<Patient> get filtered => _patients;
 
   void load() {
-    _patients = ObjectBoxService.instance.patientBox.getAll()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    if (_search.isEmpty) {
+      _patients = _repo.recent(limit: 100);
+    } else {
+      _patients = _repo.search(_search, limit: 50);
+    }
     notifyListeners();
   }
 
   void setSearch(String q) {
     _search = q;
+    // Debounce is UI-side; re-query ObjectBox with limit (not getAll).
+    _patients = _repo.search(q, limit: 50);
     notifyListeners();
   }
 
@@ -81,20 +80,12 @@ class PatientProvider extends ChangeNotifier {
 
     load();
 
-    // Broadcast or Push network sync
-    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
-    if (isHub) {
-      if (LocalServerService.instance.isRunning) {
-        LocalServerService.instance.broadcast({'event': 'sync_received'});
-      }
-    } else if (isClient) {
-      SyncQueueService.instance.addToQueue(
-        entity: 'patient',
-        action: 'create',
-        data: p.toJson(),
-      );
-    }
+    MutationService.instance.publishEntity(
+      entity: 'patient',
+      action: isNew ? 'create' : 'update',
+      data: p.toJson(),
+      hubEvents: const ['patients_updated', 'new_patient'],
+    );
 
     return p;
   }
@@ -126,20 +117,13 @@ class PatientProvider extends ChangeNotifier {
 
     load();
 
-    // Broadcast sync
-    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
-    if (isHub) {
-      if (LocalServerService.instance.isRunning) {
-        LocalServerService.instance.broadcast({'event': 'patient_deleted', 'uhid': uhid});
-      }
-    } else if (isClient) {
-      SyncQueueService.instance.addToQueue(
-        entity: 'patient',
-        action: 'delete',
-        data: {'uhid': uhid},
-      );
-    }
+    MutationService.instance.publish(
+      entity: 'patient',
+      action: 'delete',
+      data: {'uhid': uhid},
+      hubEvents: const ['patient_deleted'],
+      hubPayload: {'uhid': uhid},
+    );
   }
 
   Patient? getById(int id) {

@@ -3,8 +3,26 @@ import '../models/medicine.dart';
 import '../models/sale.dart';
 import '../models/patient.dart';
 import '../services/objectbox_service.dart';
+import '../services/sales_fact_service.dart';
+import 'consumption_aggregator.dart';
 
 class AnalyticsHelper {
+  static ConsumptionResult _consumptionForTrend(
+    List<Sale> sales,
+    int trendDays,
+    Iterable<Sale> window,
+  ) {
+    try {
+      if (ObjectBoxService.isInitialized &&
+          SalesFactService.instance.hasAnyFacts) {
+        return SalesFactService.instance.consumptionLastDays(
+          trendDays > 0 ? trendDays : 30,
+        );
+      }
+    } catch (_) {}
+    return ConsumptionAggregator.build(window.toList());
+  }
+
   /// Extract SaleItems from a Sale record
   static List<SaleItem> getItems(Sale sale) {
     try {
@@ -59,45 +77,33 @@ class AnalyticsHelper {
     return revenue - cost;
   }
 
-  /// Calculates the daily sales rate (consumption rate) of a medicine over a list of sales
+  /// Calculates the daily sales rate (consumption rate) of a medicine over a list of sales.
+  /// Prefer building [ConsumptionAggregator] once when evaluating many medicines.
   static double dailyConsumptionRate(int medicineId, List<Sale> sales, {int? trendDays}) {
     if (sales.isEmpty) return 0.0;
-    
+
     final med = ObjectBoxService.instance.medicineBox.get(medicineId);
-    final medName = med?.name.toLowerCase().trim();
-    if (medName == null) return 0.0;
+    if (med == null) return 0.0;
 
-    Iterable<Sale> filteredSales = sales.where((s) => !s.isReturn);
-    if (trendDays != null && trendDays > 0) {
-      final cutoff = DateTime.now().subtract(Duration(days: trendDays));
-      filteredSales = filteredSales.where((s) => s.createdAt.isAfter(cutoff));
+    Iterable<Sale> window = sales;
+    final days = trendDays ?? 0;
+    if (days > 0) {
+      final cutoff = DateTime.now().subtract(Duration(days: days));
+      window = sales.where((s) => s.createdAt.isAfter(cutoff));
     }
-    
-    final validSales = filteredSales.toList();
-    if (validSales.isEmpty) return 0.0;
+    final windowList = window.toList();
+    if (windowList.isEmpty) return 0.0;
 
-    int totalSold = 0;
-    for (final sale in validSales) {
-      for (final item in getItems(sale)) {
-        if (!item.isProcedure && item.medicineName.toLowerCase().trim() == medName) {
-          totalSold += item.qty;
-        }
-      }
-    }
+    final result = ConsumptionAggregator.build(windowList);
+    final totalSold = result.unitsForId(medicineId, fallbackName: med.name);
+    if (totalSold <= 0) return 0.0;
 
-    if (totalSold == 0) return 0.0;
+    if (days > 0) return totalSold / days;
 
-    if (trendDays != null && trendDays > 0) {
-      return totalSold / trendDays;
-    }
-
-    validSales.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-    final firstDate = validSales.first.createdAt;
-    final lastDate = DateTime.now();
-    final days = lastDate.difference(firstDate).inDays;
-    
-    if (days <= 0) return totalSold.toDouble();
-    return totalSold / days;
+    windowList.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final span = DateTime.now().difference(windowList.first.createdAt).inDays;
+    if (span <= 0) return totalSold.toDouble();
+    return totalSold / span;
   }
 
   /// Calculates predicted remaining days of stock for a medicine
@@ -255,10 +261,21 @@ class AnalyticsHelper {
     int targetStockDays = 365,
   }) {
     final list = <ReorderRecommendation>[];
-    
+    Iterable<Sale> window = sales;
+    if (trendDays > 0) {
+      final cutoff = DateTime.now().subtract(Duration(days: trendDays));
+      window = sales.where((s) => s.createdAt.isAfter(cutoff));
+    }
+    // Prefer durable daily facts when the box is populated; else decode sale window once.
+    final ConsumptionResult agg = _consumptionForTrend(sales, trendDays, window);
+
     for (final m in medicines) {
-      final daily = dailyConsumptionRate(m.id, sales, trendDays: trendDays);
-      final daysLeft = daysOfStockRemaining(m, sales, trendDays: trendDays);
+      final daily = agg.dailyRateForMedicine(
+        medicineId: m.id,
+        medicineName: m.name,
+        trendDays: trendDays,
+      );
+      final daysLeft = daily <= 0 ? 999.0 : m.totalStock / daily;
       
       // Suggest reorder if stock is completely depleted OR days remaining is less than threshold
       if (m.totalStock <= 0 || (daysLeft < depletionDaysThreshold && daily > 0)) {

@@ -6,11 +6,13 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'objectbox_service.dart';
+import 'chunked_box_io.dart';
 import '../models/medicine.dart';
 import '../models/stock_transfer.dart';
 import '../models/sale.dart';
 import '../models/patient.dart';
 import '../models/prescription.dart';
+import '../../objectbox.g.dart';
 
 class AuditExportService {
   /// Generates a comprehensive Excel Audit Report
@@ -24,22 +26,44 @@ class AuditExportService {
         excel.delete('Sheet1');
       }
 
-      // 1. Stock / Inventory
+      // Stream large tables in chunks into memory only as Map rows for Excel.
+      // Medicines/batches stay modest; sales/patients use chunked mapAll.
       final medicines = db.medicineBox.getAll();
       _exportInventory(excel, medicines, db.batchBox.getAll());
 
-      // 2. Internal Transfers
       final medMap = {for (var m in medicines) m.id: m.name};
       _exportTransfers(excel, db.transferBox.getAll(), medMap);
 
-      // 3. Sales / Dispense
-      _exportSales(excel, db.saleBox.getAll());
+      final sales = <Sale>[];
+      var saleOffset = 0;
+      const chunk = 500;
+      while (true) {
+        final q = db.saleBox.query().build();
+        try {
+          q.offset = saleOffset;
+          q.limit = chunk;
+          final batch = q.find();
+          if (batch.isEmpty) break;
+          sales.addAll(batch);
+          saleOffset += batch.length;
+          if (batch.length < chunk) break;
+        } finally {
+          q.close();
+        }
+        await Future<void>.delayed(Duration.zero);
+      }
+      _exportSales(excel, sales);
 
-      // 4. Patients
-      _exportPatients(excel, db.patientBox.getAll());
+      final patients = ChunkedBoxIo.mapAll(db.patientBox, (Patient e) => e.toJson())
+          .map((m) => Patient.fromJson(m))
+          .toList();
+      _exportPatients(excel, patients);
 
-      // 5. Prescriptions
-      _exportPrescriptions(excel, db.prescriptionBox.getAll());
+      final prescriptions = ChunkedBoxIo.mapAll(
+              db.prescriptionBox, (Prescription e) => e.toJson())
+          .map((m) => Prescription.fromJson(m))
+          .toList();
+      _exportPrescriptions(excel, prescriptions);
 
       // Save file
       final tempDir = await getTemporaryDirectory();

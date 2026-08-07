@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'objectbox_service.dart';
+import 'chunked_box_io.dart';
 import '../models/medicine.dart';
 import '../models/stock_transfer.dart';
 import '../models/sale.dart';
@@ -19,6 +20,7 @@ import '../models/patient_image.dart';
 import '../models/purchase_record.dart';
 import '../models/restock_request.dart';
 import '../models/procedure.dart';
+import '../models/daily_medicine_sales_fact.dart';
 
 class RestoreConfig {
   final bool inventory;
@@ -46,25 +48,39 @@ class BackupRestoreService {
 
       final db = ObjectBoxService.instance;
 
-      // 1. Export JSON Data
-      await _writeJson(stagingDir, 'medicine.json', db.medicineBox.getAll().map((e) => e.toJson()).toList());
-      await _writeJson(stagingDir, 'transfer.json', db.transferBox.getAll().map((e) => e.toJson()).toList());
-      await _writeJson(stagingDir, 'sale.json', db.saleBox.getAll().map((e) => e.toJson()).toList());
-      await _writeJson(stagingDir, 'user.json', db.userBox.getAll().map((e) => e.toJson()).toList());
-      await _writeJson(stagingDir, 'settings.json', db.settingsBox.getAll().map((e) => e.toJson()).toList());
-      await _writeJson(stagingDir, 'purchase.json', db.purchaseBox.getAll().map((e) => e.toJson()).toList());
-      await _writeJson(stagingDir, 'batch.json', db.batchBox.getAll().map((e) => e.toJson()).toList());
-      await _writeJson(stagingDir, 'restock.json', db.restockRequestBox.getAll().map((e) => e.toJson()).toList());
-      
+      // 1. Export JSON Data (chunked — avoids loading entire large tables into RAM)
+      Future<void> exportBox<T>(
+        String name,
+        dynamic box,
+        Map<String, dynamic> Function(T e) toJson,
+      ) =>
+          ChunkedBoxIo.exportBoxToJsonFile<T>(
+            box: box,
+            dir: stagingDir,
+            filename: name,
+            toJson: toJson,
+          );
+
+      await exportBox<Medicine>('medicine.json', db.medicineBox, (e) => e.toJson());
+      await exportBox<StockTransfer>('transfer.json', db.transferBox, (e) => e.toJson());
+      await exportBox<Sale>('sale.json', db.saleBox, (e) => e.toJson());
+      await exportBox<AppUser>('user.json', db.userBox, (e) => e.toJson());
+      await exportBox<AppSettings>('settings.json', db.settingsBox, (e) => e.toJson());
+      await exportBox<PurchaseRecord>('purchase.json', db.purchaseBox, (e) => e.toJson());
+      await exportBox<MedicineBatch>('batch.json', db.batchBox, (e) => e.toJson());
+      await exportBox<RestockRequest>('restock.json', db.restockRequestBox, (e) => e.toJson());
+
       // OPD
-      await _writeJson(stagingDir, 'patient.json', db.patientBox.getAll().map((e) => e.toJson()).toList());
-      await _writeJson(stagingDir, 'doctor.json', db.doctorBox.getAll().map((e) => e.toJson()).toList());
-      await _writeJson(stagingDir, 'appointment.json', db.appointmentBox.getAll().map((e) => e.toJson()).toList());
-      await _writeJson(stagingDir, 'prescription.json', db.prescriptionBox.getAll().map((e) => e.toJson()).toList());
-      await _writeJson(stagingDir, 'template.json', db.templateBox.getAll().map((e) => e.toJson()).toList());
-      await _writeJson(stagingDir, 'patient_image.json', db.patientImageBox.getAll().map((e) => e.toJson()).toList());
-      await _writeJson(stagingDir, 'procedure.json', db.procedureBox.getAll().map((e) => e.toJson()).toList());
-      await _writeJson(stagingDir, 'procedure_record.json', db.procedureRecordBox.getAll().map((e) => e.toJson()).toList());
+      await exportBox<Patient>('patient.json', db.patientBox, (e) => e.toJson());
+      await exportBox<Doctor>('doctor.json', db.doctorBox, (e) => e.toJson());
+      await exportBox<Appointment>('appointment.json', db.appointmentBox, (e) => e.toJson());
+      await exportBox<Prescription>('prescription.json', db.prescriptionBox, (e) => e.toJson());
+      await exportBox<PrescriptionTemplate>('template.json', db.templateBox, (e) => e.toJson());
+      await exportBox<PatientImage>('patient_image.json', db.patientImageBox, (e) => e.toJson());
+      await exportBox<Procedure>('procedure.json', db.procedureBox, (e) => e.toJson());
+      await exportBox<ProcedureRecord>('procedure_record.json', db.procedureRecordBox, (e) => e.toJson());
+      await exportBox<DailyMedicineSalesFact>(
+          'sales_facts.json', db.salesFactBox, (e) => e.toJson());
 
       // 2. Export Media Folders (Patient Photos, Prescriptions)
       final appDocDir = await getApplicationDocumentsDirectory();
@@ -97,11 +113,6 @@ class BackupRestoreService {
       debugPrint('Export Error: $e');
       return null;
     }
-  }
-
-  static Future<void> _writeJson(Directory dir, String filename, List<Map<String, dynamic>> data) async {
-    final file = File(p.join(dir.path, filename));
-    await file.writeAsString(jsonEncode(data));
   }
 
   static Future<void> _copyDirectory(Directory source, Directory destination) async {

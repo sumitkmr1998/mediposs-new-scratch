@@ -7,10 +7,16 @@ class Sale {
   @Id()
   int id = 0;
 
+  /// Indexed (not unique): historical DBs may still hold duplicate invoiceNos until migration.
+  @Index()
   String invoiceNo;
+  @Index()
   int patientId; // Link to Patient entity
+  @Index()
   String patientName;
+  @Index()
   String patientPhone;
+  @Index()
   String patientUhid;
 
   double subtotal;
@@ -25,6 +31,7 @@ class Sale {
   double upiAmount;
   double cardAmount;
 
+  @Index()
   @Property(type: PropertyType.date)
   DateTime createdAt;
 
@@ -35,6 +42,7 @@ class Sale {
   bool isReturn;
   bool isClinicalDispense;
 
+  @Index()
   int linkedAppointmentId; // Link to Appointment (if clinical dispense)
   int linkedProcedureId;   // Link to Procedure (if clinical dispense)
   String opdInvoiceNo;     // Link to the initial OPD advance transaction/invoice number

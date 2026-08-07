@@ -149,6 +149,7 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final inv = context.watch<InventoryProvider>();
 
     final patient =
         context.watch<PatientProvider>().getById(widget.appointment.patientId);
@@ -483,14 +484,17 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
                             ..._items.asMap().entries.map((entry) {
                               final i = entry.key;
                               final item = entry.value;
+                              final med = inv.medicines.where((m) => m.id == item.medicineId).firstOrNull;
+                              final stockText = med != null ? '  •  Stock: ${med.storeStock}' : '';
                               return _MedicineListItem(
                                 index: i + 1,
                                 name: item.medicineName,
                                 details:
-                                    'Qty: ${item.qty}  •  ${item.dosage.isNotEmpty ? item.dosage : "No dosage"}  •  ${item.days} days',
+                                    'Qty: ${item.qty}  •  ${item.dosage.isNotEmpty ? item.dosage : "No dosage"}  •  ${item.days} days$stockText',
                                 onDelete: () =>
                                     setState(() => _items.removeAt(i)),
                                 isDark: isDark,
+                                isLowStock: med?.isLowStock ?? false,
                               );
                             }),
                           ],
@@ -617,8 +621,9 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
                                         .map((p) => p.name)
                                         .toList();
                                   },
-                                  onSelected: (selection) =>
-                                      _addProcedure(selection),
+                                  onSelected: (selection) {
+                                    _onProcedureSelected(selection);
+                                  },
                                   fieldViewBuilder: (context, controller,
                                       focusNode, onFieldSubmitted) {
                                     return TextField(
@@ -654,7 +659,9 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
                                                 horizontal: 20, vertical: 14),
                                       ),
                                       onSubmitted: (val) {
-                                        _addProcedure(val);
+                                        if (val.trim().isNotEmpty) {
+                                          _onProcedureSelected(val.trim());
+                                        }
                                         controller.clear();
                                       },
                                     );
@@ -668,8 +675,11 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
                               runSpacing: 10,
                               children: [
                                 ..._procedures.asMap().entries.map((entry) {
+                                  final parts = entry.value.split('||');
+                                  final name = parts[0];
+                                  final priceText = parts.length > 1 ? ' (₹${parts[1]})' : '';
                                   return _LabTestChip(
-                                    label: entry.value,
+                                    label: '$name$priceText',
                                     onDelete: () => setState(() =>
                                         _procedures.removeAt(entry.key)),
                                   );
@@ -778,12 +788,66 @@ class _PrescriptionWindowsState extends State<PrescriptionWindows> {
     final proc = name.trim();
     if (proc.isNotEmpty) {
       setState(() {
-        if (!_procedures.contains(proc)) {
-          _procedures.add(proc);
-        }
+        // Prevent duplicate adds of the same procedure name (ignoring price values)
+        _procedures.removeWhere((p) => p.split('||')[0].toLowerCase() == proc.split('||')[0].toLowerCase());
+        _procedures.add(proc);
         _procedureCtrl.clear();
       });
     }
+  }
+
+  void _onProcedureSelected(String name) {
+    final procProv = context.read<ProcedureProvider>();
+    final proc = procProv.procedures.where((p) => p.name.toLowerCase() == name.toLowerCase()).firstOrNull;
+    final defaultPrice = proc?.basePrice ?? 0.0;
+    _showProcedurePriceDialog(name, defaultPrice);
+  }
+
+  void _showProcedurePriceDialog(String procedureName, double defaultPrice) {
+    final priceCtrl = TextEditingController(text: defaultPrice.toStringAsFixed(0));
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Procedure Price/Value'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Enter recommended price/value for "$procedureName":',
+                style: const TextStyle(fontSize: 13)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: priceCtrl,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Price (₹)',
+                isDense: true,
+              ),
+              onSubmitted: (val) {
+                final price = double.tryParse(val) ?? defaultPrice;
+                _addProcedure('$procedureName||${price.toStringAsFixed(2)}');
+                Navigator.pop(ctx);
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final price = double.tryParse(priceCtrl.text) ?? defaultPrice;
+              _addProcedure('$procedureName||${price.toStringAsFixed(2)}');
+              Navigator.pop(ctx);
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _pickImage(ImageSource source) async {
@@ -1447,10 +1511,14 @@ class _MedicineAdderState extends State<_MedicineAdder> {
                   final q = textEditingValue.text.toLowerCase();
                   return inv.medicines
                       .where((m) => m.name.toLowerCase().contains(q))
-                      .map((m) => '${m.id}||${m.name}')
+                      .map((m) => '${m.id}||${m.name}||${m.storeStock}||${m.isLowStock}')
                       .take(8);
                 },
-                displayStringForOption: (opt) => opt.split('||').last,
+                displayStringForOption: (opt) {
+                  final parts = opt.split('||');
+                  if (parts.length > 1) return parts[1];
+                  return opt;
+                },
                 onSelected: _onMedicineSelected,
                 fieldViewBuilder: (ctx, ctrl, focus, onSubmit) {
                   return TextField(
@@ -1500,19 +1568,50 @@ class _MedicineAdderState extends State<_MedicineAdder> {
                             final bool isHovered =
                                 AutocompleteHighlightedOption.of(context) ==
                                     index;
+                            final parts = option.split('||');
+                            final name = parts.length > 1 ? parts[1] : option;
+                            final stock = parts.length > 2 ? parts[2] : '0';
+                            final isLow = parts.length > 3 ? parts[3] == 'true' : false;
                             return ListTile(
                               tileColor: isHovered
                                   ? AppTheme.primary.withValues(alpha: 0.1)
                                   : null,
-                              title: Text(option.split('||').last,
-                                  style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: isHovered
-                                          ? FontWeight.w700
-                                          : FontWeight.normal,
-                                      color: isHovered
-                                          ? AppTheme.primary
-                                          : (isDark ? Colors.white : Colors.black))),
+                              title: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(name,
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: isHovered
+                                              ? FontWeight.w700
+                                              : FontWeight.normal,
+                                          color: isHovered
+                                              ? AppTheme.primary
+                                              : (isDark ? Colors.white : Colors.black))),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (isLow) ...[
+                                        const Icon(Icons.warning_amber_rounded,
+                                            color: Colors.amber, size: 14),
+                                        const SizedBox(width: 4),
+                                        Text('Stock: $stock (Low)',
+                                            style: const TextStyle(
+                                                fontSize: 11,
+                                                color: Colors.amber,
+                                                fontWeight: FontWeight.w600)),
+                                      ] else ...[
+                                        Text('Stock: $stock',
+                                            style: TextStyle(
+                                                fontSize: 11,
+                                                color: isHovered
+                                                    ? AppTheme.primary.withValues(alpha: 0.8)
+                                                    : context.textMutedColor)),
+                                      ],
+                                    ],
+                                  ),
+                                ],
+                              ),
                               onTap: () => onSelected(option),
                             );
                           },
@@ -1705,6 +1804,7 @@ class _MedicineListItem extends StatelessWidget {
   final String details;
   final VoidCallback onDelete;
   final bool isDark;
+  final bool isLowStock;
 
   const _MedicineListItem({
     required this.index,
@@ -1712,6 +1812,7 @@ class _MedicineListItem extends StatelessWidget {
     required this.details,
     required this.onDelete,
     required this.isDark,
+    this.isLowStock = false,
   });
 
   @override
@@ -1741,12 +1842,44 @@ class _MedicineListItem extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    if (isLowStock) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.amber.withValues(alpha: 0.4), width: 1),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 12),
+                            SizedBox(width: 4),
+                            Text(
+                              'LOW STOCK',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.amber,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 3),
                 Text(

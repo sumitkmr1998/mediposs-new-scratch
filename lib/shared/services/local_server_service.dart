@@ -28,6 +28,9 @@ import '../models/purchase_record.dart';
 import '../models/attendance_record.dart';
 import '../../objectbox.g.dart';
 import '../domain/stock_rules.dart';
+import 'hub/json_handlers.dart';
+import 'hub/medicines_routes.dart';
+import 'hub/sales_routes.dart';
 import 'package:flutter/foundation.dart';
 
 class LocalServerService {
@@ -68,14 +71,14 @@ class LocalServerService {
     router.get('/download-apk', _apkDownloadHandler);
 
     // ------ Protected endpoints ------
-    router.get('/api/medicines', _withAuth(_medicinesGetHandler));
+    router.get('/api/medicines', _withAuth(MedicinesRoutes.getMedicines));
     router.post('/api/medicines/push', _withAuth(_medicinesPushHandler));
     router.post('/api/medicines/sync', _withAuth(_medicinesSyncHandler));
     router.get('/api/transfers', _withAuth(_transfersGetHandler));
     router.post('/api/transfers/push', _withAuth(_transfersPushHandler));
     router.get('/api/purchases', _withAuth(_purchasesGetHandler));
     router.post('/api/purchases/push', _withAuth(_purchasesPushHandler));
-    router.get('/api/sales', _withAuth(_salesGetHandler));
+    router.get('/api/sales', _withAuth(SalesRoutes.getSales));
     router.post('/api/sales/push', _withAuth(_salesPushHandler));
     router.get('/api/patients', _withAuth(_patientsGetHandler));
     router.post('/api/patients/push', _withAuth(_patientsPushHandler));
@@ -255,14 +258,11 @@ class LocalServerService {
 
   // ---- Handlers ----
 
-  Response _healthHandler(Request req) => Response.ok(
-        jsonEncode({
-          'status': 'ok',
-          'timestamp': DateTime.now().toIso8601String(),
-          'shopId': ObjectBoxService.instance.settings.shopId,
-        }),
-        headers: {'content-type': 'application/json'},
-      );
+  Response _healthHandler(Request req) => jsonOk({
+        'status': 'ok',
+        'timestamp': DateTime.now().toIso8601String(),
+        'shopId': ObjectBoxService.instance.settings.shopId,
+      });
 
   Future<Response> _loginHandler(Request req) async {
     final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
@@ -490,61 +490,6 @@ class LocalServerService {
     }
   }
 
-  Response _medicinesGetHandler(Request req) {
-    final sinceStr = req.url.queryParameters['since'];
-    final since = DateTime.tryParse(sinceStr ?? '') ?? DateTime(2000);
-    final limitStr = req.url.queryParameters['limit'];
-    final offsetStr = req.url.queryParameters['offset'];
-    final limit = int.tryParse(limitStr ?? '');
-    final offset = int.tryParse(offsetStr ?? '');
-
-    final box = ObjectBoxService.instance.medicineBox;
-    final queryBuilder = box.query(Medicine_.updatedAt.greaterThan(since.millisecondsSinceEpoch));
-    final query = queryBuilder.build();
-    if (offset != null) query.offset = offset;
-    if (limit != null) query.limit = limit;
-    final medicines = query.find();
-    
-    final json = medicines
-        .map((m) => {
-              'id': m.id,
-              'name': m.name,
-              'barcode': m.barcode,
-              'category': m.category,
-              'unit': m.unit,
-              'purchasePrice': m.purchasePrice,
-              'sellingPrice': m.sellingPrice,
-              'mainStock': m.mainStock,
-              'storeStock': m.storeStock,
-              'bulkClinicStock': m.bulkClinicStock,
-              'bulkStoreStock': m.bulkStoreStock,
-              'lowStockThreshold': m.lowStockThreshold,
-              'isScheduleH1': m.isScheduleH1,
-              'createdAt': m.createdAt.toIso8601String(),
-              'updatedAt': m.updatedAt.toIso8601String(),
-              'batches': m.batches
-                  .map((b) => {
-                        'id': b.id,
-                        'batchNo': b.batchNo,
-                        'expiryDate': b.expiryDate.toIso8601String(),
-                        'mainStock': b.mainStock,
-                        'storeStock': b.storeStock,
-                        'bulkClinicStock': b.bulkClinicStock,
-                        'bulkStoreStock': b.bulkStoreStock,
-                      })
-                  .toList(),
-            })
-        .toList();
-    return Response.ok(
-      jsonEncode({
-        'data': json,
-        'count': json.length,
-        'serverTime': DateTime.now().millisecondsSinceEpoch,
-      }),
-      headers: {'content-type': 'application/json'},
-    );
-  }
-
   Future<Response> _medicinesSyncHandler(Request req) async {
     final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
     final list = (body['medicines'] as List?) ?? [];
@@ -724,57 +669,6 @@ class LocalServerService {
       debugPrint('Hub medicine push error: $e');
       return Response.internalServerError();
     }
-  }
-
-  Response _salesGetHandler(Request req) {
-    final sinceStr = req.url.queryParameters['since'];
-    final sinceMs = int.tryParse(sinceStr ?? '') ?? (DateTime.tryParse(sinceStr ?? '')?.millisecondsSinceEpoch) ?? 0;
-    final limitStr = req.url.queryParameters['limit'];
-    final offsetStr = req.url.queryParameters['offset'];
-    final limit = int.tryParse(limitStr ?? '');
-    final offset = int.tryParse(offsetStr ?? '');
-
-    final box = ObjectBoxService.instance.saleBox;
-    final queryBuilder = box.query(Sale_.updatedAt.greaterThan(sinceMs - 1));
-    final query = queryBuilder.build();
-    if (offset != null) query.offset = offset;
-    if (limit != null) query.limit = limit;
-    final sales = query.find();
-    
-    debugPrint('Hub: Sales sync requested (since=$sinceMs, limit=$limit, offset=$offset). Returning ${sales.length} sales.');
-
-    final json = sales
-        .map((s) => {
-              'id': s.id,
-              'invoiceNo': s.invoiceNo,
-              'patientId': s.patientId,
-              'patientName': s.patientName,
-              'patientPhone': s.patientPhone,
-              'patientUhid': s.patientUhid,
-              'subtotal': s.subtotal,
-              'discount': s.discount,
-              'taxRate': s.taxRate,
-              'taxAmount': s.taxAmount,
-              'total': s.total,
-              'paymentMethod': s.paymentMethod,
-              'cashAmount': s.cashAmount,
-              'upiAmount': s.upiAmount,
-              'cardAmount': s.cardAmount,
-              'createdAt': s.createdAt.toIso8601String(),
-              'updatedAt': s.updatedAt.toIso8601String(),
-              'synced': s.synced,
-              'isReturn': s.isReturn,
-              'isClinicalDispense': s.isClinicalDispense,
-              'linkedAppointmentId': s.linkedAppointmentId,
-              'linkedProcedureId': s.linkedProcedureId,
-              'opdInvoiceNo': s.opdInvoiceNo,
-              'itemsJson': s.itemsJson,
-            })
-        .toList();
-    return Response.ok(
-      jsonEncode({'data': json, 'serverTime': DateTime.now().millisecondsSinceEpoch}),
-      headers: {'content-type': 'application/json'},
-    );
   }
 
   void _revertHubInventory(Sale oldSale) {

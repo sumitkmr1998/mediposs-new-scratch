@@ -9,11 +9,15 @@ import '../services/sync_queue_service.dart';
 import '../services/audit_service.dart';
 import 'dart:io';
 import '../services/local_server_service.dart';
-import '../utils/analytics_helper.dart';
+import '../utils/consumption_aggregator.dart';
 import '../models/sale.dart';
+import '../repositories/medicine_repository.dart';
+import '../services/sales_fact_service.dart';
+import '../services/mutation_service.dart';
 import '../../objectbox.g.dart';
 
 class InventoryProvider extends ChangeNotifier {
+  final MedicineRepository _medRepo = MedicineRepository();
   final Box<Medicine> _box = ObjectBoxService.instance.medicineBox;
   final Box<PurchaseRecord> _purchaseBox =
       ObjectBoxService.instance.purchaseBox;
@@ -39,9 +43,24 @@ class InventoryProvider extends ChangeNotifier {
   List<Medicine> get lowStockMedicines =>
       _medicines.where((m) => m.isLowStock).toList();
 
-  bool isSmartLowStock(Medicine m, List<Sale> sales) {
+  /// Prefer pre-aggregated sales facts when available (no sale JSON decode).
+  ConsumptionResult _consumptionForSmartStock(List<Sale> sales) {
+    try {
+      if (SalesFactService.instance.hasAnyFacts) {
+        return SalesFactService.instance.consumptionLastDays(30);
+      }
+    } catch (_) {}
+    return ConsumptionAggregator.build(sales);
+  }
+
+  bool isSmartLowStock(Medicine m, List<Sale> sales, {ConsumptionResult? precomputed}) {
     if (m.totalStock <= 0) return true;
-    final daily = AnalyticsHelper.dailyConsumptionRate(m.id, sales, trendDays: 30);
+    final result = precomputed ?? _consumptionForSmartStock(sales);
+    final daily = result.dailyRateForMedicine(
+      medicineId: m.id,
+      medicineName: m.name,
+      trendDays: 30,
+    );
     if (daily > 0) {
       final daysLeft = m.totalStock / daily;
       return daysLeft < 30;
@@ -50,11 +69,13 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   int getSmartLowStockCount(List<Sale> sales) {
-    return _medicines.where((m) => isSmartLowStock(m, sales)).length;
+    final result = _consumptionForSmartStock(sales);
+    return _medicines.where((m) => isSmartLowStock(m, sales, precomputed: result)).length;
   }
 
   List<Medicine> getSmartLowStockMedicines(List<Sale> sales) {
-    return _medicines.where((m) => isSmartLowStock(m, sales)).toList();
+    final result = _consumptionForSmartStock(sales);
+    return _medicines.where((m) => isSmartLowStock(m, sales, precomputed: result)).toList();
   }
 
   int get expiredCount => expiredMedicines.length;
@@ -171,76 +192,20 @@ class InventoryProvider extends ChangeNotifier {
     }
   }
 
-  bool _hasDeduplicated = false;
-
-  void _deduplicateBatchesInDatabase() {
-    try {
-      final allMeds = _box.getAll();
-      bool changedAny = false;
-      final List<MedicineBatch> batchesToDelete = [];
-      final List<MedicineBatch> batchesToUpdate = [];
-
-      for (final m in allMeds) {
-        if (m.batches.length < 2) continue;
-
-        final Map<String, MedicineBatch> uniqueBatches = {};
-        bool medicineChanged = false;
-
-        for (final b in m.batches) {
-          final key = b.batchNo.trim().toUpperCase();
-          if (key.isEmpty) continue;
-
-          if (!uniqueBatches.containsKey(key)) {
-            uniqueBatches[key] = b;
-          } else {
-            // Merge stocks into the first encountered batch with same batch number
-            final target = uniqueBatches[key]!;
-            target.mainStock += b.mainStock;
-            target.storeStock += b.storeStock;
-            target.bulkClinicStock += b.bulkClinicStock;
-            target.bulkStoreStock += b.bulkStoreStock;
-
-            batchesToUpdate.add(target);
-            batchesToDelete.add(b);
-
-            medicineChanged = true;
-            changedAny = true;
-          }
-        }
-
-        if (medicineChanged) {
-          // Recalculate medicine total stock
-          m.recalculateStockFromBatches();
-          _box.put(m);
-        }
-      }
-
-      if (batchesToUpdate.isNotEmpty) {
-        _batchBox.putMany(batchesToUpdate);
-      }
-      if (batchesToDelete.isNotEmpty) {
-        for (final b in batchesToDelete) {
-          b.medicine.target = null;
-          _batchBox.remove(b.id);
-        }
-      }
-
-      if (changedAny) {
-        debugPrint('InventoryProvider: Auto-merged and purged duplicate batch entries in database.');
-      }
-    } catch (e) {
-      debugPrint('InventoryProvider: Error during batch deduplication: $e');
-    }
-  }
-
   void load() {
-    if (!_hasDeduplicated) {
-      _hasDeduplicated = true;
-      _deduplicateBatchesInDatabase();
+    // Batch dedup is a one-shot migration (MigrationService), not on every load.
+    _medicines = _medRepo.getAll();
+    // Cap purchase history held in memory for UI (newest first).
+    final pq = _purchaseBox
+        .query()
+        .order(PurchaseRecord_.purchasedAt, flags: Order.descending)
+        .build();
+    try {
+      pq.limit = 500;
+      _purchaseHistory = pq.find();
+    } finally {
+      pq.close();
     }
-    _medicines = _box.getAll();
-    _purchaseHistory = _purchaseBox.getAll();
-    _purchaseHistory.sort((a, b) => b.purchasedAt.compareTo(a.purchasedAt));
     notifyListeners();
   }
 
@@ -281,22 +246,11 @@ class InventoryProvider extends ChangeNotifier {
 
     load();
 
-    final isClient = Platform.isAndroid ||
-        (Platform.isWindows &&
-            ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows &&
-        !ObjectBoxService.instance.settings.isWindowsClient;
-    if (isHub) {
-      if (LocalServerService.instance.isRunning) {
-        LocalServerService.instance.broadcast({'event': 'medicines_updated'});
-      }
-    } else if (isClient) {
-      SyncQueueService.instance.addToQueue(
-        entity: 'medicine',
-        action: 'create',
-        data: m.toJson(),
-      );
-    }
+    MutationService.instance.publishEntity(
+      entity: 'medicine',
+      action: 'create',
+      data: m.toJson(),
+    );
   }
 
   void updateMedicine(Medicine m, {SyncService? syncService, AppUser? actor}) {
@@ -328,22 +282,11 @@ class InventoryProvider extends ChangeNotifier {
 
     load();
 
-    final isClient = Platform.isAndroid ||
-        (Platform.isWindows &&
-            ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows &&
-        !ObjectBoxService.instance.settings.isWindowsClient;
-    if (isHub) {
-      if (LocalServerService.instance.isRunning) {
-        LocalServerService.instance.broadcast({'event': 'medicines_updated'});
-      }
-    } else if (isClient) {
-      SyncQueueService.instance.addToQueue(
-        entity: 'medicine',
-        action: 'update',
-        data: m.toJson(),
-      );
-    }
+    MutationService.instance.publishEntity(
+      entity: 'medicine',
+      action: 'update',
+      data: m.toJson(),
+    );
   }
 
   void deleteMedicine(int id, {SyncService? syncService, AppUser? actor}) {
@@ -370,26 +313,13 @@ class InventoryProvider extends ChangeNotifier {
 
     load();
 
-    final isClient = Platform.isAndroid ||
-        (Platform.isWindows &&
-            ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows &&
-        !ObjectBoxService.instance.settings.isWindowsClient;
-    if (isHub) {
-      if (LocalServerService.instance.isRunning) {
-        LocalServerService.instance.broadcast({
-          'event': 'medicine_deleted',
-          'barcode': barcode,
-          'name': name,
-        });
-      }
-    } else if (isClient) {
-      SyncQueueService.instance.addToQueue(
-        entity: 'medicine',
-        action: 'delete',
-        data: {'barcode': barcode, 'name': name},
-      );
-    }
+    MutationService.instance.publish(
+      entity: 'medicine',
+      action: 'delete',
+      data: {'barcode': barcode, 'name': name},
+      hubEvents: const ['medicine_deleted'],
+      hubPayload: {'barcode': barcode, 'name': name},
+    );
   }
 
   // Called after a sale checkout to deduct storeStock using FIFO (soonest expiry first)

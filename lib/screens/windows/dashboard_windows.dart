@@ -379,11 +379,11 @@ class _KPIGrid extends StatelessWidget {
           ),
           AppKpiCard(
             label: "Low Stock Items",
-            value: '${inv.getSmartLowStockCount(sales.rawSales)}',
+            value: '${inv.getSmartLowStockCount(sales.salesForAnalytics(days: 30))}',
             icon: Icons.warning_amber_rounded,
             color: AppTheme.orange,
-            count: inv.getSmartLowStockCount(sales.rawSales),
-            progress: inv.getSmartLowStockCount(sales.rawSales) / totalMeds,
+            count: inv.getSmartLowStockCount(sales.salesForAnalytics(days: 30)),
+            progress: inv.getSmartLowStockCount(sales.salesForAnalytics(days: 30)) / totalMeds,
             onTap: () {
               inv.setFilter('low-stock');
               context.read<NavigationProvider>().selectDestination('warehouse');

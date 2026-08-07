@@ -62,7 +62,7 @@ class DashboardAndroid extends StatelessWidget {
           if (context.mounted) {
             context.read<SalesProvider>().load();
             context.read<InventoryProvider>().load();
-            context.read<OpdProvider>().loadAll();
+            context.read<OpdProvider>().loadQueue();
           }
         },
         child: CustomScrollView(
@@ -134,7 +134,7 @@ class DashboardAndroid extends StatelessWidget {
                       await sync.syncAllFromCloud();
                       context.read<InventoryProvider>().load();
                       context.read<SalesProvider>().load();
-                      context.read<OpdProvider>().loadAll();
+                      context.read<OpdProvider>().loadQueue();
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Cloud sync completed.')),
                       );
@@ -1116,7 +1116,7 @@ class _InventoryAlertsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sales = context.watch<SalesProvider>().rawSales;
+    final sales = context.watch<SalesProvider>().salesForAnalytics(days: 30);
     final smartLowCount = inv.getSmartLowStockCount(sales);
     final smartLowMeds = inv.getSmartLowStockMedicines(sales);
 

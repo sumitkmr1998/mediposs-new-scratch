@@ -597,10 +597,15 @@ class _PrescriptionDetailDialog extends StatelessWidget {
                 const Text('📋 Procedures',
                     style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                ...pProvider.getProcedures(prescription).map((p) => Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Text('• $p', style: const TextStyle(fontSize: 13)),
-                    )),
+                ...pProvider.getProcedures(prescription).map((p) {
+                  final parts = p.split('||');
+                  final name = parts[0];
+                  final priceText = parts.length > 1 ? ' (₹${parts[1]})' : '';
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text('• $name$priceText', style: const TextStyle(fontSize: 13)),
+                  );
+                }),
                 const SizedBox(height: 16),
               ],
 

@@ -14,11 +14,14 @@ import '../services/audit_service.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'sales_provider.dart';
+import '../repositories/appointment_repository.dart';
 import '../../objectbox.g.dart';
 
 enum OpdFilter { today, yesterday, last7Days, allTime, custom }
 
 class OpdProvider extends ChangeNotifier {
+  final AppointmentRepository _apptRepo = AppointmentRepository();
+
   List<Appointment> _appointments = [];
   List<Doctor> _doctors = [];
   List<Appointment> _todayQueue = [];
@@ -203,15 +206,45 @@ class OpdProvider extends ChangeNotifier {
     }
   }
 
-  void loadAll() {
+  /// Loads today's queue plus any still-open appointments from the prior day
+  /// (overnight walk-ins). Does **not** load lifetime appointment history.
+  void loadQueue({DateTime? day}) {
     final db = ObjectBoxService.instance;
-    _appointments = db.appointmentBox.getAll()
+    final ref = day ?? DateTime.now();
+    final dayStart = DateTime(ref.year, ref.month, ref.day);
+    final dayEnd = DateTime(ref.year, ref.month, ref.day, 23, 59, 59, 999);
+    // Include previous calendar day so unfinished tickets remain visible.
+    final windowStart = dayStart.subtract(const Duration(days: 1));
+
+    final window = _apptRepo.inScheduledRange(windowStart, dayEnd);
+    // Keep: anything scheduled today, or still open from yesterday.
+    _appointments = window.where((a) {
+      final isToday = a.scheduledAt.year == ref.year &&
+          a.scheduledAt.month == ref.month &&
+          a.scheduledAt.day == ref.day;
+      if (isToday) return true;
+      return a.status != kStatusDone && a.status != kStatusCancelled;
+    }).toList()
       ..sort((a, b) => b.scheduledAt.compareTo(a.scheduledAt));
-    _doctors = db.doctorBox.getAll()..sort((a, b) => a.name.compareTo(b.name));
+
+    loadDoctors();
     _loadedCount = pageSize;
     _recalculateTotals();
     notifyListeners();
   }
+
+  void loadDoctors() {
+    final db = ObjectBoxService.instance;
+    _doctors = db.doctorBox.getAll()..sort((a, b) => a.name.compareTo(b.name));
+  }
+
+  /// Patient history (bounded).
+  List<Appointment> loadHistoryForPatient(int patientId, {int limit = 50}) {
+    return _apptRepo.forPatient(patientId, limit: limit);
+  }
+
+  /// @deprecated Use [loadQueue]. Kept so existing call sites keep compiling.
+  void loadAll() => loadQueue();
 
   int _nextTokenForToday() {
     final today = DateTime.now();

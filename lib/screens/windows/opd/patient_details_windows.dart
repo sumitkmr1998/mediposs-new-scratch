@@ -1224,17 +1224,22 @@ class _ExpandablePrescriptionState extends State<_ExpandablePrescription> {
                             color: AppTheme.primaryLight,
                             letterSpacing: 0.5)),
                     const SizedBox(height: 6),
-                    ...widget.pProvider.getProcedures(p).map((proc) => Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.check_circle_outline,
-                                  size: 12, color: AppTheme.primaryLight),
-                              const SizedBox(width: 6),
-                              Text(proc, style: const TextStyle(fontSize: 12)),
-                            ],
-                          ),
-                        )),
+                    ...widget.pProvider.getProcedures(p).map((proc) {
+                      final parts = proc.split('||');
+                      final name = parts[0];
+                      final priceText = parts.length > 1 ? ' (₹${parts[1]})' : '';
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.check_circle_outline,
+                                size: 12, color: AppTheme.primaryLight),
+                            const SizedBox(width: 6),
+                            Text('$name$priceText', style: const TextStyle(fontSize: 12)),
+                          ],
+                        ),
+                      );
+                    }),
                   ],
                   // Images
                   if (widget.pProvider.getImages(p).isNotEmpty) ...[

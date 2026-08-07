@@ -6,12 +6,14 @@ class AuditLog {
   int id = 0;
 
   String action;        // 'CREATE', 'UPDATE', 'DELETE', 'VOID', 'CANCEL', 'LOGIN'
+  @Index()
   String entityType;    // 'Sale', 'Appointment', 'Medicine', 'Patient', 'AppUser'
   String entityId;      // ID or invoice code of target record
   String description;   // Human-readable summary of the action
   String detailsJson;   // JSON string containing detailed changes (before/after)
   String performedBy;   // Name & Role of the actor: e.g., "John (Pharmacist)"
   
+  @Index()
   @Property(type: PropertyType.date)
   DateTime timestamp;
 

@@ -18,6 +18,7 @@ import 'shared/models/app_user.dart';
 import 'shared/models/appointment.dart';
 import 'shared/models/attendance_record.dart';
 import 'shared/models/audit_log.dart';
+import 'shared/models/daily_medicine_sales_fact.dart';
 import 'shared/models/doctor.dart';
 import 'shared/models/medicine.dart';
 import 'shared/models/patient.dart';
@@ -498,7 +499,8 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(2, 6761892274774273369),
             name: 'patientId',
             type: 6,
-            flags: 0),
+            flags: 8,
+            indexId: const obx_int.IdUid(2, 7897775195150987633)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(3, 6618890115870539927),
             name: 'patientName',
@@ -513,7 +515,8 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(5, 2996785805101770237),
             name: 'doctorId',
             type: 6,
-            flags: 0),
+            flags: 8,
+            indexId: const obx_int.IdUid(3, 9205054652076221886)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(6, 233266060777707503),
             name: 'doctorName',
@@ -528,7 +531,8 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(8, 2172279708784537299),
             name: 'status',
             type: 9,
-            flags: 0),
+            flags: 2048,
+            indexId: const obx_int.IdUid(4, 6056338259682356277)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(9, 467793757491113189),
             name: 'consultationFee',
@@ -543,7 +547,8 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(11, 7958320642023442256),
             name: 'scheduledAt',
             type: 10,
-            flags: 0),
+            flags: 8,
+            indexId: const obx_int.IdUid(5, 5270562504826495897)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(12, 2075831885726806763),
             name: 'createdAt',
@@ -661,12 +666,14 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(2, 3203127430373115229),
             name: 'name',
             type: 9,
-            flags: 0),
+            flags: 2048,
+            indexId: const obx_int.IdUid(8, 1080009026392262609)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(3, 6107513838213416191),
             name: 'barcode',
             type: 9,
-            flags: 0),
+            flags: 2048,
+            indexId: const obx_int.IdUid(9, 3987744635699521594)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(4, 7177199884126591172),
             name: 'category',
@@ -760,17 +767,20 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(2, 3180548274558549193),
             name: 'uhid',
             type: 9,
-            flags: 0),
+            flags: 2048,
+            indexId: const obx_int.IdUid(10, 5956090672239187350)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(3, 3911710095549316686),
             name: 'name',
             type: 9,
-            flags: 0),
+            flags: 2048,
+            indexId: const obx_int.IdUid(11, 7828657322850620404)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(4, 3794446808928587504),
             name: 'phone',
             type: 9,
-            flags: 0),
+            flags: 2048,
+            indexId: const obx_int.IdUid(12, 5423511103348896625)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(5, 4870797169307836344),
             name: 'gender',
@@ -795,7 +805,8 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(9, 6127794589942969779),
             name: 'createdAt',
             type: 10,
-            flags: 0),
+            flags: 8,
+            indexId: const obx_int.IdUid(13, 7127679471013300965)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(10, 3319254817777990691),
             name: 'updatedAt',
@@ -858,12 +869,14 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(2, 5314330415042100083),
             name: 'appointmentId',
             type: 6,
-            flags: 0),
+            flags: 8,
+            indexId: const obx_int.IdUid(14, 8204867857686372439)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(3, 3765754610715993001),
             name: 'patientId',
             type: 6,
-            flags: 0),
+            flags: 8,
+            indexId: const obx_int.IdUid(15, 4521135195956693606)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(4, 5419269301462686337),
             name: 'patientName',
@@ -913,12 +926,14 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(13, 1718928858232437030),
             name: 'dispensed',
             type: 1,
-            flags: 0),
+            flags: 8,
+            indexId: const obx_int.IdUid(16, 358525004518878009)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(14, 9166390049168587947),
             name: 'createdAt',
             type: 10,
-            flags: 0),
+            flags: 8,
+            indexId: const obx_int.IdUid(17, 2876320411002754212)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(15, 2456645063456317354),
             name: 'imagesJson',
@@ -1060,22 +1075,26 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(2, 4074957319330479802),
             name: 'invoiceNo',
             type: 9,
-            flags: 0),
+            flags: 2048,
+            indexId: const obx_int.IdUid(18, 6694441700392689063)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(3, 8221546485611610323),
             name: 'patientId',
             type: 6,
-            flags: 0),
+            flags: 8,
+            indexId: const obx_int.IdUid(19, 8473583662339961096)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(4, 4199457586777197852),
             name: 'patientName',
             type: 9,
-            flags: 0),
+            flags: 2048,
+            indexId: const obx_int.IdUid(20, 6172978917678109782)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(5, 7031361988776898225),
             name: 'patientPhone',
             type: 9,
-            flags: 0),
+            flags: 2048,
+            indexId: const obx_int.IdUid(21, 1689783330885237946)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(6, 3990944472424571482),
             name: 'subtotal',
@@ -1125,7 +1144,8 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(15, 4075633278518050572),
             name: 'createdAt',
             type: 10,
-            flags: 0),
+            flags: 8,
+            indexId: const obx_int.IdUid(23, 2694257868889747082)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(16, 5556967118302888192),
             name: 'synced',
@@ -1155,7 +1175,8 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(21, 6030897589153968283),
             name: 'linkedAppointmentId',
             type: 6,
-            flags: 0),
+            flags: 8,
+            indexId: const obx_int.IdUid(24, 5166813511832253678)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(22, 3110113568726371911),
             name: 'linkedProcedureId',
@@ -1165,7 +1186,8 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(23, 6175242095605562542),
             name: 'patientUhid',
             type: 9,
-            flags: 0),
+            flags: 2048,
+            indexId: const obx_int.IdUid(22, 7548509520341073459)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(24, 3156319025601909690),
             name: 'opdInvoiceNo',
@@ -1609,7 +1631,8 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(3, 3955358354206465811),
             name: 'entityType',
             type: 9,
-            flags: 0),
+            flags: 2048,
+            indexId: const obx_int.IdUid(6, 1306239673764473098)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(4, 3825439085088806570),
             name: 'entityId',
@@ -1634,7 +1657,8 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(8, 7139812999515354444),
             name: 'timestamp',
             type: 10,
-            flags: 0),
+            flags: 8,
+            indexId: const obx_int.IdUid(7, 4736992155981993058)),
         obx_int.ModelProperty(
             id: const obx_int.IdUid(9, 7253643048583158079),
             name: 'deviceId',
@@ -1686,6 +1710,48 @@ final _entities = <obx_int.ModelEntity>[
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
+      backlinks: <obx_int.ModelBacklink>[]),
+  obx_int.ModelEntity(
+      id: const obx_int.IdUid(21, 350610033777783143),
+      name: 'DailyMedicineSalesFact',
+      lastPropertyId: const obx_int.IdUid(6, 5519377445447071863),
+      flags: 0,
+      properties: <obx_int.ModelProperty>[
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(1, 8739847781027163933),
+            name: 'id',
+            type: 6,
+            flags: 1),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(2, 3497877844162915132),
+            name: 'dayEpochMs',
+            type: 6,
+            flags: 8,
+            indexId: const obx_int.IdUid(25, 2079155675199352585)),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(3, 6641861541434568892),
+            name: 'medicineId',
+            type: 6,
+            flags: 8,
+            indexId: const obx_int.IdUid(26, 3203953524912116951)),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(4, 3095043815386251048),
+            name: 'medicineNameKey',
+            type: 9,
+            flags: 2048,
+            indexId: const obx_int.IdUid(27, 6375441422444537847)),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(5, 5979353322957633999),
+            name: 'qtySold',
+            type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(6, 5519377445447071863),
+            name: 'revenue',
+            type: 8,
+            flags: 0)
+      ],
+      relations: <obx_int.ModelRelation>[],
       backlinks: <obx_int.ModelBacklink>[])
 ];
 
@@ -1724,8 +1790,8 @@ Future<obx.Store> openStore(
 obx_int.ModelDefinition getObjectBoxModel() {
   final model = obx_int.ModelInfo(
       entities: _entities,
-      lastEntityId: const obx_int.IdUid(20, 757739913819245552),
-      lastIndexId: const obx_int.IdUid(1, 5015225040438721990),
+      lastEntityId: const obx_int.IdUid(21, 350610033777783143),
+      lastIndexId: const obx_int.IdUid(27, 6375441422444537847),
       lastRelationId: const obx_int.IdUid(1, 2143695166283597161),
       lastSequenceId: const obx_int.IdUid(0, 0),
       retiredEntityUids: const [],
@@ -3529,6 +3595,52 @@ obx_int.ModelDefinition getObjectBoxModel() {
               status: statusParam);
 
           return object;
+        }),
+    DailyMedicineSalesFact: obx_int.EntityDefinition<DailyMedicineSalesFact>(
+        model: _entities[20],
+        toOneRelations: (DailyMedicineSalesFact object) => [],
+        toManyRelations: (DailyMedicineSalesFact object) => {},
+        getId: (DailyMedicineSalesFact object) => object.id,
+        setId: (DailyMedicineSalesFact object, int id) {
+          object.id = id;
+        },
+        objectToFB: (DailyMedicineSalesFact object, fb.Builder fbb) {
+          final medicineNameKeyOffset = fbb.writeString(object.medicineNameKey);
+          fbb.startTable(7);
+          fbb.addInt64(0, object.id);
+          fbb.addInt64(1, object.dayEpochMs);
+          fbb.addInt64(2, object.medicineId);
+          fbb.addOffset(3, medicineNameKeyOffset);
+          fbb.addInt64(4, object.qtySold);
+          fbb.addFloat64(5, object.revenue);
+          fbb.finish(fbb.endTable());
+          return object.id;
+        },
+        objectFromFB: (obx.Store store, ByteData fbData) {
+          final buffer = fb.BufferContext(fbData);
+          final rootOffset = buffer.derefObject(0);
+          final idParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0);
+          final dayEpochMsParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 6, 0);
+          final medicineIdParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 8, 0);
+          final medicineNameKeyParam =
+              const fb.StringReader(asciiOptimization: true)
+                  .vTableGet(buffer, rootOffset, 10, '');
+          final qtySoldParam =
+              const fb.Int64Reader().vTableGet(buffer, rootOffset, 12, 0);
+          final revenueParam =
+              const fb.Float64Reader().vTableGet(buffer, rootOffset, 14, 0);
+          final object = DailyMedicineSalesFact(
+              id: idParam,
+              dayEpochMs: dayEpochMsParam,
+              medicineId: medicineIdParam,
+              medicineNameKey: medicineNameKeyParam,
+              qtySold: qtySoldParam,
+              revenue: revenueParam);
+
+          return object;
         })
   };
 
@@ -4768,4 +4880,32 @@ class AttendanceRecord_ {
   /// See [AttendanceRecord.status].
   static final status =
       obx.QueryStringProperty<AttendanceRecord>(_entities[19].properties[5]);
+}
+
+/// [DailyMedicineSalesFact] entity fields to define ObjectBox queries.
+class DailyMedicineSalesFact_ {
+  /// See [DailyMedicineSalesFact.id].
+  static final id = obx.QueryIntegerProperty<DailyMedicineSalesFact>(
+      _entities[20].properties[0]);
+
+  /// See [DailyMedicineSalesFact.dayEpochMs].
+  static final dayEpochMs = obx.QueryIntegerProperty<DailyMedicineSalesFact>(
+      _entities[20].properties[1]);
+
+  /// See [DailyMedicineSalesFact.medicineId].
+  static final medicineId = obx.QueryIntegerProperty<DailyMedicineSalesFact>(
+      _entities[20].properties[2]);
+
+  /// See [DailyMedicineSalesFact.medicineNameKey].
+  static final medicineNameKey =
+      obx.QueryStringProperty<DailyMedicineSalesFact>(
+          _entities[20].properties[3]);
+
+  /// See [DailyMedicineSalesFact.qtySold].
+  static final qtySold = obx.QueryIntegerProperty<DailyMedicineSalesFact>(
+      _entities[20].properties[4]);
+
+  /// See [DailyMedicineSalesFact.revenue].
+  static final revenue = obx.QueryDoubleProperty<DailyMedicineSalesFact>(
+      _entities[20].properties[5]);
 }

@@ -16,8 +16,12 @@ import '../models/patient_image.dart';
 import '../models/patient.dart';
 import 'patient_provider.dart';
 import 'opd_provider.dart';
+import '../repositories/prescription_repository.dart';
+import '../../objectbox.g.dart';
 
 class PrescriptionProvider extends ChangeNotifier {
+  final PrescriptionRepository _rxRepo = PrescriptionRepository();
+
   List<Prescription> _prescriptions = [];
 
   List<Prescription> get prescriptions => _prescriptions;
@@ -33,9 +37,25 @@ class PrescriptionProvider extends ChangeNotifier {
   }
 
   void load() {
-    _prescriptions = ObjectBoxService.instance.prescriptionBox.getAll()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final now = DateTime.now();
+    final dayStart = DateTime(now.year, now.month, now.day);
+    final dayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
+    _prescriptions = _rxRepo.inCreatedRange(dayStart, dayEnd);
+
+    final recent = _rxRepo.recent(limit: 200);
+    final ids = _prescriptions.map((p) => p.id).toSet();
+    for (final p in recent) {
+      if (ids.add(p.id)) _prescriptions.add(p);
+    }
     notifyListeners();
+  }
+
+  List<Prescription> loadForPatient(int patientId, {int limit = 50}) {
+    return _rxRepo.forPatient(patientId, limit: limit);
+  }
+
+  List<Prescription> loadForAppointment(int appointmentId) {
+    return _rxRepo.forAppointment(appointmentId);
   }
 
   Future<void> savePrescription({

@@ -6,7 +6,10 @@ class Medicine {
   @Id()
   int id = 0;
 
+  @Index()
   String name;
+  /// Non-unique: empty barcodes are common.
+  @Index()
   String barcode;
   String hsnCode;
   String category;

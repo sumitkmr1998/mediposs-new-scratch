@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'shared/services/objectbox_service.dart';
+import 'shared/services/migration_service.dart';
+import 'shared/services/sync_delta.dart';
 import 'shared/services/sync_service.dart';
 import 'shared/services/sync/sync_facade.dart';
 import 'shared/providers/auth_provider.dart';
@@ -67,6 +69,7 @@ void main(List<String> args) async {
     debugPrint('Main: Initializing ObjectBox (forceTerminal=$forceTerminal)...');
     await ObjectBoxService.init(forceTerminal: forceTerminal);
     debugPrint('Main: ObjectBox initialized.');
+    await MigrationService.runIfNeeded();
   } catch (e) {
     debugPrint('Main: ObjectBox initialization failed: $e');
   }
@@ -142,18 +145,27 @@ void main(List<String> args) async {
   final wsService = WebSocketService();
   SyncQueueService.instance.init();
 
-  // Listen to SyncService changes to reload local providers on sync completion
+  // Listen to SyncService changes to reload only dirty providers on sync completion
   bool wasSyncing = false;
+  void applySyncDelta(SyncDelta delta) {
+    if (delta.isEmpty) return;
+    debugPrint('Main: Applying $delta');
+    if (delta.medicines) inventoryProvider.load();
+    if (delta.sales) salesProvider.load();
+    if (delta.patients) patientProvider.load();
+    if (delta.appointments) opdProvider.loadQueue();
+    if (delta.prescriptions) prescriptionProvider.load();
+    if (delta.templates) templateProvider.load();
+    if (delta.settings) settingsProvider.load();
+    if (delta.users) authProvider.notifyListeners();
+  }
+
   syncService.addListener(() {
     final isSyncing = syncService.isSyncing;
     if (wasSyncing && !isSyncing) {
-      debugPrint('Main: SyncService completed sync. Reloading providers...');
-      inventoryProvider.load();
-      salesProvider.load();
-      patientProvider.load();
-      opdProvider.loadAll();
-      prescriptionProvider.load();
-      templateProvider.load();
+      final delta = syncService.consumeLastDelta();
+      debugPrint('Main: SyncService completed sync. Reloading dirty providers...');
+      applySyncDelta(delta.isEmpty ? SyncDelta.all : delta);
     }
     wasSyncing = isSyncing;
   });
@@ -174,23 +186,42 @@ void main(List<String> args) async {
     if (event == 'remote_camera_trigger') {
       GlobalNavigationService.handleRemoteCameraTrigger(msg);
     } else if (event == 'medicines_updated') {
-      syncService.pullMedicines().then((_) => inventoryProvider.load());
+      syncService.pullMedicines().then((_) {
+        syncService.markDelta(const SyncDelta(medicines: true));
+        inventoryProvider.load();
+      });
     } else if (event == 'sales_updated') {
       syncService.pullSales().then((_) {
+        syncService.markDelta(const SyncDelta(sales: true, medicines: true));
         salesProvider.load();
         inventoryProvider.load();
       });
     } else if (event == 'patients_updated' || event == 'new_patient') {
-      syncService.pullPatients().then((_) => patientProvider.load());
+      syncService.pullPatients().then((_) {
+        syncService.markDelta(const SyncDelta(patients: true));
+        patientProvider.load();
+      });
     } else if (event == 'appointments_updated') {
-      syncService.pullAppointments().then((_) => opdProvider.loadAll());
+      syncService.pullAppointments().then((_) {
+        syncService.markDelta(const SyncDelta(appointments: true));
+        opdProvider.loadQueue();
+      });
     } else if (event == 'prescriptions_updated') {
-      syncService.pullPrescriptions().then((_) => prescriptionProvider.load());
+      syncService.pullPrescriptions().then((_) {
+        syncService.markDelta(const SyncDelta(prescriptions: true));
+        prescriptionProvider.load();
+      });
     } else if (event == 'sync_received' || event == 'audit_logs_updated') {
       syncDebounceTimer?.cancel();
       syncDebounceTimer = Timer(const Duration(milliseconds: 500), () {
-        syncService.pullAppointments().then((_) => opdProvider.loadAll());
-        syncService.pullSales().then((_) => salesProvider.load());
+        syncService.pullAppointments().then((_) {
+          syncService.markDelta(const SyncDelta(appointments: true));
+          opdProvider.loadQueue();
+        });
+        syncService.pullSales().then((_) {
+          syncService.markDelta(const SyncDelta(sales: true));
+          salesProvider.load();
+        });
       });
     } else if (event == 'settings_updated') {
       syncService.pullSettings().then((_) => settingsProvider.load());
@@ -271,7 +302,7 @@ void main(List<String> args) async {
   salesProvider.load();
   warehouseProvider.loadTransfers();
   patientProvider.load();
-  opdProvider.loadAll();
+  opdProvider.loadQueue();
   prescriptionProvider.load();
   templateProvider.load();
   attendanceProvider.load();
@@ -335,7 +366,7 @@ class _MediPossAppState extends State<MediPossApp> with WidgetsBindingObserver {
           context.read<InventoryProvider>().load();
           context.read<SalesProvider>().load();
           context.read<PatientProvider>().load();
-          context.read<OpdProvider>().loadAll();
+          context.read<OpdProvider>().loadQueue();
           context.read<PrescriptionProvider>().load();
           context.read<TemplateProvider>().load();
         });
@@ -344,7 +375,7 @@ class _MediPossAppState extends State<MediPossApp> with WidgetsBindingObserver {
           context.read<InventoryProvider>().load();
           context.read<SalesProvider>().load();
           context.read<PatientProvider>().load();
-          context.read<OpdProvider>().loadAll();
+          context.read<OpdProvider>().loadQueue();
           context.read<PrescriptionProvider>().load();
           context.read<TemplateProvider>().load();
         });

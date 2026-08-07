@@ -13,19 +13,23 @@ class Appointment {
   @Id()
   int id = 0;
 
+  @Index()
   int patientId;
   String patientName; // Denormalized for quick display
   String patientPhone; // Denormalized
 
+  @Index()
   int doctorId;
   String doctorName; // Denormalized
 
   int tokenNumber;
+  @Index()
   String status; // waiting / with_doctor / pharmacy / done / cancelled
 
   double consultationFee;
   String notes; // Doctor's quick notes
 
+  @Index()
   @Property(type: PropertyType.date)
   DateTime scheduledAt;
 

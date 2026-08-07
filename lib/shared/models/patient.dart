@@ -6,8 +6,11 @@ class Patient {
   @Id()
   int id = 0;
 
+  @Index()
   String uhid; // Auto-generated: OPD-DDMMYY-NNNN
+  @Index()
   String name;
+  @Index()
   String phone;
   String gender; // Male / Female / Other
   String address;
@@ -15,6 +18,7 @@ class Patient {
 
   int age;
 
+  @Index()
   @Property(type: PropertyType.date)
   DateTime createdAt;
 

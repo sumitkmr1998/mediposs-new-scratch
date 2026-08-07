@@ -17,6 +17,7 @@ import '../models/sync_queue_item.dart';
 import '../models/procedure.dart';
 import '../models/audit_log.dart';
 import '../models/attendance_record.dart';
+import '../models/daily_medicine_sales_fact.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import '../../objectbox.g.dart';
@@ -50,6 +51,7 @@ class ObjectBoxService {
   late final Box<PatientImage> patientImageBox;
   late final Box<Procedure> procedureBox;
   late final Box<ProcedureRecord> procedureRecordBox;
+  late final Box<DailyMedicineSalesFact> salesFactBox;
 
   ObjectBoxService._();
 
@@ -94,6 +96,7 @@ class ObjectBoxService {
     svc.patientImageBox = svc._store.box<PatientImage>();
     svc.procedureBox = svc._store.box<Procedure>();
     svc.procedureRecordBox = svc._store.box<ProcedureRecord>();
+    svc.salesFactBox = svc._store.box<DailyMedicineSalesFact>();
 
     // Seed default settings if empty
     if (svc.settingsBox.isEmpty()) {

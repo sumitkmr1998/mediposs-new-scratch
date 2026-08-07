@@ -1,14 +1,15 @@
 import 'dart:convert';
-import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/sale.dart';
 import '../models/patient.dart';
 import '../models/app_user.dart';
 import '../services/objectbox_service.dart';
-import '../services/local_server_service.dart';
 import '../services/sync_service.dart';
-import '../services/sync_queue_service.dart';
 import '../services/audit_service.dart';
+import '../repositories/sale_repository.dart';
+import '../services/sales_fact_service.dart';
+import '../services/mutation_service.dart';
 import '../../objectbox.g.dart';
 import 'inventory_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,17 +17,32 @@ import 'package:shared_preferences/shared_preferences.dart';
 enum SalesFilter { today, yesterday, last7Days, allTime, custom }
 
 class SalesProvider extends ChangeNotifier {
+  final SaleRepository _repo = SaleRepository();
+
   List<Sale> _sales = [];
-  List<Sale>? _rawSales;
+  /// Cached last-N-days sales for analytics (never unbounded history).
+  List<Sale>? _analyticsWindow;
+  int? _analyticsWindowDays;
+
   List<Sale> get sales => List.unmodifiable(_sales);
-  List<Sale> get rawSales {
-    if (_rawSales == null) {
-      final box = ObjectBoxService.instance.saleBox;
-      final rawQuery = box.query().order(Sale_.createdAt, flags: Order.descending).build();
-      _rawSales = rawQuery.find();
-      rawQuery.close();
+
+  /// Prefer [salesForAnalytics] with an explicit window.
+  /// Defaults to last 90 days (not full multi-year history).
+  List<Sale> get rawSales => salesForAnalytics(days: 90);
+
+  /// Sales for velocity / smart-stock / charts. Always range-bounded.
+  List<Sale> salesForAnalytics({int days = 30}) {
+    if (_analyticsWindow != null && _analyticsWindowDays == days) {
+      return List.unmodifiable(_analyticsWindow!);
     }
-    return List.unmodifiable(_rawSales!);
+    _analyticsWindow = _repo.salesLastDays(days);
+    _analyticsWindowDays = days;
+    return List.unmodifiable(_analyticsWindow!);
+  }
+
+  void invalidateAnalyticsCache() {
+    _analyticsWindow = null;
+    _analyticsWindowDays = null;
   }
 
   double _todayRevenue = 0.0;
@@ -46,7 +62,9 @@ class SalesProvider extends ChangeNotifier {
   double _totalDiscount = 0.0;
 
   static const int pageSize = 30;
-  int _loadedCount = 30;
+  int _dbOffset = 0;
+  int _dbTotalCount = 0;
+  bool _dbHasMore = false;
 
   String _typeFilter = 'all'; // 'all', 'retail', 'dispense'
   String get typeFilter => _typeFilter;
@@ -54,8 +72,8 @@ class SalesProvider extends ChangeNotifier {
   void setTypeFilter(String filter) {
     if (_typeFilter != filter) {
       _typeFilter = filter;
-      _loadedCount = pageSize;
-      notifyListeners();
+      // Type filter is applied in-memory on the loaded page set; reload from DB.
+      load();
     }
   }
 
@@ -68,16 +86,14 @@ class SalesProvider extends ChangeNotifier {
     return _sales;
   }
 
-  List<Sale> get displayedSales =>
-      List.unmodifiable(_filteredByTypeList.take(_loadedCount).toList());
-  bool get hasMore => _loadedCount < _filteredByTypeList.length;
-  int get totalCount => _filteredByTypeList.length;
+  List<Sale> get displayedSales => List.unmodifiable(_filteredByTypeList);
+  bool get hasMore => _dbHasMore || _filteredByTypeList.length < _sales.length;
+  int get totalCount => _dbTotalCount > 0 ? _dbTotalCount : _filteredByTypeList.length;
   List<Sale> get filteredSales => List.unmodifiable(_filteredByTypeList);
 
   void loadMore() {
-    if (!hasMore) return;
-    _loadedCount = (_loadedCount + pageSize).clamp(0, _filteredByTypeList.length);
-    notifyListeners();
+    if (!_dbHasMore) return;
+    _fetchPage(append: true);
   }
 
   SalesFilter _activeFilter = SalesFilter.allTime;
@@ -172,8 +188,6 @@ class SalesProvider extends ChangeNotifier {
   }
 
   void _recalculateTotals() {
-    final today = DateTime.now();
-    
     _todayRevenue = 0.0;
     _filteredRevenue = 0.0;
     _todayProcedureRevenue = 0.0;
@@ -245,71 +259,149 @@ class SalesProvider extends ChangeNotifier {
     }
   }
 
-  void load() {
-    _rawSales = null; // Invalidate lazy cache
-    final box = ObjectBoxService.instance.saleBox;
+  /// Soft cap when filter is allTime: avoid loading multi-year tables into RAM.
+  static const int allTimeLookbackDays = 365;
 
-    Query<Sale> query;
-    if (_customStart != null && _customEnd != null) {
-      query = box
-          .query(
-            Sale_.createdAt.between(
-              _customStart!.millisecondsSinceEpoch,
-              _customEnd!.millisecondsSinceEpoch,
-            ),
-          )
-          .order(Sale_.createdAt, flags: Order.descending)
-          .build();
-    } else {
-      query =
-          box.query().order(Sale_.createdAt, flags: Order.descending).build();
+  DateTime get _effectiveStart {
+    if (_customStart != null) return _customStart!;
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day)
+        .subtract(const Duration(days: allTimeLookbackDays));
+  }
+
+  DateTime get _effectiveEnd {
+    if (_customEnd != null) return _customEnd!;
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
+  }
+
+  void load() {
+    invalidateAnalyticsCache();
+    _dbOffset = 0;
+    _sales = [];
+    _fetchPage(append: false);
+  }
+
+  void _fetchPage({required bool append}) {
+    final start = _effectiveStart;
+    final end = _effectiveEnd;
+
+    if (!append) {
+      _dbTotalCount = _repo.countInRange(start, end);
+      // Totals need full range for KPIs — stream in chunks, keep only pages in _sales.
+      _recalculateTotalsFromDb(start, end);
     }
 
-    final rawList = query.find();
-    query.close();
+    final page = _repo.salesInRange(
+      start,
+      end,
+      limit: pageSize,
+      offset: _dbOffset,
+    );
 
-    // Deduplicate sales by invoiceNo to prevent duplicate display in Android & Windows
-    final Map<String, Sale> uniqueMap = {};
-    final List<int> duplicateIdsToDelete = [];
+    if (append) {
+      _sales = [..._sales, ...page];
+    } else {
+      _sales = page;
+    }
+    _dbOffset = _sales.length;
+    _dbHasMore = _dbOffset < _dbTotalCount;
 
-    for (var s in rawList) {
-      if (!uniqueMap.containsKey(s.invoiceNo)) {
-        uniqueMap[s.invoiceNo] = s;
-      } else {
-        // Keep the record with highest ID (most recent) and mark duplicate for deletion
-        final existing = uniqueMap[s.invoiceNo]!;
-        if (s.id > existing.id) {
-          duplicateIdsToDelete.add(existing.id);
-          uniqueMap[s.invoiceNo] = s;
-        } else {
-          duplicateIdsToDelete.add(s.id);
-        }
+    if (!append) {
+      try {
+        SharedPreferences.getInstance().then((prefs) {
+          prefs.setString(
+              'today_revenue', '₹${_todayRevenue.toStringAsFixed(0)}');
+          prefs.setInt('today_count', _todaySalesCount);
+        });
+      } catch (e) {
+        debugPrint('SalesProvider: SharedPreferences write failed: $e');
+      }
+      if (kDebugMode) {
+        debugPrint(
+            'SalesProvider: page=${_sales.length}/$_dbTotalCount filter=$_activeFilter');
       }
     }
 
-    if (duplicateIdsToDelete.isNotEmpty) {
-      box.removeMany(duplicateIdsToDelete);
-      debugPrint('SalesProvider: Purged ${duplicateIdsToDelete.length} duplicate sale records from ObjectBox.');
-    }
-
-    _sales = uniqueMap.values.toList();
-    _loadedCount = pageSize;
-    _recalculateTotals();
-
-    try {
-      SharedPreferences.getInstance().then((prefs) {
-        prefs.setString('today_revenue', '₹${_todayRevenue.toStringAsFixed(0)}');
-        prefs.setInt('today_count', _todaySalesCount);
-      });
-    } catch (e) {
-      debugPrint('SalesProvider: SharedPreferences write failed: $e');
-    }
-    
-    // Debug log to compare sales details between Hub and Client
-    final details = _sales.map((s) => '${s.invoiceNo}:total=${s.total}:isReturn=${s.isReturn}:isDispense=${s.isClinicalDispense}').toList();
-    debugPrint('SalesProvider: Loaded ${_sales.length} today sales. Details: $details');
-    
     notifyListeners();
+  }
+
+  /// Stream sales in chunks to compute KPIs without holding the full list.
+  void _recalculateTotalsFromDb(DateTime start, DateTime end) {
+    _todayRevenue = 0.0;
+    _filteredRevenue = 0.0;
+    _todayProcedureRevenue = 0.0;
+    _filteredProcedureRevenue = 0.0;
+    _todayConsultationRevenue = 0.0;
+    _filteredConsultationRevenue = 0.0;
+    _filteredCashRevenue = 0.0;
+    _filteredUpiRevenue = 0.0;
+    _filteredCardRevenue = 0.0;
+    _todayCashRevenue = 0.0;
+    _todayUpiRevenue = 0.0;
+    _todayCardRevenue = 0.0;
+    _todaySalesCount = 0;
+    _totalRevenue = 0.0;
+    _totalDiscount = 0.0;
+
+    const chunk = 500;
+    var offset = 0;
+    while (true) {
+      final batch = _repo.salesInRange(start, end, limit: chunk, offset: offset);
+      if (batch.isEmpty) break;
+      for (final s in batch) {
+        _accumulateSale(s);
+      }
+      offset += batch.length;
+      if (batch.length < chunk) break;
+    }
+  }
+
+  void _accumulateSale(Sale s) {
+    final isTodaySale = _isToday(s.createdAt);
+    final med = s.medicineTotal;
+    final cons = s.consultationTotal;
+    final proc = s.procedureTotal;
+
+    _totalDiscount += s.discount;
+
+    if (isTodaySale) {
+      _todayRevenue += med;
+      _todaySalesCount++;
+      if (!s.isReturn) {
+        _todayProcedureRevenue += proc;
+        _todayConsultationRevenue += cons;
+      }
+      if (s.paymentMethod == 'mixed') {
+        _todayCashRevenue += s.cashAmount;
+        _todayUpiRevenue += s.upiAmount;
+        _todayCardRevenue += s.cardAmount;
+      } else if (s.paymentMethod == 'cash') {
+        _todayCashRevenue += s.total;
+      } else if (s.paymentMethod == 'upi') {
+        _todayUpiRevenue += s.total;
+      } else if (s.paymentMethod == 'card') {
+        _todayCardRevenue += s.total;
+      }
+    }
+
+    _filteredRevenue += med;
+    _totalRevenue += med;
+    if (!s.isReturn) {
+      _filteredProcedureRevenue += proc;
+      _filteredConsultationRevenue += cons;
+    }
+    if (s.paymentMethod == 'mixed') {
+      _filteredCashRevenue += s.cashAmount;
+      _filteredUpiRevenue += s.upiAmount;
+      _filteredCardRevenue += s.cardAmount;
+    } else if (s.paymentMethod == 'cash') {
+      _filteredCashRevenue += s.total;
+    } else if (s.paymentMethod == 'upi') {
+      _filteredUpiRevenue += s.total;
+    } else if (s.paymentMethod == 'card') {
+      _filteredCardRevenue += s.total;
+    }
   }
 
   void search(String term) {
@@ -319,21 +411,11 @@ class SalesProvider extends ChangeNotifier {
       return;
     }
 
-    final box = ObjectBoxService.instance.saleBox;
-    final query = box
-        .query(
-          Sale_.patientName
-              .contains(_searchQuery, caseSensitive: false)
-              .or(Sale_.invoiceNo.contains(_searchQuery, caseSensitive: false))
-              .or(Sale_.patientPhone
-                  .contains(_searchQuery, caseSensitive: false)),
-        )
-        .order(Sale_.createdAt, flags: Order.descending)
-        .build();
-
-    _sales = query.find();
-    _loadedCount = pageSize;
-    query.close();
+    _sales = _repo.search(term: term, limit: 100);
+    _dbOffset = _sales.length;
+    _dbTotalCount = _sales.length;
+    _dbHasMore = false;
+    // Totals for search results only (bounded).
     _recalculateTotals();
     notifyListeners();
   }
@@ -363,6 +445,11 @@ class SalesProvider extends ChangeNotifier {
       }
 
       if (idToDelete > 0) {
+        try {
+          SalesFactService.instance.reverseSale(sale);
+        } catch (e) {
+          debugPrint('SalesProvider: fact reverse failed: $e');
+        }
         ObjectBoxService.instance.saleBox.remove(idToDelete);
       } else {
         debugPrint('Warning: Could not find sale to delete by ID or invoiceNo');
@@ -385,19 +472,13 @@ class SalesProvider extends ChangeNotifier {
 
       load();
 
-      final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-      final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
-
-      if (isHub && LocalServerService.instance.isRunning) {
-        LocalServerService.instance.broadcast({'event': 'sync_received'});
-        LocalServerService.instance.broadcast({'event': 'medicines_updated'});
-      } else if (isClient) {
-        SyncQueueService.instance.addToQueue(
-          entity: 'sale',
-          action: 'delete',
-          data: {'invoiceNo': sale.invoiceNo},
-        );
-      }
+      MutationService.instance.publish(
+        entity: 'sale',
+        action: 'delete',
+        data: {'invoiceNo': sale.invoiceNo},
+        hubEvents: const ['sync_received', 'medicines_updated', 'sale_deleted'],
+        hubPayload: {'invoiceNo': sale.invoiceNo},
+      );
     } catch (e) {
       debugPrint('Error deleting sale: $e');
     }

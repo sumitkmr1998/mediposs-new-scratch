@@ -27,6 +27,9 @@ import '../services/notification_service.dart';
 import '../services/firebase_sync_service.dart';
 import 'sync_queue_service.dart';
 import 'discovery_service.dart';
+import 'sync_delta.dart';
+import 'sales_fact_service.dart';
+import 'sync/sync_http.dart';
 import '../../objectbox.g.dart';
 
 class SyncService extends ChangeNotifier {
@@ -34,6 +37,20 @@ class SyncService extends ChangeNotifier {
   Timer? _reconnectTimer;
   bool _queueSyncFailed = false;
   bool get queueSyncFailed => _queueSyncFailed;
+
+  /// Accumulated dirty entity flags during a sync cycle.
+  SyncDelta _pendingDelta = SyncDelta.none;
+
+  void markDelta(SyncDelta delta) {
+    _pendingDelta = _pendingDelta.merge(delta);
+  }
+
+  /// Returns and clears the pending delta (call when isSyncing goes false).
+  SyncDelta consumeLastDelta() {
+    final d = _pendingDelta;
+    _pendingDelta = SyncDelta.none;
+    return d;
+  }
 
   void setQueueSyncFailed(bool value) {
     if (_queueSyncFailed != value) {
@@ -777,7 +794,9 @@ class SyncService extends ChangeNotifier {
     if (_hubIp == null) return;
     try {
       final url = Uri.parse('$_baseUrl/api/users');
-      final res = await http.get(url, headers: _authHeaders()).timeout(const Duration(seconds: 5));
+      final res = await http
+          .get(url, headers: _authHeaders())
+          .timeout(const Duration(seconds: 5));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body)['data'] as List;
         final box = ObjectBoxService.instance.userBox;
@@ -789,22 +808,24 @@ class SyncService extends ChangeNotifier {
           debugPrint(
               'SyncService Mapping User: HubId=${u['id']}, name=${u['name']}');
           final user = AppUser.fromJson(u);
-          final existing = allLocal.where((x) => x.name == user.name).firstOrNull;
+          final existing =
+              allLocal.where((x) => x.name == user.name).firstOrNull;
           if (existing != null) {
             user.id = existing.id;
-            // Preserve the local PIN if the incoming one is masked/xxxx and the local one is a real PIN
             if (user.pin == 'xxxx' && existing.pin != 'xxxx') {
               user.pin = existing.pin;
             }
           } else {
-            user.id = 0; // Auto-assign local ID
+            user.id = 0;
           }
           return user;
         }).toList();
 
-        // Remove any local users that are no longer present on the server
         final incomingNames = users.map((u) => u.name).toSet();
-        final toRemove = allLocal.where((l) => !incomingNames.contains(l.name)).map((l) => l.id).toList();
+        final toRemove = allLocal
+            .where((l) => !incomingNames.contains(l.name))
+            .map((l) => l.id)
+            .toList();
         if (toRemove.isNotEmpty) {
           box.removeMany(toRemove);
         }
@@ -812,12 +833,17 @@ class SyncService extends ChangeNotifier {
         box.putMany(users);
         debugPrint(
             'SyncService: pullUsers stored ${users.length} users in local box.');
+        markDelta(const SyncDelta(users: true));
         notifyListeners();
       }
     } catch (e) {
       debugPrint('pullUsers err: $e');
     }
   }
+
+  /// Shared HTTP client for extracted pull modules.
+  SyncHttp get syncHttp =>
+      SyncHttp(baseUrl: _baseUrl, headers: _authHeaders());
 
   Future<int?> pullMedicines({String? since, bool isNested = false}) async {
     if (!_isConnected || _jwtToken == null || (_isSyncing && !isNested)) {
@@ -1731,6 +1757,18 @@ class SyncService extends ChangeNotifier {
           }
 
           if (salesToPut.isNotEmpty) {
+            // Apply fact rollups for newly seen invoices before put overwrites memory map.
+            for (final s in salesToPut) {
+              final wasLocal = localSalesMap.containsKey(s.invoiceNo);
+              if (!wasLocal) {
+                try {
+                  SalesFactService.instance.applySale(s);
+                } catch (e) {
+                  debugPrint('SyncService: fact apply failed: $e');
+                }
+              }
+              localSalesMap[s.invoiceNo] = s;
+            }
             box.putMany(salesToPut);
           }
 
@@ -1782,6 +1820,7 @@ class SyncService extends ChangeNotifier {
           debugPrint('SyncService: Error during incremental sales cleanup: $e');
         }
       }
+      markDelta(const SyncDelta(sales: true));
       debugPrint('SyncService: pullSales synced successfully.');
       return latestServerTime;
     } catch (e) {
