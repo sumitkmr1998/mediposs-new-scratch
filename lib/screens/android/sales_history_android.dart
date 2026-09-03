@@ -73,31 +73,13 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
                         color: context.borderColor.withValues(alpha: 0.5))),
               ),
               child: LayoutBuilder(builder: (ctx, constraints) {
-                double grossSales = 0;
-                double returns = 0;
-                double procedureFeeTotal = 0;
-                double consultationFeeTotal = 0;
-                double medsDiscountTotal = 0;
-                
-                final targetSales = isCashier
-                    ? sales.filteredSales.where((s) => _isToday(s.createdAt)).toList()
-                    : sales.filteredSales;
-
-                for (final s in targetSales) {
-                  final consultation = sales.getConsultationTotal(s);
-                  final procedure = sales.getProcedureTotal(s);
-                  final medicine = sales.getMedicineTotal(s);
-
-                  consultationFeeTotal += consultation;
-                  procedureFeeTotal += procedure;
-
-                  if (s.isReturn) {
-                    returns += medicine.abs();
-                  } else {
-                    grossSales += medicine;
-                    medsDiscountTotal += s.discount.abs();
-                  }
-                }
+                // For Cashier, we force the revenue summary to Today's metrics.
+                // For others, read full-range metrics from sales provider (independent of pagination).
+                final double procedureFeeTotal = isCashier ? sales.todayProcedureRevenue : sales.filteredProcedureRevenue;
+                final double consultationFeeTotal = isCashier ? sales.todayConsultationRevenue : sales.filteredConsultationRevenue;
+                final double grossSales = isCashier ? sales.todayGrossSales : sales.rangeGrossSales;
+                final double returns = isCashier ? sales.todayReturns : sales.rangeReturns;
+                final double medsDiscountTotal = isCashier ? sales.todayMedsDiscount : sales.rangeMedsDiscount;
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -397,14 +379,6 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
       ),
     ),
   );
-  }
-
-  bool _isToday(DateTime dt) {
-    final localDt = dt.toLocal();
-    final today = DateTime.now();
-    return localDt.year == today.year &&
-        localDt.month == today.month &&
-        localDt.day == today.day;
   }
 }
 

@@ -95,6 +95,8 @@ class SyncService extends ChangeNotifier {
   Map<String, dynamic>? _lastUserMap;
   bool _isConnected = false;
   bool _isSyncing = false;
+  bool _isPullingSales = false;
+  Future<int?>? _activeSalesPull;
   bool _isCloudMode = false;
   bool _showHubOnlinePrompt = true;
 
@@ -1617,16 +1619,63 @@ class SyncService extends ChangeNotifier {
       debugPrint('SyncService: pullSales aborted (isConnected: $_isConnected, jwt: $_jwtToken)');
       return null;
     }
+
+    // Guard against concurrent overlapping pullSales executions
+    if (_isPullingSales) {
+      debugPrint('SyncService: pullSales already in progress, awaiting active pull...');
+      return await _activeSalesPull;
+    }
+
+    _isPullingSales = true;
+    final completer = Completer<int?>();
+    _activeSalesPull = completer.future;
+
     debugPrint('SyncService: pullSales starting (since=$since)...');
     try {
       final box = ObjectBoxService.instance.saleBox;
+
+      // ── Step 0: Fast Deduplication of any preexisting duplicate invoice records ──
+      try {
+        final allCurrent = box.getAll();
+        final Map<String, List<Sale>> invoiceGroups = {};
+        for (final s in allCurrent) {
+          final trimmed = s.invoiceNo.trim();
+          if (trimmed.isNotEmpty) {
+            invoiceGroups.putIfAbsent(trimmed, () => []).add(s);
+          }
+        }
+        final List<int> duplicateIdsToRemove = [];
+        for (final entry in invoiceGroups.entries) {
+          if (entry.value.length > 1) {
+            // Keep the record with the lowest ID (original local or first synced)
+            // or the synced one if one has synced=true
+            final list = entry.value;
+            list.sort((a, b) {
+              if (a.synced != b.synced) return a.synced ? -1 : 1;
+              return a.id.compareTo(b.id);
+            });
+            for (int i = 1; i < list.length; i++) {
+              duplicateIdsToRemove.add(list[i].id);
+            }
+          }
+        }
+        if (duplicateIdsToRemove.isNotEmpty) {
+          box.removeMany(duplicateIdsToRemove);
+          debugPrint('SyncService: pullSales deduplicated ${duplicateIdsToRemove.length} existing duplicate sale records.');
+        }
+      } catch (e) {
+        debugPrint('SyncService: duplicate pre-clean warning: $e');
+      }
+
       final allLocal = box.getAll();
 
-      // Build fast lookup map for local sales
+      // Build fast lookup map for local sales (trimmed, case-insensitive)
       final Map<String, Sale> localSalesMap = {};
       for (final s in allLocal) {
-        if (s.invoiceNo.isNotEmpty) {
-          localSalesMap[s.invoiceNo] = s;
+        final inv = s.invoiceNo.trim();
+        if (inv.isNotEmpty) {
+          localSalesMap[inv] = s;
+          localSalesMap[inv.toLowerCase()] = s;
         }
       }
 
@@ -1674,13 +1723,21 @@ class SyncService extends ChangeNotifier {
           final List<Sale> salesToPut = [];
 
           for (final item in data) {
-            final invoiceNo = item['invoiceNo'] as String? ?? '';
+            final invoiceNo = (item['invoiceNo'] as String? ?? '').trim();
             if (invoiceNo.isEmpty) continue;
             hubInvoiceNos.add(invoiceNo);
             final createdAt =
                 DateHelper.parseDateTime(item['createdAt']) ?? DateTime.now();
 
-            final existing = localSalesMap[invoiceNo];
+            // Look up existing in localSalesMap or direct DB fallback
+            Sale? existing = localSalesMap[invoiceNo] ?? localSalesMap[invoiceNo.toLowerCase()];
+            if (existing == null) {
+              existing = box.query(Sale_.invoiceNo.equals(invoiceNo)).build().findFirst();
+              if (existing != null) {
+                localSalesMap[invoiceNo] = existing;
+                localSalesMap[invoiceNo.toLowerCase()] = existing;
+              }
+            }
 
             // Resolve local patient ID using cached Maps
             int localPatientId = 0;
@@ -1727,7 +1784,7 @@ class SyncService extends ChangeNotifier {
                 ..itemsJson = item['itemsJson'] ?? '[]';
               salesToPut.add(existing);
             } else {
-              salesToPut.add(Sale(
+              final newSale = Sale(
                 id: 0, // Auto-assign — never force Hub IDs
                 invoiceNo: invoiceNo,
                 patientId: localPatientId > 0 ? localPatientId : (item['patientId'] ?? 0),
@@ -1752,14 +1809,18 @@ class SyncService extends ChangeNotifier {
                 linkedProcedureId: item['linkedProcedureId'] ?? 0,
                 opdInvoiceNo: item['opdInvoiceNo'] ?? '',
                 itemsJson: item['itemsJson'] ?? '[]',
-              ));
+              );
+              salesToPut.add(newSale);
+              // Pre-register into localSalesMap to avoid duplicate within same batch
+              localSalesMap[invoiceNo] = newSale;
+              localSalesMap[invoiceNo.toLowerCase()] = newSale;
             }
           }
 
           if (salesToPut.isNotEmpty) {
-            // Apply fact rollups for newly seen invoices before put overwrites memory map.
+            // Apply fact rollups for newly seen invoices before put
             for (final s in salesToPut) {
-              final wasLocal = localSalesMap.containsKey(s.invoiceNo);
+              final wasLocal = allLocal.any((x) => x.invoiceNo.trim() == s.invoiceNo.trim());
               if (!wasLocal) {
                 try {
                   SalesFactService.instance.applySale(s);
@@ -1767,9 +1828,16 @@ class SyncService extends ChangeNotifier {
                   debugPrint('SyncService: fact apply failed: $e');
                 }
               }
-              localSalesMap[s.invoiceNo] = s;
             }
-            box.putMany(salesToPut);
+            final ids = box.putMany(salesToPut);
+            for (int i = 0; i < salesToPut.length; i++) {
+              final s = salesToPut[i];
+              if (i < ids.length && ids[i] > 0) {
+                s.id = ids[i];
+              }
+              localSalesMap[s.invoiceNo] = s;
+              localSalesMap[s.invoiceNo.toLowerCase()] = s;
+            }
           }
 
           offset += limit;
@@ -1785,7 +1853,7 @@ class SyncService extends ChangeNotifier {
         for (final s in allLocal) {
           if (s.synced &&
               s.invoiceNo.isNotEmpty &&
-              !hubInvoiceNos.contains(s.invoiceNo)) {
+              !hubInvoiceNos.contains(s.invoiceNo.trim())) {
             toRemoveIds.add(s.id);
           }
         }
@@ -1822,9 +1890,14 @@ class SyncService extends ChangeNotifier {
       }
       markDelta(const SyncDelta(sales: true));
       debugPrint('SyncService: pullSales synced successfully.');
+      completer.complete(latestServerTime);
       return latestServerTime;
     } catch (e) {
       debugPrint('pullSales err: $e');
+      completer.complete(null);
+    } finally {
+      _isPullingSales = false;
+      _activeSalesPull = null;
     }
     debugPrint('SyncService: pullSales done.');
     return null;

@@ -31,17 +31,6 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
     super.dispose();
   }
 
-  List<Sale> _filteredSales(List<Sale> sales) {
-    if (_searchQuery.isEmpty) return sales;
-    final q = _searchQuery.toLowerCase();
-    return sales.where((s) {
-      return s.invoiceNo.toLowerCase().contains(q) ||
-          (s.patientName.isNotEmpty &&
-              s.patientName.toLowerCase().contains(q)) ||
-          s.paymentMethod.toLowerCase().contains(q);
-    }).toList();
-  }
-
   @override
   Widget build(BuildContext context) {
     final sales = context.watch<SalesProvider>();
@@ -57,36 +46,16 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
       });
     }
 
-    double grossSales = 0;
-    double returns = 0;
-    double procedureFeeTotal = 0;
-    double consultationFeeTotal = 0;
-    double medsDiscountTotal = 0;
-    
-    // For Cashier, we force the revenue summary to Today's metrics
-    // For others, we calculate based on the current list (search or filter)
-    final targetSales = isCashier
-        ? sales.filteredSales.where((s) => _isToday(s.createdAt)).toList()
-        : sales.filteredSales;
+    // For Cashier, we force the revenue summary to Today's metrics.
+    // For others, read full-range metrics from sales provider (independent of pagination).
+    final double procedureFeeTotal = isCashier ? sales.todayProcedureRevenue : sales.filteredProcedureRevenue;
+    final double consultationFeeTotal = isCashier ? sales.todayConsultationRevenue : sales.filteredConsultationRevenue;
+    final double grossSales = isCashier ? sales.todayGrossSales : sales.rangeGrossSales;
+    final double returns = isCashier ? sales.todayReturns : sales.rangeReturns;
+    final double medsDiscountTotal = isCashier ? sales.todayMedsDiscount : sales.rangeMedsDiscount;
 
-    for (final s in targetSales) {
-      final consultation = sales.getConsultationTotal(s);
-      final procedure = sales.getProcedureTotal(s);
-      final medicine = sales.getMedicineTotal(s);
-
-      consultationFeeTotal += consultation;
-      procedureFeeTotal += procedure;
-
-      if (s.isReturn) {
-        returns += medicine.abs();
-      } else {
-        grossSales += medicine;
-        medsDiscountTotal += s.discount.abs();
-      }
-    }
-
-    final saleCount = sales.filteredSales.where((s) => !s.isReturn && (isCashier ? _isToday(s.createdAt) : true)).length;
-    final returnCount = sales.filteredSales.where((s) => s.isReturn && (isCashier ? _isToday(s.createdAt) : true)).length;
+    final saleCount = isCashier ? (sales.todaySalesCount - sales.todayReturnCount) : sales.rangeSaleCount;
+    final returnCount = isCashier ? sales.todayReturnCount : sales.rangeReturnCount;
     final rangeLabel = isCashier ? "Today's" : _getRangeLabel(sales);
 
     return Scaffold(
@@ -215,14 +184,6 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
         }),
       ],
     );
-  }
-
-  bool _isToday(DateTime dt) {
-    final localDt = dt.toLocal();
-    final today = DateTime.now();
-    return localDt.year == today.year &&
-        localDt.month == today.month &&
-        localDt.day == today.day;
   }
 
   Widget _buildFilterSearchCard(SalesProvider sales) {

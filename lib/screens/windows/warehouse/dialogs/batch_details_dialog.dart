@@ -26,13 +26,20 @@ class BatchDetailsDialog extends StatelessWidget {
         final sortedBatches = m.batches.toList()
           ..sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
 
+        final auth = context.read<AuthProvider>();
+        final user = auth.currentUser;
+        final isAdmin = user?.role.toLowerCase() == 'admin';
+        final canAddBatch = isAdmin || user?.canAddStock == true || user?.canEditInventory == true;
+        final canEditBatch = isAdmin || user?.canOverrideStock == true || user?.canEditInventory == true;
+        final canViewCost = isAdmin || user?.canViewPurchasePrice == true;
+
         return AlertDialog(
           title: Row(
             children: [
               const Icon(Icons.layers_outlined, color: AppTheme.primary),
               const SizedBox(width: 12),
               Expanded(child: Text('Batches: ${m.name}')),
-              if (canTransfer)
+              if (canAddBatch)
                 IconButton(
                   tooltip: 'Add New Batch',
                   icon: const Icon(Icons.add_circle_outline,
@@ -50,7 +57,7 @@ class BatchDetailsDialog extends StatelessWidget {
             ],
           ),
           content: SizedBox(
-            width: 600,
+            width: 650,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -68,6 +75,9 @@ class BatchDetailsDialog extends StatelessWidget {
                       itemBuilder: (ctx, i) {
                         final b = sortedBatches[i];
                         final isExpired = b.expiryDate.isBefore(DateTime.now());
+                        final effectiveSellPrice = b.sellingPrice > 0 ? b.sellingPrice : m.sellingPrice;
+                        final effectiveCostPrice = b.purchasePrice > 0 ? b.purchasePrice : m.purchasePrice;
+
                         return Container(
                           margin: const EdgeInsets.only(bottom: 8),
                           padding: const EdgeInsets.all(12),
@@ -91,12 +101,34 @@ class BatchDetailsDialog extends StatelessWidget {
                                         style: const TextStyle(
                                             fontWeight: FontWeight.bold)),
                                     Text(
-                                      'Expiry: ${b.expiryDate.day}/${b.expiryDate.month}/${b.expiryDate.year}',
+                                      'Exp: ${b.expiryDate.day.toString().padLeft(2, '0')}/${b.expiryDate.month.toString().padLeft(2, '0')}/${b.expiryDate.year}',
                                       style: TextStyle(
-                                          fontSize: 12,
+                                          fontSize: 11,
                                           color: isExpired
                                               ? AppTheme.danger
                                               : context.textMutedColor),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Wrap(
+                                      spacing: 8,
+                                      children: [
+                                        Text(
+                                          'MRP: ₹${effectiveSellPrice.toStringAsFixed(2)}',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppTheme.primaryLight,
+                                          ),
+                                        ),
+                                        if (canViewCost)
+                                          Text(
+                                            'Cost: ₹${effectiveCostPrice.toStringAsFixed(2)}',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: context.textMutedColor,
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -157,8 +189,9 @@ class BatchDetailsDialog extends StatelessWidget {
                                   ],
                                 ),
                               ),
-                              if (canTransfer) ...[
+                              if (canEditBatch) ...[
                                 IconButton(
+                                  tooltip: 'Edit Batch',
                                   icon:
                                       const Icon(Icons.edit_outlined, size: 20),
                                   onPressed: () {

@@ -1263,7 +1263,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(13, 6725712331159432176),
       name: 'MedicineBatch',
-      lastPropertyId: const obx_int.IdUid(8, 469942928734120521),
+      lastPropertyId: const obx_int.IdUid(10, 6695584520052427016),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -1307,6 +1307,16 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(8, 469942928734120521),
             name: 'bulkStoreStock',
             type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(9, 8960355053693443511),
+            name: 'purchasePrice',
+            type: 8,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(10, 6695584520052427016),
+            name: 'sellingPrice',
+            type: 8,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
@@ -3088,7 +3098,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         },
         objectToFB: (MedicineBatch object, fb.Builder fbb) {
           final batchNoOffset = fbb.writeString(object.batchNo);
-          fbb.startTable(9);
+          fbb.startTable(11);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, batchNoOffset);
           fbb.addInt64(2, object.expiryDate.millisecondsSinceEpoch);
@@ -3097,6 +3107,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addInt64(5, object.medicine.targetId);
           fbb.addInt64(6, object.bulkClinicStock);
           fbb.addInt64(7, object.bulkStoreStock);
+          fbb.addFloat64(8, object.purchasePrice);
+          fbb.addFloat64(9, object.sellingPrice);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -3117,6 +3129,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 16, 0);
           final bulkStoreStockParam =
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 18, 0);
+          final purchasePriceParam =
+              const fb.Float64Reader().vTableGet(buffer, rootOffset, 20, 0);
+          final sellingPriceParam =
+              const fb.Float64Reader().vTableGet(buffer, rootOffset, 22, 0);
           final object = MedicineBatch(
               id: idParam,
               batchNo: batchNoParam,
@@ -3124,7 +3140,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
               mainStock: mainStockParam,
               storeStock: storeStockParam,
               bulkClinicStock: bulkClinicStockParam,
-              bulkStoreStock: bulkStoreStockParam);
+              bulkStoreStock: bulkStoreStockParam,
+              purchasePrice: purchasePriceParam,
+              sellingPrice: sellingPriceParam);
           object.medicine.targetId =
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 14, 0);
           object.medicine.attach(store);
@@ -4591,6 +4609,14 @@ class MedicineBatch_ {
   /// See [MedicineBatch.bulkStoreStock].
   static final bulkStoreStock =
       obx.QueryIntegerProperty<MedicineBatch>(_entities[12].properties[7]);
+
+  /// See [MedicineBatch.purchasePrice].
+  static final purchasePrice =
+      obx.QueryDoubleProperty<MedicineBatch>(_entities[12].properties[8]);
+
+  /// See [MedicineBatch.sellingPrice].
+  static final sellingPrice =
+      obx.QueryDoubleProperty<MedicineBatch>(_entities[12].properties[9]);
 }
 
 /// [SyncQueueItem] entity fields to define ObjectBox queries.

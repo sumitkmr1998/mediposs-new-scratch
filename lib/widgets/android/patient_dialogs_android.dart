@@ -511,8 +511,7 @@ class _PatientSearchSheetState extends State<_PatientSearchSheet> {
                                 if (widget.onAppointmentSelected != null) {
                                   widget.onAppointmentSelected!(a);
                                 } else {
-                                  final patients = context.read<PatientProvider>().patients;
-                                  final p = patients.where((x) => x.id == a.patientId).firstOrNull ??
+                                  final p = context.read<PatientProvider>().getById(a.patientId) ??
                                       (Patient(uhid: '', name: a.patientName, phone: a.patientPhone, gender: 'Male')..id = a.patientId);
                                   widget.onSelected(p);
                                 }
@@ -528,13 +527,10 @@ class _PatientSearchSheetState extends State<_PatientSearchSheet> {
       );
     }
 
-    final patients = context.watch<PatientProvider>().patients;
-    final filtered = patients.where((p) {
-      return p.name.toLowerCase().contains(query) ||
-          p.phone.contains(query) ||
-          p.address.toLowerCase().contains(query) ||
-          p.uhid.toLowerCase().contains(query);
-    }).toList();
+    final patientProvider = context.read<PatientProvider>();
+    final List<Patient> filtered = query.isEmpty
+        ? context.watch<PatientProvider>().patients
+        : patientProvider.searchPatients(query, limit: 50);
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,

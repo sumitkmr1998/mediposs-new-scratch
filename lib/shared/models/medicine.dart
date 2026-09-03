@@ -198,6 +198,9 @@ class MedicineBatch {
   int bulkClinicStock;
   int bulkStoreStock;
 
+  double purchasePrice;
+  double sellingPrice;
+
   final medicine = ToOne<Medicine>();
 
   MedicineBatch({
@@ -208,6 +211,8 @@ class MedicineBatch {
     this.storeStock = 0,
     this.bulkClinicStock = 0,
     this.bulkStoreStock = 0,
+    this.purchasePrice = 0.0,
+    this.sellingPrice = 0.0,
   });
 
   Map<String, dynamic> toJson() => {
@@ -218,6 +223,8 @@ class MedicineBatch {
         'storeStock': storeStock,
         'bulkClinicStock': bulkClinicStock,
         'bulkStoreStock': bulkStoreStock,
+        'purchasePrice': purchasePrice,
+        'sellingPrice': sellingPrice,
       };
 
   factory MedicineBatch.fromJson(Map<String, dynamic> json) => MedicineBatch(
@@ -228,5 +235,7 @@ class MedicineBatch {
         storeStock: json['storeStock'] ?? 0,
         bulkClinicStock: json['bulkClinicStock'] ?? 0,
         bulkStoreStock: json['bulkStoreStock'] ?? 0,
+        purchasePrice: (json['purchasePrice'] as num?)?.toDouble() ?? 0.0,
+        sellingPrice: (json['sellingPrice'] as num?)?.toDouble() ?? 0.0,
       );
 }

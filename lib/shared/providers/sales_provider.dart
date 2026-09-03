@@ -61,6 +61,19 @@ class SalesProvider extends ChangeNotifier {
   double _totalRevenue = 0.0;
   double _totalDiscount = 0.0;
 
+  // Granular KPI metrics for full range
+  double _rangeGrossSales = 0.0;
+  double _rangeReturns = 0.0;
+  double _rangeMedsDiscount = 0.0;
+  int _rangeSaleCount = 0;
+  int _rangeReturnCount = 0;
+
+  // Granular KPI metrics for Today
+  double _todayGrossSales = 0.0;
+  double _todayReturns = 0.0;
+  double _todayMedsDiscount = 0.0;
+  int _todayReturnCount = 0;
+
   static const int pageSize = 30;
   int _dbOffset = 0;
   int _dbTotalCount = 0;
@@ -177,7 +190,19 @@ class SalesProvider extends ChangeNotifier {
   int get todaySalesCount => _todaySalesCount;
   double get totalRevenue => _totalRevenue;
   double get totalDiscount => _totalDiscount;
-  int get filteredSalesCount => _sales.length;
+  int get filteredSalesCount => totalCount;
+
+  // Granular KPI getters
+  double get rangeGrossSales => _rangeGrossSales;
+  double get rangeReturns => _rangeReturns;
+  double get rangeMedsDiscount => _rangeMedsDiscount;
+  int get rangeSaleCount => _rangeSaleCount;
+  int get rangeReturnCount => _rangeReturnCount;
+
+  double get todayGrossSales => _todayGrossSales;
+  double get todayReturns => _todayReturns;
+  double get todayMedsDiscount => _todayMedsDiscount;
+  int get todayReturnCount => _todayReturnCount;
 
   bool _isToday(DateTime dt) {
     final localDt = dt.toLocal();
@@ -204,58 +229,19 @@ class SalesProvider extends ChangeNotifier {
     _totalRevenue = 0.0;
     _totalDiscount = 0.0;
 
+    _rangeGrossSales = 0.0;
+    _rangeReturns = 0.0;
+    _rangeMedsDiscount = 0.0;
+    _rangeSaleCount = 0;
+    _rangeReturnCount = 0;
+
+    _todayGrossSales = 0.0;
+    _todayReturns = 0.0;
+    _todayMedsDiscount = 0.0;
+    _todayReturnCount = 0;
+
     for (final s in _sales) {
-      final isTodaySale = _isToday(s.createdAt);
-      
-      final med = s.medicineTotal;
-      final cons = s.consultationTotal;
-      final proc = s.procedureTotal;
-
-      _totalDiscount += s.discount;
-
-      if (isTodaySale) {
-        _todayRevenue += med;
-        _todaySalesCount++;
-        
-        if (!s.isReturn) {
-          _todayProcedureRevenue += proc;
-          _todayConsultationRevenue += cons;
-        }
-
-        // Today payment method breakdown
-        if (s.paymentMethod == 'mixed') {
-          _todayCashRevenue += s.cashAmount;
-          _todayUpiRevenue += s.upiAmount;
-          _todayCardRevenue += s.cardAmount;
-        } else if (s.paymentMethod == 'cash') {
-          _todayCashRevenue += s.total;
-        } else if (s.paymentMethod == 'upi') {
-          _todayUpiRevenue += s.total;
-        } else if (s.paymentMethod == 'card') {
-          _todayCardRevenue += s.total;
-        }
-      }
-
-      _filteredRevenue += med;
-      _totalRevenue += med;
-      
-      if (!s.isReturn) {
-        _filteredProcedureRevenue += proc;
-        _filteredConsultationRevenue += cons;
-      }
-
-      // Filtered payment method breakdown
-      if (s.paymentMethod == 'mixed') {
-        _filteredCashRevenue += s.cashAmount;
-        _filteredUpiRevenue += s.upiAmount;
-        _filteredCardRevenue += s.cardAmount;
-      } else if (s.paymentMethod == 'cash') {
-        _filteredCashRevenue += s.total;
-      } else if (s.paymentMethod == 'upi') {
-        _filteredUpiRevenue += s.total;
-      } else if (s.paymentMethod == 'card') {
-        _filteredCardRevenue += s.total;
-      }
+      _accumulateSale(s);
     }
   }
 
@@ -292,12 +278,23 @@ class SalesProvider extends ChangeNotifier {
       _recalculateTotalsFromDb(start, end);
     }
 
-    final page = _repo.salesInRange(
+    final rawPage = _repo.salesInRange(
       start,
       end,
       limit: pageSize,
       offset: _dbOffset,
     );
+
+    // Filter out duplicates by invoiceNo within current set
+    final existingInvoices = _sales.map((s) => s.invoiceNo.trim()).where((inv) => inv.isNotEmpty).toSet();
+    final page = <Sale>[];
+    for (final s in rawPage) {
+      final inv = s.invoiceNo.trim();
+      if (inv.isEmpty || !existingInvoices.contains(inv)) {
+        page.add(s);
+        if (inv.isNotEmpty) existingInvoices.add(inv);
+      }
+    }
 
     if (append) {
       _sales = [..._sales, ...page];
@@ -344,13 +341,29 @@ class SalesProvider extends ChangeNotifier {
     _totalRevenue = 0.0;
     _totalDiscount = 0.0;
 
+    _rangeGrossSales = 0.0;
+    _rangeReturns = 0.0;
+    _rangeMedsDiscount = 0.0;
+    _rangeSaleCount = 0;
+    _rangeReturnCount = 0;
+
+    _todayGrossSales = 0.0;
+    _todayReturns = 0.0;
+    _todayMedsDiscount = 0.0;
+    _todayReturnCount = 0;
+
     const chunk = 500;
     var offset = 0;
+    final seenInvoices = <String>{};
     while (true) {
       final batch = _repo.salesInRange(start, end, limit: chunk, offset: offset);
       if (batch.isEmpty) break;
       for (final s in batch) {
-        _accumulateSale(s);
+        final inv = s.invoiceNo.trim();
+        if (inv.isEmpty || !seenInvoices.contains(inv)) {
+          _accumulateSale(s);
+          if (inv.isNotEmpty) seenInvoices.add(inv);
+        }
       }
       offset += batch.length;
       if (batch.length < chunk) break;
@@ -358,6 +371,10 @@ class SalesProvider extends ChangeNotifier {
   }
 
   void _accumulateSale(Sale s) {
+    // Check type filter match
+    if (_typeFilter == 'retail' && s.isClinicalDispense) return;
+    if (_typeFilter == 'dispense' && !s.isClinicalDispense) return;
+
     final isTodaySale = _isToday(s.createdAt);
     final med = s.medicineTotal;
     final cons = s.consultationTotal;
@@ -365,10 +382,25 @@ class SalesProvider extends ChangeNotifier {
 
     _totalDiscount += s.discount;
 
+    // Granular range totals
+    if (s.isReturn) {
+      _rangeReturns += med.abs();
+      _rangeReturnCount++;
+    } else {
+      _rangeGrossSales += med;
+      _rangeMedsDiscount += s.discount.abs();
+      _rangeSaleCount++;
+    }
+
     if (isTodaySale) {
       _todayRevenue += med;
       _todaySalesCount++;
-      if (!s.isReturn) {
+      if (s.isReturn) {
+        _todayReturns += med.abs();
+        _todayReturnCount++;
+      } else {
+        _todayGrossSales += med;
+        _todayMedsDiscount += s.discount.abs();
         _todayProcedureRevenue += proc;
         _todayConsultationRevenue += cons;
       }
@@ -411,7 +443,17 @@ class SalesProvider extends ChangeNotifier {
       return;
     }
 
-    _sales = _repo.search(term: term, limit: 100);
+    final rawResults = _repo.search(term: term, limit: 100);
+    final seen = <String>{};
+    final deduped = <Sale>[];
+    for (final s in rawResults) {
+      final inv = s.invoiceNo.trim();
+      if (inv.isEmpty || !seen.contains(inv)) {
+        deduped.add(s);
+        if (inv.isNotEmpty) seen.add(inv);
+      }
+    }
+    _sales = deduped;
     _dbOffset = _sales.length;
     _dbTotalCount = _sales.length;
     _dbHasMore = false;

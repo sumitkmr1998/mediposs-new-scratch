@@ -786,11 +786,12 @@ class CartProvider extends ChangeNotifier {
         } else {
           for (final db in deductedBatches) {
             final expiryStr = '${db.expiryDate.day.toString().padLeft(2, '0')}/${db.expiryDate.month.toString().padLeft(2, '0')}/${db.expiryDate.year}';
+            final batchPrice = db.sellingPrice > 0 ? db.sellingPrice : item.medicine!.sellingPrice;
             saleItems.add(SaleItem(
               medicineId: item.medicine!.id,
               medicineName: item.name,
               qty: _isReturnMode ? -db.qty.abs() : db.qty,
-              unitPrice: item.medicine!.sellingPrice,
+              unitPrice: batchPrice,
               isProcedure: false,
               batchNo: db.batchNo,
               expiryDate: expiryStr,

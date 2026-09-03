@@ -352,6 +352,8 @@ class InventoryProvider extends ChangeNotifier {
               batchNo: batch.batchNo,
               expiryDate: batch.expiryDate,
               qty: deduction,
+              sellingPrice: batch.sellingPrice > 0 ? batch.sellingPrice : m.sellingPrice,
+              purchasePrice: batch.purchasePrice > 0 ? batch.purchasePrice : m.purchasePrice,
             ));
           }
         }
@@ -361,6 +363,8 @@ class InventoryProvider extends ChangeNotifier {
             batchNo: 'N/A',
             expiryDate: DateTime.now(),
             qty: remainingToDeduct,
+            sellingPrice: m.sellingPrice,
+            purchasePrice: m.purchasePrice,
           ));
         }
       } else if (qty < 0) {
@@ -378,12 +382,16 @@ class InventoryProvider extends ChangeNotifier {
             batchNo: latestBatch.batchNo,
             expiryDate: latestBatch.expiryDate,
             qty: qty, // negative
+            sellingPrice: latestBatch.sellingPrice > 0 ? latestBatch.sellingPrice : m.sellingPrice,
+            purchasePrice: latestBatch.purchasePrice > 0 ? latestBatch.purchasePrice : m.purchasePrice,
           ));
         } else {
           deducted.add(DeductedBatch(
             batchNo: 'N/A',
             expiryDate: DateTime.now(),
             qty: qty, // negative
+            sellingPrice: m.sellingPrice,
+            purchasePrice: m.purchasePrice,
           ));
         }
       }
@@ -432,6 +440,8 @@ class InventoryProvider extends ChangeNotifier {
               batchNo: batch.batchNo,
               expiryDate: batch.expiryDate,
               qty: deduction,
+              sellingPrice: batch.sellingPrice > 0 ? batch.sellingPrice : m.sellingPrice,
+              purchasePrice: batch.purchasePrice > 0 ? batch.purchasePrice : m.purchasePrice,
             ));
           }
         }
@@ -441,6 +451,8 @@ class InventoryProvider extends ChangeNotifier {
             batchNo: 'N/A',
             expiryDate: DateTime.now(),
             qty: remainingToDeduct,
+            sellingPrice: m.sellingPrice,
+            purchasePrice: m.purchasePrice,
           ));
         }
 
@@ -628,6 +640,8 @@ class InventoryProvider extends ChangeNotifier {
     Map<int, int> bulkStoreUpdates = const {},
     String batchNo = '',
     DateTime? expiryDate,
+    double? purchasePrice,
+    double? sellingPrice,
     String note = '',
     String supplier = '',
     SyncService? syncService,
@@ -693,6 +707,8 @@ class InventoryProvider extends ChangeNotifier {
               storeStock: storeQty,
               bulkClinicStock: bulkClinicQty,
               bulkStoreStock: bulkStoreQty,
+              purchasePrice: purchasePrice ?? m.purchasePrice,
+              sellingPrice: sellingPrice ?? m.sellingPrice,
             );
             batch.medicine.target = m;
             m.batches.add(batch);
@@ -701,6 +717,12 @@ class InventoryProvider extends ChangeNotifier {
             batch.storeStock += storeQty;
             batch.bulkClinicStock += bulkClinicQty;
             batch.bulkStoreStock += bulkStoreQty;
+            if (purchasePrice != null && purchasePrice > 0) {
+              batch.purchasePrice = purchasePrice;
+            }
+            if (sellingPrice != null && sellingPrice > 0) {
+              batch.sellingPrice = sellingPrice;
+            }
             _batchBox.put(batch);
           }
         }
@@ -1068,22 +1090,48 @@ class InventoryProvider extends ChangeNotifier {
     required int storeStock,
     int bulkClinicStock = 0,
     int bulkStoreStock = 0,
+    double? purchasePrice,
+    double? sellingPrice,
     SyncService? syncService,
     AppUser? actor,
   }) {
+    if (actor != null &&
+        !(actor.role.toLowerCase() == 'admin' ||
+            actor.canOverrideStock ||
+            actor.canEditInventory)) {
+      throw Exception('Unauthorized: You do not have permission to modify batch details.');
+    }
+
     final oldBatchNo = batch.batchNo;
     final oldExpiryDate = batch.expiryDate;
     final oldMainStock = batch.mainStock;
     final oldStoreStock = batch.storeStock;
     final oldBulkClinicStock = batch.bulkClinicStock;
     final oldBulkStoreStock = batch.bulkStoreStock;
+    final oldPurchasePrice = batch.purchasePrice;
+    final oldSellingPrice = batch.sellingPrice;
+
+    final canOverride = actor == null ||
+        actor.role.toLowerCase() == 'admin' ||
+        actor.canOverrideStock;
 
     batch.batchNo = batchNo;
     batch.expiryDate = expiryDate;
-    batch.mainStock = mainStock.clamp(0, 999999);
-    batch.storeStock = storeStock.clamp(0, 999999);
-    batch.bulkClinicStock = bulkClinicStock.clamp(0, 999999);
-    batch.bulkStoreStock = bulkStoreStock.clamp(0, 999999);
+
+    // Security Gate: Only update quantities if actor is authorized to override stock
+    if (canOverride) {
+      batch.mainStock = mainStock.clamp(0, 999999);
+      batch.storeStock = storeStock.clamp(0, 999999);
+      batch.bulkClinicStock = bulkClinicStock.clamp(0, 999999);
+      batch.bulkStoreStock = bulkStoreStock.clamp(0, 999999);
+    }
+
+    if (purchasePrice != null && (actor == null || actor.role.toLowerCase() == 'admin' || actor.canEditInventory)) {
+      batch.purchasePrice = purchasePrice.clamp(0.0, 9999999.0);
+    }
+    if (sellingPrice != null && (actor == null || actor.role.toLowerCase() == 'admin' || actor.canEditInventory)) {
+      batch.sellingPrice = sellingPrice.clamp(0.0, 9999999.0);
+    }
 
     _batchBox.put(batch);
 
@@ -1105,13 +1153,17 @@ class InventoryProvider extends ChangeNotifier {
         'oldExpiryDate': oldExpiryDate.toIso8601String(),
         'newExpiryDate': expiryDate.toIso8601String(),
         'oldMainStock': oldMainStock,
-        'newMainStock': mainStock,
+        'newMainStock': batch.mainStock,
         'oldStoreStock': oldStoreStock,
-        'newStoreStock': storeStock,
+        'newStoreStock': batch.storeStock,
         'oldBulkClinicStock': oldBulkClinicStock,
-        'newBulkClinicStock': bulkClinicStock,
+        'newBulkClinicStock': batch.bulkClinicStock,
         'oldBulkStoreStock': oldBulkStoreStock,
-        'newBulkStoreStock': bulkStoreStock,
+        'newBulkStoreStock': batch.bulkStoreStock,
+        'oldPurchasePrice': oldPurchasePrice,
+        'newPurchasePrice': batch.purchasePrice,
+        'oldSellingPrice': oldSellingPrice,
+        'newSellingPrice': batch.sellingPrice,
       },
       actor: actor,
     );
@@ -1154,10 +1206,14 @@ class DeductedBatch {
   final String batchNo;
   final DateTime expiryDate;
   final int qty;
+  final double sellingPrice;
+  final double purchasePrice;
 
   DeductedBatch({
     required this.batchNo,
     required this.expiryDate,
     required this.qty,
+    this.sellingPrice = 0.0,
+    this.purchasePrice = 0.0,
   });
 }

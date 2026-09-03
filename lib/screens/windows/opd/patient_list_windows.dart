@@ -47,7 +47,6 @@ class _PatientListWindowsState extends State<PatientListWindows> {
 
     final maleCount = allPatients.where((p) => p.gender == 'Male').length;
     final femaleCount = allPatients.where((p) => p.gender == 'Female').length;
-    final otherCount = allPatients.length - maleCount - femaleCount;
 
     final filteredList = _filter == 'all'
         ? list
@@ -66,14 +65,16 @@ class _PatientListWindowsState extends State<PatientListWindows> {
     final endIndex = (startIndex + _pageSize).clamp(0, totalItems);
     final paginatedList = filteredList.isEmpty ? <Patient>[] : filteredList.sublist(startIndex, endIndex);
 
+    final totalRegistered = patients.totalCount;
+
     return Scaffold(
-      appBar: _buildAppBar(allPatients.length),
+      appBar: _buildAppBar(totalRegistered),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildKpiSection(allPatients.length, maleCount, femaleCount),
+            _buildKpiSection(totalRegistered, maleCount, femaleCount),
             const SizedBox(height: 24),
             _buildFilterSearchCard(context, patients),
             const SizedBox(height: 24),

@@ -466,6 +466,14 @@ class _BatchItem extends StatelessWidget {
                   'ST:${batch.storeStock} | CL:${batch.mainStock} | SB:${batch.bulkStoreStock} | CB:${batch.bulkClinicStock}',
                   style: TextStyle(fontSize: 9, color: context.textMutedColor, fontWeight: FontWeight.w600),
                 ),
+                if (batch.sellingPrice > 0 || (batch.purchasePrice > 0 && (context.read<AuthProvider>().currentUser?.canViewPurchasePrice == true || context.read<AuthProvider>().currentUser?.role.toLowerCase() == 'admin')))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      '${batch.sellingPrice > 0 ? "MRP: ₹${batch.sellingPrice.toStringAsFixed(2)}" : ""}${(batch.sellingPrice > 0 && batch.purchasePrice > 0 && (context.read<AuthProvider>().currentUser?.canViewPurchasePrice == true || context.read<AuthProvider>().currentUser?.role.toLowerCase() == 'admin')) ? " | " : ""}${(batch.purchasePrice > 0 && (context.read<AuthProvider>().currentUser?.canViewPurchasePrice == true || context.read<AuthProvider>().currentUser?.role.toLowerCase() == 'admin')) ? "Cost: ₹${batch.purchasePrice.toStringAsFixed(2)}" : ""}',
+                      style: const TextStyle(fontSize: 9, color: AppTheme.primaryLight, fontWeight: FontWeight.w700),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -515,6 +523,8 @@ class _BatchDialogState extends State<_BatchDialog> {
   late final TextEditingController _posCtrl;
   late final TextEditingController _bulkClinicCtrl;
   late final TextEditingController _bulkStoreCtrl;
+  late final TextEditingController _sellingPriceCtrl;
+  late final TextEditingController _purchasePriceCtrl;
   late DateTime _expiry;
 
   @override
@@ -525,20 +535,42 @@ class _BatchDialogState extends State<_BatchDialog> {
     _posCtrl = TextEditingController(text: '${widget.batch?.storeStock ?? 0}');
     _bulkClinicCtrl = TextEditingController(text: '${widget.batch?.bulkClinicStock ?? 0}');
     _bulkStoreCtrl = TextEditingController(text: '${widget.batch?.bulkStoreStock ?? 0}');
+    _sellingPriceCtrl = TextEditingController(
+        text: widget.batch != null && widget.batch!.sellingPrice > 0
+            ? widget.batch!.sellingPrice.toStringAsFixed(2)
+            : '');
+    _purchasePriceCtrl = TextEditingController(
+        text: widget.batch != null && widget.batch!.purchasePrice > 0
+            ? widget.batch!.purchasePrice.toStringAsFixed(2)
+            : '');
     _expiry = widget.batch?.expiryDate ?? DateTime.now().add(const Duration(days: 365));
   }
 
-  Widget _field(TextEditingController ctrl, String label, {TextInputType? keyboardType}) {
+  @override
+  void dispose() {
+    _noCtrl.dispose();
+    _hubCtrl.dispose();
+    _posCtrl.dispose();
+    _bulkClinicCtrl.dispose();
+    _bulkStoreCtrl.dispose();
+    _sellingPriceCtrl.dispose();
+    _purchasePriceCtrl.dispose();
+    super.dispose();
+  }
+
+  Widget _field(TextEditingController ctrl, String label, {TextInputType? keyboardType, bool readOnly = false, String? helperText}) {
     return TextField(
       controller: ctrl,
       keyboardType: keyboardType,
+      readOnly: readOnly,
       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
       decoration: InputDecoration(
         labelText: label,
+        helperText: helperText,
         labelStyle: TextStyle(color: context.textMutedColor, fontWeight: FontWeight.w600, fontSize: 13),
         isDense: true,
         filled: true,
-        fillColor: context.textMutedColor.withValues(alpha: 0.03),
+        fillColor: readOnly ? context.textMutedColor.withValues(alpha: 0.08) : context.textMutedColor.withValues(alpha: 0.03),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.borderColor.withValues(alpha: 0.3))),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.borderColor.withValues(alpha: 0.3))),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppTheme.primary, width: 2)),
@@ -548,6 +580,15 @@ class _BatchDialogState extends State<_BatchDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final user = auth.currentUser;
+    final isAdmin = user?.role.toLowerCase() == 'admin';
+    final canOverrideStock = isAdmin || (user?.canOverrideStock == true);
+    final isNewBatch = widget.batch == null;
+    final canEditStockCounts = isNewBatch ? (canOverrideStock || (user?.canAddStock == true) || (user?.canEditInventory == true)) : canOverrideStock;
+    final canEditPricing = isAdmin || (user?.canEditInventory == true);
+    final canViewPurchasePrice = isAdmin || (user?.canViewPurchasePrice == true);
+
     return AlertDialog(
       backgroundColor: context.surfaceColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -555,6 +596,7 @@ class _BatchDialogState extends State<_BatchDialog> {
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _field(_noCtrl, 'BATCH NUMBER'),
             const SizedBox(height: 16),
@@ -593,19 +635,58 @@ class _BatchDialogState extends State<_BatchDialog> {
               ),
             ),
             const SizedBox(height: 16),
+
+            // Price fields
             Row(
               children: [
-                Expanded(child: _field(_bulkStoreCtrl, 'STORE BULK', keyboardType: TextInputType.number)),
+                Expanded(
+                  child: _field(
+                    _sellingPriceCtrl,
+                    'BATCH MRP (₹)',
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    readOnly: !canEditPricing,
+                    helperText: canEditPricing ? 'Leave blank for default' : 'Locked',
+                  ),
+                ),
+                if (canViewPurchasePrice) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _field(
+                      _purchasePriceCtrl,
+                      'COST (₹)',
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      readOnly: !canEditPricing,
+                      helperText: canEditPricing ? 'Supplier rate' : 'Locked',
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            Row(
+              children: [
+                const Text('STOCK COUNTS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey, letterSpacing: 0.5)),
+                const Spacer(),
+                if (!canEditStockCounts)
+                  const Text('LOCKED', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppTheme.warning)),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            Row(
+              children: [
+                Expanded(child: _field(_bulkStoreCtrl, 'STORE BULK', keyboardType: TextInputType.number, readOnly: !canEditStockCounts)),
                 const SizedBox(width: 12),
-                Expanded(child: _field(_bulkClinicCtrl, 'CLINIC BULK', keyboardType: TextInputType.number)),
+                Expanded(child: _field(_bulkClinicCtrl, 'CLINIC BULK', keyboardType: TextInputType.number, readOnly: !canEditStockCounts)),
               ],
             ),
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(child: _field(_posCtrl, 'STORE POS', keyboardType: TextInputType.number)),
+                Expanded(child: _field(_posCtrl, 'STORE POS', keyboardType: TextInputType.number, readOnly: !canEditStockCounts)),
                 const SizedBox(width: 12),
-                Expanded(child: _field(_hubCtrl, 'CLINIC DISP', keyboardType: TextInputType.number)),
+                Expanded(child: _field(_hubCtrl, 'CLINIC DISP', keyboardType: TextInputType.number, readOnly: !canEditStockCounts)),
               ],
             ),
           ],
@@ -616,6 +697,8 @@ class _BatchDialogState extends State<_BatchDialog> {
         ElevatedButton(
           onPressed: () {
             if (_noCtrl.text.isEmpty) return;
+            final sellPrice = double.tryParse(_sellingPriceCtrl.text.trim()) ?? 0.0;
+            final purchasePrice = double.tryParse(_purchasePriceCtrl.text.trim()) ?? 0.0;
             widget.onSave(MedicineBatch(
               id: widget.batch?.id ?? 0,
               batchNo: _noCtrl.text.trim(),
@@ -624,6 +707,8 @@ class _BatchDialogState extends State<_BatchDialog> {
               storeStock: int.tryParse(_posCtrl.text) ?? 0,
               bulkClinicStock: int.tryParse(_bulkClinicCtrl.text) ?? 0,
               bulkStoreStock: int.tryParse(_bulkStoreCtrl.text) ?? 0,
+              sellingPrice: sellPrice,
+              purchasePrice: purchasePrice,
             ));
             Navigator.pop(context);
           },

@@ -26,84 +26,220 @@ class EditBatchDialogState extends State<EditBatchDialog> {
       text: widget.batch != null ? '${widget.batch!.bulkClinicStock}' : '0');
   late final _bulkStoreCtrl = TextEditingController(
       text: widget.batch != null ? '${widget.batch!.bulkStoreStock}' : '0');
+  late final _sellingPriceCtrl = TextEditingController(
+      text: widget.batch != null && widget.batch!.sellingPrice > 0
+          ? widget.batch!.sellingPrice.toStringAsFixed(2)
+          : widget.medicine.sellingPrice.toStringAsFixed(2));
+  late final _purchasePriceCtrl = TextEditingController(
+      text: widget.batch != null && widget.batch!.purchasePrice > 0
+          ? widget.batch!.purchasePrice.toStringAsFixed(2)
+          : widget.medicine.purchasePrice.toStringAsFixed(2));
   late DateTime _expiryDate =
       widget.batch?.expiryDate ?? DateTime.now().add(const Duration(days: 365));
 
   @override
+  void dispose() {
+    _batchNoCtrl.dispose();
+    _hubStockCtrl.dispose();
+    _storeStockCtrl.dispose();
+    _bulkClinicCtrl.dispose();
+    _bulkStoreCtrl.dispose();
+    _sellingPriceCtrl.dispose();
+    _purchasePriceCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final user = auth.currentUser;
+    final isAdmin = user?.role.toLowerCase() == 'admin';
+
+    // Permissions:
+    // Can modify stock quantities: requires canOverrideStock or Admin (or adding a new batch if user has canAddStock)
+    final canOverrideStock = isAdmin || (user?.canOverrideStock == true);
+    final isNewBatch = widget.batch == null;
+    final canEditStockCounts = isNewBatch ? (canOverrideStock || (user?.canAddStock == true) || (user?.canEditInventory == true)) : canOverrideStock;
+
+    // Can modify metadata / prices: requires canEditInventory or Admin
+    final canEditPricing = isAdmin || (user?.canEditInventory == true);
+    final canViewPurchasePrice = isAdmin || (user?.canViewPurchasePrice == true);
+
     return AlertDialog(
-      title:
-          Text(widget.batch != null ? 'Edit Batch Details' : 'Add New Batch'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
+      title: Row(
         children: [
-          TextField(
-            controller: _batchNoCtrl,
-            decoration:
-                const InputDecoration(labelText: 'Batch Number', isDense: true),
+          Icon(
+            isNewBatch ? Icons.add_circle_outline : Icons.edit_note,
+            color: AppTheme.primary,
           ),
-          const SizedBox(height: 12),
-          InkWell(
-            onTap: _pickDate,
-            child: InputDecorator(
-              decoration: const InputDecoration(
-                  labelText: 'Expiry Date', isDense: true),
-              child: Text(
-                  '${_expiryDate.day}/${_expiryDate.month}/${_expiryDate.year}'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _bulkStoreCtrl,
-                  decoration: const InputDecoration(
-                      labelText: 'Store Bulk', isDense: true),
-                  keyboardType: TextInputType.number,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  controller: _bulkClinicCtrl,
-                  decoration: const InputDecoration(
-                      labelText: 'Clinic Bulk', isDense: true),
-                  keyboardType: TextInputType.number,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _storeStockCtrl,
-                  decoration:
-                      const InputDecoration(labelText: 'Store', isDense: true),
-                  keyboardType: TextInputType.number,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  controller: _hubStockCtrl,
-                  decoration:
-                      const InputDecoration(labelText: 'Clinic', isDense: true),
-                  keyboardType: TextInputType.number,
-                ),
-              ),
-            ],
-          ),
+          const SizedBox(width: 8),
+          Text(isNewBatch ? 'Add New Batch' : 'Edit Batch Details'),
         ],
+      ),
+      content: SizedBox(
+        width: 480,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: _batchNoCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Batch Number *',
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              InkWell(
+                onTap: _pickDate,
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Expiry Date',
+                    isDense: true,
+                    suffixIcon: Icon(Icons.calendar_today, size: 18),
+                  ),
+                  child: Text(
+                      '${_expiryDate.day.toString().padLeft(2, '0')}/${_expiryDate.month.toString().padLeft(2, '0')}/${_expiryDate.year}'),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Pricing Section
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _sellingPriceCtrl,
+                      readOnly: !canEditPricing,
+                      decoration: InputDecoration(
+                        labelText: 'Batch Selling Price (₹)',
+                        isDense: true,
+                        prefixIcon: const Icon(Icons.currency_rupee, size: 16),
+                        helperText: canEditPricing ? 'Per-unit MRP / rate' : 'Read-only',
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                  ),
+                  if (canViewPurchasePrice) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _purchasePriceCtrl,
+                        readOnly: !canEditPricing,
+                        decoration: InputDecoration(
+                          labelText: 'Batch Purchase Price (₹)',
+                          isDense: true,
+                          prefixIcon: const Icon(Icons.currency_rupee, size: 16),
+                          helperText: canEditPricing ? 'Cost from supplier' : 'Read-only',
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Stock Quantities Section Header
+              Row(
+                children: [
+                  const Text(
+                    'STOCK QUANTITIES',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (!canEditStockCounts)
+                    const Tooltip(
+                      message: 'Requires "Stock Corrections" permission to modify existing quantities',
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.lock_outline, size: 14, color: AppTheme.warning),
+                          SizedBox(width: 4),
+                          Text(
+                            'Locked (No Permission)',
+                            style: TextStyle(fontSize: 11, color: AppTheme.warning, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _bulkStoreCtrl,
+                      readOnly: !canEditStockCounts,
+                      decoration: InputDecoration(
+                        labelText: 'Store Bulk',
+                        isDense: true,
+                        filled: !canEditStockCounts,
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _bulkClinicCtrl,
+                      readOnly: !canEditStockCounts,
+                      decoration: InputDecoration(
+                        labelText: 'Clinic Bulk',
+                        isDense: true,
+                        filled: !canEditStockCounts,
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _storeStockCtrl,
+                      readOnly: !canEditStockCounts,
+                      decoration: InputDecoration(
+                        labelText: 'Store (POS)',
+                        isDense: true,
+                        filled: !canEditStockCounts,
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _hubStockCtrl,
+                      readOnly: !canEditStockCounts,
+                      decoration: InputDecoration(
+                        labelText: 'Clinic (OPD)',
+                        isDense: true,
+                        filled: !canEditStockCounts,
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
       actions: [
         if (widget.batch != null &&
-            (context.read<AuthProvider>().currentUser?.role.toLowerCase() ==
-                    'admin' ||
-                context.read<AuthProvider>().currentUser?.canDeleteInventory ==
-                    true))
+            (isAdmin || user?.canDeleteInventory == true))
           TextButton(
             style: TextButton.styleFrom(foregroundColor: AppTheme.danger),
             onPressed: () => _confirmDeleteBatch(context),
@@ -175,6 +311,8 @@ class EditBatchDialogState extends State<EditBatchDialog> {
     final storeStock = int.tryParse(_storeStockCtrl.text) ?? 0;
     final bulkClinicStock = int.tryParse(_bulkClinicCtrl.text) ?? 0;
     final bulkStoreStock = int.tryParse(_bulkStoreCtrl.text) ?? 0;
+    final sellingPrice = double.tryParse(_sellingPriceCtrl.text.trim()) ?? 0.0;
+    final purchasePrice = double.tryParse(_purchasePriceCtrl.text.trim()) ?? 0.0;
 
     final actor = context.read<AuthProvider>().currentUser;
     if (widget.batch != null) {
@@ -187,6 +325,8 @@ class EditBatchDialogState extends State<EditBatchDialog> {
         storeStock: storeStock,
         bulkClinicStock: bulkClinicStock,
         bulkStoreStock: bulkStoreStock,
+        sellingPrice: sellingPrice,
+        purchasePrice: purchasePrice,
         syncService: sync,
         actor: actor,
       );
@@ -201,6 +341,8 @@ class EditBatchDialogState extends State<EditBatchDialog> {
         bulkStoreUpdates: {widget.medicine.id: bulkStoreStock},
         batchNo: batchNo,
         expiryDate: _expiryDate,
+        sellingPrice: sellingPrice,
+        purchasePrice: purchasePrice,
         syncService: sync,
         actor: actor,
       );

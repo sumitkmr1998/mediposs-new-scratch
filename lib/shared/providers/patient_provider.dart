@@ -25,6 +25,14 @@ class PatientProvider extends ChangeNotifier {
   /// Already limited by DB query — no full-table filter in Dart.
   List<Patient> get filtered => _patients;
 
+  /// Total count of all registered patients in ObjectBox
+  int get totalCount => _repo.count();
+
+  /// Direct database search across all patients (not limited to loaded 100 recent)
+  List<Patient> searchPatients(String q, {int limit = 50}) {
+    return _repo.search(q, limit: limit);
+  }
+
   void load() {
     if (_search.isEmpty) {
       _patients = _repo.recent(limit: 100);
@@ -127,12 +135,24 @@ class PatientProvider extends ChangeNotifier {
   }
 
   Patient? getById(int id) {
-    return _patients.where((p) => p.id == id).firstOrNull;
+    if (id <= 0) return null;
+    final cached = _patients.where((p) => p.id == id).firstOrNull;
+    if (cached != null) return cached;
+    return _repo.byId(id);
   }
 
   Patient? getByUhid(String uhid) {
     if (uhid.isEmpty) return null;
-    return _patients.where((p) => p.uhid == uhid).firstOrNull;
+    final cached = _patients.where((p) => p.uhid == uhid).firstOrNull;
+    if (cached != null) return cached;
+    final q = ObjectBoxService.instance.patientBox
+        .query(Patient_.uhid.equals(uhid))
+        .build();
+    try {
+      return q.findFirst();
+    } finally {
+      q.close();
+    }
   }
 
   Patient? getByInfo(String name, String phone) {
@@ -141,11 +161,24 @@ class PatientProvider extends ChangeNotifier {
     final n = name.trim().toLowerCase();
     final p = phone.trim();
 
-    return _patients.where((pt) {
+    final cached = _patients.where((pt) {
       final nameMatch = pt.name.trim().toLowerCase() == n;
       final phoneMatch = p.isNotEmpty && pt.phone.trim() == p;
       return nameMatch && (p.isEmpty || phoneMatch);
     }).firstOrNull;
+    if (cached != null) return cached;
+
+    // Fallback to database lookup
+    final q = ObjectBoxService.instance.patientBox
+        .query(Patient_.name.equals(name.trim(), caseSensitive: false))
+        .build();
+    try {
+      final results = q.find();
+      if (p.isEmpty) return results.firstOrNull;
+      return results.where((pt) => pt.phone.trim() == p).firstOrNull;
+    } finally {
+      q.close();
+    }
   }
 
   static const Set<String> _commonNames = {
