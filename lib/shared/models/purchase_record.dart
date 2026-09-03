@@ -17,6 +17,9 @@ class PurchaseRecord {
   String note;
   String supplier;
 
+  int initialQty;
+  int finalQty;
+
   PurchaseRecord({
     this.id = 0,
     required this.medicineId,
@@ -27,6 +30,8 @@ class PurchaseRecord {
     this.location = '',
     this.note = '',
     this.supplier = '',
+    this.initialQty = 0,
+    this.finalQty = 0,
   }) : purchasedAt = purchasedAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
@@ -39,6 +44,8 @@ class PurchaseRecord {
         'location': location,
         'note': note,
         'supplier': supplier,
+        'initialQty': initialQty,
+        'finalQty': finalQty,
       };
 
   factory PurchaseRecord.fromJson(Map<String, dynamic> json) => PurchaseRecord(
@@ -51,5 +58,7 @@ class PurchaseRecord {
         location: json['location'] ?? '',
         note: json['note'] ?? '',
         supplier: json['supplier'] ?? '',
+        initialQty: json['initialQty'] ?? 0,
+        finalQty: json['finalQty'] ?? 0,
       );
 }

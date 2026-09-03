@@ -17,19 +17,28 @@ class PatientListAndroid extends StatefulWidget {
 
 class _PatientListAndroidState extends State<PatientListAndroid> {
   final _searchCtrl = TextEditingController();
-  int _currentPage = 1;
-  final int _pageSize = 10;
+  final ScrollController _scrollCtrl = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    _scrollCtrl.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<PatientProvider>().load();
     });
   }
 
+  void _onScroll() {
+    if (_scrollCtrl.hasClients &&
+        _scrollCtrl.position.pixels >= _scrollCtrl.position.maxScrollExtent - 200) {
+      context.read<PatientProvider>().loadMore();
+    }
+  }
+
   @override
   void dispose() {
+    _scrollCtrl.removeListener(_onScroll);
+    _scrollCtrl.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -38,12 +47,7 @@ class _PatientListAndroidState extends State<PatientListAndroid> {
   Widget build(BuildContext context) {
     final patients = context.watch<PatientProvider>();
     final list = patients.filtered;
-    final totalItems = list.length;
-    final totalPages = (totalItems / _pageSize).ceil();
-    final currentPage = _currentPage.clamp(1, totalPages > 0 ? totalPages : 1);
-    final startIndex = (currentPage - 1) * _pageSize;
-    final endIndex = (startIndex + _pageSize).clamp(0, totalItems);
-    final paginatedList = list.isEmpty ? <Patient>[] : list.sublist(startIndex, endIndex);
+    final totalCount = patients.totalCount;
 
     return Scaffold(
       backgroundColor: context.surfaceColor,
@@ -77,18 +81,18 @@ class _PatientListAndroidState extends State<PatientListAndroid> {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Container(
                 decoration: BoxDecoration(
                   color: context.surfaceColor,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                      color: context.borderColor.withValues(alpha: 0.5)),
+                      color: context.borderColor.withValues(alpha: 0.4)),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.02),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+                      blurRadius: 6,
+                      offset: const Offset(0, 1),
                     ),
                   ],
                 ),
@@ -96,33 +100,83 @@ class _PatientListAndroidState extends State<PatientListAndroid> {
                   controller: _searchCtrl,
                   onChanged: (v) {
                     patients.setSearch(v);
-                    setState(() => _currentPage = 1);
                   },
+                  style: const TextStyle(fontSize: 13),
                   decoration: InputDecoration(
                     hintText: 'Search by name, phone, or UHID...',
-                    hintStyle: TextStyle(color: context.textMutedColor),
+                    hintStyle: TextStyle(fontSize: 12, color: context.textMutedColor),
                     prefixIcon:
-                        const Icon(Icons.search, color: AppTheme.primary),
+                        const Icon(Icons.search, size: 18, color: AppTheme.primary),
+                    suffixIcon: _searchCtrl.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 16),
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              patients.setSearch('');
+                            },
+                          )
+                        : null,
                     border: InputBorder.none,
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 14),
+                        horizontal: 12, vertical: 10),
                   ),
                 ),
               ),
             ),
           ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Row(
+                children: [
+                  Text(
+                    'LOADED ${list.length} OF $totalCount PATIENTS',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      color: context.textMutedColor,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  if (patients.isLoadingMore) ...[
+                    const SizedBox(width: 8),
+                    const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
         ],
-        body: paginatedList.isEmpty
+        body: list.isEmpty
             ? const AppEmptyState(
                 icon: Icons.people_outline,
                 title: 'No patients found',
               )
             : ListView.builder(
+                controller: _scrollCtrl,
                 padding: const EdgeInsets.all(20).copyWith(bottom: 100),
-                itemCount: paginatedList.length,
+                itemCount: list.length + (patients.hasMore ? 1 : 0),
                 itemBuilder: (ctx, i) {
-                  final p = paginatedList[i];
+                  if (i == list.length) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 20),
+                      child: Center(
+                        child: patients.isLoadingMore
+                            ? const CircularProgressIndicator()
+                            : TextButton.icon(
+                                onPressed: () => patients.loadMore(),
+                                icon: const Icon(Icons.arrow_downward, size: 16),
+                                label: const Text('Load More Patients'),
+                              ),
+                      ),
+                    );
+                  }
+                  final p = list[i];
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: _ModernPatientTile(
@@ -135,51 +189,6 @@ class _PatientListAndroidState extends State<PatientListAndroid> {
               ),
       ),
     ),
-      bottomNavigationBar: list.isEmpty ? null : Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: context.surfaceColor,
-          border: Border(top: BorderSide(color: context.borderColor)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 4,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Showing ${totalItems == 0 ? 0 : startIndex + 1}-$endIndex of $totalItems',
-                style: TextStyle(color: context.textMutedColor, fontSize: 13),
-              ),
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.chevron_left),
-                    onPressed: currentPage > 1
-                        ? () => setState(() => _currentPage = currentPage - 1)
-                        : null,
-                  ),
-                  Text(
-                    'Page $currentPage of ${totalPages > 0 ? totalPages : 1}',
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.chevron_right),
-                    onPressed: currentPage < totalPages
-                        ? () => setState(() => _currentPage = currentPage + 1)
-                        : null,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showPatientDialog(context),
         backgroundColor: AppTheme.primary,
@@ -200,7 +209,7 @@ class _PatientListAndroidState extends State<PatientListAndroid> {
 }
 
 // ─── Patient Tile ─────────────────────────────────────────────────────────────
-class _ModernPatientTile extends StatelessWidget {
+class _ModernPatientTile extends StatefulWidget {
   final Patient patient;
   final VoidCallback onEdit;
   final VoidCallback onBook;
@@ -212,74 +221,86 @@ class _ModernPatientTile extends StatelessWidget {
   });
 
   @override
+  State<_ModernPatientTile> createState() => _ModernPatientTileState();
+}
+
+class _ModernPatientTileState extends State<_ModernPatientTile> {
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: context.surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+        boxShadow: AppTheme.subtleShadow,
+        border: Border.all(
+          color: _expanded
+              ? AppTheme.primary.withValues(alpha: 0.3)
+              : context.borderColor.withValues(alpha: 0.4),
+        ),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (ctx) => PatientDetailsScreen(patientId: patient.id),
-            ),
-          ),
+          onTap: () => setState(() => _expanded = !_expanded),
+          onLongPress: () => setState(() => _expanded = !_expanded),
           borderRadius: BorderRadius.circular(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 child: Row(
                   children: [
-                    Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Center(
-                        child: Text(
-                          patient.name.isNotEmpty
-                              ? patient.name[0].toUpperCase()
-                              : '?',
-                          style: const TextStyle(
-                            color: AppTheme.primary,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                          ),
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                      child: Text(
+                        widget.patient.name.isNotEmpty
+                            ? widget.patient.name[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                          color: AppTheme.primary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            patient.name,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w800, fontSize: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  widget.patient.name,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700, fontSize: 14),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Icon(
+                                _expanded
+                                    ? Icons.keyboard_arrow_up_rounded
+                                    : Icons.keyboard_arrow_down_rounded,
+                                size: 18,
+                                color: context.textMutedColor,
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 2),
                           Text(
-                            '${patient.uhid}  •  ${patient.gender}${patient.ageYears > 0 ? "  •  ${patient.ageYears}y" : ""}${patient.phone.isNotEmpty ? "  •  ${patient.phone}" : ""}',
+                            '${widget.patient.uhid}  •  ${widget.patient.gender}${widget.patient.ageYears > 0 ? "  •  ${widget.patient.ageYears}y" : ""}${widget.patient.phone.isNotEmpty ? "  •  ${widget.patient.phone}" : ""}',
                             style: TextStyle(
                                 color: context.textMutedColor,
                                 fontWeight: FontWeight.w500,
-                                fontSize: 13),
+                                fontSize: 12),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
@@ -287,46 +308,60 @@ class _ModernPatientTile extends StatelessWidget {
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                decoration: BoxDecoration(
-                  border: Border(
-                    top: BorderSide(
-                        color: context.borderColor.withValues(alpha: 0.3)),
+              if (_expanded) ...[
+                Container(
+                  height: 1,
+                  color: context.borderColor.withValues(alpha: 0.2),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _ActionBtn(
+                          label: 'Details',
+                          icon: Icons.visibility_outlined,
+                          color: AppTheme.primaryLight,
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (ctx) =>
+                                  PatientDetailsScreen(patientId: widget.patient.id),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: _ActionBtn(
+                          label: 'Book',
+                          icon: Icons.add_box_rounded,
+                          color: AppTheme.primary,
+                          onTap: widget.onBook,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: _ActionBtn(
+                          label: 'Edit',
+                          icon: Icons.edit_rounded,
+                          color: AppTheme.indigo,
+                          onTap: widget.onEdit,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: _ActionBtn(
+                          label: 'Delete',
+                          icon: Icons.delete_outline_rounded,
+                          color: AppTheme.danger,
+                          onTap: () => _confirmDelete(context),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: _ActionBtn(
-                        label: 'Book Appt',
-                        icon: Icons.add_box_rounded,
-                        color: AppTheme.primary,
-                        onTap: onBook,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _ActionBtn(
-                        label: 'Edit',
-                        icon: Icons.edit_rounded,
-                        color: AppTheme.indigo,
-                        onTap: onEdit,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _ActionBtn(
-                        label: 'Delete',
-                        icon: Icons.delete_outline_rounded,
-                        color: AppTheme.danger,
-                        onTap: () => _confirmDelete(context),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              ],
             ],
           ),
         ),
@@ -340,7 +375,7 @@ class _ModernPatientTile extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Patient?'),
         content: Text(
-            'Are you sure you want to delete ${patient.name}? This will remove all their medical history and photographs.'),
+            'Are you sure you want to delete ${widget.patient.name}? This will remove all their medical history and photographs.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -351,11 +386,11 @@ class _ModernPatientTile extends StatelessWidget {
               final sync = context.read<SyncService>();
               context
                   .read<PatientProvider>()
-                  .deletePatient(patient.id, syncService: sync);
+                  .deletePatient(widget.patient.id, syncService: sync);
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Patient ${patient.name} deleted'),
+                  content: Text('Patient ${widget.patient.name} deleted'),
                   backgroundColor: AppTheme.danger,
                 ),
               );
@@ -388,21 +423,20 @@ class _ActionBtn extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
+          color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
+          border: Border.all(color: color.withValues(alpha: 0.15)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 16, color: color),
+            Icon(icon, size: 14, color: color),
             const SizedBox(width: 4),
             Text(label,
                 style: TextStyle(
-                    color: color, fontSize: 13, fontWeight: FontWeight.w700)),
+                    color: color, fontSize: 11, fontWeight: FontWeight.w700)),
           ],
         ),
       ),

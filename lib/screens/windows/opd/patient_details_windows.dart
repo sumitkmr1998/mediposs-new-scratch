@@ -35,6 +35,38 @@ class PatientDetailsWindows extends StatefulWidget {
 }
 
 class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
+  bool _loadingPhotos = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _pullPhotosIfTerminal();
+    });
+  }
+
+  Future<void> _pullPhotosIfTerminal() async {
+    final sync = context.read<SyncService>();
+    if (sync.isHub || !sync.isConnected) return;
+
+    final patient = context.read<PatientProvider>().getById(widget.patientId);
+    if (patient == null || patient.uhid.isEmpty) return;
+
+    setState(() => _loadingPhotos = true);
+    try {
+      final fetched = await sync.pullPatientPhotosForPatient(patient.uhid, patient.id);
+      if (fetched.isNotEmpty && mounted) {
+        context.read<PatientProvider>().load();
+      }
+    } catch (e) {
+      debugPrint('Error pulling photos for patient: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _loadingPhotos = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final patientById = context.watch<PatientProvider>().getById(widget.patientId);
@@ -267,13 +299,30 @@ class _PatientDetailsWindowsState extends State<PatientDetailsWindows> {
                                   title: 'Gallery',
                                   icon: Icons.photo_library_rounded,
                                   accentColor: AppTheme.purple,
-                                  badge: photos.isNotEmpty
-                                      ? '${photos.length}'
-                                      : null,
-                                  trailing: _AddPhotoBtn(
-                                      onTap: () => _addPhoto(context, patient)),
+                                  badge: _loadingPhotos
+                                      ? '...'
+                                      : (photos.isNotEmpty
+                                          ? '${photos.length}'
+                                          : null),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (_loadingPhotos)
+                                        const Padding(
+                                          padding: EdgeInsets.only(right: 8.0),
+                                          child: SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          ),
+                                        ),
+                                      _AddPhotoBtn(
+                                          onTap: () => _addPhoto(context, patient)),
+                                    ],
+                                  ),
                                   child: _GalleryContent(
                                     photos: photos,
+                                    isLoading: _loadingPhotos,
                                     onView: (i) =>
                                         _viewPhotos(context, photos, i),
                                   ),
@@ -808,12 +857,40 @@ class _PatientDetailsContent extends StatelessWidget {
 
 class _GalleryContent extends StatelessWidget {
   final List<PatientImage> photos;
+  final bool isLoading;
   final ValueChanged<int> onView;
-  const _GalleryContent({required this.photos, required this.onView});
+  const _GalleryContent({
+    required this.photos,
+    required this.onView,
+    this.isLoading = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     if (photos.isEmpty) {
+      if (isLoading) {
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Fetching photos from Hub...',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: context.textMutedColor,
+                ),
+              ),
+            ],
+          ),
+        );
+      }
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
@@ -860,7 +937,20 @@ class _GalleryContent extends StatelessWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: Stack(fit: StackFit.expand, children: [
-                Image.file(File(photo.imagePath), fit: BoxFit.cover),
+                Image.file(
+                  File(photo.imagePath),
+                  fit: BoxFit.cover,
+                  errorBuilder: (ctx, err, stack) => Container(
+                    color: Colors.grey.shade200,
+                    child: Center(
+                      child: Icon(
+                        Icons.broken_image_rounded,
+                        color: Colors.grey.shade400,
+                        size: 28,
+                      ),
+                    ),
+                  ),
+                ),
                 Positioned(
                   bottom: 0,
                   left: 0,
@@ -1768,10 +1858,32 @@ class _PhotoViewerState extends State<_PhotoViewer> {
               transformationController: _ctrl,
               minScale: 0.5,
               maxScale: 4,
-              child: Image.file(File(photo.imagePath),
-                  fit: BoxFit.contain,
-                  width: double.infinity,
-                  height: double.infinity),
+              child: Image.file(
+                File(photo.imagePath),
+                fit: BoxFit.contain,
+                width: double.infinity,
+                height: double.infinity,
+                errorBuilder: (ctx, err, stack) => Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.broken_image_rounded,
+                          size: 56, color: Colors.white54),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Image file not found on disk',
+                        style: TextStyle(color: Colors.white70, fontSize: 14),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        photo.imagePath,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white38, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
           Positioned(

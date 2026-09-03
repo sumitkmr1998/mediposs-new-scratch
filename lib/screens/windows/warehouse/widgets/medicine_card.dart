@@ -44,6 +44,11 @@ class ModernMedicineCardWindowsState
     final daysLeft = AnalyticsHelper.daysOfStockRemaining(widget.medicine, sales, trendDays: 30);
     final isSmartLow = widget.inv.isSmartLowStock(widget.medicine, sales);
 
+    final activeBatch = widget.medicine.activeBatch ?? widget.medicine.soonestExpiringBatch;
+    final displayPrice = (activeBatch != null && activeBatch.sellingPrice > 0)
+        ? activeBatch.sellingPrice
+        : widget.medicine.sellingPrice;
+
     return Container(
       decoration: BoxDecoration(
         color: context.surfaceColor,
@@ -99,7 +104,7 @@ class ModernMedicineCardWindowsState
                     ),
                   ),
                   Text(
-                    '₹${widget.medicine.sellingPrice.toStringAsFixed(0)}',
+                    '₹${displayPrice.toStringAsFixed(0)}',
                     style: const TextStyle(
                         fontWeight: FontWeight.w900,
                         fontSize: 18,

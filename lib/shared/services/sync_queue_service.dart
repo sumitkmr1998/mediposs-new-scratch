@@ -114,7 +114,7 @@ class SyncQueueService extends ChangeNotifier {
           if (item.action == 'delete') {
             return await syncService.pushPatientDelete(data['uhid'] ?? '');
           }
-          return await syncService.pushPatient(Patient.fromJson(data));
+          return await syncService.pushPatient(Patient.fromJson(data), action: item.action);
         case 'medicine':
           if (item.action == 'create') {
             return await syncService.pushMedicine(Medicine.fromJson(data));

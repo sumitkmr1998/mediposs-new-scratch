@@ -21,6 +21,7 @@ import '../models/daily_medicine_sales_fact.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import '../../objectbox.g.dart';
+import 'device_identity_service.dart';
 
 class ObjectBoxService {
   static ObjectBoxService? _instance;
@@ -109,6 +110,9 @@ class ObjectBoxService {
       }
     }
 
+    // Initialize device identity asynchronously
+    DeviceIdentityService.initDeviceId();
+
     if (svc.userBox.isEmpty()) {
       svc.userBox.put(AppUser(
         name: 'Admin',
@@ -146,8 +150,70 @@ class ObjectBoxService {
 
 
 
+    _repairMissingTimestamps(svc);
+
     _instance = svc;
     return svc;
+  }
+
+  static void _repairMissingTimestamps(ObjectBoxService svc) {
+    final epoch = DateTime(2000);
+    
+    // 1. Medicine
+    final badMeds = svc.medicineBox
+        .query(Medicine_.updatedAt.lessThan(epoch.millisecondsSinceEpoch))
+        .build();
+    final meds = badMeds.find();
+    badMeds.close();
+    if (meds.isNotEmpty) {
+      for (final m in meds) {
+        m.updatedAt = m.createdAt.isBefore(epoch) ? DateTime.now() : m.createdAt;
+      }
+      svc.medicineBox.putMany(meds);
+      debugPrint('ObjectBoxService: Repaired ${meds.length} medicines with missing timestamps.');
+    }
+
+    // 2. Patient
+    final badPatients = svc.patientBox
+        .query(Patient_.updatedAt.lessThan(epoch.millisecondsSinceEpoch))
+        .build();
+    final patients = badPatients.find();
+    badPatients.close();
+    if (patients.isNotEmpty) {
+      for (final p in patients) {
+        p.updatedAt = p.createdAt.isBefore(epoch) ? DateTime.now() : p.createdAt;
+      }
+      svc.patientBox.putMany(patients);
+      debugPrint('ObjectBoxService: Repaired ${patients.length} patients with missing timestamps.');
+    }
+
+    // 3. Prescription
+    final badPrescriptions = svc.prescriptionBox
+        .query(Prescription_.updatedAt.lessThan(epoch.millisecondsSinceEpoch))
+        .build();
+    final prescriptions = badPrescriptions.find();
+    badPrescriptions.close();
+    if (prescriptions.isNotEmpty) {
+      for (final pr in prescriptions) {
+        pr.updatedAt = pr.createdAt.isBefore(epoch) ? DateTime.now() : pr.createdAt;
+      }
+      svc.prescriptionBox.putMany(prescriptions);
+      debugPrint('ObjectBoxService: Repaired ${prescriptions.length} prescriptions with missing timestamps.');
+    }
+
+    // 4. Sale
+    final badSales = svc.saleBox
+        .query(Sale_.updatedAt.lessThan(epoch.millisecondsSinceEpoch))
+        .build();
+    final sales = badSales.find();
+    badSales.close();
+    if (sales.isNotEmpty) {
+      for (final s in sales) {
+        s.updatedAt = s.createdAt.isBefore(epoch) ? DateTime.now() : s.createdAt;
+      }
+      svc.saleBox.putMany(sales);
+      debugPrint('ObjectBoxService: Repaired ${sales.length} sales with missing timestamps.');
+    }
   }
  
   Future<void> close() async {

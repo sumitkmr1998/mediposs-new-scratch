@@ -18,6 +18,7 @@ import '../../../shared/providers/navigation_provider.dart';
 import '../../../shared/providers/procedure_provider.dart';
 import '../../../shared/providers/inventory_provider.dart';
 import '../../../shared/providers/sales_provider.dart';
+import 'patient_details_android.dart';
 
 class OpdQueueAndroid extends StatefulWidget {
   const OpdQueueAndroid({super.key});
@@ -424,61 +425,55 @@ class _ModernQueueCardState extends State<_ModernQueueCard> {
 
     return Container(
       decoration: BoxDecoration(
-        color: context.surfaceColor.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-        border: Border.all(color: context.borderColor.withValues(alpha: 0.3)),
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppTheme.subtleShadow,
+        border: Border.all(color: context.borderColor.withValues(alpha: 0.4)),
       ),
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                // Token number - High Density Premium
+                // Token number - High Density Compact
                 Container(
-                  width: 56,
-                  height: 56,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        color.withValues(alpha: 0.2),
+                        color.withValues(alpha: 0.15),
                         color.withValues(alpha: 0.05)
                       ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Text('TOKEN',
                           style: TextStyle(
-                              fontSize: 10,
+                              fontSize: 8,
                               fontWeight: FontWeight.w700,
-                              letterSpacing: 1,
+                              letterSpacing: 0.5,
                               color: Colors.grey)),
                       Text(
                         '${widget.appointment.tokenNumber}',
                         style: TextStyle(
-                          fontSize: 24,
+                          fontSize: 18,
                           fontWeight: FontWeight.w900,
                           color: color,
-                          letterSpacing: -1,
+                          letterSpacing: -0.5,
                           height: 1,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 12),
                 // Patient + doctor info - Editorial Typo
                 Expanded(
                   child: Column(
@@ -488,23 +483,55 @@ class _ModernQueueCardState extends State<_ModernQueueCard> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(widget.appointment.patientName,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 17,
-                                        letterSpacing: -0.2)),
-                                Text(
-                                  'UHID: ${context.read<PatientProvider>().getById(widget.appointment.patientId)?.uhid ?? widget.appointment.patientId}',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    color: context.textMutedColor,
-                                  ),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: widget.appointment.patientId > 0
+                                  ? () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => PatientDetailsAndroid(
+                                            patientId: widget.appointment.patientId,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  : null,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 1.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            widget.appointment.patientName,
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 14,
+                                                letterSpacing: -0.2),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Icon(
+                                          Icons.chevron_right_rounded,
+                                          size: 14,
+                                          color: context.textMutedColor.withValues(alpha: 0.6),
+                                        ),
+                                      ],
+                                    ),
+                                    Text(
+                                      'UHID: ${context.read<PatientProvider>().getById(widget.appointment.patientId)?.uhid ?? widget.appointment.patientId}',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: context.textMutedColor,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
+                              ),
                             ),
                           ),
                           Row(
@@ -512,15 +539,15 @@ class _ModernQueueCardState extends State<_ModernQueueCard> {
                             children: [
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
+                                    horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
                                   color: color.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
                                   _getDuration(),
                                   style: TextStyle(
-                                    fontSize: 11,
+                                    fontSize: 10,
                                     fontWeight: FontWeight.w800,
                                     color: color,
                                     letterSpacing: 0.2,
@@ -529,7 +556,7 @@ class _ModernQueueCardState extends State<_ModernQueueCard> {
                               ),
                               if (widget.appointment.status != kStatusDone)
                                 PopupMenuButton<String>(
-                                  icon: Icon(Icons.more_vert, color: context.textMutedColor, size: 20),
+                                  icon: Icon(Icons.more_vert, color: context.textMutedColor, size: 18),
                                   padding: EdgeInsets.zero,
                                   onSelected: (value) {
                                     if (value == 'cancel') {
@@ -541,7 +568,7 @@ class _ModernQueueCardState extends State<_ModernQueueCard> {
                                       value: 'cancel',
                                       child: Row(
                                         children: [
-                                          Icon(Icons.cancel_outlined, color: AppTheme.danger, size: 18),
+                                          Icon(Icons.cancel_outlined, color: AppTheme.danger, size: 16),
                                           SizedBox(width: 8),
                                           Text('Cancel Appointment', style: TextStyle(color: AppTheme.danger)),
                                         ],

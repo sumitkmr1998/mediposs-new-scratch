@@ -116,6 +116,17 @@ class WarehouseProvider extends ChangeNotifier {
     );
     if (validationError != null) return validationError;
 
+    int getStockForLoc(Medicine m, String loc) {
+      if (loc == 'main' || loc == 'clinic') return m.mainStock;
+      if (loc == 'store') return m.storeStock;
+      if (loc == 'bulkClinic') return m.bulkClinicStock;
+      if (loc == 'bulkStore') return m.bulkStoreStock;
+      return 0;
+    }
+
+    final initialFrom = getStockForLoc(medicine, from);
+    final initialTo = getStockForLoc(medicine, to);
+
     // Update medicine stock via InventoryProvider
     _inventoryProvider.applyTransfer(
       medicineId: medicine.id,
@@ -126,6 +137,9 @@ class WarehouseProvider extends ChangeNotifier {
       syncService: syncService,
       actor: actor,
     );
+
+    final finalFrom = (initialFrom - qty).clamp(0, 999999);
+    final finalTo = initialTo + qty;
 
     // Record transfer
     final now = await TimeService.getRobustTime();
@@ -140,6 +154,10 @@ class WarehouseProvider extends ChangeNotifier {
       note: note,
       transferredBy: transferredBy.isNotEmpty ? transferredBy : (actor?.name ?? 'System'),
       transferredAt: now,
+      initialFromQty: initialFrom,
+      finalFromQty: finalFrom,
+      initialToQty: initialTo,
+      finalToQty: finalTo,
     );
     ObjectBoxService.instance.transferBox.put(transfer);
 

@@ -216,12 +216,14 @@ class TransferHistoryTabState extends State<TransferHistoryTab> {
                                   DataColumn(label: Text('From Location')),
                                   DataColumn(label: Text('To Location')),
                                   DataColumn(label: Text('Batch Number')),
-                                  DataColumn(label: Text('Qty'), numeric: true),
+                                  DataColumn(label: Text('Transfer Qty'), numeric: true),
+                                  DataColumn(label: Text('Stock Changes (From / To)')),
                                   DataColumn(label: Text('Notes')),
                                   DataColumn(label: Text('Transferred By')),
                                 ],
                                 rows: history.take(_limit).map((t) {
                                   final dateStr = '${t.transferredAt.day.toString().padLeft(2,'0')}/${t.transferredAt.month.toString().padLeft(2,'0')}/${t.transferredAt.year} ${t.transferredAt.hour.toString().padLeft(2,'0')}:${t.transferredAt.minute.toString().padLeft(2,'0')}';
+                                  final hasStockTrack = t.finalFromQty > 0 || t.finalToQty > 0 || t.initialFromQty > 0 || t.initialToQty > 0;
                                   return DataRow(
                                     cells: [
                                       DataCell(Text(dateStr, style: const TextStyle(fontSize: 13))),
@@ -234,6 +236,18 @@ class TransferHistoryTabState extends State<TransferHistoryTab> {
                                         decoration: BoxDecoration(color: AppTheme.primaryLight.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
                                         child: Text('${t.qty}', style: const TextStyle(color: AppTheme.primaryLight, fontWeight: FontWeight.bold)),
                                       )),
+                                      DataCell(hasStockTrack
+                                          ? Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text('From: ${t.initialFromQty} → ${t.finalFromQty}',
+                                                    style: TextStyle(fontSize: 11, color: context.textMutedColor, fontWeight: FontWeight.w600)),
+                                                Text('To: ${t.initialToQty} → ${t.finalToQty}',
+                                                    style: const TextStyle(fontSize: 11, color: AppTheme.success, fontWeight: FontWeight.w600)),
+                                              ],
+                                            )
+                                          : Text('-', style: TextStyle(color: context.textMutedColor))),
                                       DataCell(SizedBox(
                                         width: 150,
                                         child: Text(t.note.isEmpty ? '-' : t.note, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: context.textMutedColor, fontStyle: FontStyle.italic)),

@@ -109,7 +109,7 @@ class Medicine {
     return medicine;
   }
  
-  /// Recalculates aggregate stock fields from individual batches.
+  /// Recalculates aggregate stock fields and prices from individual batches.
   void recalculateStockFromBatches() {
     int totalMain = 0;
     int totalStore = 0;
@@ -125,6 +125,27 @@ class Medicine {
     storeStock = totalStore.clamp(0, 999999);
     bulkClinicStock = totalBulkClinic.clamp(0, 999999);
     bulkStoreStock = totalBulkStore.clamp(0, 999999);
+
+    if (batches.isNotEmpty) {
+      final active = activeBatch ?? soonestExpiringBatch;
+      if (active != null && active.sellingPrice > 0) {
+        sellingPrice = active.sellingPrice;
+      } else {
+        final pricedBatch = batches.where((b) => b.sellingPrice > 0).firstOrNull;
+        if (pricedBatch != null) {
+          sellingPrice = pricedBatch.sellingPrice;
+        }
+      }
+      if (active != null && active.purchasePrice > 0) {
+        purchasePrice = active.purchasePrice;
+      } else {
+        final pricedCostBatch = batches.where((b) => b.purchasePrice > 0).firstOrNull;
+        if (pricedCostBatch != null) {
+          purchasePrice = pricedCostBatch.purchasePrice;
+        }
+      }
+    }
+
     updatedAt = DateTime.now();
   }
 
@@ -198,6 +219,9 @@ class MedicineBatch {
   int bulkClinicStock;
   int bulkStoreStock;
 
+  double purchasePrice;
+  double sellingPrice;
+
   final medicine = ToOne<Medicine>();
 
   MedicineBatch({
@@ -208,6 +232,8 @@ class MedicineBatch {
     this.storeStock = 0,
     this.bulkClinicStock = 0,
     this.bulkStoreStock = 0,
+    this.purchasePrice = 0.0,
+    this.sellingPrice = 0.0,
   });
 
   Map<String, dynamic> toJson() => {
@@ -218,6 +244,8 @@ class MedicineBatch {
         'storeStock': storeStock,
         'bulkClinicStock': bulkClinicStock,
         'bulkStoreStock': bulkStoreStock,
+        'purchasePrice': purchasePrice,
+        'sellingPrice': sellingPrice,
       };
 
   factory MedicineBatch.fromJson(Map<String, dynamic> json) => MedicineBatch(
@@ -228,5 +256,7 @@ class MedicineBatch {
         storeStock: json['storeStock'] ?? 0,
         bulkClinicStock: json['bulkClinicStock'] ?? 0,
         bulkStoreStock: json['bulkStoreStock'] ?? 0,
+        purchasePrice: (json['purchasePrice'] as num?)?.toDouble() ?? 0.0,
+        sellingPrice: (json['sellingPrice'] as num?)?.toDouble() ?? 0.0,
       );
 }

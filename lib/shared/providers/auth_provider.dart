@@ -243,4 +243,14 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('AuthProvider: autoCheckIn failed: $e');
     }
   }
+
+  void reloadUsers() {
+    if (_currentUser != null) {
+      final updated = ObjectBoxService.instance.userBox.get(_currentUser!.id);
+      if (updated != null) {
+        _currentUser = updated;
+      }
+    }
+    notifyListeners();
+  }
 }

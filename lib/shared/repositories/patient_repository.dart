@@ -5,13 +5,14 @@ import '../../objectbox.g.dart';
 class PatientRepository {
   Box<Patient> get _box => ObjectBoxService.instance.patientBox;
 
-  List<Patient> recent({int limit = 100}) {
+  List<Patient> recent({int limit = 50, int offset = 0}) {
     final q = _box
         .query()
         .order(Patient_.createdAt, flags: Order.descending)
         .build();
     try {
       q.limit = limit;
+      q.offset = offset;
       return q.find();
     } finally {
       q.close();
@@ -19,9 +20,9 @@ class PatientRepository {
   }
 
   /// Name / phone / UHID contains search, newest first.
-  List<Patient> search(String term, {int limit = 50}) {
+  List<Patient> search(String term, {int limit = 50, int offset = 0}) {
     final t = term.trim();
-    if (t.isEmpty) return recent(limit: limit);
+    if (t.isEmpty) return recent(limit: limit, offset: offset);
 
     final q = _box
         .query(
@@ -34,6 +35,7 @@ class PatientRepository {
         .build();
     try {
       q.limit = limit;
+      q.offset = offset;
       return q.find();
     } finally {
       q.close();

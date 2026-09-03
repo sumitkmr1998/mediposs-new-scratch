@@ -3,7 +3,6 @@ import '../models/medicine.dart';
 import '../models/sale.dart';
 import '../models/patient.dart';
 import '../services/objectbox_service.dart';
-import '../services/sales_fact_service.dart';
 import 'consumption_aggregator.dart';
 
 class AnalyticsHelper {
@@ -12,14 +11,6 @@ class AnalyticsHelper {
     int trendDays,
     Iterable<Sale> window,
   ) {
-    try {
-      if (ObjectBoxService.isInitialized &&
-          SalesFactService.instance.hasAnyFacts) {
-        return SalesFactService.instance.consumptionLastDays(
-          trendDays > 0 ? trendDays : 30,
-        );
-      }
-    } catch (_) {}
     return ConsumptionAggregator.build(window.toList());
   }
 

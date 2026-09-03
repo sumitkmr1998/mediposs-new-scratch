@@ -22,6 +22,11 @@ class StockTransfer {
   String note;
   String transferredBy;
 
+  int initialFromQty;
+  int finalFromQty;
+  int initialToQty;
+  int finalToQty;
+
   StockTransfer({
     this.id = 0,
     required this.medicineId,
@@ -34,6 +39,10 @@ class StockTransfer {
     DateTime? transferredAt,
     this.note = '',
     this.transferredBy = '',
+    this.initialFromQty = 0,
+    this.finalFromQty = 0,
+    this.initialToQty = 0,
+    this.finalToQty = 0,
   }) : transferredAt = transferredAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
@@ -48,6 +57,10 @@ class StockTransfer {
         'transferredAt': transferredAt.toIso8601String(),
         'note': note,
         'transferredBy': transferredBy,
+        'initialFromQty': initialFromQty,
+        'finalFromQty': finalFromQty,
+        'initialToQty': initialToQty,
+        'finalToQty': finalToQty,
       };
 
   factory StockTransfer.fromJson(Map<String, dynamic> json) => StockTransfer(
@@ -62,5 +75,9 @@ class StockTransfer {
         transferredAt: DateTime.tryParse(json['transferredAt'] ?? ''),
         note: json['note'] ?? '',
         transferredBy: json['transferredBy'] ?? '',
+        initialFromQty: json['initialFromQty'] ?? 0,
+        finalFromQty: json['finalFromQty'] ?? 0,
+        initialToQty: json['initialToQty'] ?? 0,
+        finalToQty: json['finalToQty'] ?? 0,
       );
 }

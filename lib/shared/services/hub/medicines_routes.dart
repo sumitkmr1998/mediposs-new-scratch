@@ -10,15 +10,23 @@ import '../../../objectbox.g.dart';
 class MedicinesRoutes {
   static Response getMedicines(Request req) {
     final sinceStr = req.url.queryParameters['since'];
-    final since = DateTime.tryParse(sinceStr ?? '') ?? DateTime(2000);
     final limitStr = req.url.queryParameters['limit'];
     final offsetStr = req.url.queryParameters['offset'];
     final limit = int.tryParse(limitStr ?? '');
     final offset = int.tryParse(offsetStr ?? '');
 
     final box = ObjectBoxService.instance.medicineBox;
-    final queryBuilder =
-        box.query(Medicine_.updatedAt.greaterThan(since.millisecondsSinceEpoch));
+    final QueryBuilder<Medicine> queryBuilder;
+    if (sinceStr != null && sinceStr.isNotEmpty) {
+      final since = DateTime.tryParse(sinceStr);
+      if (since != null) {
+        queryBuilder = box.query(Medicine_.updatedAt.greaterThan(since.millisecondsSinceEpoch));
+      } else {
+        queryBuilder = box.query();
+      }
+    } else {
+      queryBuilder = box.query();
+    }
     final query = queryBuilder.build();
     try {
       if (offset != null) query.offset = offset;
@@ -32,6 +40,11 @@ class MedicinesRoutes {
           'count': json.length,
           'serverTime': DateTime.now().millisecondsSinceEpoch,
         }),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': e.toString()}),
         headers: {'content-type': 'application/json'},
       );
     } finally {
@@ -55,16 +68,6 @@ class MedicinesRoutes {
         'isScheduleH1': m.isScheduleH1,
         'createdAt': m.createdAt.toIso8601String(),
         'updatedAt': m.updatedAt.toIso8601String(),
-        'batches': m.batches
-            .map((b) => {
-                  'id': b.id,
-                  'batchNo': b.batchNo,
-                  'expiryDate': b.expiryDate.toIso8601String(),
-                  'mainStock': b.mainStock,
-                  'storeStock': b.storeStock,
-                  'bulkClinicStock': b.bulkClinicStock,
-                  'bulkStoreStock': b.bulkStoreStock,
-                })
-            .toList(),
+        'batches': m.batches.map((b) => b.toJson()).toList(),
       };
 }

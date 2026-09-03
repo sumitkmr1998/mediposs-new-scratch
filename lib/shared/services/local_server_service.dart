@@ -11,6 +11,7 @@ import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 import 'package:path_provider/path_provider.dart';
 import '../services/objectbox_service.dart';
 import '../services/audit_service.dart';
+import '../utils/date_helper.dart';
 import '../models/medicine.dart';
 import '../models/app_user.dart';
 import '../models/sale.dart';
@@ -479,6 +480,10 @@ class LocalServerService {
       updated.defaultPrinterName = current.defaultPrinterName;
       updated.autoPrintReceipt = current.autoPrintReceipt;
       updated.receiptPaperSize = current.receiptPaperSize;
+      // Keep Hub's own theme and display preferences independent
+      updated.themeMode = current.themeMode;
+      updated.preferredRefreshRate = current.preferredRefreshRate;
+      updated.navCollapsed = current.navCollapsed;
 
       box.put(updated);
       
@@ -494,69 +499,170 @@ class LocalServerService {
     final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
     final list = (body['medicines'] as List?) ?? [];
     int upserted = 0;
+    final box = ObjectBoxService.instance.medicineBox;
+
+    final batchBox = ObjectBoxService.instance.batchBox;
 
     for (final item in list) {
-      final name = item['name'] as String? ?? '';
-      final barcode = item['barcode'] as String? ?? '';
-      Condition<Medicine> cond = Medicine_.name.equals(name);
+      final name = (item['name'] as String? ?? '').trim();
+      final barcode = (item['barcode'] as String? ?? '').trim();
+
+      Medicine? existing;
       if (barcode.isNotEmpty) {
-        cond = cond.and(Medicine_.barcode.equals(barcode));
+        existing = box.query(Medicine_.barcode.equals(barcode)).build().findFirst();
       }
-      final existing = ObjectBoxService.instance.medicineBox.query(cond).build().findFirst();
+      if (existing == null && name.isNotEmpty) {
+        existing = box.query(Medicine_.name.equals(name, caseSensitive: false)).build().findFirst();
+      }
+      if (existing == null && name.isNotEmpty) {
+        final all = box.getAll();
+        final nameLower = name.toLowerCase();
+        existing = all.where((m) => m.name.trim().toLowerCase() == nameLower).firstOrNull;
+      }
+
       if (existing != null) {
         final serverUpdated = existing.updatedAt;
         final clientUpdated =
             DateTime.tryParse(item['updatedAt'] ?? '') ?? DateTime(2000);
         if (clientUpdated.isAfter(serverUpdated)) {
-          existing
-            ..name = item['name']
-            ..barcode = item['barcode']
-            ..sellingPrice = (item['sellingPrice'] as num).toDouble()
-            ..mainStock = item['mainStock']
-            ..storeStock = item['storeStock']
-            ..bulkClinicStock = item['bulkClinicStock'] ?? 0
-            ..bulkStoreStock = item['bulkStoreStock'] ?? 0
-            ..isScheduleH1 = item['isScheduleH1'] ?? false;
+          final targetExisting = existing;
+          targetExisting
+            ..name = name
+            ..barcode = barcode.isNotEmpty ? barcode : targetExisting.barcode
+            ..category = item['category'] ?? targetExisting.category
+            ..unit = item['unit'] ?? targetExisting.unit
+            ..purchasePrice = (item['purchasePrice'] as num?)?.toDouble() ?? targetExisting.purchasePrice
+            ..sellingPrice = (item['sellingPrice'] as num?)?.toDouble() ?? targetExisting.sellingPrice
+            ..mainStock = item['mainStock'] ?? targetExisting.mainStock
+            ..storeStock = item['storeStock'] ?? targetExisting.storeStock
+            ..bulkClinicStock = item['bulkClinicStock'] ?? targetExisting.bulkClinicStock
+            ..bulkStoreStock = item['bulkStoreStock'] ?? targetExisting.bulkStoreStock
+            ..lowStockThreshold = item['lowStockThreshold'] ?? targetExisting.lowStockThreshold
+            ..isScheduleH1 = item['isScheduleH1'] ?? targetExisting.isScheduleH1
+            ..updatedAt = DateTime.now();
 
-          // Sync batches
+          // Sync batches safely
           if (item['batches'] != null) {
-            final batchBox = ObjectBoxService.instance.batchBox;
-            batchBox.removeMany(existing.batches.map((b) => b.id).toList());
-            existing.batches.clear();
-            for (var bItem in item['batches']) {
-              existing.batches.add(MedicineBatch(
-                id: 0,
-                batchNo: bItem['batchNo'] ?? '',
-                expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now(),
-                mainStock: bItem['mainStock'] ?? 0,
-                storeStock: bItem['storeStock'] ?? 0,
-                bulkClinicStock: bItem['bulkClinicStock'] ?? 0,
-                bulkStoreStock: bItem['bulkStoreStock'] ?? 0,
-              ));
+            final incomingBatches = (item['batches'] as List);
+
+            // Query all batches for this medicine directly from batchBox to avoid stale ToMany caching
+            final allDbBatches = batchBox
+                .query(MedicineBatch_.medicine.equals(targetExisting.id))
+                .build()
+                .find();
+
+            // Build a map of batchNo -> primary batch, and prune duplicate batch records from DB immediately
+            final existingBatchMap = <String, MedicineBatch>{};
+            final duplicateBatchIdsToRemove = <int>[];
+
+            for (final b in allDbBatches) {
+              final key = b.batchNo.trim().toUpperCase();
+              if (key.isEmpty) continue;
+              if (!existingBatchMap.containsKey(key)) {
+                existingBatchMap[key] = b;
+              } else {
+                // Redundant duplicate batch found for same batchNo in database! Prune it.
+                duplicateBatchIdsToRemove.add(b.id);
+              }
             }
+
+            if (duplicateBatchIdsToRemove.isNotEmpty) {
+              batchBox.removeMany(duplicateBatchIdsToRemove);
+            }
+
+            final activeBatchNos = <String>{};
+
+            for (var bItem in incomingBatches) {
+              final bNo = (bItem['batchNo'] as String? ?? '').trim().toUpperCase();
+              if (bNo.isEmpty) continue;
+              activeBatchNos.add(bNo);
+
+              final expDate = DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now();
+              final pPrice = (bItem['purchasePrice'] as num?)?.toDouble() ?? 0.0;
+              final sPrice = (bItem['sellingPrice'] as num?)?.toDouble() ?? 0.0;
+              final mStock = (bItem['mainStock'] as num?)?.toInt() ?? 0;
+              final sStock = (bItem['storeStock'] as num?)?.toInt() ?? 0;
+              final bcStock = (bItem['bulkClinicStock'] as num?)?.toInt() ?? 0;
+              final bsStock = (bItem['bulkStoreStock'] as num?)?.toInt() ?? 0;
+
+              final existingBatch = existingBatchMap[bNo];
+              if (existingBatch != null) {
+                // Update specific batch fields in place without creating duplicates
+                existingBatch
+                  ..expiryDate = expDate
+                  ..purchasePrice = pPrice
+                  ..sellingPrice = sPrice
+                  ..mainStock = mStock
+                  ..storeStock = sStock
+                  ..bulkClinicStock = bcStock
+                  ..bulkStoreStock = bsStock;
+                existingBatch.medicine.target = targetExisting;
+                batchBox.put(existingBatch);
+              } else {
+                final newBatch = MedicineBatch(
+                  id: 0,
+                  batchNo: bNo,
+                  expiryDate: expDate,
+                  mainStock: mStock,
+                  storeStock: sStock,
+                  bulkClinicStock: bcStock,
+                  bulkStoreStock: bsStock,
+                  purchasePrice: pPrice,
+                  sellingPrice: sPrice,
+                );
+                newBatch.medicine.target = targetExisting;
+                final newBatchId = batchBox.put(newBatch);
+                newBatch.id = newBatchId;
+                existingBatchMap[bNo] = newBatch;
+              }
+            }
+
+            // Remove orphaned batches no longer present
+            final toRemoveIds = <int>[];
+            for (final entry in existingBatchMap.entries) {
+              if (!activeBatchNos.contains(entry.key)) {
+                if (entry.value.id > 0) toRemoveIds.add(entry.value.id);
+              }
+            }
+            if (toRemoveIds.isNotEmpty) {
+              batchBox.removeMany(toRemoveIds);
+            }
+
+            // Refresh targetExisting.batches relation from DB
+            targetExisting.batches.clear();
+            final refreshedBatches = batchBox
+                .query(MedicineBatch_.medicine.equals(targetExisting.id))
+                .build()
+                .find();
+            targetExisting.batches.addAll(refreshedBatches);
           }
 
-          ObjectBoxService.instance.medicineBox.put(existing);
+          targetExisting.recalculateStockFromBatches();
+          box.put(targetExisting);
           upserted++;
         }
       } else {
         final m = Medicine(
-          name: item['name'],
-          barcode: item['barcode'] ?? '',
+          name: name,
+          barcode: barcode,
           category: item['category'] ?? 'General',
           unit: item['unit'] ?? 'Pcs',
-          purchasePrice: (item['purchasePrice'] as num).toDouble(),
-          sellingPrice: (item['sellingPrice'] as num).toDouble(),
+          purchasePrice: (item['purchasePrice'] as num?)?.toDouble() ?? 0.0,
+          sellingPrice: (item['sellingPrice'] as num?)?.toDouble() ?? 0.0,
           mainStock: item['mainStock'] ?? 0,
           storeStock: item['storeStock'] ?? 0,
           bulkClinicStock: item['bulkClinicStock'] ?? 0,
           bulkStoreStock: item['bulkStoreStock'] ?? 0,
+          lowStockThreshold: item['lowStockThreshold'] ?? 10,
           isScheduleH1: item['isScheduleH1'] ?? false,
-          updatedAt: DateTime.tryParse(item['updatedAt'] ?? ''),
+          updatedAt: DateTime.now(),
         );
+        final medId = box.put(m);
+        m.id = medId;
+
         if (item['batches'] != null) {
           for (var bItem in item['batches']) {
-            m.batches.add(MedicineBatch(
+            final newBatch = MedicineBatch(
               id: 0,
               batchNo: bItem['batchNo'] ?? '',
               expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now(),
@@ -564,15 +670,24 @@ class LocalServerService {
               storeStock: bItem['storeStock'] ?? 0,
               bulkClinicStock: bItem['bulkClinicStock'] ?? 0,
               bulkStoreStock: bItem['bulkStoreStock'] ?? 0,
-            ));
+              purchasePrice: (bItem['purchasePrice'] as num?)?.toDouble() ?? 0.0,
+              sellingPrice: (bItem['sellingPrice'] as num?)?.toDouble() ?? 0.0,
+            );
+            newBatch.medicine.target = m;
+            final bId = batchBox.put(newBatch);
+            newBatch.id = bId;
+            m.batches.add(newBatch);
           }
         }
-        ObjectBoxService.instance.medicineBox.put(m);
+        m.recalculateStockFromBatches();
+        box.put(m);
         upserted++;
       }
     }
 
     broadcast({'event': 'medicines_updated'});
+    broadcast({'event': 'sync_received'});
+    _incomingDataController.add('medicines');
     return Response.ok(
       jsonEncode({'upserted': upserted}),
       headers: {'content-type': 'application/json'},
@@ -583,72 +698,177 @@ class LocalServerService {
     try {
       final item = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
       final box = ObjectBoxService.instance.medicineBox;
-      final name = item['name'] as String? ?? '';
-      final barcode = item['barcode'] as String? ?? '';
-      
-      // Match by Name + Barcode to prevent duplicates
-      Condition<Medicine> cond = Medicine_.name.equals(name);
+      final name = (item['name'] as String? ?? '').trim();
+      final barcode = (item['barcode'] as String? ?? '').trim();
+
+      // Robust matching: Check Barcode first (if present), then case-insensitive trimmed Name
+      Medicine? existing;
       if (barcode.isNotEmpty) {
-        cond = cond.and(Medicine_.barcode.equals(barcode));
+        existing = box.query(Medicine_.barcode.equals(barcode)).build().findFirst();
       }
-      var existing = box.query(cond).build().findFirst();
+      if (existing == null && name.isNotEmpty) {
+        existing = box.query(Medicine_.name.equals(name, caseSensitive: false)).build().findFirst();
+      }
+      if (existing == null && name.isNotEmpty) {
+        final all = box.getAll();
+        final nameLower = name.toLowerCase();
+        existing = all.where((m) => m.name.trim().toLowerCase() == nameLower).firstOrNull;
+      }
+
+      final batchBox = ObjectBoxService.instance.batchBox;
 
       if (existing != null) {
-        final incomingUpdatedAt = DateTime.tryParse(item['updatedAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-        if (existing.updatedAt.isAfter(incomingUpdatedAt)) {
-          debugPrint('Hub: Medicines sync conflict skipped (existing is newer)');
-          return Response.ok(jsonEncode({'success': true, 'reason': 'Existing record is newer'}));
+        final targetExisting = existing;
+        // Purge any preexisting duplicates on Hub for this medicine to heal inflated records
+        final all = box.getAll();
+        final duplicateIds = <int>[];
+        for (final m in all) {
+          if (m.id == targetExisting.id) continue;
+          final isSameBarcode = barcode.isNotEmpty && m.barcode.trim() == barcode;
+          final isSameName = name.isNotEmpty && m.name.trim().toLowerCase() == name.toLowerCase();
+          if (isSameBarcode || isSameName) {
+            duplicateIds.add(m.id);
+          }
         }
-        existing
-          ..name = item['name']
-          ..barcode = item['barcode'] ?? ''
-          ..category = item['category'] ?? 'General'
-          ..unit = item['unit'] ?? 'Pcs'
-          ..purchasePrice = (item['purchasePrice'] as num).toDouble()
-          ..sellingPrice = (item['sellingPrice'] as num).toDouble()
-          ..mainStock = item['mainStock'] ?? 0
-          ..storeStock = item['storeStock'] ?? 0
-          ..bulkClinicStock = item['bulkClinicStock'] ?? 0
-          ..bulkStoreStock = item['bulkStoreStock'] ?? 0
-          ..lowStockThreshold = item['lowStockThreshold'] ?? 5
-          ..isScheduleH1 = item['isScheduleH1'] ?? false
+        if (duplicateIds.isNotEmpty) {
+          debugPrint('Hub: Purging ${duplicateIds.length} redundant duplicate medicine records: $duplicateIds');
+          box.removeMany(duplicateIds);
+        }
+
+        targetExisting
+          ..name = name
+          ..barcode = barcode.isNotEmpty ? barcode : targetExisting.barcode
+          ..category = item['category'] ?? targetExisting.category
+          ..unit = item['unit'] ?? targetExisting.unit
+          ..purchasePrice = (item['purchasePrice'] as num?)?.toDouble() ?? targetExisting.purchasePrice
+          ..sellingPrice = (item['sellingPrice'] as num?)?.toDouble() ?? targetExisting.sellingPrice
+          ..mainStock = item['mainStock'] ?? targetExisting.mainStock
+          ..storeStock = item['storeStock'] ?? targetExisting.storeStock
+          ..bulkClinicStock = item['bulkClinicStock'] ?? targetExisting.bulkClinicStock
+          ..bulkStoreStock = item['bulkStoreStock'] ?? targetExisting.bulkStoreStock
+          ..lowStockThreshold = item['lowStockThreshold'] ?? targetExisting.lowStockThreshold
+          ..isScheduleH1 = item['isScheduleH1'] ?? targetExisting.isScheduleH1
           ..updatedAt = DateTime.now();
 
         if (item['batches'] != null) {
-          final batchBox = ObjectBoxService.instance.batchBox;
-          batchBox.removeMany(existing.batches.map((b) => b.id).toList());
-          existing.batches.clear();
-          for (var bItem in item['batches']) {
-            existing.batches.add(MedicineBatch(
-              id: 0,
-              batchNo: bItem['batchNo'] ?? '',
-              expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now(),
-              mainStock: bItem['mainStock'] ?? 0,
-              storeStock: bItem['storeStock'] ?? 0,
-              bulkClinicStock: bItem['bulkClinicStock'] ?? 0,
-              bulkStoreStock: bItem['bulkStoreStock'] ?? 0,
-            ));
+          final incomingBatches = (item['batches'] as List);
+          
+          // Query all batches for this medicine directly from batchBox to avoid stale ToMany caching
+          final allDbBatches = batchBox
+              .query(MedicineBatch_.medicine.equals(targetExisting.id))
+              .build()
+              .find();
+
+          // Build a map of batchNo -> primary batch, and prune duplicate batch records from DB immediately
+          final existingBatchMap = <String, MedicineBatch>{};
+          final duplicateBatchIdsToRemove = <int>[];
+
+          for (final b in allDbBatches) {
+            final key = b.batchNo.trim().toUpperCase();
+            if (key.isEmpty) continue;
+            if (!existingBatchMap.containsKey(key)) {
+              existingBatchMap[key] = b;
+            } else {
+              // Redundant duplicate batch found for same batchNo in database! Prune it.
+              duplicateBatchIdsToRemove.add(b.id);
+            }
           }
+
+          if (duplicateBatchIdsToRemove.isNotEmpty) {
+            batchBox.removeMany(duplicateBatchIdsToRemove);
+          }
+
+          final activeBatchNos = <String>{};
+
+          for (var bItem in incomingBatches) {
+            final bNo = (bItem['batchNo'] as String? ?? '').trim().toUpperCase();
+            if (bNo.isEmpty) continue;
+            activeBatchNos.add(bNo);
+
+            final expDate = DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now();
+            final pPrice = (bItem['purchasePrice'] as num?)?.toDouble() ?? 0.0;
+            final sPrice = (bItem['sellingPrice'] as num?)?.toDouble() ?? 0.0;
+            final mStock = (bItem['mainStock'] as num?)?.toInt() ?? 0;
+            final sStock = (bItem['storeStock'] as num?)?.toInt() ?? 0;
+            final bcStock = (bItem['bulkClinicStock'] as num?)?.toInt() ?? 0;
+            final bsStock = (bItem['bulkStoreStock'] as num?)?.toInt() ?? 0;
+
+            final existingBatch = existingBatchMap[bNo];
+            if (existingBatch != null) {
+              // Update specific batch fields in place without creating duplicates
+              existingBatch
+                ..expiryDate = expDate
+                ..purchasePrice = pPrice
+                ..sellingPrice = sPrice
+                ..mainStock = mStock
+                ..storeStock = sStock
+                ..bulkClinicStock = bcStock
+                ..bulkStoreStock = bsStock;
+              existingBatch.medicine.target = targetExisting;
+              batchBox.put(existingBatch);
+            } else {
+              // Create new batch and link properly to existing medicine
+              final newBatch = MedicineBatch(
+                id: 0,
+                batchNo: bNo,
+                expiryDate: expDate,
+                mainStock: mStock,
+                storeStock: sStock,
+                bulkClinicStock: bcStock,
+                bulkStoreStock: bsStock,
+                purchasePrice: pPrice,
+                sellingPrice: sPrice,
+              );
+              newBatch.medicine.target = targetExisting;
+              final newId = batchBox.put(newBatch);
+              newBatch.id = newId;
+              existingBatchMap[bNo] = newBatch;
+            }
+          }
+
+          // Remove orphaned batches no longer present in incoming batches
+          final toRemoveIds = <int>[];
+          for (final entry in existingBatchMap.entries) {
+            if (!activeBatchNos.contains(entry.key)) {
+              if (entry.value.id > 0) toRemoveIds.add(entry.value.id);
+            }
+          }
+          if (toRemoveIds.isNotEmpty) {
+            batchBox.removeMany(toRemoveIds);
+          }
+
+          // Refresh targetExisting.batches relation from DB
+          targetExisting.batches.clear();
+          final refreshedBatches = batchBox
+              .query(MedicineBatch_.medicine.equals(targetExisting.id))
+              .build()
+              .find();
+          targetExisting.batches.addAll(refreshedBatches);
         }
-        box.put(existing);
+        targetExisting.recalculateStockFromBatches();
+        box.put(targetExisting);
       } else {
         final m = Medicine(
-          name: item['name'],
-          barcode: item['barcode'] ?? '',
+          name: name,
+          barcode: barcode,
           category: item['category'] ?? 'General',
           unit: item['unit'] ?? 'Pcs',
-          purchasePrice: (item['purchasePrice'] as num).toDouble(),
-          sellingPrice: (item['sellingPrice'] as num).toDouble(),
+          purchasePrice: (item['purchasePrice'] as num?)?.toDouble() ?? 0.0,
+          sellingPrice: (item['sellingPrice'] as num?)?.toDouble() ?? 0.0,
           mainStock: item['mainStock'] ?? 0,
           storeStock: item['storeStock'] ?? 0,
           bulkClinicStock: item['bulkClinicStock'] ?? 0,
           bulkStoreStock: item['bulkStoreStock'] ?? 0,
-          lowStockThreshold: item['lowStockThreshold'] ?? 5,
+          lowStockThreshold: item['lowStockThreshold'] ?? 10,
           isScheduleH1: item['isScheduleH1'] ?? false,
+          updatedAt: DateTime.now(),
         );
+        final medId = box.put(m);
+        m.id = medId;
+
         if (item['batches'] != null) {
           for (var bItem in item['batches']) {
-            m.batches.add(MedicineBatch(
+            final newBatch = MedicineBatch(
               id: 0,
               batchNo: bItem['batchNo'] ?? '',
               expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now(),
@@ -656,12 +876,20 @@ class LocalServerService {
               storeStock: bItem['storeStock'] ?? 0,
               bulkClinicStock: bItem['bulkClinicStock'] ?? 0,
               bulkStoreStock: bItem['bulkStoreStock'] ?? 0,
-            ));
+              purchasePrice: (bItem['purchasePrice'] as num?)?.toDouble() ?? 0.0,
+              sellingPrice: (bItem['sellingPrice'] as num?)?.toDouble() ?? 0.0,
+            );
+            newBatch.medicine.target = m;
+            final bId = batchBox.put(newBatch);
+            newBatch.id = bId;
+            m.batches.add(newBatch);
           }
         }
+        m.recalculateStockFromBatches();
         box.put(m);
       }
 
+      broadcast({'event': 'medicines_updated'});
       broadcast({'event': 'sync_received'});
       _incomingDataController.add('medicines');
       return Response.ok(jsonEncode({'status': 'success'}));
@@ -823,6 +1051,8 @@ class LocalServerService {
   Future<Response> _patientsPushHandler(Request req) async {
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      final createdAt = DateTime.tryParse(body['createdAt'] ?? '') ?? DateTime.now();
+      final updatedAt = DateTime.tryParse(body['updatedAt'] ?? '') ?? DateTime.now();
       final p = Patient(
         uhid: body['uhid'] ?? '',
         name: body['name'] ?? '',
@@ -831,34 +1061,35 @@ class LocalServerService {
         address: body['address'] ?? '',
         bloodGroup: body['bloodGroup'] ?? '',
         age: body['age'] ?? 0,
-        createdAt: DateTime.tryParse(body['createdAt'] ?? '') ?? DateTime.now(),
+        createdAt: createdAt,
+        updatedAt: updatedAt,
       );
 
       // Conflict resolution: check if UHID already exists
-      final existing = ObjectBoxService.instance.patientBox
-          .query(Patient_.uhid.equals(p.uhid))
-          .build()
-          .findFirst();
+      Patient? existing;
+      if (p.uhid.isNotEmpty) {
+        final query = ObjectBoxService.instance.patientBox
+            .query(Patient_.uhid.equals(p.uhid))
+            .build();
+        try {
+          existing = query.findFirst();
+        } finally {
+          query.close();
+        }
+      }
 
       if (existing != null) {
         if (existing.updatedAt.isAfter(p.updatedAt)) {
           debugPrint('Hub: Patient sync conflict skipped (existing is newer)');
           return Response.ok(jsonEncode({'success': true, 'reason': 'Existing record is newer'}));
         }
-        // Only merge if the name matches (or is very similar)
-        // This prevents overwriting ABC with XYZ if they happen to get the same UHID (collision)
-        final nameMatches = existing.name.trim().toLowerCase() == p.name.trim().toLowerCase();
-        if (nameMatches) {
-          p.id = existing.id;
-        } else {
-          // Collision detected: Same UHID but different name.
-          // Append a suffix to the new UHID to make it unique on the Hub.
-          p.uhid = "${p.uhid}-DUP";
-          p.id = 0;
-        }
+        // Update existing record on Hub (preserve local ObjectBox id and original createdAt)
+        p.id = existing.id;
+        p.createdAt = existing.createdAt;
       }
 
       ObjectBoxService.instance.patientBox.put(p);
+      broadcast({'event': 'patients_updated', 'uhid': p.uhid});
       broadcast({'event': 'sync_received'});
       _incomingDataController.add('patients');
 
@@ -928,9 +1159,14 @@ class LocalServerService {
         notes: body['notes'] ?? '',
         scheduledAt: scheduledAt,
         createdAt: DateTime.tryParse(body['createdAt'] ?? '') ?? DateTime.now(),
+        updatedAt: DateTime.tryParse(body['updatedAt'] ?? '') ?? DateTime.now(),
         isWalkIn: body['isWalkIn'] ?? true,
         consultationBilled: body['consultationBilled'] ?? false,
-      );
+        paymentMethod: body['paymentMethod'] ?? 'cash',
+      )
+        ..calledAt = DateHelper.parseDateTime(body['calledAt'])
+        ..pharmacyAt = DateHelper.parseDateTime(body['pharmacyAt'])
+        ..completedAt = DateHelper.parseDateTime(body['completedAt']);
 
       // Match strictly by natural key to avoid ObjectBox ID sequence violations from Android
       final existing = ObjectBoxService.instance.appointmentBox
@@ -997,41 +1233,59 @@ class LocalServerService {
 
   Response _patientsGetHandler(Request req) {
     final sinceStr = req.url.queryParameters['since'];
-    final since = DateTime.tryParse(sinceStr ?? '') ?? DateTime(2000);
     final limitStr = req.url.queryParameters['limit'];
     final offsetStr = req.url.queryParameters['offset'];
     final limit = int.tryParse(limitStr ?? '');
     final offset = int.tryParse(offsetStr ?? '');
 
     final box = ObjectBoxService.instance.patientBox;
-    final queryBuilder = box.query(Patient_.updatedAt.greaterThan(since.millisecondsSinceEpoch));
+    final QueryBuilder<Patient> queryBuilder;
+    if (sinceStr != null && sinceStr.isNotEmpty) {
+      final since = DateTime.tryParse(sinceStr);
+      if (since != null) {
+        queryBuilder = box.query(Patient_.updatedAt.greaterThan(since.millisecondsSinceEpoch));
+      } else {
+        queryBuilder = box.query();
+      }
+    } else {
+      queryBuilder = box.query();
+    }
     final query = queryBuilder.build();
-    if (offset != null) query.offset = offset;
-    if (limit != null) query.limit = limit;
-    final patients = query.find();
+    try {
+      if (offset != null) query.offset = offset;
+      if (limit != null) query.limit = limit;
+      final patients = query.find();
 
-    final json = patients
-        .map((p) => {
-              'id': p.id,
-              'uhid': p.uhid,
-              'name': p.name,
-              'phone': p.phone,
-              'gender': p.gender,
-              'address': p.address,
-              'bloodGroup': p.bloodGroup,
-              'age': p.age,
-              'createdAt': p.createdAt.toIso8601String(),
-              'updatedAt': p.updatedAt.toIso8601String(),
-            })
-        .toList();
-    return Response.ok(
-      jsonEncode({
-        'data': json,
-        'count': json.length,
-        'serverTime': DateTime.now().millisecondsSinceEpoch,
-      }),
-      headers: {'content-type': 'application/json'},
-    );
+      final json = patients
+          .map((p) => {
+                'id': p.id,
+                'uhid': p.uhid,
+                'name': p.name,
+                'phone': p.phone,
+                'gender': p.gender,
+                'address': p.address,
+                'bloodGroup': p.bloodGroup,
+                'age': p.age,
+                'createdAt': p.createdAt.toIso8601String(),
+                'updatedAt': p.updatedAt.toIso8601String(),
+              })
+          .toList();
+      return Response.ok(
+        jsonEncode({
+          'data': json,
+          'count': json.length,
+          'serverTime': DateTime.now().millisecondsSinceEpoch,
+        }),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': e.toString()}),
+        headers: {'content-type': 'application/json'},
+      );
+    } finally {
+      query.close();
+    }
   }
 
   Response _appointmentsGetHandler(Request req) {
@@ -1050,9 +1304,11 @@ class LocalServerService {
         'tokenNumber': a.tokenNumber,
         'status': a.status,
         'consultationFee': a.consultationFee,
+        'paymentMethod': a.paymentMethod,
         'notes': a.notes,
         'scheduledAt': a.scheduledAt.toIso8601String(),
         'createdAt': a.createdAt.toIso8601String(),
+        'updatedAt': a.updatedAt.toIso8601String(),
         'calledAt': a.calledAt?.toIso8601String(),
         'pharmacyAt': a.pharmacyAt?.toIso8601String(),
         'completedAt': a.completedAt?.toIso8601String(),
@@ -1126,51 +1382,69 @@ class LocalServerService {
 
   Response _prescriptionsGetHandler(Request req) {
     final sinceStr = req.url.queryParameters['since'];
-    final since = DateTime.tryParse(sinceStr ?? '') ?? DateTime(2000);
     final limitStr = req.url.queryParameters['limit'];
     final offsetStr = req.url.queryParameters['offset'];
     final limit = int.tryParse(limitStr ?? '');
     final offset = int.tryParse(offsetStr ?? '');
 
     final box = ObjectBoxService.instance.prescriptionBox;
-    final queryBuilder = box.query(Prescription_.updatedAt.greaterThan(since.millisecondsSinceEpoch));
+    final QueryBuilder<Prescription> queryBuilder;
+    if (sinceStr != null && sinceStr.isNotEmpty) {
+      final since = DateTime.tryParse(sinceStr);
+      if (since != null) {
+        queryBuilder = box.query(Prescription_.updatedAt.greaterThan(since.millisecondsSinceEpoch));
+      } else {
+        queryBuilder = box.query();
+      }
+    } else {
+      queryBuilder = box.query();
+    }
     final query = queryBuilder.build();
-    if (offset != null) query.offset = offset;
-    if (limit != null) query.limit = limit;
-    final prescriptions = query.find();
+    try {
+      if (offset != null) query.offset = offset;
+      if (limit != null) query.limit = limit;
+      final prescriptions = query.find();
 
-    final patientBox = ObjectBoxService.instance.patientBox;
-    final json = prescriptions.map((p) {
-      final patient = patientBox.get(p.patientId);
-      return {
-        'id': p.id,
-        'appointmentId': p.appointmentId,
-        'patientId': p.patientId,
-        'patientUhid': patient?.uhid ?? '',
-        'patientName': p.patientName,
-        'doctorId': p.doctorId,
-        'doctorName': p.doctorName,
-        'diagnosis': p.diagnosis,
-        'complaints': p.complaints,
-        'notes': p.notes,
-        'itemsJson': p.itemsJson,
-        'labTestsJson': p.labTestsJson,
-        'vitalsJson': p.vitalsJson,
-        'imagesJson': p.imagesJson,
-        'proceduresJson': p.proceduresJson,
-        'dispensed': p.dispensed,
-        'createdAt': p.createdAt.toIso8601String(),
-        'updatedAt': p.updatedAt.toIso8601String(),
-      };
-    }).toList();
-    return Response.ok(
-      jsonEncode({
-        'data': json,
-        'count': json.length,
-        'serverTime': DateTime.now().millisecondsSinceEpoch,
-      }),
-      headers: {'content-type': 'application/json'},
-    );
+      final patientBox = ObjectBoxService.instance.patientBox;
+      final json = prescriptions.map((p) {
+        final patient = patientBox.get(p.patientId);
+        return {
+          'id': p.id,
+          'appointmentId': p.appointmentId,
+          'patientId': p.patientId,
+          'patientUhid': patient?.uhid ?? '',
+          'patientName': p.patientName,
+          'doctorId': p.doctorId,
+          'doctorName': p.doctorName,
+          'diagnosis': p.diagnosis,
+          'complaints': p.complaints,
+          'notes': p.notes,
+          'itemsJson': p.itemsJson,
+          'labTestsJson': p.labTestsJson,
+          'vitalsJson': p.vitalsJson,
+          'imagesJson': p.imagesJson,
+          'proceduresJson': p.proceduresJson,
+          'dispensed': p.dispensed,
+          'createdAt': p.createdAt.toIso8601String(),
+          'updatedAt': p.updatedAt.toIso8601String(),
+        };
+      }).toList();
+      return Response.ok(
+        jsonEncode({
+          'data': json,
+          'count': json.length,
+          'serverTime': DateTime.now().millisecondsSinceEpoch,
+        }),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': e.toString()}),
+        headers: {'content-type': 'application/json'},
+      );
+    } finally {
+      query.close();
+    }
   }
 
   Future<Response> _prescriptionsPushHandler(Request req) async {
@@ -1325,12 +1599,14 @@ class LocalServerService {
 
       final box = ObjectBoxService.instance.medicineBox;
       Medicine? m;
-      if (id != null && id > 0) {
+      if (barcode.trim().isNotEmpty) {
+        m = box.query(Medicine_.barcode.equals(barcode.trim())).build().findFirst();
+      }
+      if (m == null && name.trim().isNotEmpty) {
+        m = box.query(Medicine_.name.equals(name.trim(), caseSensitive: false)).build().findFirst();
+      }
+      if (m == null && id != null && id > 0) {
         m = box.get(id);
-      } else if (barcode.isNotEmpty) {
-        m = box.query(Medicine_.barcode.equals(barcode)).build().findFirst();
-      } else if (name.isNotEmpty) {
-        m = box.query(Medicine_.name.equals(name)).build().findFirst();
       }
 
       if (m != null) {
@@ -1393,37 +1669,124 @@ class LocalServerService {
   Future<Response> _transfersPushHandler(Request req) async {
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      int hubMedId = body['medicineId'] ?? 0;
+      final medName = (body['medicineName'] ?? '').toString().trim();
+      if (medName.isNotEmpty) {
+        final existingMed = ObjectBoxService.instance.medicineBox.get(hubMedId);
+        if (existingMed == null || existingMed.name.trim().toLowerCase() != medName.toLowerCase()) {
+          final found = ObjectBoxService.instance.medicineBox
+              .query(Medicine_.name.equals(medName, caseSensitive: false))
+              .build()
+              .findFirst();
+          if (found != null) {
+            hubMedId = found.id;
+          }
+        }
+      }
+
+      final batchNo = (body['batchNo'] as String? ?? '').trim();
+      final expiryDate = DateTime.tryParse(body['expiryDate'] ?? '');
+
       final transfer = StockTransfer(
-        medicineId: body['medicineId'],
-        medicineName: body['medicineName'],
-        qty: body['qty'],
-        fromWarehouse: body['fromWarehouse'],
-        toWarehouse: body['toWarehouse'],
+        medicineId: hubMedId,
+        medicineName: body['medicineName'] ?? '',
+        qty: body['qty'] ?? 0,
+        fromWarehouse: body['fromWarehouse'] ?? '',
+        toWarehouse: body['toWarehouse'] ?? '',
+        batchNo: batchNo.isNotEmpty ? batchNo : null,
+        expiryDate: expiryDate,
         note: body['note'] ?? '',
         transferredBy: body['transferredBy'] ?? '',
         transferredAt:
             DateTime.tryParse(body['transferredAt'] ?? '') ?? DateTime.now(),
+        initialFromQty: (body['initialFromQty'] as num?)?.toInt() ?? 0,
+        finalFromQty: (body['finalFromQty'] as num?)?.toInt() ?? 0,
+        initialToQty: (body['initialToQty'] as num?)?.toInt() ?? 0,
+        finalToQty: (body['finalToQty'] as num?)?.toInt() ?? 0,
       );
 
       // Save transfer to Hub
       ObjectBoxService.instance.transferBox.put(transfer);
 
-      // Update medicine stock on Hub
+      // Update medicine & batch stock on Hub
       final m = ObjectBoxService.instance.medicineBox.get(transfer.medicineId);
       if (m != null) {
-        if ((transfer.fromWarehouse == 'main' || transfer.fromWarehouse == 'clinic') &&
-            transfer.toWarehouse == 'store') {
-          m.mainStock = (m.mainStock - transfer.qty).clamp(0, 999999);
-          m.storeStock += transfer.qty;
-        } else if (transfer.fromWarehouse == 'store' &&
-            (transfer.toWarehouse == 'main' || transfer.toWarehouse == 'clinic')) {
-          m.storeStock = (m.storeStock - transfer.qty).clamp(0, 999999);
-          m.mainStock += transfer.qty;
+        final batchBox = ObjectBoxService.instance.batchBox;
+        MedicineBatch? targetBatch;
+
+        if (batchNo.isNotEmpty) {
+          targetBatch = batchBox
+              .query(MedicineBatch_.batchNo
+                  .equals(batchNo, caseSensitive: false)
+                  .and(MedicineBatch_.medicine.equals(m.id)))
+              .build()
+              .findFirst();
         }
-        m.updatedAt = DateTime.now();
-        ObjectBoxService.instance.medicineBox.put(m);
+
+        int getBatchLocStock(MedicineBatch b, String loc) {
+          if (loc == 'main' || loc == 'clinic') return b.mainStock;
+          if (loc == 'store') return b.storeStock;
+          if (loc == 'bulkClinic') return b.bulkClinicStock;
+          if (loc == 'bulkStore') return b.bulkStoreStock;
+          return 0;
+        }
+
+        void setBatchLocStock(MedicineBatch b, String loc, int val) {
+          if (loc == 'main' || loc == 'clinic') b.mainStock = val;
+          if (loc == 'store') b.storeStock = val;
+          if (loc == 'bulkClinic') b.bulkClinicStock = val;
+          if (loc == 'bulkStore') b.bulkStoreStock = val;
+        }
+
+        if (targetBatch != null) {
+          setBatchLocStock(
+            targetBatch,
+            transfer.fromWarehouse,
+            (getBatchLocStock(targetBatch, transfer.fromWarehouse) - transfer.qty)
+                .clamp(0, 999999),
+          );
+          setBatchLocStock(
+            targetBatch,
+            transfer.toWarehouse,
+            getBatchLocStock(targetBatch, transfer.toWarehouse) + transfer.qty,
+          );
+          targetBatch.medicine.target = m;
+          batchBox.put(targetBatch);
+
+          m.recalculateStockFromBatches();
+          m.updatedAt = DateTime.now();
+          ObjectBoxService.instance.medicineBox.put(m);
+        } else {
+          // Fallback: If no batch matched or medicine has no batches, update aggregate medicine stock
+          int getMedLocStock(String loc) {
+            if (loc == 'main' || loc == 'clinic') return m.mainStock;
+            if (loc == 'store') return m.storeStock;
+            if (loc == 'bulkClinic') return m.bulkClinicStock;
+            if (loc == 'bulkStore') return m.bulkStoreStock;
+            return 0;
+          }
+
+          void setMedLocStock(String loc, int val) {
+            if (loc == 'main' || loc == 'clinic') m.mainStock = val;
+            if (loc == 'store') m.storeStock = val;
+            if (loc == 'bulkClinic') m.bulkClinicStock = val;
+            if (loc == 'bulkStore') m.bulkStoreStock = val;
+          }
+
+          setMedLocStock(
+            transfer.fromWarehouse,
+            (getMedLocStock(transfer.fromWarehouse) - transfer.qty).clamp(0, 999999),
+          );
+          setMedLocStock(
+            transfer.toWarehouse,
+            getMedLocStock(transfer.toWarehouse) + transfer.qty,
+          );
+          m.updatedAt = DateTime.now();
+          ObjectBoxService.instance.medicineBox.put(m);
+        }
       }
 
+      broadcast({'event': 'medicines_updated'});
       broadcast({'event': 'sync_received'});
       return Response.ok(jsonEncode({'status': 'success'}));
     } catch (e) {
@@ -1459,8 +1822,23 @@ class LocalServerService {
   Future<Response> _purchasesPushHandler(Request req) async {
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      int hubMedId = body['medicineId'] ?? 0;
+      final medName = (body['medicineName'] ?? '').toString().trim();
+      if (medName.isNotEmpty) {
+        final existingMed = ObjectBoxService.instance.medicineBox.get(hubMedId);
+        if (existingMed == null || existingMed.name.trim().toLowerCase() != medName.toLowerCase()) {
+          final found = ObjectBoxService.instance.medicineBox
+              .query(Medicine_.name.equals(medName, caseSensitive: false))
+              .build()
+              .findFirst();
+          if (found != null) {
+            hubMedId = found.id;
+          }
+        }
+      }
+
       final purchase = PurchaseRecord(
-        medicineId: body['medicineId'],
+        medicineId: hubMedId,
         medicineName: body['medicineName'],
         qty: body['qty'],
         purchasePrice: (body['purchasePrice'] as num).toDouble(),
@@ -1553,30 +1931,78 @@ class LocalServerService {
 
   Future<Response> _patientPhotosGetHandler(Request req) async {
     try {
-      // Optional ?uhid= filter for lazy per-patient loading
-      final filterUhid = req.url.queryParameters['uhid'];
+      final filterUhid = req.url.queryParameters['uhid']?.trim();
 
       final photos = ObjectBoxService.instance.patientImageBox.getAll();
       final patientBox = ObjectBoxService.instance.patientBox;
       final List<Map<String, dynamic>> result = [];
+      final Set<String> includedFilenames = {};
+
+      Patient? targetPatient;
+      if (filterUhid != null && filterUhid.isNotEmpty) {
+        targetPatient = patientBox
+            .query(Patient_.uhid.equals(filterUhid, caseSensitive: false))
+            .build()
+            .findFirst();
+        if (targetPatient == null) {
+          final filterLower = filterUhid.toLowerCase();
+          targetPatient = patientBox
+              .getAll()
+              .where((p) => p.uhid.trim().toLowerCase() == filterLower)
+              .firstOrNull;
+        }
+      }
+
+      final appDocDir = await getApplicationDocumentsDirectory();
 
       for (final photo in photos) {
         // Resolve the patient by ID to get their UHID
         final patient = patientBox.get(photo.patientId);
-        final uhid = patient?.uhid ?? '';
+        final uhid = patient?.uhid.trim() ?? targetPatient?.uhid.trim() ?? '';
 
-        // If caller requested a specific patient, skip others
-        if (filterUhid != null && filterUhid.isNotEmpty && uhid != filterUhid) {
-          continue;
+        // If caller requested a specific patient, check matching criteria
+        if (filterUhid != null && filterUhid.isNotEmpty) {
+          final filterLower = filterUhid.toLowerCase();
+          final matchesTarget = targetPatient != null && photo.patientId == targetPatient.id;
+          final matchesUhid = uhid.isNotEmpty && uhid.toLowerCase() == filterLower;
+          final matchesPath = targetPatient != null &&
+              photo.imagePath.replaceAll('\\', '/').contains('/patient_photos/${targetPatient.id}/');
+
+          if (!matchesTarget && !matchesUhid && !matchesPath) {
+            continue;
+          }
         }
 
-        final file = File(photo.imagePath);
+        File file = File(photo.imagePath);
+        if (!await file.exists()) {
+          final filename = photo.imagePath.replaceAll('\\', '/').split('/').last;
+          final candidatePaths = [
+            '${appDocDir.path}/patient_photos/${photo.patientId}/$filename',
+            if (patient != null) '${appDocDir.path}/patient_photos/${patient.id}/$filename',
+            if (targetPatient != null) '${appDocDir.path}/patient_photos/${targetPatient.id}/$filename',
+            '${appDocDir.path}/prescription_photos/$filename',
+            '${appDocDir.path}/prescriptions/images/$filename',
+          ];
+          for (final cPath in candidatePaths) {
+            final cFile = File(cPath);
+            if (await cFile.exists()) {
+              file = cFile;
+              break;
+            }
+          }
+        }
+
         if (!await file.exists()) continue;
+
+        final filename = file.path.replaceAll('\\', '/').split('/').last;
+        if (includedFilenames.contains(filename)) continue;
+        includedFilenames.add(filename);
+
         final bytes = await file.readAsBytes();
         final base64Data = base64Encode(bytes);
-        final filename = photo.imagePath.replaceAll('\\', '/').split('/').last;
+        final resolvedUhid = uhid.isNotEmpty ? uhid : (targetPatient?.uhid ?? filterUhid ?? '');
         result.add({
-          'patientUhid': uhid, // ← UHID so Android can resolve local ID
+          'patientUhid': resolvedUhid,
           'category': photo.category,
           'date': photo.date.toIso8601String(),
           'createdAt': photo.createdAt.toIso8601String(),
@@ -1584,6 +2010,32 @@ class LocalServerService {
           'imageData': base64Data,
         });
       }
+
+      // Also scan disk folder for this patient in case images exist on disk but not in patientImageBox
+      if (targetPatient != null) {
+        final photoDir = Directory('${appDocDir.path}/patient_photos/${targetPatient.id}');
+        if (await photoDir.exists()) {
+          final files = await photoDir.list().toList();
+          for (final entity in files) {
+            if (entity is File) {
+              final filename = entity.path.replaceAll('\\', '/').split('/').last;
+              if (!includedFilenames.contains(filename)) {
+                includedFilenames.add(filename);
+                final bytes = await entity.readAsBytes();
+                result.add({
+                  'patientUhid': targetPatient.uhid,
+                  'category': 'General',
+                  'date': DateTime.now().toIso8601String(),
+                  'createdAt': DateTime.now().toIso8601String(),
+                  'filename': filename,
+                  'imageData': base64Encode(bytes),
+                });
+              }
+            }
+          }
+        }
+      }
+
       return Response.ok(
         jsonEncode({'data': result, 'count': result.length}),
         headers: {'content-type': 'application/json'},
@@ -1597,7 +2049,7 @@ class LocalServerService {
   Future<Response> _patientPhotosPushHandler(Request req) async {
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
-      final patientUhid = body['patientUhid'] as String? ?? '';
+      final patientUhid = (body['patientUhid'] as String? ?? '').trim();
       final category = body['category'] as String? ?? 'General';
       final date = DateTime.tryParse(body['date'] ?? '') ?? DateTime.now();
       final filename = body['filename'] as String? ??
@@ -1611,7 +2063,7 @@ class LocalServerService {
       // Resolve UHID → Hub's local patientId
       final patient = ObjectBoxService.instance.patientBox
           .getAll()
-          .where((p) => p.uhid == patientUhid)
+          .where((p) => p.uhid.trim().toLowerCase() == patientUhid.toLowerCase())
           .firstOrNull;
       if (patient == null) {
         debugPrint(
@@ -1628,7 +2080,8 @@ class LocalServerService {
       final photoDir = Directory('${appDocDir.path}/patient_photos/$patientId');
       if (!await photoDir.exists()) await photoDir.create(recursive: true);
 
-      final savedPath = '${photoDir.path}/$filename';
+      final cleanFilename = filename.replaceAll('\\', '/').split('/').last;
+      final savedPath = '${photoDir.path}/$cleanFilename';
       final bytes = base64Decode(imageData);
       await File(savedPath).writeAsBytes(bytes);
 
@@ -1636,7 +2089,7 @@ class LocalServerService {
       final existing = ObjectBoxService.instance.patientImageBox
           .getAll()
           .where(
-              (p) => p.imagePath.endsWith(filename) && p.patientId == patientId)
+              (p) => p.imagePath.replaceAll('\\', '/').split('/').last == cleanFilename && p.patientId == patientId)
           .firstOrNull;
 
       if (existing == null) {
@@ -1647,6 +2100,9 @@ class LocalServerService {
           date: date,
         );
         ObjectBoxService.instance.patientImageBox.put(pImage);
+      } else {
+        existing.imagePath = savedPath;
+        ObjectBoxService.instance.patientImageBox.put(existing);
       }
 
       broadcast({'event': 'photo_received', 'path': savedPath});
@@ -1703,35 +2159,57 @@ class LocalServerService {
     final boxP = ObjectBoxService.instance.patientBox;
     final boxS = ObjectBoxService.instance.saleBox;
     final boxPr = ObjectBoxService.instance.prescriptionBox;
+    final boxM = ObjectBoxService.instance.medicineBox;
     
     int migrated = 0;
-    
-    // Since ObjectBox initialization might have some records with updatedAt as epoch or 0
     final epoch = DateTime(2000);
 
+    final List<Patient> patientsToPut = [];
     for (var p in boxP.getAll()) {
-      // In ObjectBox, uninitialized Date/int might look like 0 or very early dates
       if (p.updatedAt.isBefore(epoch)) {
-        p.updatedAt = p.createdAt;
-        boxP.put(p);
+        p.updatedAt = p.createdAt.isBefore(epoch) ? DateTime.now() : p.createdAt;
+        patientsToPut.add(p);
         migrated++;
       }
     }
+    if (patientsToPut.isNotEmpty) {
+      boxP.putMany(patientsToPut);
+    }
     
+    final List<Sale> salesToPut = [];
     for (var s in boxS.getAll()) {
       if (s.updatedAt.isBefore(epoch)) {
-        s.updatedAt = s.createdAt;
-        boxS.put(s);
+        s.updatedAt = s.createdAt.isBefore(epoch) ? DateTime.now() : s.createdAt;
+        salesToPut.add(s);
         migrated++;
       }
     }
+    if (salesToPut.isNotEmpty) {
+      boxS.putMany(salesToPut);
+    }
     
+    final List<Prescription> prescriptionsToPut = [];
     for (var pr in boxPr.getAll()) {
       if (pr.updatedAt.isBefore(epoch)) {
-        pr.updatedAt = pr.createdAt;
-        boxPr.put(pr);
+        pr.updatedAt = pr.createdAt.isBefore(epoch) ? DateTime.now() : pr.createdAt;
+        prescriptionsToPut.add(pr);
         migrated++;
       }
+    }
+    if (prescriptionsToPut.isNotEmpty) {
+      boxPr.putMany(prescriptionsToPut);
+    }
+
+    final List<Medicine> medicinesToPut = [];
+    for (var m in boxM.getAll()) {
+      if (m.updatedAt.isBefore(epoch)) {
+        m.updatedAt = m.createdAt.isBefore(epoch) ? DateTime.now() : m.createdAt;
+        medicinesToPut.add(m);
+        migrated++;
+      }
+    }
+    if (medicinesToPut.isNotEmpty) {
+      boxM.putMany(medicinesToPut);
     }
     
     if (migrated > 0) {
@@ -2025,7 +2503,10 @@ class LocalServerService {
           createdAt: DateTime.tryParse(data['createdAt'] ?? '') ?? DateTime.now(),
         );
         final existing = ObjectBoxService.instance.patientBox.query(Patient_.uhid.equals(p.uhid)).build().findFirst();
-        if (existing != null) p.id = existing.id;
+        if (existing != null) {
+          p.id = existing.id;
+          p.createdAt = existing.createdAt;
+        }
         ObjectBoxService.instance.patientBox.put(p);
         broadcast({'event': 'patients_updated'});
         _incomingDataController.add('patients');

@@ -62,6 +62,8 @@ class _MedicineRegistrationSheetState
     _isScheduleH1 = widget.medicine?.isScheduleH1 ?? false;
 
     if (widget.medicine != null) {
+      final medSell = widget.medicine!.sellingPrice;
+      final medBuy = widget.medicine!.purchasePrice;
       _localBatches.addAll(widget.medicine!.batches.map((b) => MedicineBatch(
             id: b.id,
             batchNo: b.batchNo,
@@ -70,6 +72,8 @@ class _MedicineRegistrationSheetState
             storeStock: b.storeStock,
             bulkClinicStock: b.bulkClinicStock,
             bulkStoreStock: b.bulkStoreStock,
+            sellingPrice: b.sellingPrice > 0 ? b.sellingPrice : medSell,
+            purchasePrice: b.purchasePrice > 0 ? b.purchasePrice : medBuy,
           )));
     }
   }
@@ -160,6 +164,12 @@ class _MedicineRegistrationSheetState
     // Sync batches
     m.batches.clear();
     for (var b in _localBatches) {
+      if (b.sellingPrice <= 0 && m.sellingPrice > 0) {
+        b.sellingPrice = m.sellingPrice;
+      }
+      if (b.purchasePrice <= 0 && m.purchasePrice > 0) {
+        b.purchasePrice = m.purchasePrice;
+      }
       b.medicine.target = m;
       m.batches.add(b);
     }
@@ -374,6 +384,7 @@ class _MedicineRegistrationSheetState
       context: context,
       builder: (_) => _BatchDialog(
         batch: existing,
+        medicine: widget.medicine,
         onSave: (b) {
           setState(() {
             if (existing != null) {
@@ -466,6 +477,14 @@ class _BatchItem extends StatelessWidget {
                   'ST:${batch.storeStock} | CL:${batch.mainStock} | SB:${batch.bulkStoreStock} | CB:${batch.bulkClinicStock}',
                   style: TextStyle(fontSize: 9, color: context.textMutedColor, fontWeight: FontWeight.w600),
                 ),
+                if (batch.sellingPrice > 0 || (batch.purchasePrice > 0 && (context.read<AuthProvider>().currentUser?.canViewPurchasePrice == true || context.read<AuthProvider>().currentUser?.role.toLowerCase() == 'admin')))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      '${batch.sellingPrice > 0 ? "MRP: ₹${batch.sellingPrice.toStringAsFixed(2)}" : ""}${(batch.sellingPrice > 0 && batch.purchasePrice > 0 && (context.read<AuthProvider>().currentUser?.canViewPurchasePrice == true || context.read<AuthProvider>().currentUser?.role.toLowerCase() == 'admin')) ? " | " : ""}${(batch.purchasePrice > 0 && (context.read<AuthProvider>().currentUser?.canViewPurchasePrice == true || context.read<AuthProvider>().currentUser?.role.toLowerCase() == 'admin')) ? "Cost: ₹${batch.purchasePrice.toStringAsFixed(2)}" : ""}',
+                      style: const TextStyle(fontSize: 9, color: AppTheme.primaryLight, fontWeight: FontWeight.w700),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -501,9 +520,10 @@ class _BatchItem extends StatelessWidget {
 
 class _BatchDialog extends StatefulWidget {
   final MedicineBatch? batch;
+  final Medicine? medicine;
   final Function(MedicineBatch) onSave;
 
-  const _BatchDialog({this.batch, required this.onSave});
+  const _BatchDialog({this.batch, this.medicine, required this.onSave});
 
   @override
   State<_BatchDialog> createState() => _BatchDialogState();
@@ -515,6 +535,8 @@ class _BatchDialogState extends State<_BatchDialog> {
   late final TextEditingController _posCtrl;
   late final TextEditingController _bulkClinicCtrl;
   late final TextEditingController _bulkStoreCtrl;
+  late final TextEditingController _sellingPriceCtrl;
+  late final TextEditingController _purchasePriceCtrl;
   late DateTime _expiry;
 
   @override
@@ -525,39 +547,78 @@ class _BatchDialogState extends State<_BatchDialog> {
     _posCtrl = TextEditingController(text: '${widget.batch?.storeStock ?? 0}');
     _bulkClinicCtrl = TextEditingController(text: '${widget.batch?.bulkClinicStock ?? 0}');
     _bulkStoreCtrl = TextEditingController(text: '${widget.batch?.bulkStoreStock ?? 0}');
+    final defaultSell = widget.batch != null && widget.batch!.sellingPrice > 0
+        ? widget.batch!.sellingPrice
+        : (widget.medicine?.sellingPrice ?? 0.0);
+    final defaultBuy = widget.batch != null && widget.batch!.purchasePrice > 0
+        ? widget.batch!.purchasePrice
+        : (widget.medicine?.purchasePrice ?? 0.0);
+    _sellingPriceCtrl = TextEditingController(
+        text: defaultSell > 0 ? defaultSell.toStringAsFixed(2) : '');
+    _purchasePriceCtrl = TextEditingController(
+        text: defaultBuy > 0 ? defaultBuy.toStringAsFixed(2) : '');
     _expiry = widget.batch?.expiryDate ?? DateTime.now().add(const Duration(days: 365));
   }
 
-  Widget _field(TextEditingController ctrl, String label, {TextInputType? keyboardType}) {
+  @override
+  void dispose() {
+    _noCtrl.dispose();
+    _hubCtrl.dispose();
+    _posCtrl.dispose();
+    _bulkClinicCtrl.dispose();
+    _bulkStoreCtrl.dispose();
+    _sellingPriceCtrl.dispose();
+    _purchasePriceCtrl.dispose();
+    super.dispose();
+  }
+
+  Widget _field(TextEditingController ctrl, String label, {TextInputType? keyboardType, bool readOnly = false, String? helperText}) {
     return TextField(
       controller: ctrl,
       keyboardType: keyboardType,
-      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+      readOnly: readOnly,
+      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: context.textMutedColor, fontWeight: FontWeight.w600, fontSize: 13),
+        helperText: helperText,
+        helperStyle: const TextStyle(fontSize: 9),
+        labelStyle: TextStyle(color: context.textMutedColor, fontWeight: FontWeight.w600, fontSize: 11),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         isDense: true,
         filled: true,
-        fillColor: context.textMutedColor.withValues(alpha: 0.03),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.borderColor.withValues(alpha: 0.3))),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.borderColor.withValues(alpha: 0.3))),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppTheme.primary, width: 2)),
+        fillColor: readOnly ? context.textMutedColor.withValues(alpha: 0.08) : context.textMutedColor.withValues(alpha: 0.03),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: context.borderColor.withValues(alpha: 0.3))),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: context.borderColor.withValues(alpha: 0.3))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.primary, width: 1.5)),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final user = auth.currentUser;
+    final isAdmin = user?.role.toLowerCase() == 'admin';
+    final canOverrideStock = isAdmin || (user?.canOverrideStock == true);
+    final isNewBatch = widget.batch == null;
+    final canEditStockCounts = isNewBatch ? (canOverrideStock || (user?.canAddStock == true) || (user?.canEditInventory == true)) : canOverrideStock;
+    final canEditPricing = isAdmin || (user?.canEditInventory == true);
+    final canViewPurchasePrice = isAdmin || (user?.canViewPurchasePrice == true);
+
     return AlertDialog(
       backgroundColor: context.surfaceColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: Text(widget.batch != null ? 'EDIT BATCH' : 'NEW REGISTRY', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1, color: AppTheme.primaryLight)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      titlePadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      title: Text(widget.batch != null ? 'EDIT BATCH' : 'NEW REGISTRY', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1, color: AppTheme.primaryLight)),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _field(_noCtrl, 'BATCH NUMBER'),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
             InkWell(
               onTap: () async {
                 final d = await showDatePicker(
@@ -571,51 +632,106 @@ class _BatchDialogState extends State<_BatchDialog> {
                 if (d != null) setState(() => _expiry = d);
               },
               child: Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
                   color: context.textMutedColor.withValues(alpha: 0.03),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: context.borderColor.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.calendar_today_rounded, size: 20, color: AppTheme.primary),
-                    const SizedBox(width: 16),
+                    const Icon(Icons.calendar_today_rounded, size: 16, color: AppTheme.primary),
+                    const SizedBox(width: 10),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('EXPIRY DATE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey, letterSpacing: 0.5)),
-                        Text(DateFormat('dd MMM yyyy').format(_expiry).toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+                        const Text('EXPIRY DATE', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.grey, letterSpacing: 0.5)),
+                        Text(DateFormat('dd MMM yyyy').format(_expiry).toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
                       ],
                     ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
+
+            // Price fields
             Row(
               children: [
-                Expanded(child: _field(_bulkStoreCtrl, 'STORE BULK', keyboardType: TextInputType.number)),
-                const SizedBox(width: 12),
-                Expanded(child: _field(_bulkClinicCtrl, 'CLINIC BULK', keyboardType: TextInputType.number)),
+                Expanded(
+                  child: _field(
+                    _sellingPriceCtrl,
+                    'BATCH MRP (₹)',
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    readOnly: !canEditPricing,
+                    helperText: canEditPricing ? 'Blank for default' : 'Locked',
+                  ),
+                ),
+                if (canViewPurchasePrice) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _field(
+                      _purchasePriceCtrl,
+                      'COST (₹)',
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      readOnly: !canEditPricing,
+                      helperText: canEditPricing ? 'Supplier rate' : 'Locked',
+                    ),
+                  ),
+                ],
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
+
             Row(
               children: [
-                Expanded(child: _field(_posCtrl, 'STORE POS', keyboardType: TextInputType.number)),
-                const SizedBox(width: 12),
-                Expanded(child: _field(_hubCtrl, 'CLINIC DISP', keyboardType: TextInputType.number)),
+                const Text('STOCK COUNTS', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.grey, letterSpacing: 0.5)),
+                const Spacer(),
+                if (!canEditStockCounts)
+                  const Text('LOCKED', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppTheme.warning)),
+              ],
+            ),
+            const SizedBox(height: 6),
+
+            Row(
+              children: [
+                Expanded(child: _field(_bulkStoreCtrl, 'STORE BULK', keyboardType: TextInputType.number, readOnly: !canEditStockCounts)),
+                const SizedBox(width: 8),
+                Expanded(child: _field(_bulkClinicCtrl, 'CLINIC BULK', keyboardType: TextInputType.number, readOnly: !canEditStockCounts)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(child: _field(_posCtrl, 'STORE POS', keyboardType: TextInputType.number, readOnly: !canEditStockCounts)),
+                const SizedBox(width: 8),
+                Expanded(child: _field(_hubCtrl, 'CLINIC DISP', keyboardType: TextInputType.number, readOnly: !canEditStockCounts)),
               ],
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+          child: const Text('CANCEL', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+        ),
         ElevatedButton(
           onPressed: () {
             if (_noCtrl.text.isEmpty) return;
+            final parsedSell = double.tryParse(_sellingPriceCtrl.text.trim());
+            final parsedBuy = double.tryParse(_purchasePriceCtrl.text.trim());
+            final sellPrice = (parsedSell != null && parsedSell > 0)
+                ? parsedSell
+                : (widget.batch != null && widget.batch!.sellingPrice > 0
+                    ? widget.batch!.sellingPrice
+                    : (widget.medicine?.sellingPrice ?? 0.0));
+            final purchasePrice = (parsedBuy != null && parsedBuy > 0)
+                ? parsedBuy
+                : (widget.batch != null && widget.batch!.purchasePrice > 0
+                    ? widget.batch!.purchasePrice
+                    : (widget.medicine?.purchasePrice ?? 0.0));
             widget.onSave(MedicineBatch(
               id: widget.batch?.id ?? 0,
               batchNo: _noCtrl.text.trim(),
@@ -624,10 +740,17 @@ class _BatchDialogState extends State<_BatchDialog> {
               storeStock: int.tryParse(_posCtrl.text) ?? 0,
               bulkClinicStock: int.tryParse(_bulkClinicCtrl.text) ?? 0,
               bulkStoreStock: int.tryParse(_bulkStoreCtrl.text) ?? 0,
+              sellingPrice: sellPrice,
+              purchasePrice: purchasePrice,
             ));
             Navigator.pop(context);
           },
-          child: const Text('SAVE BATCH'),
+          style: ElevatedButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          child: const Text('SAVE BATCH', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
         ),
       ],
     );

@@ -6,6 +6,7 @@ import 'analysis/tabs/sales_trends_tab.dart';
 import 'analysis/tabs/medicine_stock_explorer_tab.dart';
 import 'analysis/tabs/product_performance_tab.dart';
 import 'analysis/tabs/reorder_dead_stock_tab.dart';
+import 'analysis/tabs/replenishment_tab.dart';
 import 'analysis/tabs/patient_analytics_tab.dart';
 import 'analysis/tabs/clinic_reconciliation_tab.dart';
 import 'analysis/tabs/schedule_h1_register_tab.dart';
@@ -36,6 +37,7 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
       }
       if (auth.hasInventoryWriteAccess) {
         _allowedTabTitles.add('Reorder');
+        _allowedTabTitles.add('Replenishment');
       }
       if (auth.canAccessOPD) {
         _allowedTabTitles.add('Patients');
@@ -147,6 +149,23 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
           ),
         );
         tabViews.add(const ReorderAndDeadStockTab());
+      } else if (title == 'Replenishment') {
+        tabWidgets.add(
+          const Tab(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.swap_horiz_rounded, size: 16),
+                  SizedBox(width: 6),
+                  Text('Replenishment Planner'),
+                ],
+              ),
+            ),
+          ),
+        );
+        tabViews.add(const ReplenishmentTab());
       } else if (title == 'Patients') {
         tabWidgets.add(
           const Tab(

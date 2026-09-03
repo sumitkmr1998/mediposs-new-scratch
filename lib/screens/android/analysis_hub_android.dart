@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -10,10 +11,13 @@ import '../../shared/models/patient.dart';
 import '../../shared/services/objectbox_service.dart';
 import '../../shared/services/sync_service.dart';
 import '../../shared/providers/inventory_provider.dart';
+import '../../shared/providers/warehouse_provider.dart';
+import '../windows/warehouse/dialogs/transfer_dialog.dart';
 import '../../shared/providers/sales_provider.dart';
 import '../../shared/providers/patient_provider.dart';
 import '../../shared/providers/procedure_provider.dart';
 import '../../shared/utils/analytics_helper.dart';
+import '../../shared/utils/consumption_aggregator.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../theme/app_theme.dart';
 import 'package:excel/excel.dart' as excel_pkg;
@@ -36,6 +40,7 @@ class AnalysisHubScreenAndroid extends StatefulWidget {
 class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _period = 'This Month';
+  DateTimeRange? _customRange;
   int _touchedIndex = -1;
   
   Medicine? _selectedMedicine;
@@ -57,8 +62,11 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
   int _reorderDepletionDays = 90;
   int _reorderTargetDays = 365;
 
+  int _replenishmentTargetDays = 15;
+
   String _stockExplorerQuery = '';
   String _stockExplorerSort = 'name';
+  Timer? _searchDebounceTimer;
 
   int? _lastSalesLength;
   final Map<int, double> _velocitiesCache = {};
@@ -172,6 +180,7 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
         _allowedTabTitles.add('Explorer');
       }
       if (auth.hasInventoryWriteAccess) {
+        _allowedTabTitles.add('Replenishment');
         _allowedTabTitles.add('Reorder');
       }
       if (auth.canAccessOPD) {
@@ -190,6 +199,7 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
 
   @override
   void dispose() {
+    _searchDebounceTimer?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -246,6 +256,9 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
       } else if (title == 'Explorer') {
         tabWidgets.add(const Tab(child: Text('Explorer')));
         tabViews.add(_buildProductPerformanceTab(allSales, allMedicines, allProcedures));
+      } else if (title == 'Replenishment') {
+        tabWidgets.add(const Tab(child: Text('Replenishment')));
+        tabViews.add(_buildReplenishmentPlannerTab(allSales, allMedicines));
       } else if (title == 'Reorder') {
         tabWidgets.add(const Tab(child: Text('Reorder')));
         tabViews.add(_buildReorderAndDeadStockTab(allSales, allMedicines));
@@ -352,16 +365,26 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
     final isStaffOnly = !auth.isAdmin || !(auth.currentUser?.canViewHistoricalData ?? true);
     final now = DateTime.now();
     late DateTime start;
+    late DateTime endDate;
 
-    if (_period == 'This Week') {
-      start = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
-    } else if (_period == 'This Month') {
+    if (_period == 'This Month') {
       start = DateTime(now.year, now.month, 1);
-    } else {
+      endDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
+    } else if (_period == 'Last 3 Months') {
       start = DateTime(now.year, now.month - 3, 1);
+      endDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
+    } else if (_period == 'Custom Range' && _customRange != null) {
+      start = DateTime(_customRange!.start.year, _customRange!.start.month, _customRange!.start.day);
+      endDate = DateTime(_customRange!.end.year, _customRange!.end.month, _customRange!.end.day, 23, 59, 59);
+    } else {
+      start = DateTime(now.year, now.month, 1);
+      endDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
     }
 
-    final filteredSales = sales.where((s) => s.createdAt.isAfter(start)).toList();
+    final filteredSales = sales.where((s) {
+      return (s.createdAt.isAfter(start) || s.createdAt.isAtSameMomentAs(start)) &&
+             (s.createdAt.isBefore(endDate) || s.createdAt.isAtSameMomentAs(endDate));
+    }).toList();
     
     final profitData = <DateTime, double>{};
     final medsRevenueData = <DateTime, double>{};
@@ -369,8 +392,8 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
     final consultationRevenueData = <DateTime, double>{};
 
     var tempDate = DateTime(start.year, start.month, start.day);
-    final endDate = DateTime(now.year, now.month, now.day);
-    while (tempDate.isBefore(endDate) || tempDate.isAtSameMomentAs(endDate)) {
+    final lastDay = DateTime(endDate.year, endDate.month, endDate.day);
+    while (tempDate.isBefore(lastDay) || tempDate.isAtSameMomentAs(lastDay)) {
       profitData[tempDate] = 0.0;
       medsRevenueData[tempDate] = 0.0;
       procedureRevenueData[tempDate] = 0.0;
@@ -432,9 +455,35 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
               ),
               if (!isStaffOnly)
                 _buildPeriodSelector(
-                  selectedPeriod: _period,
-                  periods: const ['This Week', 'This Month', 'Last 3 Months'],
-                  onPeriodSelected: (p) => setState(() => _period = p),
+                  selectedPeriod: _period == 'Custom Range' && _customRange != null
+                      ? '${DateFormat('dd/MM').format(_customRange!.start)}-${DateFormat('dd/MM').format(_customRange!.end)}'
+                      : _period,
+                  periods: const ['This Month', 'Last 3 Months', 'Custom Range'],
+                  onPeriodSelected: (p) async {
+                    if (p == 'Custom Range') {
+                      final picked = await showDateRangePicker(
+                        context: context,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                        initialDateRange: _customRange ??
+                            DateTimeRange(
+                              start: DateTime.now().subtract(const Duration(days: 30)),
+                              end: DateTime.now(),
+                            ),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          _customRange = picked;
+                          _period = 'Custom Range';
+                        });
+                      }
+                    } else {
+                      setState(() {
+                        _period = p;
+                        _customRange = null;
+                      });
+                    }
+                  },
                 ),
             ],
           ),
@@ -786,8 +835,9 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
 
   Widget _buildMedicineStockExplorerTab(List<Sale> sales, List<Medicine> medicines) {
 
+    final q = _stockExplorerQuery.toLowerCase().trim();
     final filtered = medicines.where((m) {
-      final q = _stockExplorerQuery.toLowerCase().trim();
+      if (q.isEmpty) return true;
       return m.name.toLowerCase().contains(q) || m.barcode.contains(q) || m.category.toLowerCase().contains(q);
     }).toList();
 
@@ -814,7 +864,14 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
           child: Column(
             children: [
               TextField(
-                onChanged: (val) => setState(() => _stockExplorerQuery = val),
+                onChanged: (val) {
+                  _searchDebounceTimer?.cancel();
+                  _searchDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+                    if (mounted) {
+                      setState(() => _stockExplorerQuery = val);
+                    }
+                  });
+                },
                 decoration: InputDecoration(
                   hintText: 'Search stock explorer...',
                   prefixIcon: const Icon(Icons.search),
@@ -2406,6 +2463,273 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildReplenishmentPlannerTab(List<Sale> allSales, List<Medicine> allMedicines) {
+    final invProvider = context.read<InventoryProvider>();
+    final salesFor30Days = context.watch<SalesProvider>().salesForAnalytics(days: 30);
+    final consumptionResult = ConsumptionAggregator.build(salesFor30Days);
+
+    final List<Map<String, dynamic>> replenishmentItems = [];
+
+    for (final med in allMedicines) {
+      final dispensingStock = invProvider.getDispensingStock(med);
+      final daily = consumptionResult.dailyRateForMedicine(
+        medicineId: med.id,
+        medicineName: med.name,
+        trendDays: 30,
+      );
+
+      final int requiredStock = (daily > 0 ? (daily * _replenishmentTargetDays).ceil() : med.lowStockThreshold).toInt();
+      final int deficit = requiredStock > dispensingStock ? (requiredStock - dispensingStock) : 0;
+      final bool isLow = dispensingStock < requiredStock;
+
+      final int totalBulkStock = med.bulkStoreStock + med.bulkClinicStock;
+
+      if (isLow) {
+        replenishmentItems.add({
+          'medicine': med,
+          'dispensingStock': dispensingStock,
+          'daily': daily,
+          'requiredStock': requiredStock,
+          'deficit': deficit,
+          'bulkStock': totalBulkStock,
+        });
+      }
+    }
+
+    replenishmentItems.sort((a, b) => (b['deficit'] as int).compareTo(a['deficit'] as int));
+
+    return Column(
+      children: [
+        // Target Coverage Buffer Selector Only
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Row(
+            children: [
+              Text(
+                'Target Buffer:',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: context.textMutedColor,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Wrap(
+                  spacing: 8,
+                  children: [7, 15, 30, 45].map((days) {
+                    final isSelected = _replenishmentTargetDays == days;
+                    return ChoiceChip(
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                      label: Text(
+                        '${days}d',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                        ),
+                      ),
+                      selected: isSelected,
+                      selectedColor: AppTheme.primary,
+                      labelStyle: TextStyle(
+                        color: isSelected ? Colors.white : context.textColor,
+                      ),
+                      onSelected: (selected) {
+                        if (selected) {
+                          setState(() => _replenishmentTargetDays = days);
+                        }
+                      },
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Replenishment Item Cards List
+        Expanded(
+          child: replenishmentItems.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.check_circle_outline_rounded, color: AppTheme.emerald.withValues(alpha: 0.5), size: 40),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Store & Clinic stock is fully healthy!',
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'All medicines cover the $_replenishmentTargetDays-day consumption buffer.',
+                        style: TextStyle(fontSize: 11, color: context.textMutedColor),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  itemCount: replenishmentItems.length,
+                  separatorBuilder: (context, index) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final item = replenishmentItems[index];
+                    final Medicine med = item['medicine'];
+                    final int dispensingStock = item['dispensingStock'];
+                    final double daily = item['daily'];
+                    final int requiredStock = item['requiredStock'];
+                    final int deficit = item['deficit'];
+                    final int bulkStock = item['bulkStock'];
+
+                    return Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: context.surfaceColor,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: context.borderColor.withValues(alpha: 0.4)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.02),
+                            blurRadius: 6,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  med.name,
+                                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.danger.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'Deficit: $deficit',
+                                  style: const TextStyle(
+                                    color: AppTheme.danger,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Active: $dispensingStock',
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: context.textColor),
+                                  ),
+                                  Text(
+                                    'Daily: ${daily.toStringAsFixed(1)}/d',
+                                    style: TextStyle(fontSize: 10, color: context.textMutedColor),
+                                  ),
+                                ],
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    'Req (${_replenishmentTargetDays}d): $requiredStock',
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: context.textColor),
+                                  ),
+                                  Text(
+                                    'Bulk: $bulkStock',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: bulkStock >= deficit ? AppTheme.emerald : AppTheme.orange,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  icon: const Icon(Icons.storefront_rounded, size: 13),
+                                  label: const Text('To Store', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppTheme.primary,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 6),
+                                    visualDensity: VisualDensity.compact,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  onPressed: () {
+                                    final fullQty = deficit > 0 ? deficit : 1;
+                                    showDialog(
+                                      context: context,
+                                      builder: (dialogCtx) => TransferDialog(
+                                        medicine: med,
+                                        from: 'bulkStore',
+                                        to: 'store',
+                                        initialQty: fullQty,
+                                        wh: context.read<WarehouseProvider>(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  icon: const Icon(Icons.local_hospital_rounded, size: 13),
+                                  label: const Text('To Clinic', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppTheme.indigo,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 6),
+                                    visualDensity: VisualDensity.compact,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  onPressed: () {
+                                    final fullQty = deficit > 0 ? deficit : 1;
+                                    showDialog(
+                                      context: context,
+                                      builder: (dialogCtx) => TransferDialog(
+                                        medicine: med,
+                                        from: 'bulkClinic',
+                                        to: 'clinic',
+                                        initialQty: fullQty,
+                                        wh: context.read<WarehouseProvider>(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 }

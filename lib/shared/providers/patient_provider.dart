@@ -17,27 +17,71 @@ import '../repositories/patient_repository.dart';
 class PatientProvider extends ChangeNotifier {
   final PatientRepository _repo = PatientRepository();
 
+  static const int pageSize = 50;
   List<Patient> _patients = [];
   String _search = '';
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
 
   List<Patient> get patients => _patients;
 
   /// Already limited by DB query — no full-table filter in Dart.
   List<Patient> get filtered => _patients;
 
-  void load() {
-    if (_search.isEmpty) {
-      _patients = _repo.recent(limit: 100);
-    } else {
-      _patients = _repo.search(_search, limit: 50);
+  /// Total count of all registered patients in ObjectBox
+  int get totalCount => _repo.count();
+
+  bool get hasMore => _hasMore;
+  bool get isLoadingMore => _isLoadingMore;
+
+  Patient? getById(int id) => _repo.byId(id);
+
+  /// Direct database search across all patients (not limited to loaded recent)
+  List<Patient> searchPatients(String q, {int limit = 50}) {
+    return _repo.search(q, limit: limit);
+  }
+
+  void load({bool refresh = true}) {
+    if (refresh) {
+      _patients = [];
+      _hasMore = true;
     }
+    final nextChunk = _search.isEmpty
+        ? _repo.recent(limit: pageSize, offset: _patients.length)
+        : _repo.search(_search, limit: pageSize, offset: _patients.length);
+    if (nextChunk.length < pageSize) {
+      _hasMore = false;
+    }
+    _patients.addAll(nextChunk);
+    notifyListeners();
+  }
+
+  void loadMore() {
+    if (!_hasMore || _isLoadingMore) return;
+    _isLoadingMore = true;
+    notifyListeners();
+    final nextChunk = _search.isEmpty
+        ? _repo.recent(limit: pageSize, offset: _patients.length)
+        : _repo.search(_search, limit: pageSize, offset: _patients.length);
+    if (nextChunk.length < pageSize) {
+      _hasMore = false;
+    }
+    _patients.addAll(nextChunk);
+    _isLoadingMore = false;
     notifyListeners();
   }
 
   void setSearch(String q) {
-    _search = q;
-    // Debounce is UI-side; re-query ObjectBox with limit (not getAll).
-    _patients = _repo.search(q, limit: 50);
+    _search = q.trim();
+    _patients = [];
+    _hasMore = true;
+    final nextChunk = _search.isEmpty
+        ? _repo.recent(limit: pageSize, offset: 0)
+        : _repo.search(_search, limit: pageSize, offset: 0);
+    if (nextChunk.length < pageSize) {
+      _hasMore = false;
+    }
+    _patients = nextChunk;
     notifyListeners();
   }
 
@@ -45,9 +89,9 @@ class PatientProvider extends ChangeNotifier {
     final now = DateTime.now();
     final dateStr = DateFormat('ddMMyy').format(now);
     final count = ObjectBoxService.instance.patientBox.count() + 1;
-    // Add a small random suffix to prevent collisions between Android and Hub
-    final random = (DateTime.now().microsecondsSinceEpoch % 1000).toString().padLeft(3, '0');
-    return 'OPD-$dateStr-${count.toString().padLeft(3, '0')}-$random';
+    final deviceTag = Platform.isAndroid ? 'A' : 'H';
+    final random = (DateTime.now().microsecondsSinceEpoch % 10000).toString().padLeft(4, '0');
+    return 'OPD-$dateStr-$deviceTag${count.toString().padLeft(3, '0')}-$random';
   }
 
   Patient savePatient(Patient p, [SyncService? syncService, AppUser? actor]) {
@@ -59,6 +103,7 @@ class PatientProvider extends ChangeNotifier {
     final oldPatient = isNew ? null : ObjectBoxService.instance.patientBox.get(p.id);
     final oldJson = oldPatient != null ? oldPatient.toJson() : <String, dynamic>{};
 
+    p.updatedAt = DateTime.now();
     ObjectBoxService.instance.patientBox.put(p);
 
     // Log patient save/update
@@ -126,13 +171,18 @@ class PatientProvider extends ChangeNotifier {
     );
   }
 
-  Patient? getById(int id) {
-    return _patients.where((p) => p.id == id).firstOrNull;
-  }
-
   Patient? getByUhid(String uhid) {
     if (uhid.isEmpty) return null;
-    return _patients.where((p) => p.uhid == uhid).firstOrNull;
+    final cached = _patients.where((p) => p.uhid == uhid).firstOrNull;
+    if (cached != null) return cached;
+    final q = ObjectBoxService.instance.patientBox
+        .query(Patient_.uhid.equals(uhid))
+        .build();
+    try {
+      return q.findFirst();
+    } finally {
+      q.close();
+    }
   }
 
   Patient? getByInfo(String name, String phone) {
@@ -141,11 +191,24 @@ class PatientProvider extends ChangeNotifier {
     final n = name.trim().toLowerCase();
     final p = phone.trim();
 
-    return _patients.where((pt) {
+    final cached = _patients.where((pt) {
       final nameMatch = pt.name.trim().toLowerCase() == n;
       final phoneMatch = p.isNotEmpty && pt.phone.trim() == p;
       return nameMatch && (p.isEmpty || phoneMatch);
     }).firstOrNull;
+    if (cached != null) return cached;
+
+    // Fallback to database lookup
+    final q = ObjectBoxService.instance.patientBox
+        .query(Patient_.name.equals(name.trim(), caseSensitive: false))
+        .build();
+    try {
+      final results = q.find();
+      if (p.isEmpty) return results.firstOrNull;
+      return results.where((pt) => pt.phone.trim() == p).firstOrNull;
+    } finally {
+      q.close();
+    }
   }
 
   static const Set<String> _commonNames = {

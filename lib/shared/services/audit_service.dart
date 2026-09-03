@@ -5,6 +5,7 @@ import '../models/audit_log.dart';
 import '../models/app_user.dart';
 import 'objectbox_service.dart';
 import 'sync_queue_service.dart';
+import 'device_identity_service.dart';
 import '../../objectbox.g.dart';
 
 class AuditService {
@@ -58,7 +59,12 @@ class AuditService {
         detailsJson: jsonEncode(details ?? {}),
         performedBy: actor != null ? '${actor.name} (${actor.role})' : 'System',
         timestamp: DateTime.now(),
-        deviceId: settings.deviceId ?? 'Unknown-Device',
+        deviceId: (settings.deviceId != null &&
+                settings.deviceId!.isNotEmpty &&
+                settings.deviceId != 'Unknown-Device' &&
+                settings.deviceId != 'unknown')
+            ? settings.deviceId!
+            : DeviceIdentityService.cachedDeviceId,
       );
       
       db.store.box<AuditLog>().put(logEntry);

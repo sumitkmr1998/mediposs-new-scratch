@@ -31,6 +31,12 @@ class SettingsProvider extends ChangeNotifier {
     }
   }
 
+  void setThemeMode(String mode) {
+    _settings.themeMode = mode;
+    ObjectBoxService.instance.settingsBox.put(_settings);
+    notifyListeners();
+  }
+
   bool _isAutoBackingUp = false;
   bool get isAutoBackingUp => _isAutoBackingUp;
 

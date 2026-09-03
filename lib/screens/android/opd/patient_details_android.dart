@@ -209,23 +209,23 @@ class _SaleHistoryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
-        border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+        border: Border.all(color: context.borderColor.withValues(alpha: 0.4)),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           onTap: () {
             showDialog(
               context: context,
@@ -233,47 +233,47 @@ class _SaleHistoryTile extends StatelessWidget {
             );
           },
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: AppTheme.success.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
                     Icons.shopping_cart_outlined,
                     color: AppTheme.success,
-                    size: 24,
+                    size: 18,
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Sale: ${sale.invoiceNo}',
                           style: const TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 16)),
+                              fontWeight: FontWeight.w700, fontSize: 13)),
                       if (sale.opdInvoiceNo.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
                           'OPD Link ID: ${sale.opdInvoiceNo}',
                           style: const TextStyle(
                             color: AppTheme.primary,
-                            fontSize: 12,
+                            fontSize: 10,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                       ],
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Text(
                         DateFormat('dd MMM yyyy, hh:mm a')
                             .format(sale.createdAt),
                         style: TextStyle(
                             color: context.textMutedColor,
-                            fontSize: 13,
+                            fontSize: 11,
                             fontWeight: FontWeight.w500),
                       ),
                     ],
@@ -282,10 +282,10 @@ class _SaleHistoryTile extends StatelessWidget {
                 Text('₹${sale.total.toStringAsFixed(0)}',
                     style: const TextStyle(
                         fontWeight: FontWeight.w800,
-                        fontSize: 16,
+                        fontSize: 14,
                         color: AppTheme.success)),
-                const SizedBox(width: 8),
-                const Icon(Icons.chevron_right, color: Colors.grey),
+                const SizedBox(width: 4),
+                const Icon(Icons.chevron_right, color: Colors.grey, size: 18),
               ],
             ),
           ),
@@ -365,23 +365,23 @@ class _PrescriptionHistoryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
-        border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+        border: Border.all(color: context.borderColor.withValues(alpha: 0.4)),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           onTap: () {
             showDialog(
               context: context,
@@ -390,35 +390,35 @@ class _PrescriptionHistoryTile extends StatelessWidget {
             );
           },
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: AppTheme.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
                     Icons.medical_services_outlined,
                     color: AppTheme.primary,
-                    size: 24,
+                    size: 18,
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Dr. ${prescription.doctorName}',
                           style: const TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 16)),
-                      const SizedBox(height: 4),
+                              fontWeight: FontWeight.w700, fontSize: 13)),
+                      const SizedBox(height: 2),
                       Text(
                         '${prescription.diagnosis.isNotEmpty ? "${prescription.diagnosis} • " : ""}${DateFormat('dd MMM yyyy').format(prescription.createdAt)}',
                         style: TextStyle(
                             color: context.textMutedColor,
-                            fontSize: 13,
+                            fontSize: 11,
                             fontWeight: FontWeight.w500),
                       ),
                     ],
@@ -426,11 +426,11 @@ class _PrescriptionHistoryTile extends StatelessWidget {
                 ),
                 if (prescription.dispensed)
                   Container(
-                    padding: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.only(right: 6),
                     child: const Icon(Icons.check_circle,
-                        color: AppTheme.success, size: 24),
+                        color: AppTheme.success, size: 18),
                   ),
-                const Icon(Icons.chevron_right, color: Colors.grey),
+                const Icon(Icons.chevron_right, color: Colors.grey, size: 18),
               ],
             ),
           ),
@@ -755,22 +755,30 @@ class _GalleryTabState extends State<_GalleryTab> {
   }
 
   Future<void> _pullPhotosFromHub() async {
-    if (!Platform.isAndroid) return;
     final sync = context.read<SyncService>();
-    if (!sync.isConnected) return;
+    if (sync.isHub || !sync.isConnected) return;
     final uhid = widget.patient.uhid;
     if (uhid.isEmpty) return;
 
     setState(() => _loadingFromHub = true);
-    await sync.pullPatientPhotosForPatient(uhid, widget.patient.id);
-    if (mounted) {
-      setState(() => _loadingFromHub = false);
+    try {
+      final fetched = await sync.pullPatientPhotosForPatient(uhid, widget.patient.id);
+      if (fetched.isNotEmpty && mounted) {
+        context.read<PatientProvider>().load();
+      }
+    } catch (e) {
+      debugPrint('Error pulling photos from hub: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _loadingFromHub = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final sync = context.watch<SyncService>();
     final pProvider = context.watch<PatientProvider>();
     final photos = pProvider.getPatientPhotosRobust(widget.patient);
 
@@ -820,7 +828,7 @@ class _GalleryTabState extends State<_GalleryTab> {
                         'No photographs saved for this patient',
                         style: TextStyle(color: context.textMutedColor),
                       ),
-                      if (Platform.isAndroid) ...[
+                      if (!sync.isHub) ...[
                         const SizedBox(height: 12),
                         TextButton.icon(
                           onPressed: _pullPhotosFromHub,
@@ -848,8 +856,17 @@ class _GalleryTabState extends State<_GalleryTab> {
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            Image.file(File(photo.imagePath),
-                                fit: BoxFit.cover),
+                            Image.file(
+                              File(photo.imagePath),
+                              fit: BoxFit.cover,
+                              errorBuilder: (ctx, err, stack) => Container(
+                                color: Colors.grey.shade200,
+                                child: const Center(
+                                  child: Icon(Icons.broken_image_rounded,
+                                      color: Colors.grey, size: 24),
+                                ),
+                              ),
+                            ),
                             Positioned(
                               bottom: 0,
                               left: 0,
@@ -1116,7 +1133,6 @@ class _EnhancedPhotoViewerState extends State<_EnhancedPhotoViewer> {
   }
 }
 
-// --- Profile Tab ---
 class _ProfileTab extends StatelessWidget {
   final Patient patient;
   const _ProfileTab({required this.patient});
@@ -1124,7 +1140,7 @@ class _ProfileTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Column(
         children: [
           _ProfileInfoItem(
@@ -1166,15 +1182,15 @@ class _ProfileInfoItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 8,
+            blurRadius: 6,
             offset: const Offset(0, 2),
           ),
         ],
@@ -1183,14 +1199,14 @@ class _ProfileInfoItem extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: AppTheme.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, color: AppTheme.primary, size: 24),
+            child: Icon(icon, color: AppTheme.primary, size: 18),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1198,12 +1214,12 @@ class _ProfileInfoItem extends StatelessWidget {
                 Text(label,
                     style: TextStyle(
                         color: context.textMutedColor,
-                        fontSize: 12,
+                        fontSize: 10,
                         fontWeight: FontWeight.w600)),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(value,
                     style: const TextStyle(
-                        fontWeight: FontWeight.w800, fontSize: 15)),
+                        fontWeight: FontWeight.w800, fontSize: 13)),
               ],
             ),
           ),

@@ -140,16 +140,17 @@ class OpdProvider extends ChangeNotifier {
     switch (filter) {
       case OpdFilter.today:
         _setToday();
-        break;
+        loadQueue();
+        return;
       case OpdFilter.yesterday:
         final yest = now.subtract(const Duration(days: 1));
         _customStart = DateTime(yest.year, yest.month, yest.day);
-        _customEnd = DateTime(yest.year, yest.month, yest.day, 23, 59, 59);
+        _customEnd = DateTime(yest.year, yest.month, yest.day, 23, 59, 59, 999);
         break;
       case OpdFilter.last7Days:
         final start = now.subtract(const Duration(days: 6));
         _customStart = DateTime(start.year, start.month, start.day);
-        _customEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
+        _customEnd = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
         break;
       case OpdFilter.allTime:
         _customStart = null;
@@ -157,7 +158,7 @@ class OpdProvider extends ChangeNotifier {
         break;
       case OpdFilter.custom:
         if (range != null) {
-          _customStart = range.start;
+          _customStart = DateTime(range.start.year, range.start.month, range.start.day);
           _customEnd = DateTime(
             range.end.year,
             range.end.month,
@@ -165,11 +166,17 @@ class OpdProvider extends ChangeNotifier {
             23,
             59,
             59,
+            999,
           );
         }
         break;
     }
+
+    _appointments = _apptRepo.inScheduledRange(_customStart, _customEnd)
+      ..sort((a, b) => b.scheduledAt.compareTo(a.scheduledAt));
+    loadDoctors();
     _loadedCount = pageSize;
+    _recalculateTotals();
     notifyListeners();
   }
 
@@ -206,10 +213,22 @@ class OpdProvider extends ChangeNotifier {
     }
   }
 
+  void load() {
+    if (_activeFilter == OpdFilter.today) {
+      loadQueue();
+      return;
+    }
+    _appointments = _apptRepo.inScheduledRange(_customStart, _customEnd)
+      ..sort((a, b) => b.scheduledAt.compareTo(a.scheduledAt));
+    loadDoctors();
+    _loadedCount = pageSize;
+    _recalculateTotals();
+    notifyListeners();
+  }
+
   /// Loads today's queue plus any still-open appointments from the prior day
   /// (overnight walk-ins). Does **not** load lifetime appointment history.
   void loadQueue({DateTime? day}) {
-    final db = ObjectBoxService.instance;
     final ref = day ?? DateTime.now();
     final dayStart = DateTime(ref.year, ref.month, ref.day);
     final dayEnd = DateTime(ref.year, ref.month, ref.day, 23, 59, 59, 999);
@@ -243,8 +262,8 @@ class OpdProvider extends ChangeNotifier {
     return _apptRepo.forPatient(patientId, limit: limit);
   }
 
-  /// @deprecated Use [loadQueue]. Kept so existing call sites keep compiling.
-  void loadAll() => loadQueue();
+  /// Reloads data respecting the active filter.
+  void loadAll() => load();
 
   int _nextTokenForToday() {
     final today = DateTime.now();

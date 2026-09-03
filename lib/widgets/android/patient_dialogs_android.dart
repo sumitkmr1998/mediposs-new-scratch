@@ -333,6 +333,16 @@ class _PatientSearchSheet extends StatefulWidget {
 
 class _PatientSearchSheetState extends State<_PatientSearchSheet> {
   final _searchCtrl = TextEditingController();
+  late bool _showOpdQueue;
+
+  @override
+  void initState() {
+    super.initState();
+    _showOpdQueue = widget.limitToTodayOpd;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<PatientProvider>().load();
+    });
+  }
 
   @override
   void dispose() {
@@ -340,204 +350,47 @@ class _PatientSearchSheetState extends State<_PatientSearchSheet> {
     super.dispose();
   }
 
+  Future<void> _openNewPatientRegistration() async {
+    final initialName = _searchCtrl.text.trim();
+    final newPatient = await AndroidPatientDialogs.showRegistrationSheet(
+      context,
+      patient: initialName.isNotEmpty
+          ? Patient(uhid: '', name: initialName, gender: 'Male')
+          : null,
+    );
+    if (newPatient != null && mounted) {
+      widget.onSelected(newPatient);
+      Navigator.pop(context);
+    }
+  }
+
+  void _useAsWalkIn(String name) {
+    final walkIn = Patient(uhid: '', name: name.trim(), phone: '', gender: 'Male')..id = 0;
+    widget.onSelected(walkIn);
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final query = _searchCtrl.text.toLowerCase();
+    final rawQuery = _searchCtrl.text.trim();
+    final query = rawQuery.toLowerCase();
 
-    if (widget.limitToTodayOpd) {
-      final opd = context.watch<OpdProvider>();
-      final todayQueue = opd.todayQueue; // already sorted by tokenNumber
-      final filteredAppts = todayQueue.where((a) {
-        return a.patientName.toLowerCase().contains(query) ||
-            a.patientPhone.contains(query) ||
-            a.tokenNumber.toString().contains(query) ||
-            a.doctorName.toLowerCase().contains(query);
-      }).toList();
-
-      return Container(
-        height: MediaQuery.of(context).size.height * 0.85,
-        padding: const EdgeInsets.only(top: 16),
-        decoration: BoxDecoration(
-          color: context.surfaceColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          children: [
-            // Drag handle
-            Container(
-              width: 48,
-              height: 5,
-              decoration: BoxDecoration(
-                  color: context.borderColor.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(4)),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('SELECT OPD PATIENT',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1,
-                          color: AppTheme.primaryLight)),
-                  if (widget.showSkip)
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: Text('SKIP / WALK-IN', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: context.textMutedColor)),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: TextField(
-                controller: _searchCtrl,
-                autofocus: true,
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                decoration: InputDecoration(
-                  hintText: 'Search by Name, Phone, Doctor or Token...',
-                  hintStyle: TextStyle(color: context.textMutedColor, fontSize: 14),
-                  prefixIcon: const Icon(Icons.search_rounded,
-                      color: AppTheme.primaryLight, size: 22),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(
-                          color: context.borderColor.withValues(alpha: 0.3))),
-                  enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(
-                          color: context.borderColor.withValues(alpha: 0.3))),
-                  focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide:
-                          const BorderSide(color: AppTheme.primary, width: 2)),
-                  filled: true,
-                  fillColor: context.textMutedColor.withValues(alpha: 0.03),
-                  isDense: true,
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: filteredAppts.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.person_search_rounded,
-                              size: 64, color: context.borderColor.withValues(alpha: 0.2)),
-                          const SizedBox(height: 24),
-                          const Text('NO MATCHING RECORDS',
-                              style: TextStyle(
-                                  color: Colors.grey,
-                                  letterSpacing: 1,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w900)),
-                        ],
-                      ),
-                    )
-                  : ListView.builder(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                      itemCount: filteredAppts.length,
-                      itemBuilder: (ctx, i) {
-                        final a = filteredAppts[i];
-                        final pres = ObjectBoxService.instance.prescriptionBox
-                            .query(Prescription_.appointmentId.equals(a.id))
-                            .build()
-                            .findFirst();
-                        final isDispensed = pres?.dispensed == true || a.status == 'done';
-
-                        return Opacity(
-                          opacity: isDispensed ? 0.4 : 1.0,
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            decoration: BoxDecoration(
-                              color: context.surfaceColor.withValues(alpha: 0.9),
-                              borderRadius: BorderRadius.circular(20),
-                              boxShadow: [
-                                BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))
-                              ],
-                              border: Border.all(
-                                  color:
-                                      context.borderColor.withValues(alpha: 0.2)),
-                            ),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 6),
-                              leading: Container(
-                                width: 44, height: 44,
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primary.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    '#${a.tokenNumber}',
-                                    style: const TextStyle(
-                                      color: AppTheme.primary,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              title: Text(
-                                a.patientName,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w900, fontSize: 15),
-                              ),
-                              subtitle: Text(
-                                'Dr. ${a.doctorName} • Status: ${a.status}',
-                                style: TextStyle(
-                                    color: context.textMutedColor,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600),
-                              ),
-                              trailing: Text(
-                                a.patientPhone,
-                                style: TextStyle(
-                                    color: context.textMutedColor,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600),
-                              ),
-                              onTap: () {
-                                Navigator.pop(context);
-                                if (widget.onAppointmentSelected != null) {
-                                  widget.onAppointmentSelected!(a);
-                                } else {
-                                  final patients = context.read<PatientProvider>().patients;
-                                  final p = patients.where((x) => x.id == a.patientId).firstOrNull ??
-                                      (Patient(uhid: '', name: a.patientName, phone: a.patientPhone, gender: 'Male')..id = a.patientId);
-                                  widget.onSelected(p);
-                                }
-                              },
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final patients = context.watch<PatientProvider>().patients;
-    final filtered = patients.where((p) {
-      return p.name.toLowerCase().contains(query) ||
-          p.phone.contains(query) ||
-          p.address.toLowerCase().contains(query) ||
-          p.uhid.toLowerCase().contains(query);
+    final opd = context.watch<OpdProvider>();
+    final todayQueue = opd.todayQueue;
+    final filteredAppts = todayQueue.where((a) {
+      return a.patientName.toLowerCase().contains(query) ||
+          a.patientPhone.contains(query) ||
+          a.tokenNumber.toString().contains(query) ||
+          a.doctorName.toLowerCase().contains(query);
     }).toList();
 
+    final patientProvider = context.watch<PatientProvider>();
+    final List<Patient> filteredPatients = rawQuery.isEmpty
+        ? patientProvider.patients
+        : patientProvider.searchPatients(rawQuery, limit: 50);
+
     return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
+      height: MediaQuery.of(context).size.height * 0.88,
       padding: const EdgeInsets.only(top: 16),
       decoration: BoxDecoration(
         color: context.surfaceColor,
@@ -547,143 +400,420 @@ class _PatientSearchSheetState extends State<_PatientSearchSheet> {
         children: [
           // Drag handle
           Container(
-            width: 48,
-            height: 5,
+            width: 40,
+            height: 4,
             decoration: BoxDecoration(
                 color: context.borderColor.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(4)),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          // Header
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('SELECT PATIENT',
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1,
-                        color: AppTheme.primaryLight)),
-                if (widget.showSkip)
+                Text(
+                  _showOpdQueue ? 'SELECT OPD PATIENT' : 'SELECT PATIENT',
+                  style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.2,
+                      color: AppTheme.primaryLight),
+                ),
+                const Spacer(),
+                ElevatedButton.icon(
+                  onPressed: _openNewPatientRegistration,
+                  icon: const Icon(Icons.person_add_rounded, size: 13),
+                  label: const Text('NEW PATIENT',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    visualDensity: VisualDensity.compact,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    elevation: 0,
+                  ),
+                ),
+                if (widget.showSkip) ...[
+                  const SizedBox(width: 6),
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: Text('SKIP / WALK-IN', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: context.textMutedColor)),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    child: Text('SKIP / WALK-IN',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 10,
+                            color: context.textMutedColor)),
                   ),
+                ],
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: TextField(
-              controller: _searchCtrl,
-              autofocus: true,
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-              decoration: InputDecoration(
-                hintText: 'Search by Name, Phone, UHID...',
-                hintStyle: TextStyle(color: context.textMutedColor, fontSize: 14),
-                prefixIcon: const Icon(Icons.search_rounded,
-                    color: AppTheme.primaryLight, size: 22),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(
-                        color: context.borderColor.withValues(alpha: 0.3))),
-                enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(
-                        color: context.borderColor.withValues(alpha: 0.3))),
-                focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide:
-                        const BorderSide(color: AppTheme.primary, width: 2)),
-                filled: true,
-                fillColor: context.textMutedColor.withValues(alpha: 0.03),
-                isDense: true,
+          // Toggle if opened in OPD mode
+          if (widget.limitToTodayOpd) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<bool>(
+                  segments: [
+                    ButtonSegment<bool>(
+                      value: true,
+                      label: Text("Today's Queue (${todayQueue.length})"),
+                      icon: const Icon(Icons.queue_rounded, size: 14),
+                    ),
+                    const ButtonSegment<bool>(
+                      value: false,
+                      label: Text('All Patients'),
+                      icon: Icon(Icons.people_alt_outlined, size: 14),
+                    ),
+                  ],
+                  selected: {_showOpdQueue},
+                  onSelectionChanged: (s) => setState(() => _showOpdQueue = s.first),
+                  style: SegmentedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    selectedBackgroundColor: AppTheme.primary,
+                    selectedForegroundColor: Colors.white,
+                    textStyle: const TextStyle(
+                        fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ),
               ),
-              onChanged: (_) => setState(() {}),
+            ),
+          ],
+          const SizedBox(height: 8),
+          // Search Input Field with Right Add Patient Button
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchCtrl,
+                    autofocus: true,
+                    style: const TextStyle(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: _showOpdQueue
+                          ? 'Search name, phone, doctor or token...'
+                          : 'Search name, phone, UHID...',
+                      hintStyle:
+                          TextStyle(color: context.textMutedColor, fontSize: 12),
+                      prefixIcon: const Icon(Icons.search_rounded,
+                          color: AppTheme.primaryLight, size: 18),
+                      suffixIcon: _searchCtrl.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 16),
+                              onPressed: () {
+                                _searchCtrl.clear();
+                                setState(() {});
+                              },
+                            )
+                          : null,
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                              color: context.borderColor.withValues(alpha: 0.3))),
+                      enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                              color: context.borderColor.withValues(alpha: 0.3))),
+                      focusedBorder: const OutlineInputBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(12)),
+                          borderSide:
+                              BorderSide(color: AppTheme.primary, width: 1.5)),
+                      filled: true,
+                      fillColor: context.textMutedColor.withValues(alpha: 0.03),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
+                  icon: const Icon(Icons.person_add_alt_1_rounded,
+                      size: 18, color: AppTheme.primary),
+                  tooltip: 'Register New Patient',
+                  style: IconButton.styleFrom(
+                    padding: const EdgeInsets.all(8),
+                    minimumSize: const Size(38, 38),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                  ),
+                  onPressed: _openNewPatientRegistration,
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
+          // Results list
           Expanded(
-            child: filtered.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.person_search_rounded,
-                            size: 64, color: context.borderColor.withValues(alpha: 0.2)),
-                        const SizedBox(height: 24),
-                        const Text('NO MATCHING RECORDS',
-                            style: TextStyle(
-                                color: Colors.grey,
-                                letterSpacing: 1,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w900)),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                    itemCount: filtered.length,
-                    itemBuilder: (ctx, i) {
-                      final p = filtered[i];
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: context.surfaceColor.withValues(alpha: 0.9),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))
-                          ],
-                          border: Border.all(
-                              color:
-                                  context.borderColor.withValues(alpha: 0.2)),
+            child: _showOpdQueue
+                ? (filteredAppts.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.person_search_rounded,
+                                  size: 40,
+                                  color: context.borderColor.withValues(alpha: 0.3)),
+                              const SizedBox(height: 12),
+                              Text(
+                                rawQuery.isNotEmpty
+                                    ? 'NO OPD APPOINTMENTS MATCHING "$rawQuery"'
+                                    : 'NO ACTIVE PATIENTS IN TODAY\'S OPD QUEUE',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    color: Colors.grey,
+                                    letterSpacing: 0.8,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800),
+                              ),
+                              const SizedBox(height: 12),
+                              ElevatedButton.icon(
+                                onPressed: () {
+                                  setState(() => _showOpdQueue = false);
+                                },
+                                icon: const Icon(Icons.people_alt_outlined, size: 14),
+                                label: const Text('Search in All Patients', style: TextStyle(fontSize: 11)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.primary,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10)),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 6),
-                          leading: Container(
-                            width: 44, height: 44,
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 4),
+                        itemCount: filteredAppts.length,
+                        itemBuilder: (ctx, i) {
+                          final a = filteredAppts[i];
+                          final pres = ObjectBoxService.instance.prescriptionBox
+                              .query(Prescription_.appointmentId.equals(a.id))
+                              .build()
+                              .findFirst();
+                          final isDispensed =
+                              pres?.dispensed == true || a.status == 'done';
+
+                          return Opacity(
+                            opacity: isDispensed ? 0.4 : 1.0,
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              decoration: BoxDecoration(
+                                color: context.surfaceColor,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                    color: context.borderColor.withValues(alpha: 0.3)),
+                              ),
+                              child: ListTile(
+                                dense: true,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                                leading: Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primary.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '#${a.tokenNumber}',
+                                      style: const TextStyle(
+                                          color: AppTheme.primary,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w900),
+                                    ),
+                                  ),
+                                ),
+                                title: Text(a.patientName,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 13)),
+                                subtitle: Text(
+                                  'Dr. ${a.doctorName} • ${a.status.toUpperCase()}',
+                                  style: TextStyle(
+                                      color: context.textMutedColor,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                                trailing: Text(
+                                  a.patientPhone,
+                                  style: TextStyle(
+                                      color: context.textMutedColor,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  if (widget.onAppointmentSelected != null) {
+                                    widget.onAppointmentSelected!(a);
+                                  } else {
+                                    final p = context
+                                            .read<PatientProvider>()
+                                            .getById(a.patientId) ??
+                                        (Patient(
+                                                uhid: '',
+                                                name: a.patientName,
+                                                phone: a.patientPhone,
+                                                gender: 'Male')
+                                          ..id = a.patientId);
+                                    widget.onSelected(p);
+                                  }
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                      ))
+                : (filteredPatients.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.person_search_rounded,
+                                  size: 56,
+                                  color: context.borderColor.withValues(alpha: 0.3)),
+                              const SizedBox(height: 16),
+                              Text(
+                                rawQuery.isNotEmpty
+                                    ? 'NO REGISTERED PATIENTS MATCHING "$rawQuery"'
+                                    : 'NO PATIENTS IN DATABASE',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    color: Colors.grey,
+                                    letterSpacing: 0.8,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w900),
+                              ),
+                              const SizedBox(height: 20),
+                              ElevatedButton.icon(
+                                onPressed: _openNewPatientRegistration,
+                                icon: const Icon(Icons.person_add_rounded, size: 18),
+                                label: Text(rawQuery.isNotEmpty
+                                    ? 'Register "$rawQuery" as New Patient'
+                                    : 'Register New Patient'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.primary,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 20, vertical: 10),
+                                ),
+                              ),
+                              if (rawQuery.isNotEmpty) ...[
+                                const SizedBox(height: 10),
+                                OutlinedButton.icon(
+                                  onPressed: () => _useAsWalkIn(rawQuery),
+                                  icon: const Icon(Icons.shopping_bag_outlined,
+                                      size: 18),
+                                  label: Text('Use "$rawQuery" as Walk-in Customer'),
+                                  style: OutlinedButton.styleFrom(
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12)),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 20, vertical: 10),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 4),
+                        itemCount: filteredPatients.length,
+                        itemBuilder: (ctx, i) {
+                          final p = filteredPatients[i];
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
                             decoration: BoxDecoration(
-                              color: AppTheme.primary.withValues(alpha: 0.1),
+                              color: context.surfaceColor,
                               borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                  color:
+                                      context.borderColor.withValues(alpha: 0.3)),
                             ),
-                            child: Center(
-                              child: Text(p.name[0].toUpperCase(),
+                            child: ListTile(
+                              dense: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 2),
+                              leading: Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primary.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    p.name.isNotEmpty
+                                        ? p.name[0].toUpperCase()
+                                        : '?',
+                                    style: const TextStyle(
+                                        color: AppTheme.primary,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800),
+                                  ),
+                                ),
+                              ),
+                              title: Text(p.name,
                                   style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 13)),
+                              subtitle: Text(
+                                  '${p.uhid.isNotEmpty ? "${p.uhid} • " : ""}${p.phone.isNotEmpty ? p.phone : "No phone"}'
+                                      .toUpperCase(),
+                                  style: TextStyle(
+                                      color: context.textMutedColor,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.5)),
+                              trailing: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color:
+                                      AppTheme.primary.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'SELECT',
+                                  style: TextStyle(
                                       color: AppTheme.primary,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w900)),
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 10,
+                                      letterSpacing: 0.5),
+                                ),
+                              ),
+                              onTap: () {
+                                Navigator.pop(context);
+                                widget.onSelected(p);
+                              },
                             ),
-                          ),
-                          title: Text(p.name,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-                          subtitle: Text('${p.phone} • ${p.address}'.toUpperCase(),
-                              style: TextStyle(color: context.textMutedColor, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
-                          trailing: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: context.textMutedColor.withValues(alpha: 0.05),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(p.uhid,
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    color: context.textMutedColor,
-                                    fontWeight: FontWeight.w900)),
-                          ),
-                          onTap: () {
-                            Navigator.pop(context);
-                            widget.onSelected(p);
-                          },
-                        ),
-                      );
-                    },
-                  ),
+                          );
+                        },
+                      )),
           ),
         ],
       ),

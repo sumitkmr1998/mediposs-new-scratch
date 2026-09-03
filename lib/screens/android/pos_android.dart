@@ -149,32 +149,32 @@ class _PosAndroidState extends State<PosAndroid> {
       ),
       builder: (ctx) {
         return Container(
-          padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(ctx).padding.bottom + 20),
+          padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(ctx).padding.bottom + 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Center(
                 child: Container(
-                  width: 48,
-                  height: 5,
+                  width: 40,
+                  height: 4,
                   decoration: BoxDecoration(
                     color: context.borderColor.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
               const Text(
                 'SELECT APPOINTMENT FOR CLINIC DISPENSE',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 10,
                   fontWeight: FontWeight.w900,
-                  letterSpacing: 1,
+                  letterSpacing: 1.2,
                   color: AppTheme.primaryLight,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               Flexible(
                 child: ListView.builder(
                   shrinkWrap: true,
@@ -190,28 +190,30 @@ class _PosAndroidState extends State<PosAndroid> {
                     return Opacity(
                       opacity: isDispensed ? 0.4 : 1.0,
                       child: Container(
-                        margin: const EdgeInsets.only(bottom: 12),
+                        margin: const EdgeInsets.only(bottom: 8),
                         decoration: BoxDecoration(
-                          color: context.surfaceColor.withValues(alpha: 0.9),
-                          borderRadius: BorderRadius.circular(20),
+                          color: context.surfaceColor,
+                          borderRadius: BorderRadius.circular(14),
                           border: Border.all(
-                            color: context.borderColor.withValues(alpha: 0.2),
+                            color: context.borderColor.withValues(alpha: 0.3),
                           ),
                         ),
                         child: ListTile(
+                          dense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                           leading: Container(
-                            width: 44,
-                            height: 44,
+                            width: 36,
+                            height: 36,
                             decoration: BoxDecoration(
                               color: AppTheme.primary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             child: Center(
                               child: Text(
                                 '#${a.tokenNumber}',
                                 style: const TextStyle(
                                   color: AppTheme.primary,
-                                  fontSize: 14,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w900,
                                 ),
                               ),
@@ -220,16 +222,16 @@ class _PosAndroidState extends State<PosAndroid> {
                           title: Text(
                             a.patientName,
                             style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
                             ),
                           ),
                           subtitle: Text(
-                            'Doctor: Dr. ${a.doctorName} • Status: ${a.status.toUpperCase()}',
+                            'Dr. ${a.doctorName} • ${a.status.toUpperCase()}',
                             style: TextStyle(
                               color: context.textMutedColor,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           onTap: () {
@@ -352,16 +354,16 @@ class _PosAndroidState extends State<PosAndroid> {
       context,
       limitToTodayOpd: cart.isClinicalDispense,
       onSelected: (p) {
-        cart.setPatient(name: p.name, phone: p.phone, id: p.id, uhid: p.uhid);
+        cart.setPatient(name: p.name, phone: p.phone, id: p.id, uhid: p.uhid, address: p.address);
         _patientCtrl.text = p.name;
-        _currentSearchFocusNode?.requestFocus();
+        if (mounted) setState(() {});
       },
       onAppointmentSelected: (Appointment appt) {
         final patient = context.read<PatientProvider>().getById(appt.patientId);
         cart.setPatient(name: appt.patientName, phone: appt.patientPhone, id: appt.patientId, uhid: patient?.uhid);
         _patientCtrl.text = appt.patientName;
         cart.setLinkedAppointment(appt.id);
-        _currentSearchFocusNode?.requestFocus();
+        if (mounted) setState(() {});
       },
     );
   }
@@ -481,7 +483,54 @@ class _PosAndroidState extends State<PosAndroid> {
                       letterSpacing: 1,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
+                  // Attached Patient / Walk-in tile in checkout summary
+                  InkWell(
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showPatientProactiveSearch();
+                    },
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: cart.patientName.isNotEmpty
+                            ? AppTheme.primary.withValues(alpha: 0.08)
+                            : context.borderColor.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: cart.patientName.isNotEmpty
+                              ? AppTheme.primary.withValues(alpha: 0.25)
+                              : context.borderColor.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            cart.patientName.isNotEmpty ? Icons.person_rounded : Icons.person_outline_rounded,
+                            size: 18,
+                            color: cart.patientName.isNotEmpty ? AppTheme.primary : context.textMutedColor,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              cart.patientName.isNotEmpty
+                                  ? 'Patient: ${cart.patientName}${cart.patientPhone.isNotEmpty ? " (${cart.patientPhone})" : ""}'
+                                  : 'Walk-in Customer (Tap to change)',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: cart.patientName.isNotEmpty ? AppTheme.primary : context.textMutedColor,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const Icon(Icons.edit_outlined, size: 16, color: Colors.grey),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   SummaryField(
                     label: 'Subtotal',
                     value: '₹${cart.subtotal.toStringAsFixed(2)}',
@@ -861,47 +910,72 @@ class _PosAndroidState extends State<PosAndroid> {
                       ),
                     ),
                   ),
-                // Currently Selected Patient
+                // Currently Selected Patient (shown only when a patient is attached)
                 if (cart.patientName.isNotEmpty)
                   Container(
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
+                        horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
-                      color: AppTheme.primary.withValues(alpha: 0.1),
+                      color: AppTheme.primary.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                          color: AppTheme.primary.withValues(alpha: 0.3)),
+                          color: AppTheme.primary.withValues(alpha: 0.25)),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.person,
-                            color: AppTheme.primary, size: 20),
-                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.person_rounded,
+                              color: AppTheme.primary, size: 18),
+                        ),
+                        const SizedBox(width: 10),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Patient attached',
-                                  style: TextStyle(
-                                      fontSize: 10,
-                                      color: context.textMutedColor,
-                                      fontWeight: FontWeight.bold)),
-                              Text(
-                                  '${cart.patientName}${context.read<PatientProvider>().getById(cart.patientId)?.uhid != null ? ' (${context.read<PatientProvider>().getById(cart.patientId)!.uhid})' : ''} ${cart.patientPhone.isNotEmpty ? ' • ${cart.patientPhone}' : ''}',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      color: AppTheme.primaryLight)),
-                            ],
+                          child: InkWell(
+                            onTap: _showPatientProactiveSearch,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text('PATIENT ATTACHED',
+                                        style: TextStyle(
+                                            fontSize: 9,
+                                            color: context.textMutedColor,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 0.6)),
+                                    const SizedBox(width: 6),
+                                    const Text('(Tap to change)',
+                                        style: TextStyle(
+                                            fontSize: 9,
+                                            color: AppTheme.primaryLight,
+                                            fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                                Text(
+                                    '${cart.patientName}${context.read<PatientProvider>().getById(cart.patientId)?.uhid != null ? ' (${context.read<PatientProvider>().getById(cart.patientId)!.uhid})' : ''}${cart.patientPhone.isNotEmpty ? ' • ${cart.patientPhone}' : ''}',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 13,
+                                        color: AppTheme.primaryLight),
+                                    overflow: TextOverflow.ellipsis),
+                              ],
+                            ),
                           ),
                         ),
-                        InkWell(
-                          onTap: () {
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded,
+                              color: AppTheme.danger, size: 18),
+                          tooltip: 'Clear Patient',
+                          onPressed: () {
                             cart.setPatient(name: '', phone: '', id: 0, uhid: '');
                             _patientCtrl.clear();
+                            if (mounted) setState(() {});
                           },
-                          child: const Icon(Icons.close_rounded,
-                              color: AppTheme.danger, size: 20),
                         ),
                       ],
                     ),
@@ -912,8 +986,9 @@ class _PosAndroidState extends State<PosAndroid> {
                     if (val.text.isEmpty) return const Iterable.empty();
                     final q = val.text.toLowerCase();
                     final isClinical = cart.isClinicalDispense;
+                    final isReturn = cart.isReturnMode;
                     final meds = inv.rawMedicines.where((m) =>
-                        (isClinical ? m.getNonExpiredMainStock() > 0 : m.getNonExpiredStoreStock() > 0) &&
+                        (isReturn || (isClinical ? m.getNonExpiredMainStock() > 0 : m.getNonExpiredStoreStock() > 0)) &&
                         (m.name.toLowerCase().contains(q) ||
                             m.barcode.contains(val.text)));
                     final procs = context
@@ -941,53 +1016,76 @@ class _PosAndroidState extends State<PosAndroid> {
                         _searchCtrl.text = ctrl.text;
                       }
                     });
-                    return TextField(
-                      controller: ctrl,
-                      focusNode: focusNode,
-                      decoration: InputDecoration(
-                        hintText: 'Search or Scan Barcode',
-                        prefixIcon: const Icon(Icons.search_rounded,
-                            color: AppTheme.primary),
-                        suffixIcon: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.person_search_rounded),
-                              onPressed: _showPatientProactiveSearch,
-                              color: AppTheme.primary,
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: ctrl,
+                            focusNode: focusNode,
+                            style: const TextStyle(fontSize: 13),
+                            decoration: InputDecoration(
+                              hintText: cart.isClinicalDispense
+                                  ? 'Search medicine or procedure for clinic dispense...'
+                                  : 'Search medicine, procedure, or barcode...',
+                              hintStyle: TextStyle(fontSize: 12, color: context.textMutedColor),
+                              prefixIcon: const Icon(Icons.search_rounded,
+                                  size: 18, color: AppTheme.primaryLight),
+                              suffixIcon: ctrl.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear_rounded, size: 16),
+                                      onPressed: () {
+                                        ctrl.clear();
+                                        _searchCtrl.clear();
+                                      },
+                                    )
+                                  : null,
+                              filled: true,
+                              fillColor: context.borderColor.withValues(alpha: 0.05),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 10),
                             ),
-                          ],
+                          ),
                         ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide(
-                              color:
-                                  context.borderColor.withValues(alpha: 0.5)),
+                        const SizedBox(width: 8),
+                        IconButton.filledTonal(
+                          icon: Icon(
+                            cart.patientName.isNotEmpty
+                                ? Icons.person_rounded
+                                : Icons.person_add_alt_1_rounded,
+                            size: 18,
+                            color: cart.patientName.isNotEmpty
+                                ? AppTheme.primary
+                                : context.textMutedColor,
+                          ),
+                          tooltip: cart.patientName.isNotEmpty
+                              ? 'Change Patient'
+                              : 'Select / Add Patient',
+                          style: IconButton.styleFrom(
+                            padding: const EdgeInsets.all(8),
+                            minimumSize: const Size(38, 38),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            backgroundColor: cart.patientName.isNotEmpty
+                                ? AppTheme.primary.withValues(alpha: 0.12)
+                                : context.borderColor.withValues(alpha: 0.1),
+                          ),
+                          onPressed: _showPatientProactiveSearch,
                         ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide(
-                              color:
-                                  context.borderColor.withValues(alpha: 0.3)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: const BorderSide(
-                              color: AppTheme.primary, width: 2),
-                        ),
-                        filled: true,
-                        fillColor: context.surfaceColor,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 12),
-                      ),
+                      ],
                     );
                   },
                   optionsViewBuilder: (ctx, onSelected, options) {
                     return Align(
                       alignment: Alignment.topLeft,
                       child: Material(
-                        elevation: 8,
-                        borderRadius: BorderRadius.circular(16),
+                        elevation: 6,
+                        borderRadius: BorderRadius.circular(12),
                         child: Container(
                           constraints: BoxConstraints(
                             maxHeight: MediaQuery.of(context).size.height * 0.4,
@@ -1031,8 +1129,9 @@ class _PosAndroidState extends State<PosAndroid> {
                                     if (!isProc) ...[
                                       Builder(builder: (ctx) {
                                         final isClinical = cart.isClinicalDispense;
-                                         final stock = isClinical ? (item as Medicine).getNonExpiredMainStock() : (item as Medicine).getNonExpiredStoreStock();
-                                         final isLow = isClinical ? stock <= (item as Medicine).lowStockThreshold : (item as Medicine).isLowStock;
+                                        final med = item as Medicine;
+                                        final stock = isClinical ? med.getNonExpiredMainStock() : med.getNonExpiredStoreStock();
+                                        final isLow = isClinical ? stock <= med.lowStockThreshold : med.isLowStock;
                                         return Text('Stock: $stock',
                                             style: TextStyle(
                                                 fontSize: 11,

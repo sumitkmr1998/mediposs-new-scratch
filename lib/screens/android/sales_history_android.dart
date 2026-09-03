@@ -22,10 +22,26 @@ class SalesHistoryAndroid extends StatefulWidget {
 
 class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
   final TextEditingController _searchCtrl = TextEditingController();
+  final ScrollController _scrollCtrl = ScrollController();
   bool _showFilters = false;
 
   @override
+  void initState() {
+    super.initState();
+    _scrollCtrl.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (_scrollCtrl.hasClients &&
+        _scrollCtrl.position.pixels >= _scrollCtrl.position.maxScrollExtent - 250) {
+      context.read<SalesProvider>().loadMore();
+    }
+  }
+
+  @override
   void dispose() {
+    _scrollCtrl.removeListener(_onScroll);
+    _scrollCtrl.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -61,43 +77,26 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
           }
         },
         child: CustomScrollView(
+          controller: _scrollCtrl,
           slivers: [
           // 1. High-Density Financial Summary (Glassmorphic) - Horizontal Scrollable
           SliverToBoxAdapter(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: context.surfaceColor,
                 border: Border(
                     bottom: BorderSide(
-                        color: context.borderColor.withValues(alpha: 0.5))),
+                        color: context.borderColor.withValues(alpha: 0.3))),
               ),
               child: LayoutBuilder(builder: (ctx, constraints) {
-                double grossSales = 0;
-                double returns = 0;
-                double procedureFeeTotal = 0;
-                double consultationFeeTotal = 0;
-                double medsDiscountTotal = 0;
-                
-                final targetSales = isCashier
-                    ? sales.filteredSales.where((s) => _isToday(s.createdAt)).toList()
-                    : sales.filteredSales;
-
-                for (final s in targetSales) {
-                  final consultation = sales.getConsultationTotal(s);
-                  final procedure = sales.getProcedureTotal(s);
-                  final medicine = sales.getMedicineTotal(s);
-
-                  consultationFeeTotal += consultation;
-                  procedureFeeTotal += procedure;
-
-                  if (s.isReturn) {
-                    returns += medicine.abs();
-                  } else {
-                    grossSales += medicine;
-                    medsDiscountTotal += s.discount.abs();
-                  }
-                }
+                // For Cashier, we force the revenue summary to Today's metrics.
+                // For others, read full-range metrics from sales provider (independent of pagination).
+                final double procedureFeeTotal = isCashier ? sales.todayProcedureRevenue : sales.filteredProcedureRevenue;
+                final double consultationFeeTotal = isCashier ? sales.todayConsultationRevenue : sales.filteredConsultationRevenue;
+                final double grossSales = isCashier ? sales.todayGrossSales : sales.rangeGrossSales;
+                final double returns = isCashier ? sales.todayReturns : sales.rangeReturns;
+                final double medsDiscountTotal = isCashier ? sales.todayMedsDiscount : sales.rangeMedsDiscount;
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -106,22 +105,22 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
                       children: [
                         Text('REVENUE COMPOSITION',
                             style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
                                 color: context.textMutedColor,
-                                letterSpacing: 1.5)),
+                                letterSpacing: 1.2)),
                         const Spacer(),
                         const Icon(Icons.verified_user,
-                            size: 12, color: AppTheme.success),
+                            size: 11, color: AppTheme.success),
                         const SizedBox(width: 4),
-                        Text('SENTRY PROTECTION ACTIVE',
+                        Text('VERIFIED AUDIT LOG',
                             style: TextStyle(
-                                fontSize: 10,
+                                fontSize: 9,
                                 fontWeight: FontWeight.w700,
                                 color: AppTheme.success.withValues(alpha: 0.8))),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       clipBehavior: Clip.none,
@@ -133,28 +132,28 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
                             color: AppTheme.accent,
                             icon: Icons.medical_services_rounded,
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           _StatCard(
                             label: "CONSULTATION",
                             value: '₹${consultationFeeTotal.toStringAsFixed(0)}',
                             color: AppTheme.indigo,
                             icon: Icons.account_box_rounded,
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           _StatCard(
                             label: "MED GROSS",
                             value: '₹${grossSales.toStringAsFixed(0)}',
                             color: AppTheme.primary,
                             icon: Icons.trending_up_rounded,
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           _StatCard(
                             label: "MED RETURNS",
                             value: '₹${returns.toStringAsFixed(0)}',
                             color: AppTheme.danger,
                             icon: Icons.assignment_return_rounded,
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           _StatCard(
                             label: "MED DISCOUNTS",
                             value: '₹${medsDiscountTotal.toStringAsFixed(0)}',
@@ -174,19 +173,21 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
           // 2. Search Bar & Filter Toggle
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               child: Row(
                 children: [
                   Expanded(
                     child: TextField(
                       controller: _searchCtrl,
                       onChanged: (v) => sales.search(v),
+                      style: const TextStyle(fontSize: 13),
                       decoration: InputDecoration(
-                        hintText: 'Search by patient, mobile or bill #',
-                        prefixIcon: const Icon(Icons.search_rounded),
+                        hintText: 'Search patient, phone, or bill #...',
+                        hintStyle: TextStyle(fontSize: 12, color: context.textMutedColor),
+                        prefixIcon: const Icon(Icons.search_rounded, size: 18),
                         suffixIcon: _searchCtrl.text.isNotEmpty
                             ? IconButton(
-                                icon: const Icon(Icons.close_rounded),
+                                icon: const Icon(Icons.close_rounded, size: 16),
                                 onPressed: () {
                                   _searchCtrl.clear();
                                   sales.search('');
@@ -195,12 +196,14 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
                             : null,
                         filled: true,
                         fillColor: context.surfaceColor,
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide(
-                              color: context.borderColor.withValues(alpha: 0.5)),
+                              color: context.borderColor.withValues(alpha: 0.3)),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 0),
                       ),
                     ),
                   ),
@@ -360,7 +363,9 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
                           color: context.textMutedColor,
                           letterSpacing: 1)),
                   const Spacer(),
-                  Text('${sales.filteredSales.length} LOGS',
+                  Text(sales.hasMore 
+                      ? 'LOADED ${sales.filteredSales.length} OF ${sales.totalCount}' 
+                      : '${sales.filteredSales.length} LOGS',
                       style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
@@ -382,7 +387,7 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
                   ),
                 )
               : SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 32),
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (ctx, i) => _SaleRow(
@@ -393,18 +398,41 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
                     ),
                   ),
                 ),
+
+          // 5. Infinite Scroll Bottom Loader / End Indicator
+          if (sales.hasMore)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  ),
+                ),
+              ),
+            )
+          else if (sales.filteredSales.isNotEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 24, top: 8),
+                child: Center(
+                  child: Text(
+                    'All ${sales.filteredSales.length} transactions loaded',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: context.textMutedColor.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     ),
   );
-  }
-
-  bool _isToday(DateTime dt) {
-    final localDt = dt.toLocal();
-    final today = DateTime.now();
-    return localDt.year == today.year &&
-        localDt.month == today.month &&
-        localDt.day == today.day;
   }
 }
 
@@ -423,33 +451,28 @@ class _SaleRow extends StatelessWidget {
     final inv = context.read<InventoryProvider>();
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 4,
-              offset: const Offset(0, 2)),
-        ],
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: context.borderColor.withValues(alpha: 0.4)),
+        boxShadow: AppTheme.subtleShadow,
       ),
       child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
         shape: const Border(),
         leading: Container(
-          width: 40,
-          height: 40,
+          width: 34,
+          height: 34,
           decoration: BoxDecoration(
             color: (sale.isReturn ? AppTheme.danger : AppTheme.primaryLight)
                 .withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(
             sale.isReturn ? Icons.assignment_return : Icons.receipt_long,
             color: sale.isReturn ? AppTheme.danger : AppTheme.primaryLight,
-            size: 18,
+            size: 16,
           ),
         ),
         title: Row(
@@ -458,9 +481,9 @@ class _SaleRow extends StatelessWidget {
               child: Text(
                 sale.patientName.isEmpty ? 'Walk-in Guest' : sale.patientName,
                 style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                    letterSpacing: -0.3),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    letterSpacing: -0.2),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -469,7 +492,7 @@ class _SaleRow extends StatelessWidget {
               style: TextStyle(
                 fontWeight: FontWeight.w800,
                 color: sale.isReturn ? AppTheme.danger : AppTheme.primaryLight,
-                fontSize: 16,
+                fontSize: 14,
               ),
             ),
           ],
@@ -483,20 +506,20 @@ class _SaleRow extends StatelessWidget {
                   sale.invoiceNo,
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    fontSize: 11,
+                    fontSize: 10,
                     color: context.textMutedColor,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                   decoration: BoxDecoration(
                     color: AppTheme.success.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: const Text('VERIFIED',
                       style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 9,
                           fontWeight: FontWeight.w700,
                           color: AppTheme.success)),
                 ),
@@ -504,19 +527,19 @@ class _SaleRow extends StatelessWidget {
                 Text(
                   '${dt.hour}:${dt.minute.toString().padLeft(2, '0')}',
                   style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 10,
                       fontWeight: FontWeight.w600,
                       color: context.textMutedColor),
                 ),
               ],
             ),
             if (sale.opdInvoiceNo.isNotEmpty) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               Text(
                 'OPD ID: ${sale.opdInvoiceNo}',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 11,
+                  fontSize: 10,
                   color: AppTheme.primaryLight,
                 ),
               ),
@@ -718,33 +741,36 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 135,
-      padding: const EdgeInsets.all(12),
+      width: 120,
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: isProminent ? color : color.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.1)),
+        color: isProminent ? color : color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: isProminent ? 0.3 : 0.15)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(icon, size: 14, color: isProminent ? Colors.white : color),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(value,
               style: TextStyle(
-                  fontSize: 15,
+                  fontSize: 14,
                   fontWeight: FontWeight.w900,
                   color: isProminent ? Colors.white : color,
-                  letterSpacing: -0.5)),
+                  letterSpacing: -0.3)),
           const SizedBox(height: 2),
           Text(label,
               style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 9,
                   fontWeight: FontWeight.w700,
                   color: isProminent
-                      ? Colors.white.withValues(alpha: 0.8)
+                      ? Colors.white.withValues(alpha: 0.85)
                       : context.textMutedColor,
-                  letterSpacing: 0.5)),
+                  letterSpacing: 0.3),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
         ],
       ),
     );

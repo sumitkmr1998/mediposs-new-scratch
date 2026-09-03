@@ -161,6 +161,7 @@ class SalesFactService {
       _box.removeAll();
     }
 
+    final seenInvoices = <String>{};
     var offset = 0;
     var processed = 0;
     while (true) {
@@ -174,6 +175,11 @@ class SalesFactService {
         final batch = q.find();
         if (batch.isEmpty) break;
         for (final s in batch) {
+          final inv = s.invoiceNo.trim();
+          if (inv.isNotEmpty) {
+            if (seenInvoices.contains(inv)) continue;
+            seenInvoices.add(inv);
+          }
           applySale(s);
           processed++;
         }

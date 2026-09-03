@@ -186,13 +186,25 @@ void onStart(ServiceInstance service) async {
       debugPrint('Background WebSocket Event: $event');
       
       if (event == 'medicines_updated') {
-        await syncService.pullMedicines();
+        final lastSync = ObjectBoxService.instance.settings.lastGlobalSync;
+        final sinceStr = lastSync != null 
+            ? DateTime.fromMillisecondsSinceEpoch(lastSync).subtract(const Duration(minutes: 2)).toIso8601String()
+            : null;
+        await syncService.pullMedicines(since: sinceStr, allowOrphanRemoval: false);
         notifyForeground(event, msg);
       } else if (event == 'sales_updated') {
-        await syncService.pullSales();
+        final lastSync = ObjectBoxService.instance.settings.lastGlobalSync;
+        final sinceStr = lastSync != null 
+            ? DateTime.fromMillisecondsSinceEpoch(lastSync).subtract(const Duration(minutes: 2)).toIso8601String()
+            : null;
+        await syncService.pullSales(since: sinceStr);
         notifyForeground(event, msg);
       } else if (event == 'patients_updated' || event == 'new_patient') {
-        await syncService.pullPatients();
+        final lastSync = ObjectBoxService.instance.settings.lastGlobalSync;
+        final sinceStr = lastSync != null 
+            ? DateTime.fromMillisecondsSinceEpoch(lastSync).subtract(const Duration(minutes: 2)).toIso8601String()
+            : null;
+        await syncService.pullPatients(since: sinceStr, allowOrphanRemoval: false);
         notifyForeground(event, msg);
       } else if (event == 'appointments_updated') {
         await syncService.pullAppointments();
@@ -200,6 +212,7 @@ void onStart(ServiceInstance service) async {
       } else if (event == 'sync_received') {
         await syncService.pullAppointments();
         await syncService.pullSales();
+        await syncService.pullPatients(allowOrphanRemoval: false);
         notifyForeground(event, msg);
       } else if (event == 'settings_updated') {
         await syncService.pullSettings();
@@ -211,7 +224,9 @@ void onStart(ServiceInstance service) async {
         final uhid = msg['uhid'];
         if (uhid != null) {
           final box = ObjectBoxService.instance.patientBox;
-          final p = box.query(Patient_.uhid.equals(uhid)).build().findFirst();
+          final query = box.query(Patient_.uhid.equals(uhid)).build();
+          final p = query.findFirst();
+          query.close();
           if (p != null) {
             box.remove(p.id);
             notifyForeground(event, msg);
@@ -317,29 +332,54 @@ void setupForegroundSyncListeners(
     return;
   }
 
+  Timer? debounceTimer;
+  final Set<String> pendingEvents = {};
+
   FlutterBackgroundService().on('data_synced').listen((event) {
     final String eventName = (event != null && event['event'] != null) ? event['event'].toString() : '';
     debugPrint('Foreground: Received sync notification ($eventName) from Background Service');
+    pendingEvents.add(eventName);
 
-    if (eventName == 'medicines_updated' || eventName == 'medicine_deleted') {
-      inventoryProvider.load();
-    } else if (eventName == 'sales_updated' || eventName == 'sale_deleted') {
-      salesProvider.load();
-      inventoryProvider.load();
-    } else if (eventName == 'patients_updated' || eventName == 'patient_deleted' || eventName == 'new_patient') {
-      patientProvider.load();
-    } else if (eventName == 'appointments_updated') {
-      opdProvider.loadAll();
-    } else if (eventName == 'prescriptions_updated') {
-      prescriptionProvider.load();
-    } else {
-      // General fallback
-      inventoryProvider.load();
-      salesProvider.load();
-      patientProvider.load();
-      opdProvider.loadAll();
-      prescriptionProvider.load();
-      templateProvider.load();
-    }
+    debounceTimer?.cancel();
+    debounceTimer = Timer(const Duration(milliseconds: 350), () {
+      final events = Set<String>.from(pendingEvents);
+      pendingEvents.clear();
+
+      bool reloadMeds = false;
+      bool reloadSales = false;
+      bool reloadPatients = false;
+      bool reloadOpd = false;
+      bool reloadPrescriptions = false;
+      bool reloadTemplates = false;
+
+      for (final ev in events) {
+        if (ev == 'medicines_updated' || ev == 'medicine_deleted') {
+          reloadMeds = true;
+        } else if (ev == 'sales_updated' || ev == 'sale_deleted') {
+          reloadSales = true;
+          reloadMeds = true;
+        } else if (ev == 'patients_updated' || ev == 'patient_deleted' || ev == 'new_patient') {
+          reloadPatients = true;
+        } else if (ev == 'appointments_updated') {
+          reloadOpd = true;
+        } else if (ev == 'prescriptions_updated') {
+          reloadPrescriptions = true;
+        } else {
+          reloadMeds = true;
+          reloadSales = true;
+          reloadPatients = true;
+          reloadOpd = true;
+          reloadPrescriptions = true;
+          reloadTemplates = true;
+        }
+      }
+
+      if (reloadMeds) inventoryProvider.load();
+      if (reloadSales) salesProvider.load();
+      if (reloadPatients) patientProvider.load();
+      if (reloadOpd) opdProvider.loadAll();
+      if (reloadPrescriptions) prescriptionProvider.load();
+      if (reloadTemplates) templateProvider.load();
+    });
   });
 }

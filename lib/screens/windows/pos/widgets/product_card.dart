@@ -23,12 +23,20 @@ class ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isProcedure = item is Procedure;
     final name = item.name;
-    final price = isProcedure ? item.basePrice : item.sellingPrice;
     final icon = isProcedure ? Icons.auto_awesome : Icons.medication;
-    final cart = context.read<CartProvider>();
+    final cart = context.watch<CartProvider>();
     final isLowStock = !isProcedure && 
         (cart.isClinicalDispense ? item.mainStock <= item.lowStockThreshold : item.isLowStock);
-    final activeBatch = isProcedure ? null : (item as Medicine).getActiveBatch(cart.isClinicalDispense);
+    final activeBatch = isProcedure
+        ? null
+        : ((item as Medicine).getActiveBatch(cart.isClinicalDispense) ??
+            item.soonestExpiringBatch ??
+            (item.batches.isNotEmpty ? item.batches.first : null));
+    final price = isProcedure
+        ? item.basePrice
+        : ((activeBatch != null && activeBatch.sellingPrice > 0)
+            ? activeBatch.sellingPrice
+            : item.sellingPrice);
 
     return InkWell(
       onTap: onTap,

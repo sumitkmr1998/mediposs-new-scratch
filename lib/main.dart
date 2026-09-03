@@ -157,7 +157,7 @@ void main(List<String> args) async {
     if (delta.prescriptions) prescriptionProvider.load();
     if (delta.templates) templateProvider.load();
     if (delta.settings) settingsProvider.load();
-    if (delta.users) authProvider.notifyListeners();
+    if (delta.users) authProvider.reloadUsers();
   }
 
   syncService.addListener(() {
@@ -179,59 +179,98 @@ void main(List<String> args) async {
       prescriptionProvider,
       templateProvider);
 
+  Timer? medsDebounce;
+  Timer? salesDebounce;
+  Timer? patientsDebounce;
+  Timer? apptsDebounce;
+  Timer? scriptsDebounce;
   Timer? syncDebounceTimer;
+
   wsService.eventStream.listen((msg) {
     final event = msg['event'];
     debugPrint('WebSocket Event: $event');
     if (event == 'remote_camera_trigger') {
       GlobalNavigationService.handleRemoteCameraTrigger(msg);
     } else if (event == 'medicines_updated') {
-      syncService.pullMedicines().then((_) {
-        syncService.markDelta(const SyncDelta(medicines: true));
-        inventoryProvider.load();
+      medsDebounce?.cancel();
+      medsDebounce = Timer(const Duration(milliseconds: 300), () {
+        final lastSync = ObjectBoxService.instance.settings.lastGlobalSync;
+        final sinceStr = lastSync != null 
+            ? DateTime.fromMillisecondsSinceEpoch(lastSync).subtract(const Duration(minutes: 2)).toIso8601String()
+            : null;
+        syncService.pullMedicines(since: sinceStr, allowOrphanRemoval: false).then((_) {
+          syncService.markDelta(const SyncDelta(medicines: true));
+          inventoryProvider.load();
+        });
       });
     } else if (event == 'sales_updated') {
-      syncService.pullSales().then((_) {
-        syncService.markDelta(const SyncDelta(sales: true, medicines: true));
-        salesProvider.load();
-        inventoryProvider.load();
+      salesDebounce?.cancel();
+      salesDebounce = Timer(const Duration(milliseconds: 300), () {
+        final lastSync = ObjectBoxService.instance.settings.lastGlobalSync;
+        final sinceStr = lastSync != null 
+            ? DateTime.fromMillisecondsSinceEpoch(lastSync).subtract(const Duration(minutes: 2)).toIso8601String()
+            : null;
+        syncService.pullSales(since: sinceStr).then((_) {
+          syncService.markDelta(const SyncDelta(sales: true, medicines: true));
+          salesProvider.load();
+          inventoryProvider.load();
+        });
       });
     } else if (event == 'patients_updated' || event == 'new_patient') {
-      syncService.pullPatients().then((_) {
-        syncService.markDelta(const SyncDelta(patients: true));
-        patientProvider.load();
+      patientsDebounce?.cancel();
+      patientsDebounce = Timer(const Duration(milliseconds: 300), () {
+        final lastSync = ObjectBoxService.instance.settings.lastGlobalSync;
+        final sinceStr = lastSync != null 
+            ? DateTime.fromMillisecondsSinceEpoch(lastSync).subtract(const Duration(minutes: 2)).toIso8601String()
+            : null;
+        syncService.pullPatients(since: sinceStr, allowOrphanRemoval: false).then((_) {
+          syncService.markDelta(const SyncDelta(patients: true));
+          patientProvider.load();
+        });
       });
     } else if (event == 'appointments_updated') {
-      syncService.pullAppointments().then((_) {
-        syncService.markDelta(const SyncDelta(appointments: true));
-        opdProvider.loadQueue();
+      apptsDebounce?.cancel();
+      apptsDebounce = Timer(const Duration(milliseconds: 300), () {
+        syncService.pullAppointments().then((_) {
+          syncService.markDelta(const SyncDelta(appointments: true));
+          opdProvider.load();
+        });
       });
     } else if (event == 'prescriptions_updated') {
-      syncService.pullPrescriptions().then((_) {
-        syncService.markDelta(const SyncDelta(prescriptions: true));
-        prescriptionProvider.load();
+      scriptsDebounce?.cancel();
+      scriptsDebounce = Timer(const Duration(milliseconds: 300), () {
+        syncService.pullPrescriptions().then((_) {
+          syncService.markDelta(const SyncDelta(prescriptions: true));
+          prescriptionProvider.load();
+        });
       });
     } else if (event == 'sync_received' || event == 'audit_logs_updated') {
       syncDebounceTimer?.cancel();
-      syncDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+      syncDebounceTimer = Timer(const Duration(milliseconds: 600), () {
         syncService.pullAppointments().then((_) {
           syncService.markDelta(const SyncDelta(appointments: true));
-          opdProvider.loadQueue();
+          opdProvider.load();
         });
         syncService.pullSales().then((_) {
           syncService.markDelta(const SyncDelta(sales: true));
           salesProvider.load();
         });
+        syncService.pullPatients(allowOrphanRemoval: false).then((_) {
+          syncService.markDelta(const SyncDelta(patients: true));
+          patientProvider.load();
+        });
       });
     } else if (event == 'settings_updated') {
       syncService.pullSettings().then((_) => settingsProvider.load());
     } else if (event == 'users_updated') {
-      syncService.pullUsers().then((_) => authProvider.notifyListeners());
+      syncService.pullUsers().then((_) => authProvider.reloadUsers());
     } else if (event == 'patient_deleted') {
       final uhid = msg['uhid'];
       if (uhid != null) {
         final box = ObjectBoxService.instance.patientBox;
-        final p = box.query(Patient_.uhid.equals(uhid)).build().findFirst();
+        final query = box.query(Patient_.uhid.equals(uhid)).build();
+        final p = query.findFirst();
+        query.close();
         if (p != null) {
           box.remove(p.id);
           patientProvider.load();
@@ -249,7 +288,9 @@ void main(List<String> args) async {
           cond = cond == null ? nameCond : cond.and(nameCond);
         }
         if (cond != null) {
-          final m = box.query(cond).build().findFirst();
+          final query = box.query(cond).build();
+          final m = query.findFirst();
+          query.close();
           if (m != null) {
             box.remove(m.id);
             inventoryProvider.load();
@@ -260,7 +301,9 @@ void main(List<String> args) async {
       final invoiceNo = msg['invoiceNo'];
       if (invoiceNo != null) {
         final box = ObjectBoxService.instance.saleBox;
-        final s = box.query(Sale_.invoiceNo.equals(invoiceNo)).build().findFirst();
+        final query = box.query(Sale_.invoiceNo.equals(invoiceNo)).build();
+        final s = query.findFirst();
+        query.close();
         if (s != null) {
           box.remove(s.id);
           salesProvider.load();
@@ -360,24 +403,32 @@ class _MediPossAppState extends State<MediPossApp> with WidgetsBindingObserver {
       final syncService = context.read<SyncService>();
       final wsService = context.read<WebSocketService>();
       
+      void reloadProvidersStaggered() async {
+        if (!mounted) return;
+        context.read<InventoryProvider>().load();
+        await Future.delayed(const Duration(milliseconds: 16));
+        if (!mounted) return;
+        context.read<SalesProvider>().load();
+        await Future.delayed(const Duration(milliseconds: 16));
+        if (!mounted) return;
+        context.read<PatientProvider>().load();
+        await Future.delayed(const Duration(milliseconds: 16));
+        if (!mounted) return;
+        context.read<OpdProvider>().loadQueue();
+        await Future.delayed(const Duration(milliseconds: 16));
+        if (!mounted) return;
+        context.read<PrescriptionProvider>().load();
+        context.read<TemplateProvider>().load();
+      }
+
       // Re-trigger sync and check WS
       if (syncService.isCloudMode) {
         syncService.syncAllFromCloud().then((_) {
-          context.read<InventoryProvider>().load();
-          context.read<SalesProvider>().load();
-          context.read<PatientProvider>().load();
-          context.read<OpdProvider>().loadQueue();
-          context.read<PrescriptionProvider>().load();
-          context.read<TemplateProvider>().load();
+          reloadProvidersStaggered();
         });
       } else {
         syncService.syncAll().then((_) {
-          context.read<InventoryProvider>().load();
-          context.read<SalesProvider>().load();
-          context.read<PatientProvider>().load();
-          context.read<OpdProvider>().loadQueue();
-          context.read<PrescriptionProvider>().load();
-          context.read<TemplateProvider>().load();
+          reloadProvidersStaggered();
         });
 
         if (!wsService.connected && syncService.hubIp != null) {

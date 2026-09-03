@@ -32,14 +32,23 @@ class CartItem {
   final Medicine? medicine;
   final Procedure? procedure;
   int qty;
-  double? customPrice; // For procedures
+  double? customPrice; // For procedures or price overrides
 
   CartItem({this.medicine, this.procedure, this.qty = 1, this.customPrice});
 
-  double get lineTotal {
-    if (medicine != null) return medicine!.sellingPrice * qty;
-    if (procedure != null) return (customPrice ?? procedure!.basePrice) * qty;
+  double get unitPrice {
+    if (customPrice != null && customPrice! > 0) return customPrice!;
+    if (medicine != null) {
+      final ab = medicine!.activeBatch ?? medicine!.soonestExpiringBatch;
+      if (ab != null && ab.sellingPrice > 0) return ab.sellingPrice;
+      return medicine!.sellingPrice;
+    }
+    if (procedure != null) return procedure!.basePrice;
     return 0;
+  }
+
+  double get lineTotal {
+    return unitPrice * qty;
   }
 
   String get name => medicine?.name ?? procedure?.name ?? 'Unknown';
@@ -275,9 +284,9 @@ class CartProvider extends ChangeNotifier {
   }
 
   void updatePrice(int id, double price, {bool isProcedure = true}) {
-    if (!isProcedure) return;
-    final idx =
-        _items.indexWhere((i) => i.procedure?.id == id && i.isProcedure);
+    final idx = isProcedure
+        ? _items.indexWhere((i) => i.procedure?.id == id && i.isProcedure)
+        : _items.indexWhere((i) => i.medicine?.id == id && !i.isProcedure);
     if (idx >= 0) {
       _items[idx].customPrice = price;
       notifyListeners();
@@ -778,7 +787,7 @@ class CartProvider extends ChangeNotifier {
             medicineId: item.medicine!.id,
             medicineName: item.name,
             qty: qtyToDeduct,
-            unitPrice: item.medicine!.sellingPrice,
+            unitPrice: item.unitPrice,
             isProcedure: false,
             batchNo: 'N/A',
             expiryDate: '',
@@ -786,11 +795,12 @@ class CartProvider extends ChangeNotifier {
         } else {
           for (final db in deductedBatches) {
             final expiryStr = '${db.expiryDate.day.toString().padLeft(2, '0')}/${db.expiryDate.month.toString().padLeft(2, '0')}/${db.expiryDate.year}';
+            final batchPrice = db.sellingPrice > 0 ? db.sellingPrice : item.unitPrice;
             saleItems.add(SaleItem(
               medicineId: item.medicine!.id,
               medicineName: item.name,
               qty: _isReturnMode ? -db.qty.abs() : db.qty,
-              unitPrice: item.medicine!.sellingPrice,
+              unitPrice: batchPrice,
               isProcedure: false,
               batchNo: db.batchNo,
               expiryDate: expiryStr,

@@ -11,6 +11,7 @@ class TransferDialog extends StatefulWidget {
   final String from;
   final String to;
   final WarehouseProvider wh;
+  final int? initialQty;
 
   const TransferDialog({
     super.key,
@@ -18,6 +19,7 @@ class TransferDialog extends StatefulWidget {
     required this.from,
     required this.to,
     required this.wh,
+    this.initialQty,
   });
 
   @override
@@ -25,7 +27,7 @@ class TransferDialog extends StatefulWidget {
 }
 
 class TransferDialogState extends State<TransferDialog> {
-  final _qtyCtrl = TextEditingController(text: '1');
+  late final TextEditingController _qtyCtrl;
   final _noteCtrl = TextEditingController();
   MedicineBatch? _selectedBatch;
   late String _fromLoc;
@@ -47,16 +49,18 @@ class TransferDialogState extends State<TransferDialog> {
     if (availableBatches.isNotEmpty) {
       availableBatches.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
       _selectedBatch = availableBatches.first;
+    } else if (widget.medicine.batches.isNotEmpty) {
+      _selectedBatch = widget.medicine.batches.first;
     } else {
-      _selectedBatch = widget.medicine.batches.isNotEmpty
-          ? widget.medicine.batches.first
-          : null;
+      _selectedBatch = null;
     }
   }
 
   @override
   void initState() {
     super.initState();
+    final initVal = (widget.initialQty != null && widget.initialQty! > 0) ? widget.initialQty.toString() : '1';
+    _qtyCtrl = TextEditingController(text: initVal);
     _fromLoc = widget.from;
     _toLoc = widget.to;
     _updateSelectedBatch();
@@ -89,6 +93,8 @@ class TransferDialogState extends State<TransferDialog> {
     final availableBatches = widget.medicine.batches
         .where((b) => _getStock(b, _fromLoc) > 0)
         .toList();
+
+    final batchList = availableBatches.isNotEmpty ? availableBatches : widget.medicine.batches.toList();
 
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -146,7 +152,7 @@ class TransferDialogState extends State<TransferDialog> {
               },
             ),
             const SizedBox(height: 24),
-            if (availableBatches.isNotEmpty) ...[
+            if (batchList.isNotEmpty) ...[
               DropdownButtonFormField<MedicineBatch>(
                 value: _selectedBatch,
                 decoration: InputDecoration(
@@ -155,7 +161,7 @@ class TransferDialogState extends State<TransferDialog> {
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ),
-                items: availableBatches.map((b) {
+                items: batchList.map((b) {
                   final qty = _getStock(b, _fromLoc);
                   final date =
                       '${b.expiryDate.day}/${b.expiryDate.month}/${b.expiryDate.year}';

@@ -5,12 +5,23 @@ import '../../objectbox.g.dart';
 class PrescriptionRepository {
   Box<Prescription> get _box => ObjectBoxService.instance.prescriptionBox;
 
-  List<Prescription> inCreatedRange(DateTime start, DateTime end) {
+  List<Prescription> inCreatedRange(DateTime? start, DateTime? end) {
+    if (start == null && end == null) {
+      final q = _box
+          .query()
+          .order(Prescription_.createdAt, flags: Order.descending)
+          .build();
+      try {
+        return q.find();
+      } finally {
+        q.close();
+      }
+    }
     final q = _box
         .query(
           Prescription_.createdAt.between(
-            start.millisecondsSinceEpoch,
-            end.millisecondsSinceEpoch,
+            (start ?? DateTime(2000)).millisecondsSinceEpoch,
+            (end ?? DateTime.now()).millisecondsSinceEpoch,
           ),
         )
         .order(Prescription_.createdAt, flags: Order.descending)

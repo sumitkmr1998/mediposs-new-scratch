@@ -234,13 +234,15 @@ class PurchaseHistoryTabState extends State<PurchaseHistoryTab> {
                                   DataColumn(label: Text('Medicine Name')),
                                   DataColumn(label: Text('Supplier')),
                                   DataColumn(label: Text('Purchase Price'), numeric: true),
-                                  DataColumn(label: Text('Qty'), numeric: true),
+                                  DataColumn(label: Text('Added Qty'), numeric: true),
+                                  DataColumn(label: Text('Stock (Before → After)')),
                                   DataColumn(label: Text('Target Location')),
                                   DataColumn(label: Text('Notes')),
                                   DataColumn(label: Text('Actions')),
                                 ],
                                 rows: history.take(_limit).map((p) {
                                   final dateStr = '${p.purchasedAt.day.toString().padLeft(2,'0')}/${p.purchasedAt.month.toString().padLeft(2,'0')}/${p.purchasedAt.year} ${p.purchasedAt.hour.toString().padLeft(2,'0')}:${p.purchasedAt.minute.toString().padLeft(2,'0')}';
+                                  final hasStockTrack = p.finalQty > 0 || p.initialQty > 0;
                                   return DataRow(
                                     cells: [
                                       DataCell(Text(dateStr, style: const TextStyle(fontSize: 13))),
@@ -263,6 +265,10 @@ class PurchaseHistoryTabState extends State<PurchaseHistoryTab> {
                                         decoration: BoxDecoration(color: AppTheme.indigo.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
                                         child: Text('+${p.qty}', style: const TextStyle(color: AppTheme.indigo, fontWeight: FontWeight.bold)),
                                       )),
+                                      DataCell(hasStockTrack
+                                          ? Text('${p.initialQty} → ${p.finalQty}',
+                                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppTheme.primary))
+                                          : Text('-', style: TextStyle(color: context.textMutedColor))),
                                       DataCell(LocationBadge(location: p.location)),
                                       DataCell(SizedBox(
                                         width: 150,

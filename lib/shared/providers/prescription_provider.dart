@@ -284,20 +284,28 @@ class PrescriptionProvider extends ChangeNotifier {
 
     // If not found, try to resolve by filename in local prescription directory
     try {
-      final fileName = p_path.basename(originalPath);
+      final fileName = originalPath.replaceAll('\\', '/').split('/').last.trim();
+      if (fileName.isEmpty) return originalPath;
       final appDocDir = await getApplicationDocumentsDirectory();
       // Try prescriptions directory first
       final pPath = p_path.join(appDocDir.path, 'prescriptions', 'images', fileName);
       if (await File(pPath).exists()) return pPath;
       
+      // Try prescription_photos
+      final ppPath = p_path.join(appDocDir.path, 'prescription_photos', fileName);
+      if (await File(ppPath).exists()) return ppPath;
+
       // Try patient_photos directory (gallery)
       final gPath = p_path.join(appDocDir.path, 'patient_photos');
       if (await Directory(gPath).exists()) {
          // Search recursively in patient_photos
          final entities = await Directory(gPath).list(recursive: true).toList();
          for (final entity in entities) {
-           if (entity is File && p_path.basename(entity.path) == fileName) {
-             return entity.path;
+           if (entity is File) {
+             final entityName = entity.path.replaceAll('\\', '/').split('/').last.trim();
+             if (entityName.toLowerCase() == fileName.toLowerCase()) {
+               return entity.path;
+             }
            }
          }
       }

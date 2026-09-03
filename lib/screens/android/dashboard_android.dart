@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/inventory_provider.dart';
+import '../../shared/providers/warehouse_provider.dart';
 import '../../shared/providers/sales_provider.dart';
 import '../../shared/providers/opd_provider.dart';
 import '../../shared/models/medicine.dart' as model;
 import '../../theme/app_theme.dart';
 import 'pos_android.dart';
 import 'warehouse_android.dart';
+import '../windows/warehouse/dialogs/transfer_dialog.dart';
 import 'sales_history_android.dart';
 import 'settings_android.dart';
 import 'user_management_android.dart';
@@ -62,7 +65,7 @@ class DashboardAndroid extends StatelessWidget {
           if (context.mounted) {
             context.read<SalesProvider>().load();
             context.read<InventoryProvider>().load();
-            context.read<OpdProvider>().loadQueue();
+            context.read<OpdProvider>().load();
           }
         },
         child: CustomScrollView(
@@ -207,23 +210,19 @@ class DashboardAndroid extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _WelcomeSection(auth: auth, cs: cs),
-                  const SizedBox(height: 24),
-                  _SecurityStatusIndicator(cs: cs),
-                  const SizedBox(height: 24),
                   _DateFilterBar(sales: sales, cs: cs, isCashier: isCashier),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                   _PrimaryStats(
                     sales: sales,
                     opd: opd,
                     inv: inv,
                     rangeLabel: rangeLabel,
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                   _FinancialPerformance(sales: sales, opd: opd),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                   _QuickActionsCard(),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                   _InventoryAlertsSection(inv: inv, cs: cs),
                   const SizedBox(height: 32),
                 ],
@@ -722,6 +721,52 @@ class _QuickActionsCard extends StatefulWidget {
 
 class _QuickActionsCardState extends State<_QuickActionsCard> {
   bool _isEditMode = false;
+  List<String>? _actions;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadActions();
+  }
+
+  Future<void> _loadActions() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getStringList('android_dashboard_actions');
+      if (saved != null && saved.isNotEmpty) {
+        if (mounted) setState(() => _actions = saved);
+        return;
+      }
+    } catch (_) {}
+
+    final db = ObjectBoxService.instance;
+    final settings = db.settings;
+    if (settings.dashboardActions.isNotEmpty) {
+      if (mounted) setState(() => _actions = List<String>.from(settings.dashboardActions));
+    } else {
+      const defaultActions = ['new_pos', 'add_patient', 'stock_list', 'reports', 'patients', 'returns', 'settings'];
+      if (mounted) setState(() => _actions = List<String>.from(defaultActions));
+    }
+  }
+
+  Future<void> _saveActions(List<String> actions) async {
+    setState(() => _actions = actions);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('android_dashboard_actions', actions);
+    } catch (e) {
+      debugPrint('Error saving actions to prefs: $e');
+    }
+
+    try {
+      final db = ObjectBoxService.instance;
+      final settings = db.settings;
+      settings.dashboardActions = actions;
+      db.settingsBox.put(settings);
+    } catch (e) {
+      debugPrint('Error saving actions to settings: $e');
+    }
+  }
 
   final Map<String, _DashboardActionData> _allActionsMap = {
     'new_pos': _DashboardActionData(
@@ -817,14 +862,10 @@ class _QuickActionsCardState extends State<_QuickActionsCard> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final db = ObjectBoxService.instance;
-    final settings = db.settings;
-    var currentActionIds = settings.dashboardActions;
-    if (currentActionIds.isEmpty) {
-      currentActionIds = ['new_pos', 'add_patient', 'stock_list', 'reports', 'patients', 'returns', 'settings'];
-      settings.dashboardActions = currentActionIds;
-      db.settingsBox.put(settings);
-    }
+    final currentActionIds = _actions ??
+        (ObjectBoxService.instance.settings.dashboardActions.isNotEmpty
+            ? ObjectBoxService.instance.settings.dashboardActions
+            : const ['new_pos', 'add_patient', 'stock_list', 'reports', 'patients', 'returns', 'settings']);
 
     // Filter by permissions
     final allowedActions = currentActionIds
@@ -875,21 +916,18 @@ class _QuickActionsCardState extends State<_QuickActionsCard> {
             final visibleCount = allowedActions.length;
             if (oldIndex >= visibleCount || newIndex >= visibleCount) return;
             
-            setState(() {
-              final actions = List<String>.from(settings.dashboardActions);
-              final String movedId = allowedActions[oldIndex];
-              final String targetId = allowedActions[newIndex];
-              
-              final int actualOldIdx = actions.indexOf(movedId);
-              final int actualNewIdx = actions.indexOf(targetId);
-              
-              if (actualOldIdx != -1 && actualNewIdx != -1) {
-                final item = actions.removeAt(actualOldIdx);
-                actions.insert(actualNewIdx, item);
-                settings.dashboardActions = actions;
-                db.settingsBox.put(settings);
-              }
-            });
+            final actions = List<String>.from(currentActionIds);
+            final String movedId = allowedActions[oldIndex];
+            final String targetId = allowedActions[newIndex];
+            
+            final int actualOldIdx = actions.indexOf(movedId);
+            final int actualNewIdx = actions.indexOf(targetId);
+            
+            if (actualOldIdx != -1 && actualNewIdx != -1) {
+              final item = actions.removeAt(actualOldIdx);
+              actions.insert(actualNewIdx, item);
+              _saveActions(actions);
+            }
           },
           children: [
             ...allowedActions.map((id) {
@@ -910,21 +948,18 @@ class _QuickActionsCardState extends State<_QuickActionsCard> {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => action.screen!));
                   }
                 },
-                onEdit: () => _showActionPicker(context, id),
+                onEdit: () => _showActionPicker(context, id, currentActionIds),
                 onDelete: () {
-                  setState(() {
-                    final actions = List<String>.from(settings.dashboardActions);
-                    actions.remove(id);
-                    settings.dashboardActions = actions;
-                    db.settingsBox.put(settings);
-                  });
+                  final actions = List<String>.from(currentActionIds);
+                  actions.remove(id);
+                  _saveActions(actions);
                 },
               );
             }),
             if (_isEditMode)
               _AddCardItem(
                 key: const ValueKey('add_button'),
-                onTap: () => _showActionPicker(context, null),
+                onTap: () => _showActionPicker(context, null, currentActionIds),
               ),
           ],
         ),
@@ -932,10 +967,8 @@ class _QuickActionsCardState extends State<_QuickActionsCard> {
     );
   }
 
-  void _showActionPicker(BuildContext context, String? targetId) {
+  void _showActionPicker(BuildContext context, String? targetId, List<String> currentActionIds) {
     final auth = context.read<AuthProvider>();
-    final db = ObjectBoxService.instance;
-    final settings = db.settings;
 
     showModalBottomSheet(
       context: context,
@@ -955,7 +988,7 @@ class _QuickActionsCardState extends State<_QuickActionsCard> {
                 child: ListView(
                   shrinkWrap: true,
                   children: _allActionsMap.values.where((a) => a.isAllowed(auth)).map((a) {
-                    final bool isAlreadyIn = settings.dashboardActions.contains(a.id);
+                    final bool isAlreadyIn = currentActionIds.contains(a.id);
                     return ListTile(
                       leading: Icon(a.icon, color: a.color),
                       title: Text(a.label),
@@ -963,17 +996,14 @@ class _QuickActionsCardState extends State<_QuickActionsCard> {
                       onTap: (isAlreadyIn && targetId != a.id)
                           ? null
                           : () {
-                              setState(() {
-                                final actions = List<String>.from(settings.dashboardActions);
-                                if (targetId == null) {
-                                  actions.add(a.id);
-                                } else {
-                                  final idx = actions.indexOf(targetId);
-                                  if (idx != -1) actions[idx] = a.id;
-                                }
-                                settings.dashboardActions = actions;
-                                db.settingsBox.put(settings);
-                              });
+                              final actions = List<String>.from(currentActionIds);
+                              if (targetId == null) {
+                                actions.add(a.id);
+                              } else {
+                                final idx = actions.indexOf(targetId);
+                                if (idx != -1) actions[idx] = a.id;
+                              }
+                              _saveActions(actions);
                               Navigator.pop(context);
                             },
                     );
@@ -1117,10 +1147,10 @@ class _InventoryAlertsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sales = context.watch<SalesProvider>().salesForAnalytics(days: 30);
-    final smartLowCount = inv.getSmartLowStockCount(sales);
-    final smartLowMeds = inv.getSmartLowStockMedicines(sales);
+    final replenishmentCount = inv.getStoreClinicReplenishmentCount(sales, targetDays: 15);
+    final replenishmentMeds = inv.getStoreClinicReplenishmentMedicines(sales, targetDays: 15);
 
-    if (smartLowCount == 0 && inv.nearExpiryCount == 0 && inv.expiredCount == 0) return const SizedBox.shrink();
+    if (replenishmentCount == 0 && inv.nearExpiryCount == 0 && inv.expiredCount == 0) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1130,12 +1160,12 @@ class _InventoryAlertsSection extends StatelessWidget {
           child: Text('INVENTORY HEALTH', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: AppTheme.primary)),
         ),
         _ExpandableHealthCard(
-          label: 'Low Stock',
-          count: smartLowCount,
+          label: 'Low Stock Alert (Store+Clinic)',
+          count: replenishmentCount,
           color: AppTheme.warning,
           icon: Icons.warning_amber_rounded,
-          items: smartLowMeds,
-          subtitleBuilder: (m) => 'Store: ${m.storeStock} | Main: ${m.mainStock}',
+          items: replenishmentMeds,
+          subtitleBuilder: (m) => 'Store+Clinic: ${inv.getDispensingStock(m)} | Bulk: ${m.mainStock}',
         ),
         const SizedBox(height: 12),
         _ExpandableHealthCard(
@@ -1215,21 +1245,28 @@ class _ExpandableHealthCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Column(
-                children: items.take(10).map((m) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(m.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                            Text(subtitleBuilder(m), style: TextStyle(color: context.textMutedColor, fontSize: 11)),
-                          ],
-                        ),
+                children: items.take(10).map((m) => Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => _showQuickStockDetailsDialog(context, m),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(m.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                Text(subtitleBuilder(m), style: TextStyle(color: context.textMutedColor, fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
+                        ],
                       ),
-                      const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
-                    ],
+                    ),
                   ),
                 )).toList(),
               ),
@@ -1242,6 +1279,171 @@ class _ExpandableHealthCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  void _showQuickStockDetailsDialog(BuildContext context, model.Medicine m) {
+    final inv = context.read<InventoryProvider>();
+    final dispensingStock = inv.getDispensingStock(m);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: context.surfaceColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.inventory_2_rounded, color: AppTheme.primary, size: 24),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          m.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                        Text(
+                          'Category: ${m.category.isEmpty ? "General" : m.category}',
+                          style: TextStyle(fontSize: 12, color: ctx.textMutedColor),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              // Stock Breakdown Card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: ctx.bgColor,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: ctx.borderColor.withValues(alpha: 0.2)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Store Stock:', style: TextStyle(fontSize: 13, color: ctx.textMutedColor)),
+                        Text('${m.storeStock} units', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Clinic Stock:', style: TextStyle(fontSize: 13, color: ctx.textMutedColor)),
+                        Text('${m.mainStock} units', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      ],
+                    ),
+                    const Divider(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Total Dispensing Stock:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        Text('$dispensingStock units', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.primary)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Bulk Warehouse Stock:', style: TextStyle(fontSize: 13, color: ctx.textMutedColor)),
+                        Text(
+                          '${m.bulkStoreStock + m.bulkClinicStock} units',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: (m.bulkStoreStock + m.bulkClinicStock) > 0 ? AppTheme.emerald : AppTheme.orange,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Action Buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.storefront_rounded, size: 16),
+                      label: const Text('To Store', style: TextStyle(fontSize: 12)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        showDialog(
+                          context: context,
+                          builder: (dialogCtx) => TransferDialog(
+                            medicine: m,
+                            from: 'bulkStore',
+                            to: 'store',
+                            initialQty: 1,
+                            wh: context.read<WarehouseProvider>(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.local_hospital_rounded, size: 16),
+                      label: const Text('To Clinic', style: TextStyle(fontSize: 12)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.indigo,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        showDialog(
+                          context: context,
+                          builder: (dialogCtx) => TransferDialog(
+                            medicine: m,
+                            from: 'bulkClinic',
+                            to: 'clinic',
+                            initialQty: 1,
+                            wh: context.read<WarehouseProvider>(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

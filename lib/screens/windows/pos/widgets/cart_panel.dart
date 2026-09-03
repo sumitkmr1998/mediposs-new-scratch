@@ -6,10 +6,8 @@ import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/providers/patient_provider.dart';
 import '../../../../shared/providers/opd_provider.dart';
 import '../../../../shared/models/patient.dart';
-import '../../../../shared/models/prescription.dart';
 import '../../../../shared/services/objectbox_service.dart';
 import '../../../../objectbox.g.dart';
-import 'package:objectbox/objectbox.dart';
 import '../../../../theme/app_theme.dart';
 
 class CartPanel extends StatelessWidget {
@@ -84,23 +82,14 @@ class CartPanel extends StatelessWidget {
                   child: Autocomplete<Patient>(
                     displayStringForOption: (p) => p.name,
                     optionsBuilder: (TextEditingValue val) {
-                      if (val.text.isEmpty) return const Iterable.empty();
-                      final patients = context.read<PatientProvider>().patients;
+                      if (val.text.trim().isEmpty) return const Iterable.empty();
+                      final patientProvider = context.read<PatientProvider>();
+                      final results = patientProvider.searchPatients(val.text, limit: 40);
                       if (cart.isClinicalDispense) {
                         final opdPatientIds = context.read<OpdProvider>().todayQueue.map((a) => a.patientId).toSet();
-                        return patients.where((p) => opdPatientIds.contains(p.id)).where((p) {
-                          final q = val.text.toLowerCase();
-                          return p.name.toLowerCase().contains(q) ||
-                              p.phone.contains(q) ||
-                              p.address.toLowerCase().contains(q);
-                        });
+                        return results.where((p) => opdPatientIds.contains(p.id));
                       }
-                      return patients.where((p) {
-                        final q = val.text.toLowerCase();
-                        return p.name.toLowerCase().contains(q) ||
-                            p.phone.contains(q) ||
-                            p.address.toLowerCase().contains(q);
-                      });
+                      return results;
                     },
                     onSelected: (p) {
                       cart.setPatient(name: p.name, phone: p.phone, id: p.id, uhid: p.uhid, address: p.address);
@@ -296,7 +285,7 @@ class CartPanel extends StatelessWidget {
                                 ],
                               )
                             : Text(
-                                '₹${(item.medicine?.sellingPrice ?? item.customPrice ?? item.procedure!.basePrice).toStringAsFixed(2)} × ${item.qty}',
+                                '₹${item.unitPrice.toStringAsFixed(2)} × ${item.qty}',
                               ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,

@@ -95,6 +95,8 @@ class SyncService extends ChangeNotifier {
   Map<String, dynamic>? _lastUserMap;
   bool _isConnected = false;
   bool _isSyncing = false;
+  bool _isPullingSales = false;
+  Future<int?>? _activeSalesPull;
   bool _isCloudMode = false;
   bool _showHubOnlinePrompt = true;
 
@@ -181,18 +183,13 @@ class SyncService extends ChangeNotifier {
 
         final settings = ObjectBoxService.instance.settings;
         final localShopId = settings.shopId;
-        final oldHubAddress = isUrl ? settings.cloudflareUrl : settings.hubIp;
-
-        final isDifferentHub = oldHubAddress != null &&
-            oldHubAddress.isNotEmpty &&
-            oldHubAddress.trim().toLowerCase() != address.trim().toLowerCase();
 
         final isDifferentShop = hubShopId.isNotEmpty &&
             localShopId.isNotEmpty &&
             localShopId.trim().toLowerCase() != hubShopId.trim().toLowerCase();
 
-        if (isDifferentHub || isDifferentShop) {
-          debugPrint('SyncService: Hub address or Shop ID changed (Hub: $address, Shop: $hubShopId). Wiping local database and resetting sync state.');
+        if (isDifferentShop) {
+          debugPrint('SyncService: Shop ID changed (Hub: $hubShopId, Local: $localShopId). Wiping local database and resetting sync state.');
           
           // 1. Logout (invalidate/clear session & credentials)
           _jwtToken = null;
@@ -694,28 +691,8 @@ class SyncService extends ChangeNotifier {
       sinceStr = startOfToday.toIso8601String();
       debugPrint('SyncService: Incremental sync for TODAY ONLY from $sinceStr');
     } else if (settings.lastGlobalSync == null) {
-      if (!isHub) {
-        debugPrint('SyncService: Initial client sync. Wiping local database for a fresh start...');
-        ObjectBoxService.instance.patientBox.removeAll();
-        ObjectBoxService.instance.medicineBox.removeAll();
-        ObjectBoxService.instance.batchBox.removeAll();
-        ObjectBoxService.instance.purchaseBox.removeAll();
-        ObjectBoxService.instance.restockRequestBox.removeAll();
-        ObjectBoxService.instance.saleBox.removeAll();
-        ObjectBoxService.instance.prescriptionBox.removeAll();
-        ObjectBoxService.instance.appointmentBox.removeAll();
-        ObjectBoxService.instance.doctorBox.removeAll();
-        ObjectBoxService.instance.transferBox.removeAll();
-        ObjectBoxService.instance.templateBox.removeAll();
-        ObjectBoxService.instance.patientImageBox.removeAll();
-        ObjectBoxService.instance.procedureBox.removeAll();
-        ObjectBoxService.instance.procedureRecordBox.removeAll();
-        ObjectBoxService.instance.attendanceBox.removeAll();
-        ObjectBoxService.instance.store.box<ScheduleH1Record>().removeAll();
-        ObjectBoxService.instance.store.box<AuditLog>().removeAll();
-      }
-      sinceStr = null; // Pull all data freshly instead of just the last 180 days!
-      debugPrint('SyncService: Initial sync detected. Pulling all data freshly.');
+      sinceStr = null; // Pull all data freshly instead of just recent
+      debugPrint('SyncService: Initial sync detected. Pulling all data freshly without wiping.');
     } else {
       // Add a 1-minute safety buffer for clock drift
       final bufferedDate = DateTime.fromMillisecondsSinceEpoch(settings.lastGlobalSync!)
@@ -725,8 +702,8 @@ class SyncService extends ChangeNotifier {
     }
 
     try {
-      final t1 = await pullMedicines(since: sinceStr, isNested: true);
-      final t2 = await pullPatients(since: sinceStr);
+      final t1 = await pullMedicines(since: sinceStr, isNested: true, allowOrphanRemoval: isFullSync);
+      final t2 = await pullPatients(since: sinceStr, allowOrphanRemoval: isFullSync);
       await pullAppointments();
       await pullDoctors();
       await pullProcedures();
@@ -739,17 +716,11 @@ class SyncService extends ChangeNotifier {
       await pullH1Records(since: sinceStr);
       await pullAttendance();
 
-      // Update sync timestamp using the Hub's reported time if available
+      // Update sync timestamp using the Hub's reported time if available, or current time
       final serverTime = t1 ?? t2 ?? t3;
-      if (serverTime != null) {
-        settings.lastGlobalSync = serverTime;
-        ObjectBoxService.instance.settingsBox.put(settings);
-        debugPrint('SyncService: Updated lastGlobalSync to Hub time: $serverTime');
-      } else if (!isFullSync) {
-        // Only fallback to local time if not a full sync (full sync might return too much data for t1/t2/t3 to be reliable markers)
-        settings.lastGlobalSync = DateTime.now().millisecondsSinceEpoch;
-        ObjectBoxService.instance.settingsBox.put(settings);
-      }
+      settings.lastGlobalSync = serverTime ?? DateTime.now().millisecondsSinceEpoch;
+      ObjectBoxService.instance.settingsBox.put(settings);
+      debugPrint('SyncService: Updated lastGlobalSync to: ${settings.lastGlobalSync}');
 
       debugPrint('SyncService: syncAll completed successfully.');
     } catch (e) {
@@ -845,12 +816,12 @@ class SyncService extends ChangeNotifier {
   SyncHttp get syncHttp =>
       SyncHttp(baseUrl: _baseUrl, headers: _authHeaders());
 
-  Future<int?> pullMedicines({String? since, bool isNested = false}) async {
+  Future<int?> pullMedicines({String? since, bool isNested = false, bool allowOrphanRemoval = false}) async {
     if (!_isConnected || _jwtToken == null || (_isSyncing && !isNested)) {
       debugPrint('SyncService: pullMedicines aborted (isConnected: $_isConnected, jwt: $_jwtToken, isSyncing: $_isSyncing)');
       return null;
     }
-    debugPrint('SyncService: pullMedicines starting (since=$since)...');
+    debugPrint('SyncService: pullMedicines starting (since=$since, allowOrphanRemoval=$allowOrphanRemoval)...');
     final bool manageSyncState = !_isSyncing;
     if (manageSyncState) {
       _isSyncing = true;
@@ -957,6 +928,8 @@ class SyncService extends ChangeNotifier {
                     storeStock: bItem['storeStock'] ?? 0,
                     bulkClinicStock: bItem['bulkClinicStock'] ?? 0,
                     bulkStoreStock: bItem['bulkStoreStock'] ?? 0,
+                    purchasePrice: (bItem['purchasePrice'] as num?)?.toDouble() ?? 0.0,
+                    sellingPrice: (bItem['sellingPrice'] as num?)?.toDouble() ?? 0.0,
                   ));
                 }
                 existing.recalculateStockFromBatches();
@@ -1000,6 +973,8 @@ class SyncService extends ChangeNotifier {
                     storeStock: bItem['storeStock'] ?? 0,
                     bulkClinicStock: bItem['bulkClinicStock'] ?? 0,
                     bulkStoreStock: bItem['bulkStoreStock'] ?? 0,
+                    purchasePrice: (bItem['purchasePrice'] as num?)?.toDouble() ?? 0.0,
+                    sellingPrice: (bItem['sellingPrice'] as num?)?.toDouble() ?? 0.0,
                   ));
                 }
                 m.recalculateStockFromBatches();
@@ -1016,6 +991,8 @@ class SyncService extends ChangeNotifier {
                 claimedLocalIds.add(m.id);
               }
             }
+            // Yield to Flutter event loop so UI thread can render animation/frames smoothly
+            await Future.delayed(Duration.zero);
           }
 
           offset += limit;
@@ -1030,8 +1007,9 @@ class SyncService extends ChangeNotifier {
         box.removeMany(redundantIdsToRemove);
       }
 
-      // Cleanup phase: Only run during full sync (since == null)
-      if (since == null) {
+      // Cleanup phase: Only run during full sync with explicit orphan removal enabled,
+      // and NEVER delete if hub returned 0 items while local database has medicines!
+      if (since == null && allowOrphanRemoval && (hubBarcodes.isNotEmpty || hubNames.isNotEmpty)) {
         final toRemoveIds = <int>[];
         for (final m in allLocal) {
           if (claimedLocalIds.contains(m.id)) continue;
@@ -1054,7 +1032,7 @@ class SyncService extends ChangeNotifier {
       return latestServerTime;
     } catch (e) {
       debugPrint('pullMedicines err: $e');
-      if (since == null || _isCloudMode) {
+      if (_isCloudMode) {
         await syncAllFromCloud();
       }
     } finally {
@@ -1066,9 +1044,9 @@ class SyncService extends ChangeNotifier {
     return null;
   }
 
-  Future<int?> pullPatients({String? since}) async {
+  Future<int?> pullPatients({String? since, bool allowOrphanRemoval = false}) async {
     if (!_isConnected || _jwtToken == null) return null;
-    debugPrint('SyncService: pullPatients starting (since=$since)...');
+    debugPrint('SyncService: pullPatients starting (since=$since, allowOrphanRemoval=$allowOrphanRemoval)...');
     try {
       final box = ObjectBoxService.instance.patientBox;
       final allLocal = box.getAll();
@@ -1105,10 +1083,12 @@ class SyncService extends ChangeNotifier {
           final List<Patient> patientsToPut = [];
 
           for (final item in data) {
-            final uhid = item['uhid'] as String? ?? '';
+            final uhid = (item['uhid'] as String? ?? '').trim();
             if (uhid.isNotEmpty) hubUhids.add(uhid);
-            final serverTime =
+            final createdAt =
                 DateHelper.parseDateTime(item['createdAt']) ?? DateTime.now();
+            final updatedAt =
+                DateHelper.parseDateTime(item['updatedAt']) ?? createdAt;
 
             final existing = uhid.isNotEmpty ? uhidMap[uhid] : null;
             if (existing != null) {
@@ -1120,7 +1100,8 @@ class SyncService extends ChangeNotifier {
                 ..address = item['address'] ?? ''
                 ..bloodGroup = item['bloodGroup'] ?? ''
                 ..age = item['age'] ?? 0
-                ..createdAt = serverTime;
+                ..createdAt = createdAt
+                ..updatedAt = updatedAt;
               patientsToPut.add(existing);
             } else {
               patientsToPut.add(Patient(
@@ -1132,13 +1113,16 @@ class SyncService extends ChangeNotifier {
                 address: item['address'] ?? '',
                 bloodGroup: item['bloodGroup'] ?? '',
                 age: item['age'] ?? 0,
-                createdAt: serverTime,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
               ));
             }
           }
 
           if (patientsToPut.isNotEmpty) {
             box.putMany(patientsToPut);
+            // Yield to Flutter event loop so UI thread can render frames
+            await Future.delayed(Duration.zero);
           }
 
           offset += limit;
@@ -1148,8 +1132,9 @@ class SyncService extends ChangeNotifier {
         }
       }
 
-      // Remove patients deleted on Hub (Full Sync only)
-      if (since == null) {
+      // Remove patients deleted on Hub (Full Sync with orphan removal enabled only)
+      // AND NEVER remove if hub returned 0 items while local database has patients!
+      if (since == null && allowOrphanRemoval && hubUhids.isNotEmpty) {
         final toRemoveIds = <int>[];
         for (final p in allLocal) {
           if (p.uhid.isNotEmpty && !hubUhids.contains(p.uhid)) {
@@ -1164,7 +1149,7 @@ class SyncService extends ChangeNotifier {
       return latestServerTime;
     } catch (e) {
       debugPrint('pullPatients err: $e');
-      if (since == null || _isCloudMode) {
+      if (_isCloudMode) {
         await syncAllFromCloud();
       }
     }
@@ -1182,30 +1167,38 @@ class SyncService extends ChangeNotifier {
         final box = ObjectBoxService.instance.appointmentBox;
         final allLocal = box.getAll();
 
-        // Cache all patients to map UHID <-> ID
+        // Cache all patients to map UHID <-> ID and fallback lookups
         final allPatients = ObjectBoxService.instance.patientBox.getAll();
         final Map<String, Patient> patientUhidMap = {};
         final Map<int, String> patientIdToUhidMap = {};
+        final Map<String, Patient> patientNamePhoneMap = {};
+        final Map<String, Patient> patientNameMap = {};
         for (final p in allPatients) {
           final uh = p.uhid.trim();
           if (uh.isNotEmpty) {
             patientUhidMap[uh] = p;
             patientIdToUhidMap[p.id] = uh;
           }
+          final pName = p.name.trim().toLowerCase();
+          final pPhone = p.phone.trim();
+          if (pName.isNotEmpty) {
+            patientNameMap[pName] = p;
+            if (pPhone.isNotEmpty) {
+              patientNamePhoneMap['${pName}_$pPhone'] = p;
+            }
+          }
         }
 
-        // Natural key: tokenNumber + patientUhid + scheduledAt date (YYYY-MM-DD)
+        // Natural key: tokenNumber + patientUhid/Name + scheduledAt date (YYYY-MM-DD)
         String apptKey(int token, String uhid, DateTime scheduledAt) =>
             '${token}_${uhid}_${scheduledAt.year}-${scheduledAt.month}-${scheduledAt.day}';
 
         // Precompute local appointment keys
         final Map<String, Appointment> localApptMap = {};
         for (final a in allLocal) {
-          final uh = patientIdToUhidMap[a.patientId];
-          if (uh != null) {
-            final lKey = apptKey(a.tokenNumber, uh, a.scheduledAt);
-            localApptMap[lKey] = a;
-          }
+          final uh = patientIdToUhidMap[a.patientId] ?? a.patientName.trim().toLowerCase();
+          final lKey = apptKey(a.tokenNumber, uh, a.scheduledAt);
+          localApptMap[lKey] = a;
         }
 
         final hubKeys = <String>{};
@@ -1213,34 +1206,45 @@ class SyncService extends ChangeNotifier {
 
         for (final item in data) {
           final uhid = item['patientUhid'] as String? ?? '';
+          final patientName = (item['patientName'] as String? ?? '').trim();
+          final patientPhone = (item['patientPhone'] as String? ?? '').trim();
           final scheduledAt = DateHelper.parseDateTime(item['scheduledAt']) ?? DateTime.now();
           final createdAt = DateHelper.parseDateTime(item['createdAt']) ?? DateTime.now();
+          final updatedAt = DateHelper.parseDateTime(item['updatedAt']) ?? createdAt;
           final token = item['tokenNumber'] as int? ?? 0;
 
-          // Resolve local patient ID using cached Map
+          // Resolve local patient ID using cached Map with fallback
           int localPatientId = 0;
           if (uhid.isNotEmpty && patientUhidMap.containsKey(uhid)) {
             localPatientId = patientUhidMap[uhid]!.id;
           }
-
-          if (localPatientId == 0) {
-            debugPrint('SyncService: Warning — Could not resolve local patient for UHID $uhid. Skipping appointment.');
-            continue;
+          if (localPatientId == 0 && patientName.isNotEmpty) {
+            final pNameLower = patientName.toLowerCase();
+            if (patientPhone.isNotEmpty && patientNamePhoneMap.containsKey('${pNameLower}_$patientPhone')) {
+              localPatientId = patientNamePhoneMap['${pNameLower}_$patientPhone']!.id;
+            } else if (patientNameMap.containsKey(pNameLower)) {
+              localPatientId = patientNameMap[pNameLower]!.id;
+            }
           }
 
-          final key = apptKey(token, uhid, scheduledAt);
+          final effectiveIdKey = uhid.isNotEmpty ? uhid : patientName.toLowerCase();
+          final key = apptKey(token, effectiveIdKey, scheduledAt);
           hubKeys.add(key);
 
           final existing = localApptMap[key];
 
           if (existing != null) {
             existing
-              ..patientId = localPatientId
+              ..patientId = localPatientId > 0 ? localPatientId : existing.patientId
+              ..patientName = patientName.isNotEmpty ? patientName : existing.patientName
+              ..patientPhone = patientPhone.isNotEmpty ? patientPhone : existing.patientPhone
               ..status = item['status'] ?? 'waiting'
               ..consultationFee = (item['consultationFee'] as num?)?.toDouble() ?? 0.0
+              ..paymentMethod = item['paymentMethod'] ?? existing.paymentMethod
               ..notes = item['notes'] ?? ''
               ..isWalkIn = item['isWalkIn'] ?? true
               ..consultationBilled = item['consultationBilled'] ?? false
+              ..updatedAt = updatedAt
               ..calledAt = DateHelper.parseDateTime(item['calledAt'])
               ..pharmacyAt = DateHelper.parseDateTime(item['pharmacyAt'])
               ..completedAt = DateHelper.parseDateTime(item['completedAt']);
@@ -1248,17 +1252,19 @@ class SyncService extends ChangeNotifier {
           } else {
             apptsToPut.add(Appointment(
               id: 0,
-              patientId: localPatientId,
-              patientName: item['patientName'] ?? '',
-              patientPhone: item['patientPhone'] ?? '',
+              patientId: localPatientId > 0 ? localPatientId : (item['patientId'] ?? 0),
+              patientName: patientName,
+              patientPhone: patientPhone,
               doctorId: item['doctorId'] ?? 0,
               doctorName: item['doctorName'] ?? '',
               tokenNumber: token,
               status: item['status'] ?? 'waiting',
               consultationFee: (item['consultationFee'] as num?)?.toDouble() ?? 0.0,
+              paymentMethod: item['paymentMethod'] ?? 'cash',
               notes: item['notes'] ?? '',
               scheduledAt: scheduledAt,
               createdAt: createdAt,
+              updatedAt: updatedAt,
               isWalkIn: item['isWalkIn'] ?? true,
               consultationBilled: item['consultationBilled'] ?? false,
             )
@@ -1301,11 +1307,7 @@ class SyncService extends ChangeNotifier {
             continue;
           }
 
-          final uh = patientIdToUhidMap[a.patientId];
-          if (uh == null) {
-            apptsToRemove.add(a.id);
-            continue;
-          }
+          final uh = patientIdToUhidMap[a.patientId] ?? a.patientName.trim().toLowerCase();
           final key = apptKey(a.tokenNumber, uh, a.scheduledAt);
           if (!hubKeys.contains(key)) {
             apptsToRemove.add(a.id);
@@ -1617,16 +1619,63 @@ class SyncService extends ChangeNotifier {
       debugPrint('SyncService: pullSales aborted (isConnected: $_isConnected, jwt: $_jwtToken)');
       return null;
     }
+
+    // Guard against concurrent overlapping pullSales executions
+    if (_isPullingSales) {
+      debugPrint('SyncService: pullSales already in progress, awaiting active pull...');
+      return await _activeSalesPull;
+    }
+
+    _isPullingSales = true;
+    final completer = Completer<int?>();
+    _activeSalesPull = completer.future;
+
     debugPrint('SyncService: pullSales starting (since=$since)...');
     try {
       final box = ObjectBoxService.instance.saleBox;
+
+      // ── Step 0: Fast Deduplication of any preexisting duplicate invoice records ──
+      try {
+        final allCurrent = box.getAll();
+        final Map<String, List<Sale>> invoiceGroups = {};
+        for (final s in allCurrent) {
+          final trimmed = s.invoiceNo.trim();
+          if (trimmed.isNotEmpty) {
+            invoiceGroups.putIfAbsent(trimmed, () => []).add(s);
+          }
+        }
+        final List<int> duplicateIdsToRemove = [];
+        for (final entry in invoiceGroups.entries) {
+          if (entry.value.length > 1) {
+            // Keep the record with the lowest ID (original local or first synced)
+            // or the synced one if one has synced=true
+            final list = entry.value;
+            list.sort((a, b) {
+              if (a.synced != b.synced) return a.synced ? -1 : 1;
+              return a.id.compareTo(b.id);
+            });
+            for (int i = 1; i < list.length; i++) {
+              duplicateIdsToRemove.add(list[i].id);
+            }
+          }
+        }
+        if (duplicateIdsToRemove.isNotEmpty) {
+          box.removeMany(duplicateIdsToRemove);
+          debugPrint('SyncService: pullSales deduplicated ${duplicateIdsToRemove.length} existing duplicate sale records.');
+        }
+      } catch (e) {
+        debugPrint('SyncService: duplicate pre-clean warning: $e');
+      }
+
       final allLocal = box.getAll();
 
-      // Build fast lookup map for local sales
+      // Build fast lookup map for local sales (trimmed, case-insensitive)
       final Map<String, Sale> localSalesMap = {};
       for (final s in allLocal) {
-        if (s.invoiceNo.isNotEmpty) {
-          localSalesMap[s.invoiceNo] = s;
+        final inv = s.invoiceNo.trim();
+        if (inv.isNotEmpty) {
+          localSalesMap[inv] = s;
+          localSalesMap[inv.toLowerCase()] = s;
         }
       }
 
@@ -1674,13 +1723,21 @@ class SyncService extends ChangeNotifier {
           final List<Sale> salesToPut = [];
 
           for (final item in data) {
-            final invoiceNo = item['invoiceNo'] as String? ?? '';
+            final invoiceNo = (item['invoiceNo'] as String? ?? '').trim();
             if (invoiceNo.isEmpty) continue;
             hubInvoiceNos.add(invoiceNo);
             final createdAt =
                 DateHelper.parseDateTime(item['createdAt']) ?? DateTime.now();
 
-            final existing = localSalesMap[invoiceNo];
+            // Look up existing in localSalesMap or direct DB fallback
+            Sale? existing = localSalesMap[invoiceNo] ?? localSalesMap[invoiceNo.toLowerCase()];
+            if (existing == null) {
+              existing = box.query(Sale_.invoiceNo.equals(invoiceNo)).build().findFirst();
+              if (existing != null) {
+                localSalesMap[invoiceNo] = existing;
+                localSalesMap[invoiceNo.toLowerCase()] = existing;
+              }
+            }
 
             // Resolve local patient ID using cached Maps
             int localPatientId = 0;
@@ -1727,7 +1784,7 @@ class SyncService extends ChangeNotifier {
                 ..itemsJson = item['itemsJson'] ?? '[]';
               salesToPut.add(existing);
             } else {
-              salesToPut.add(Sale(
+              final newSale = Sale(
                 id: 0, // Auto-assign — never force Hub IDs
                 invoiceNo: invoiceNo,
                 patientId: localPatientId > 0 ? localPatientId : (item['patientId'] ?? 0),
@@ -1752,14 +1809,19 @@ class SyncService extends ChangeNotifier {
                 linkedProcedureId: item['linkedProcedureId'] ?? 0,
                 opdInvoiceNo: item['opdInvoiceNo'] ?? '',
                 itemsJson: item['itemsJson'] ?? '[]',
-              ));
+              );
+              salesToPut.add(newSale);
+              // Pre-register into localSalesMap to avoid duplicate within same batch
+              localSalesMap[invoiceNo] = newSale;
+              localSalesMap[invoiceNo.toLowerCase()] = newSale;
             }
           }
 
           if (salesToPut.isNotEmpty) {
-            // Apply fact rollups for newly seen invoices before put overwrites memory map.
+            // Apply fact rollups for newly seen invoices before put
             for (final s in salesToPut) {
-              final wasLocal = localSalesMap.containsKey(s.invoiceNo);
+              final invTrimmed = s.invoiceNo.trim();
+              final wasLocal = allLocal.any((x) => x.invoiceNo.trim() == invTrimmed);
               if (!wasLocal) {
                 try {
                   SalesFactService.instance.applySale(s);
@@ -1767,9 +1829,19 @@ class SyncService extends ChangeNotifier {
                   debugPrint('SyncService: fact apply failed: $e');
                 }
               }
-              localSalesMap[s.invoiceNo] = s;
             }
-            box.putMany(salesToPut);
+            final ids = box.putMany(salesToPut);
+            for (int i = 0; i < salesToPut.length; i++) {
+              final s = salesToPut[i];
+              if (i < ids.length && ids[i] > 0) {
+                s.id = ids[i];
+              }
+              localSalesMap[s.invoiceNo] = s;
+              localSalesMap[s.invoiceNo.toLowerCase()] = s;
+              allLocal.add(s);
+            }
+            // Yield to Flutter event loop so UI thread can render frames
+            await Future.delayed(Duration.zero);
           }
 
           offset += limit;
@@ -1785,7 +1857,7 @@ class SyncService extends ChangeNotifier {
         for (final s in allLocal) {
           if (s.synced &&
               s.invoiceNo.isNotEmpty &&
-              !hubInvoiceNos.contains(s.invoiceNo)) {
+              !hubInvoiceNos.contains(s.invoiceNo.trim())) {
             toRemoveIds.add(s.id);
           }
         }
@@ -1822,9 +1894,14 @@ class SyncService extends ChangeNotifier {
       }
       markDelta(const SyncDelta(sales: true));
       debugPrint('SyncService: pullSales synced successfully.');
+      completer.complete(latestServerTime);
       return latestServerTime;
     } catch (e) {
       debugPrint('pullSales err: $e');
+      completer.complete(null);
+    } finally {
+      _isPullingSales = false;
+      _activeSalesPull = null;
     }
     debugPrint('SyncService: pullSales done.');
     return null;
@@ -2094,6 +2171,17 @@ class SyncService extends ChangeNotifier {
     debugPrint('SyncService: pullPatientPhotosForPatient($uhid) starting...');
     final newPhotos = <PatientImage>[];
     try {
+      var targetPatientId = patientLocalId;
+      if (targetPatientId == 0 && uhid.isNotEmpty) {
+        final patient = ObjectBoxService.instance.patientBox
+            .getAll()
+            .where((p) => p.uhid.trim().toUpperCase() == uhid.trim().toUpperCase())
+            .firstOrNull;
+        if (patient != null) {
+          targetPatientId = patient.id;
+        }
+      }
+
       final url = Uri.parse('$_baseUrl/api/patient-photos')
           .replace(queryParameters: {'uhid': uhid});
       final res = await http
@@ -2106,40 +2194,58 @@ class SyncService extends ChangeNotifier {
         final appDocDir = await getApplicationDocumentsDirectory();
 
         for (final item in data) {
-          final filename = item['filename'] as String? ?? '';
+          final rawFilename = item['filename'] as String? ?? '';
+          final filename = rawFilename.replaceAll('\\', '/').split('/').last.trim();
           final category = item['category'] as String? ?? 'General';
           final date = DateHelper.parseDateTime(item['date']) ?? DateTime.now();
           final imageData = item['imageData'] as String? ?? '';
           if (filename.isEmpty || imageData.isEmpty) continue;
 
-          // Skip if already downloaded for this patient
-          final alreadyExists = allLocal.any((p) =>
-              p.patientId == patientLocalId &&
-              p.imagePath.endsWith(filename) &&
-              File(p.imagePath).existsSync());
-          if (alreadyExists) continue;
+          // Check if already exists for this patient
+          PatientImage? existingRecord;
+          for (final p in allLocal) {
+            if (p.patientId == targetPatientId) {
+              final pName = p.imagePath.replaceAll('\\', '/').split('/').last.trim();
+              if (pName.toLowerCase() == filename.toLowerCase()) {
+                existingRecord = p;
+                break;
+              }
+            }
+          }
+
+          if (existingRecord != null && File(existingRecord.imagePath).existsSync()) {
+            continue;
+          }
 
           // Save image bytes
           final photoDir =
-              Directory('${appDocDir.path}/patient_photos/$patientLocalId');
+              Directory('${appDocDir.path}/patient_photos/$targetPatientId');
           if (!await photoDir.exists()) {
             await photoDir.create(recursive: true);
           }
           final savedPath = '${photoDir.path}/$filename';
           await File(savedPath).writeAsBytes(base64Decode(imageData));
 
-          final pImage = PatientImage(
-            id: 0,
-            patientId: patientLocalId, // ← use Android's local ID, not Hub's
-            imagePath: savedPath,
-            category: category,
-            date: date,
-          );
-          box.put(pImage);
-          newPhotos.add(pImage);
+          if (existingRecord != null) {
+            existingRecord.imagePath = savedPath;
+            existingRecord.category = category;
+            existingRecord.date = date;
+            box.put(existingRecord);
+            newPhotos.add(existingRecord);
+          } else {
+            final pImage = PatientImage(
+              id: 0,
+              patientId: targetPatientId,
+              imagePath: savedPath,
+              category: category,
+              date: date,
+            );
+            box.put(pImage);
+            newPhotos.add(pImage);
+          }
         }
         debugPrint(
-            'SyncService: pullPatientPhotosForPatient($uhid) — ${newPhotos.length} new photos.');
+            'SyncService: pullPatientPhotosForPatient($uhid) — ${newPhotos.length} new/updated photos.');
       }
     } catch (e) {
       debugPrint('pullPatientPhotosForPatient err: $e');
@@ -2181,9 +2287,11 @@ class SyncService extends ChangeNotifier {
         entity: 'h1_record', action: 'create');
   }
 
-  Future<bool> pushPatient(Patient p) async {
-    return await _unifiedPush('/api/patients/push', p.toJson(),
-        entity: 'patient', action: 'create');
+  Future<bool> pushPatient(Patient p, {String action = 'create'}) async {
+    final data = p.toJson();
+    data['action'] = action;
+    return await _unifiedPush('/api/patients/push', data,
+        entity: 'patient', action: action);
   }
 
   Future<bool> pushAuditLog(AuditLog l) async {
@@ -2506,6 +2614,18 @@ class SyncService extends ChangeNotifier {
         updated.autoPrintReceipt = current.autoPrintReceipt;
         updated.receiptPaperSize = current.receiptPaperSize;
 
+        // Keep device-local theme and display settings
+        updated.themeMode = current.themeMode;
+        updated.preferredRefreshRate = current.preferredRefreshRate;
+        updated.navCollapsed = current.navCollapsed;
+        final prefs = await SharedPreferences.getInstance();
+        final localActions = prefs.getStringList('android_dashboard_actions');
+        if (localActions != null && localActions.isNotEmpty) {
+          updated.dashboardActions = localActions;
+        } else {
+          updated.dashboardActions = current.dashboardActions;
+        }
+
         // Preserve client-side sync timestamps
         updated.lastGlobalSync = current.lastGlobalSync;
         updated.lastFirebaseSync = current.lastFirebaseSync;
@@ -2566,6 +2686,8 @@ class SyncService extends ChangeNotifier {
 
           if (logsToPut.isNotEmpty) {
             box.putMany(logsToPut);
+            // Yield to Flutter event loop so UI thread can render frames
+            await Future.delayed(Duration.zero);
           }
 
           offset += limit;

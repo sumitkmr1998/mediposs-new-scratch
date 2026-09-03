@@ -74,8 +74,9 @@ class MedicinesGridState extends State<MedicinesGrid> {
     final query = widget.searchCtrl.text.toLowerCase();
 
     final isClinical = widget.cart.isClinicalDispense;
+    final isReturn = widget.cart.isReturnMode;
     final medicines = widget.inv.rawMedicines
-        .where((m) => isClinical ? m.getNonExpiredMainStock() > 0 : m.getNonExpiredStoreStock() > 0)
+        .where((m) => isReturn || (isClinical ? m.getNonExpiredMainStock() > 0 : m.getNonExpiredStoreStock() > 0))
         .where(
           (m) =>
               query.isEmpty ||

@@ -12,7 +12,6 @@ import '../services/local_server_service.dart';
 import '../utils/consumption_aggregator.dart';
 import '../models/sale.dart';
 import '../repositories/medicine_repository.dart';
-import '../services/sales_fact_service.dart';
 import '../services/mutation_service.dart';
 import '../../objectbox.g.dart';
 
@@ -43,13 +42,7 @@ class InventoryProvider extends ChangeNotifier {
   List<Medicine> get lowStockMedicines =>
       _medicines.where((m) => m.isLowStock).toList();
 
-  /// Prefer pre-aggregated sales facts when available (no sale JSON decode).
   ConsumptionResult _consumptionForSmartStock(List<Sale> sales) {
-    try {
-      if (SalesFactService.instance.hasAnyFacts) {
-        return SalesFactService.instance.consumptionLastDays(30);
-      }
-    } catch (_) {}
     return ConsumptionAggregator.build(sales);
   }
 
@@ -76,6 +69,37 @@ class InventoryProvider extends ChangeNotifier {
   List<Medicine> getSmartLowStockMedicines(List<Sale> sales) {
     final result = _consumptionForSmartStock(sales);
     return _medicines.where((m) => isSmartLowStock(m, sales, precomputed: result)).toList();
+  }
+
+  /// Store + Clinic Replenishment Helpers (Excludes Bulk/Main Stock)
+  /// Evaluates whether Store + Clinic stock is below target coverage duration (in days)
+  int getDispensingStock(Medicine m) => m.storeStock + m.bulkClinicStock;
+
+  bool isStoreClinicReplenishmentNeeded(Medicine m, List<Sale> sales, {int targetDays = 15, ConsumptionResult? precomputed}) {
+    final dispensingStock = getDispensingStock(m);
+    final result = precomputed ?? _consumptionForSmartStock(sales);
+    final daily = result.dailyRateForMedicine(
+      medicineId: m.id,
+      medicineName: m.name,
+      trendDays: 30,
+    );
+
+    if (daily > 0) {
+      final requiredStock = (daily * targetDays).ceil();
+      return dispensingStock < requiredStock;
+    }
+    // Fallback: If no sales consumption data exists, check against medicine's configured lowStockThreshold
+    return dispensingStock <= m.lowStockThreshold;
+  }
+
+  int getStoreClinicReplenishmentCount(List<Sale> sales, {int targetDays = 15}) {
+    final result = _consumptionForSmartStock(sales);
+    return _medicines.where((m) => isStoreClinicReplenishmentNeeded(m, sales, targetDays: targetDays, precomputed: result)).length;
+  }
+
+  List<Medicine> getStoreClinicReplenishmentMedicines(List<Sale> sales, {int targetDays = 15}) {
+    final result = _consumptionForSmartStock(sales);
+    return _medicines.where((m) => isStoreClinicReplenishmentNeeded(m, sales, targetDays: targetDays, precomputed: result)).toList();
   }
 
   int get expiredCount => expiredMedicines.length;
@@ -107,13 +131,67 @@ class InventoryProvider extends ChangeNotifier {
   double get totalInventoryValue =>
       _medicines.fold(0, (sum, m) => sum + (m.storeStock * m.sellingPrice));
 
-  /// Reconciles cached aggregate stock with batch-level stock for all medicines.
+  /// Reconciles cached aggregate stock with batch-level stock, synchronizes prices,
+  /// and deduplicates any redundant medicine records to heal inflated stock.
   void reconcileAllStock() {
-    for (final m in _medicines) {
+    final allMeds = _box.getAll();
+    final Map<String, List<Medicine>> grouped = {};
+    for (final m in allMeds) {
+      final key = m.barcode.trim().isNotEmpty
+          ? 'bc:${m.barcode.trim()}'
+          : 'name:${m.name.trim().toLowerCase()}';
+      grouped.putIfAbsent(key, () => []).add(m);
+    }
+
+    final List<int> duplicatesToRemove = [];
+    for (final entry in grouped.entries) {
+      final list = entry.value;
+      if (list.length > 1) {
+        // Keep primary: medicine with the most batches, or lowest ID
+        list.sort((a, b) {
+          final cmp = b.batches.length.compareTo(a.batches.length);
+          if (cmp != 0) return cmp;
+          return a.id.compareTo(b.id);
+        });
+        final primary = list.first;
+        for (int i = 1; i < list.length; i++) {
+          final dup = list[i];
+          for (final b in dup.batches) {
+            final exists = primary.batches.any((pb) =>
+                pb.batchNo.trim().toUpperCase() == b.batchNo.trim().toUpperCase() &&
+                pb.expiryDate.year == b.expiryDate.year &&
+                pb.expiryDate.month == b.expiryDate.month &&
+                pb.expiryDate.day == b.expiryDate.day);
+            if (!exists) {
+              b.medicine.target = primary;
+              _batchBox.put(b);
+              primary.batches.add(b);
+            }
+          }
+          duplicatesToRemove.add(dup.id);
+        }
+        primary.recalculateStockFromBatches();
+        _box.put(primary);
+      }
+    }
+
+    if (duplicatesToRemove.isNotEmpty) {
+      _box.removeMany(duplicatesToRemove);
+    }
+
+    // Recalculate stock and prices for all remaining medicines
+    final remaining = _box.getAll();
+    for (final m in remaining) {
       m.recalculateStockFromBatches();
       _box.put(m);
     }
     load();
+
+    final isHub = Platform.isWindows &&
+        !ObjectBoxService.instance.settings.isWindowsClient;
+    if (isHub && LocalServerService.instance.isRunning) {
+      LocalServerService.instance.broadcast({'event': 'medicines_updated'});
+    }
   }
 
   List<Medicine> getFilteredMedicines(List<Sale> sales) {
@@ -265,6 +343,28 @@ class InventoryProvider extends ChangeNotifier {
     final oldMed = _box.get(m.id);
     final oldJson = oldMed != null ? oldMed.toJson() : <String, dynamic>{};
 
+    final activeBatchNos = <String>{};
+    for (final b in m.batches) {
+      final bNo = b.batchNo.trim().toUpperCase();
+      if (bNo.isNotEmpty) activeBatchNos.add(bNo);
+      b.medicine.target = m;
+      final bId = _batchBox.put(b);
+      b.id = bId;
+    }
+
+    if (oldMed != null) {
+      final toRemove = <int>[];
+      for (final b in oldMed.batches) {
+        if (!activeBatchNos.contains(b.batchNo.trim().toUpperCase())) {
+          if (b.id > 0) toRemove.add(b.id);
+        }
+      }
+      if (toRemove.isNotEmpty) {
+        _batchBox.removeMany(toRemove);
+      }
+    }
+
+    m.recalculateStockFromBatches();
     _box.put(m);
 
     // Log medicine update
@@ -281,6 +381,7 @@ class InventoryProvider extends ChangeNotifier {
     );
 
     load();
+    syncService?.pushMedicine(m);
 
     MutationService.instance.publishEntity(
       entity: 'medicine',
@@ -352,6 +453,8 @@ class InventoryProvider extends ChangeNotifier {
               batchNo: batch.batchNo,
               expiryDate: batch.expiryDate,
               qty: deduction,
+              sellingPrice: batch.sellingPrice > 0 ? batch.sellingPrice : m.sellingPrice,
+              purchasePrice: batch.purchasePrice > 0 ? batch.purchasePrice : m.purchasePrice,
             ));
           }
         }
@@ -361,6 +464,8 @@ class InventoryProvider extends ChangeNotifier {
             batchNo: 'N/A',
             expiryDate: DateTime.now(),
             qty: remainingToDeduct,
+            sellingPrice: m.sellingPrice,
+            purchasePrice: m.purchasePrice,
           ));
         }
       } else if (qty < 0) {
@@ -378,12 +483,16 @@ class InventoryProvider extends ChangeNotifier {
             batchNo: latestBatch.batchNo,
             expiryDate: latestBatch.expiryDate,
             qty: qty, // negative
+            sellingPrice: latestBatch.sellingPrice > 0 ? latestBatch.sellingPrice : m.sellingPrice,
+            purchasePrice: latestBatch.purchasePrice > 0 ? latestBatch.purchasePrice : m.purchasePrice,
           ));
         } else {
           deducted.add(DeductedBatch(
             batchNo: 'N/A',
             expiryDate: DateTime.now(),
             qty: qty, // negative
+            sellingPrice: m.sellingPrice,
+            purchasePrice: m.purchasePrice,
           ));
         }
       }
@@ -432,6 +541,8 @@ class InventoryProvider extends ChangeNotifier {
               batchNo: batch.batchNo,
               expiryDate: batch.expiryDate,
               qty: deduction,
+              sellingPrice: batch.sellingPrice > 0 ? batch.sellingPrice : m.sellingPrice,
+              purchasePrice: batch.purchasePrice > 0 ? batch.purchasePrice : m.purchasePrice,
             ));
           }
         }
@@ -441,6 +552,8 @@ class InventoryProvider extends ChangeNotifier {
             batchNo: 'N/A',
             expiryDate: DateTime.now(),
             qty: remainingToDeduct,
+            sellingPrice: m.sellingPrice,
+            purchasePrice: m.purchasePrice,
           ));
         }
 
@@ -530,9 +643,10 @@ class InventoryProvider extends ChangeNotifier {
       int remaining = qty;
       final batches = m.batches.toList();
 
-      if (batchNo != null) {
-        // Transfer from a specific batch if specified
-        final batch = batches.where((b) => b.batchNo == batchNo).firstOrNull;
+      if (batchNo != null && batchNo.trim().isNotEmpty) {
+        // Transfer from a specific batch if specified (use case-insensitive trimmed match)
+        final cleanBatchNo = batchNo.trim().toUpperCase();
+        final batch = batches.where((b) => b.batchNo.trim().toUpperCase() == cleanBatchNo).firstOrNull;
         if (batch != null) {
           _transferInBatch(batch, qty, from, to);
           remaining = 0;
@@ -546,11 +660,13 @@ class InventoryProvider extends ChangeNotifier {
           int available = 0;
           if (from == 'main' || from == 'clinic') {
             available = batch.mainStock;
-          } else if (from == 'store')
+          } else if (from == 'store') {
             available = batch.storeStock;
-          else if (from == 'bulkClinic')
+          } else if (from == 'bulkClinic') {
             available = batch.bulkClinicStock;
-          else if (from == 'bulkStore') available = batch.bulkStoreStock;
+          } else if (from == 'bulkStore') {
+            available = batch.bulkStoreStock;
+          }
 
           if (available > 0) {
             final move = remaining > available ? available : remaining;
@@ -628,6 +744,8 @@ class InventoryProvider extends ChangeNotifier {
     Map<int, int> bulkStoreUpdates = const {},
     String batchNo = '',
     DateTime? expiryDate,
+    double? purchasePrice,
+    double? sellingPrice,
     String note = '',
     String supplier = '',
     SyncService? syncService,
@@ -664,6 +782,12 @@ class InventoryProvider extends ChangeNotifier {
           continue;
         }
 
+        // Capture initial stock for all target locations before mutation
+        final initialClinic = m.mainStock;
+        final initialStore = m.storeStock;
+        final initialBulkClinic = m.bulkClinicStock;
+        final initialBulkStore = m.bulkStoreStock;
+
         // Update or create batch
         if (batchNo.isNotEmpty && expiryDate != null) {
           final cleanBatchNo = batchNo.trim().toUpperCase();
@@ -693,6 +817,8 @@ class InventoryProvider extends ChangeNotifier {
               storeStock: storeQty,
               bulkClinicStock: bulkClinicQty,
               bulkStoreStock: bulkStoreQty,
+              purchasePrice: purchasePrice ?? m.purchasePrice,
+              sellingPrice: sellingPrice ?? m.sellingPrice,
             );
             batch.medicine.target = m;
             m.batches.add(batch);
@@ -701,6 +827,12 @@ class InventoryProvider extends ChangeNotifier {
             batch.storeStock += storeQty;
             batch.bulkClinicStock += bulkClinicQty;
             batch.bulkStoreStock += bulkStoreQty;
+            if (purchasePrice != null && purchasePrice > 0) {
+              batch.purchasePrice = purchasePrice;
+            }
+            if (sellingPrice != null && sellingPrice > 0) {
+              batch.sellingPrice = sellingPrice;
+            }
             _batchBox.put(batch);
           }
         }
@@ -712,6 +844,12 @@ class InventoryProvider extends ChangeNotifier {
           m.storeStock += storeQty;
           m.bulkClinicStock += bulkClinicQty;
           m.bulkStoreStock += bulkStoreQty;
+        }
+        if (sellingPrice != null && sellingPrice > 0) {
+          m.sellingPrice = sellingPrice;
+        }
+        if (purchasePrice != null && purchasePrice > 0) {
+          m.purchasePrice = purchasePrice;
         }
         m.updatedAt = now;
         finalUpdates.add(m);
@@ -727,6 +865,8 @@ class InventoryProvider extends ChangeNotifier {
             location: 'clinic',
             note: note,
             supplier: supplier,
+            initialQty: initialClinic,
+            finalQty: m.mainStock,
           ));
         }
         if (storeQty > 0) {
@@ -739,6 +879,8 @@ class InventoryProvider extends ChangeNotifier {
             location: 'store',
             note: note,
             supplier: supplier,
+            initialQty: initialStore,
+            finalQty: m.storeStock,
           ));
         }
         if (bulkClinicQty > 0) {
@@ -751,6 +893,8 @@ class InventoryProvider extends ChangeNotifier {
             location: 'bulkClinic',
             note: note,
             supplier: supplier,
+            initialQty: initialBulkClinic,
+            finalQty: m.bulkClinicStock,
           ));
         }
         if (bulkStoreQty > 0) {
@@ -763,6 +907,8 @@ class InventoryProvider extends ChangeNotifier {
             location: 'bulkStore',
             note: note,
             supplier: supplier,
+            initialQty: initialBulkStore,
+            finalQty: m.bulkStoreStock,
           ));
         }
 
@@ -793,6 +939,11 @@ class InventoryProvider extends ChangeNotifier {
             action: 'create',
             data: p.toJson(),
           );
+        }
+        if (syncService != null) {
+          for (final m in finalUpdates) {
+            syncService.pushMedicine(m);
+          }
         }
       }
 
@@ -1068,27 +1219,75 @@ class InventoryProvider extends ChangeNotifier {
     required int storeStock,
     int bulkClinicStock = 0,
     int bulkStoreStock = 0,
+    double? purchasePrice,
+    double? sellingPrice,
     SyncService? syncService,
     AppUser? actor,
   }) {
+    if (actor != null &&
+        !(actor.role.toLowerCase() == 'admin' ||
+            actor.canOverrideStock ||
+            actor.canEditInventory)) {
+      throw Exception('Unauthorized: You do not have permission to modify batch details.');
+    }
+
     final oldBatchNo = batch.batchNo;
     final oldExpiryDate = batch.expiryDate;
     final oldMainStock = batch.mainStock;
     final oldStoreStock = batch.storeStock;
     final oldBulkClinicStock = batch.bulkClinicStock;
     final oldBulkStoreStock = batch.bulkStoreStock;
+    final oldPurchasePrice = batch.purchasePrice;
+    final oldSellingPrice = batch.sellingPrice;
+
+    final canOverride = actor == null ||
+        actor.role.toLowerCase() == 'admin' ||
+        actor.canOverrideStock;
 
     batch.batchNo = batchNo;
     batch.expiryDate = expiryDate;
-    batch.mainStock = mainStock.clamp(0, 999999);
-    batch.storeStock = storeStock.clamp(0, 999999);
-    batch.bulkClinicStock = bulkClinicStock.clamp(0, 999999);
-    batch.bulkStoreStock = bulkStoreStock.clamp(0, 999999);
+
+    // Security Gate: Only update quantities if actor is authorized to override stock
+    if (canOverride) {
+      batch.mainStock = mainStock.clamp(0, 999999);
+      batch.storeStock = storeStock.clamp(0, 999999);
+      batch.bulkClinicStock = bulkClinicStock.clamp(0, 999999);
+      batch.bulkStoreStock = bulkStoreStock.clamp(0, 999999);
+    }
+
+    // Materialize/pin prices of any other batches that currently have <= 0
+    // so they preserve the medicine's prior price instead of shifting dynamically.
+    final oldMedSellPrice = m.sellingPrice;
+    final oldMedPurchasePrice = m.purchasePrice;
+    for (final other in m.batches) {
+      if (other.id != batch.id) {
+        bool changed = false;
+        if (other.sellingPrice <= 0 && oldMedSellPrice > 0) {
+          other.sellingPrice = oldMedSellPrice;
+          changed = true;
+        }
+        if (other.purchasePrice <= 0 && oldMedPurchasePrice > 0) {
+          other.purchasePrice = oldMedPurchasePrice;
+          changed = true;
+        }
+        if (changed) {
+          _batchBox.put(other);
+        }
+      }
+    }
+
+    if (purchasePrice != null && (actor == null || actor.role.toLowerCase() == 'admin' || actor.canEditInventory)) {
+      batch.purchasePrice = purchasePrice.clamp(0.0, 9999999.0);
+    }
+    if (sellingPrice != null && (actor == null || actor.role.toLowerCase() == 'admin' || actor.canEditInventory)) {
+      batch.sellingPrice = sellingPrice.clamp(0.0, 9999999.0);
+    }
 
     _batchBox.put(batch);
 
-    // Core Fix: Recalculate medicine totals now that batch has changed
+    // Recalculate medicine stock totals and active batch price
     m.recalculateStockFromBatches();
+    m.updatedAt = DateTime.now();
     _box.put(m);
 
     // Log batch details modification
@@ -1105,13 +1304,17 @@ class InventoryProvider extends ChangeNotifier {
         'oldExpiryDate': oldExpiryDate.toIso8601String(),
         'newExpiryDate': expiryDate.toIso8601String(),
         'oldMainStock': oldMainStock,
-        'newMainStock': mainStock,
+        'newMainStock': batch.mainStock,
         'oldStoreStock': oldStoreStock,
-        'newStoreStock': storeStock,
+        'newStoreStock': batch.storeStock,
         'oldBulkClinicStock': oldBulkClinicStock,
-        'newBulkClinicStock': bulkClinicStock,
+        'newBulkClinicStock': batch.bulkClinicStock,
         'oldBulkStoreStock': oldBulkStoreStock,
-        'newBulkStoreStock': bulkStoreStock,
+        'newBulkStoreStock': batch.bulkStoreStock,
+        'oldPurchasePrice': oldPurchasePrice,
+        'newPurchasePrice': batch.purchasePrice,
+        'oldSellingPrice': oldSellingPrice,
+        'newSellingPrice': batch.sellingPrice,
       },
       actor: actor,
     );
@@ -1126,38 +1329,33 @@ class InventoryProvider extends ChangeNotifier {
     if (isHub && LocalServerService.instance.isRunning) {
       LocalServerService.instance.broadcast({'event': 'medicines_updated'});
     }
-    if (isClient && syncService != null) {
-      syncService.pushMedicine(m);
+    if (isClient) {
+      SyncQueueService.instance.addToQueue(
+        entity: 'medicine',
+        action: 'update',
+        data: m.toJson(),
+      );
+      if (syncService != null) {
+        syncService.pushMedicine(m);
+      }
     }
   }
 
-  List<Map<String, dynamic>> toSyncJson() => _medicines
-      .map((m) => {
-            'id': m.id,
-            'name': m.name,
-            'barcode': m.barcode,
-            'category': m.category,
-            'unit': m.unit,
-            'purchasePrice': m.purchasePrice,
-            'sellingPrice': m.sellingPrice,
-            'mainStock': m.mainStock,
-            'storeStock': m.storeStock,
-            'bulkClinicStock': m.bulkClinicStock,
-            'bulkStoreStock': m.bulkStoreStock,
-            'lowStockThreshold': m.lowStockThreshold,
-            'updatedAt': m.updatedAt.toIso8601String(),
-          })
-      .toList();
+  List<Map<String, dynamic>> toSyncJson() => _medicines.map((m) => m.toJson()).toList();
 }
 
 class DeductedBatch {
   final String batchNo;
   final DateTime expiryDate;
   final int qty;
+  final double sellingPrice;
+  final double purchasePrice;
 
   DeductedBatch({
     required this.batchNo,
     required this.expiryDate,
     required this.qty,
+    this.sellingPrice = 0.0,
+    this.purchasePrice = 0.0,
   });
 }

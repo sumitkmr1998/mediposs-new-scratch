@@ -28,8 +28,18 @@ class ConsumptionResult {
       unitsByName[name.toLowerCase().trim()] ?? 0;
 
   int unitsForId(int id, {String? fallbackName}) {
-    if (id > 0 && unitsById.containsKey(id)) return unitsById[id]!;
-    if (fallbackName != null) return unitsForName(fallbackName);
+    if (id > 0 && unitsById.containsKey(id)) {
+      final idUnits = unitsById[id]!;
+      if (fallbackName != null && fallbackName.trim().isNotEmpty) {
+        final nameUnits = unitsForName(fallbackName);
+        // Use the larger count if name was also used on lines with medicineId == 0
+        return nameUnits > idUnits ? nameUnits : idUnits;
+      }
+      return idUnits;
+    }
+    if (fallbackName != null && fallbackName.trim().isNotEmpty) {
+      return unitsForName(fallbackName);
+    }
     return 0;
   }
 
@@ -52,13 +62,21 @@ class ConsumptionResult {
 class ConsumptionAggregator {
   /// Build consumption maps in one pass over [sales].
   /// Skips procedure lines. Returns decrease qty/revenue on [Sale.isReturn].
+  /// Deduplicates sales by invoiceNo to prevent duplicate sync counting.
   static ConsumptionResult build(List<Sale> sales) {
     final unitsByName = <String, int>{};
     final revenueByName = <String, double>{};
     final unitsById = <int, int>{};
     final revenueById = <int, double>{};
+    final seenInvoices = <String>{};
 
     for (final sale in sales) {
+      final inv = sale.invoiceNo.trim();
+      if (inv.isNotEmpty) {
+        if (seenInvoices.contains(inv)) continue;
+        seenInvoices.add(inv);
+      }
+
       final sign = sale.isReturn ? -1 : 1;
       List items;
       try {
