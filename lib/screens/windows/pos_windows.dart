@@ -15,7 +15,6 @@ import '../../shared/services/objectbox_service.dart';
 import '../../shared/providers/opd_provider.dart';
 import '../../shared/models/appointment.dart';
 import '../../theme/app_theme.dart';
-import '../../shared/models/prescription.dart';
 import '../../objectbox.g.dart';
 import '../../widgets/patient_dialogs.dart';
 import '../../shared/services/printing_service.dart';
@@ -58,6 +57,8 @@ class _PosWindowsState extends State<PosWindows> {
   final Map<String, FocusNode> _priceFocusNodes = {};
   final Map<String, TextEditingController> _priceControllers = {};
 
+  int? _lastSyncedEditingSaleId;
+
   @override
   void initState() {
     super.initState();
@@ -68,6 +69,7 @@ class _PosWindowsState extends State<PosWindows> {
     _mixCashCtrl.text = cart.mixedCash.toStringAsFixed(0);
     _mixUpiCtrl.text = cart.mixedUpi.toStringAsFixed(0);
     _mixCardCtrl.text = cart.mixedCard.toStringAsFixed(0);
+    _lastSyncedEditingSaleId = cart.editingSaleId;
 
     // Auto-focus search on load
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -218,6 +220,17 @@ class _PosWindowsState extends State<PosWindows> {
     final cart = context.watch<CartProvider>();
     final auth = context.watch<AuthProvider>();
     final isWide = MediaQuery.of(context).size.width > 800;
+
+    // Synchronize UI controllers whenever loaded editing sale changes or is cleared
+    if (cart.editingSaleId != _lastSyncedEditingSaleId) {
+      _lastSyncedEditingSaleId = cart.editingSaleId;
+      _patientCtrl.text = cart.patientName;
+      _discountCtrl.text = cart.discountAmount > 0 ? cart.discountAmount.toStringAsFixed(0) : '';
+      _paymentMethod = cart.paymentMethod;
+      _mixCashCtrl.text = cart.mixedCash.toStringAsFixed(0);
+      _mixUpiCtrl.text = cart.mixedUpi.toStringAsFixed(0);
+      _mixCardCtrl.text = cart.mixedCard.toStringAsFixed(0);
+    }
 
     return CallbackShortcuts(
       bindings: {

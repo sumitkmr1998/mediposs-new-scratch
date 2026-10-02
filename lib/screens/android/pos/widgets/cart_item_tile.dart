@@ -73,7 +73,7 @@ class CartItemTile extends StatelessWidget {
                   ),
                   IconButton(
                     icon: const Icon(Icons.add_rounded, size: 14),
-                    onPressed: (item.isProcedure || cart.isReturnMode || item.qty < maxStock)
+                    onPressed: (item.isProcedure || cart.isReturnMode || cart.isEditingSale || item.qty < maxStock)
                         ? () => cart.updateQty(item.id, item.qty + 1, isProcedure: item.isProcedure)
                         : null,
                     visualDensity: VisualDensity.compact,
@@ -152,7 +152,7 @@ class CartItemTile extends StatelessWidget {
             void applyQty(int val) {
               int finalQty = val;
               if (finalQty <= 0) finalQty = 1;
-              if (!item.isProcedure && !cart.isReturnMode && finalQty > maxStock) {
+              if (!item.isProcedure && !cart.isReturnMode && !cart.isEditingSale && finalQty > maxStock) {
                 finalQty = maxStock;
               }
               cart.updateQty(item.id, finalQty, isProcedure: item.isProcedure);

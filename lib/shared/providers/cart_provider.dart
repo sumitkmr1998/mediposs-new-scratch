@@ -37,7 +37,7 @@ class CartItem {
   CartItem({this.medicine, this.procedure, this.qty = 1, this.customPrice});
 
   double get unitPrice {
-    if (customPrice != null && customPrice! > 0) return customPrice!;
+    if (customPrice != null && customPrice! >= 0) return customPrice!;
     if (medicine != null) {
       final ab = medicine!.activeBatch ?? medicine!.soonestExpiringBatch;
       if (ab != null && ab.sellingPrice > 0) return ab.sellingPrice;
@@ -269,7 +269,7 @@ class CartProvider extends ChangeNotifier {
         (isProcedure ? i.procedure?.id : i.medicine?.id) == id &&
         i.isProcedure == isProcedure);
     if (idx >= 0) {
-      if (!isProcedure && !_isReturnMode) {
+      if (!isProcedure && !_isReturnMode && _editingSaleId == null) {
         final medicine = _items[idx].medicine;
         if (medicine != null) {
           final maxStock = _isClinicalDispense ? medicine.mainStock : medicine.storeStock;
@@ -602,30 +602,63 @@ class CartProvider extends ChangeNotifier {
     _editingSaleId = sale.id;
     _editingInvoiceNo = sale.invoiceNo;
     _editingCreatedAt = sale.createdAt;
+    _isClinicalDispense = sale.isClinicalDispense;
+    _isReturnMode = sale.isReturn;
 
     final db = ObjectBoxService.instance;
     final saleItems = _salesProvider.getSaleItems(sale);
     for (final item in saleItems) {
       if (item.isProcedure) {
-        final proc = db.procedureBox.get(item.procedureId);
-        if (proc != null) {
-          addProcedure(proc, price: item.unitPrice, qty: item.qty.abs());
+        Procedure? proc = db.procedureBox.get(item.procedureId);
+        if (proc == null || proc.name.toLowerCase() != item.medicineName.toLowerCase()) {
+          proc = db.procedureBox
+              .query(Procedure_.name.equals(item.medicineName, caseSensitive: false))
+              .build()
+              .findFirst();
+        }
+        proc ??= Procedure(
+          name: item.medicineName,
+          basePrice: item.unitPrice,
+        )..id = item.procedureId;
+
+        final existingIdx = _items.indexWhere((i) => i.procedure?.id == proc!.id && i.isProcedure);
+        if (existingIdx >= 0) {
+          _items[existingIdx].qty += item.qty.abs();
         } else {
-          addProcedure(
-            Procedure(name: item.medicineName, basePrice: item.unitPrice)..id = item.procedureId,
-            price: item.unitPrice,
+          _items.add(CartItem(
+            procedure: proc,
             qty: item.qty.abs(),
-          );
+            customPrice: item.unitPrice,
+          ));
         }
       } else {
-        final med = db.medicineBox.get(item.medicineId);
-        if (med != null) {
-          addItem(med, qty: item.qty.abs());
+        // 1. Try to find medicine by ID first if valid
+        Medicine? med = (item.medicineId > 0) ? db.medicineBox.get(item.medicineId) : null;
+        // 2. If not found or name doesn't match, find by case-insensitive name
+        if (med == null || med.name.toLowerCase() != item.medicineName.toLowerCase()) {
+          med = db.medicineBox
+              .query(Medicine_.name.equals(item.medicineName, caseSensitive: false))
+              .build()
+              .findFirst();
+        }
+
+        // 3. If still null, create fallback Medicine with item name and price
+        med ??= Medicine(
+          name: item.medicineName,
+          sellingPrice: item.unitPrice,
+          purchasePrice: 0,
+        )..id = item.medicineId;
+
+        // 4. Directly add to cart items with preserved price and quantity WITHOUT stock limit clamping!
+        final existingIdx = _items.indexWhere((i) => i.medicine?.id == med!.id && !i.isProcedure);
+        if (existingIdx >= 0) {
+          _items[existingIdx].qty += item.qty.abs();
         } else {
-          addItem(
-            Medicine(name: item.medicineName, sellingPrice: item.unitPrice, purchasePrice: 0)..id = item.medicineId,
+          _items.add(CartItem(
+            medicine: med,
             qty: item.qty.abs(),
-          );
+            customPrice: item.unitPrice,
+          ));
         }
       }
     }
@@ -644,11 +677,10 @@ class CartProvider extends ChangeNotifier {
       _mixedCard = sale.isReturn ? -sale.cardAmount : sale.cardAmount;
     }
     
-    _isClinicalDispense = sale.isClinicalDispense;
-    _isReturnMode = sale.isReturn;
     _linkedAppointmentId = sale.linkedAppointmentId != 0 ? sale.linkedAppointmentId : null;
     _linkedProcedureId = sale.linkedProcedureId != 0 ? sale.linkedProcedureId : null;
 
+    debugPrint('CartProvider: Loaded ${sale.invoiceNo} with ${_items.length} item(s) for editing.');
     notifyListeners();
   }
 

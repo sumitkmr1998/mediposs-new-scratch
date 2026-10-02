@@ -111,6 +111,8 @@ class LocalServerService {
     router.get('/api/procedures', _withAuth(_proceduresGetHandler));
     router.post('/api/procedures/push', _withAuth(_proceduresPushHandler));
     router.post('/api/procedures/delete', _withAuth(_proceduresDeleteHandler));
+    router.get('/api/procedure-records', _withAuth(_procedureRecordsGetHandler));
+    router.post('/api/procedure-records/push', _withAuth(_procedureRecordsPushHandler));
     router.post('/api/sync', _withAuth(_syncHandler));
     router.get('/api/audit', _withAuth(_auditGetHandler));
     router.post('/api/audit/push', _withAuth(_auditPushHandler));
@@ -400,6 +402,46 @@ class LocalServerService {
     } catch (e) {
       return Response.internalServerError(
           body: jsonEncode({'error': e.toString()}));
+    }
+  }
+
+  Response _procedureRecordsGetHandler(Request req) {
+    try {
+      final list = ObjectBoxService.instance.procedureRecordBox.getAll();
+      return Response.ok(
+        jsonEncode({'data': list.map((e) => e.toJson()).toList()}),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(body: jsonEncode({'error': e.toString()}));
+    }
+  }
+
+  Future<Response> _procedureRecordsPushHandler(Request req) async {
+    try {
+      final data = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      final rec = ProcedureRecord.fromJson(data);
+      final box = ObjectBoxService.instance.procedureRecordBox;
+
+      // Try finding existing record by matching date, patientName and procedureName
+      final existing = box.query(
+        ProcedureRecord_.patientName.equals(rec.patientName)
+            .and(ProcedureRecord_.procedureName.equals(rec.procedureName))
+      ).build().findFirst();
+
+      if (existing != null && existing.date.difference(rec.date).inSeconds.abs() <= 5) {
+        rec.id = existing.id;
+      } else {
+        rec.id = 0;
+      }
+
+      box.put(rec);
+      broadcast({'event': 'procedures_updated'});
+      _incomingDataController.add('procedures');
+      return Response.ok(jsonEncode({'success': true, 'id': rec.id}));
+    } catch (e) {
+      debugPrint('Hub procedure record push err: $e');
+      return Response.internalServerError(body: jsonEncode({'error': e.toString()}));
     }
   }
 
@@ -1547,9 +1589,21 @@ class LocalServerService {
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
       final id = body['id'] as int?;
-      if (id != null && id > 0) {
-        ObjectBoxService.instance.doctorBox.remove(id);
+      final name = (body['name'] as String? ?? '').trim();
+      final box = ObjectBoxService.instance.doctorBox;
+      Doctor? target;
+
+      if (name.isNotEmpty) {
+        target = box.query(Doctor_.name.equals(name, caseSensitive: false)).build().findFirst();
+      }
+      if (target == null && id != null && id > 0) {
+        target = box.get(id);
+      }
+
+      if (target != null) {
+        box.remove(target.id);
         broadcast({'event': 'sync_received'});
+        broadcast({'event': 'doctors_updated', 'name': target.name});
         _incomingDataController.add('doctors');
       }
       return Response.ok(
@@ -1631,9 +1685,31 @@ class LocalServerService {
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
       final id = body['id'] as int?;
-      if (id != null && id > 0) {
-        ObjectBoxService.instance.prescriptionBox.remove(id);
+      final uhid = (body['uhid'] as String? ?? '').trim();
+      final createdAtStr = (body['createdAt'] as String? ?? '').trim();
+      final box = ObjectBoxService.instance.prescriptionBox;
+      Prescription? target;
+
+      if (uhid.isNotEmpty && createdAtStr.isNotEmpty) {
+        final p = ObjectBoxService.instance.patientBox
+            .query(Patient_.uhid.equals(uhid))
+            .build()
+            .findFirst();
+        final cDate = DateTime.tryParse(createdAtStr);
+        if (p != null && cDate != null) {
+          final scripts = box.query(Prescription_.patientId.equals(p.id)).build().find();
+          target = scripts.where((s) => s.createdAt.difference(cDate).inSeconds.abs() <= 5).firstOrNull;
+        }
+      }
+      if (target == null && id != null && id > 0) {
+        target = box.get(id);
+      }
+
+      if (target != null) {
+        box.remove(target.id);
         broadcast({'event': 'sync_received'});
+        broadcast({'event': 'prescriptions_updated'});
+        _incomingDataController.add('prescriptions');
       }
       return Response.ok(jsonEncode({'status': 'success'}));
     } catch (e) {
@@ -1647,14 +1723,21 @@ class LocalServerService {
     final json = transfers
         .map((t) => {
               'id': t.id,
+              'uuid': t.uuid,
               'medicineId': t.medicineId,
               'medicineName': t.medicineName,
               'qty': t.qty,
               'fromWarehouse': t.fromWarehouse,
               'toWarehouse': t.toWarehouse,
+              'batchNo': t.batchNo,
+              'expiryDate': t.expiryDate?.toIso8601String(),
               'transferredAt': t.transferredAt.toIso8601String(),
               'note': t.note,
               'transferredBy': t.transferredBy,
+              'initialFromQty': t.initialFromQty,
+              'finalFromQty': t.finalFromQty,
+              'initialToQty': t.initialToQty,
+              'finalToQty': t.finalToQty,
             })
         .toList();
     return Response.ok(
@@ -1669,6 +1752,22 @@ class LocalServerService {
   Future<Response> _transfersPushHandler(Request req) async {
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      final transferUuid = (body['uuid'] as String? ?? '').trim();
+
+      // Deduplication / Idempotency check:
+      // If a transfer with this UUID was already recorded on Hub, acknowledge immediately
+      // without applying secondary stock deductions (prevents retry double-deduction).
+      if (transferUuid.isNotEmpty) {
+        final existingTransfer = ObjectBoxService.instance.transferBox
+            .query(StockTransfer_.uuid.equals(transferUuid))
+            .build()
+            .findFirst();
+        if (existingTransfer != null) {
+          debugPrint('Hub: Transfer $transferUuid already processed; acknowledging idempotently.');
+          return Response.ok(jsonEncode({'status': 'success', 'note': 'already_processed'}));
+        }
+      }
+
       int hubMedId = body['medicineId'] ?? 0;
       final medName = (body['medicineName'] ?? '').toString().trim();
       if (medName.isNotEmpty) {
@@ -1688,6 +1787,7 @@ class LocalServerService {
       final expiryDate = DateTime.tryParse(body['expiryDate'] ?? '');
 
       final transfer = StockTransfer(
+        uuid: transferUuid.isNotEmpty ? transferUuid : null,
         medicineId: hubMedId,
         medicineName: body['medicineName'] ?? '',
         qty: body['qty'] ?? 0,
@@ -1800,6 +1900,7 @@ class LocalServerService {
     final json = purchases
         .map((p) => {
               'id': p.id,
+              'uuid': p.uuid,
               'medicineId': p.medicineId,
               'medicineName': p.medicineName,
               'qty': p.qty,
@@ -1808,6 +1909,10 @@ class LocalServerService {
               'location': p.location,
               'note': p.note,
               'supplier': p.supplier,
+              'batchNo': p.batchNo,
+              'expiryDate': p.expiryDate?.toIso8601String(),
+              'initialQty': p.initialQty,
+              'finalQty': p.finalQty,
             })
         .toList();
     return Response.ok(
@@ -1822,6 +1927,20 @@ class LocalServerService {
   Future<Response> _purchasesPushHandler(Request req) async {
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      final purchaseUuid = (body['uuid'] as String? ?? '').trim();
+
+      // Deduplication / Idempotency check:
+      if (purchaseUuid.isNotEmpty) {
+        final existingPurchase = ObjectBoxService.instance.purchaseBox
+            .query(PurchaseRecord_.uuid.equals(purchaseUuid))
+            .build()
+            .findFirst();
+        if (existingPurchase != null) {
+          debugPrint('Hub: Purchase $purchaseUuid already recorded; acknowledging idempotently.');
+          return Response.ok(jsonEncode({'status': 'success', 'note': 'already_processed'}));
+        }
+      }
+
       int hubMedId = body['medicineId'] ?? 0;
       final medName = (body['medicineName'] ?? '').toString().trim();
       if (medName.isNotEmpty) {
@@ -1838,14 +1957,19 @@ class LocalServerService {
       }
 
       final purchase = PurchaseRecord(
+        uuid: purchaseUuid.isNotEmpty ? purchaseUuid : null,
         medicineId: hubMedId,
-        medicineName: body['medicineName'],
-        qty: body['qty'],
-        purchasePrice: (body['purchasePrice'] as num).toDouble(),
+        medicineName: body['medicineName'] ?? '',
+        qty: body['qty'] ?? 0,
+        purchasePrice: (body['purchasePrice'] as num?)?.toDouble() ?? 0.0,
         purchasedAt: DateTime.tryParse(body['purchasedAt'] ?? '') ?? DateTime.now(),
         location: body['location'] ?? '',
         note: body['note'] ?? '',
         supplier: body['supplier'] ?? '',
+        batchNo: body['batchNo'] as String? ?? '',
+        expiryDate: DateTime.tryParse(body['expiryDate'] ?? ''),
+        initialQty: (body['initialQty'] as num?)?.toInt() ?? 0,
+        finalQty: (body['finalQty'] as num?)?.toInt() ?? 0,
       );
 
       // Save purchase to Hub

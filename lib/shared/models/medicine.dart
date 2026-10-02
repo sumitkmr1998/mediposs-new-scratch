@@ -45,8 +45,8 @@ class Medicine {
     this.hsnCode = '',
     this.category = 'General',
     this.unit = 'Pcs',
-    required this.purchasePrice,
-    required this.sellingPrice,
+    this.purchasePrice = 0.0,
+    this.sellingPrice = 0.0,
     this.mainStock = 0,
     this.storeStock = 0,
     this.bulkClinicStock = 0,
@@ -88,8 +88,8 @@ class Medicine {
       hsnCode: json['hsnCode'] ?? '',
       category: json['category'] ?? 'General',
       unit: json['unit'] ?? 'Pcs',
-      purchasePrice: (json['purchasePrice'] as num).toDouble(),
-      sellingPrice: (json['sellingPrice'] as num).toDouble(),
+      purchasePrice: (json['purchasePrice'] as num?)?.toDouble() ?? 0.0,
+      sellingPrice: (json['sellingPrice'] as num?)?.toDouble() ?? 0.0,
       mainStock: json['mainStock'] ?? 0,
       storeStock: json['storeStock'] ?? 0,
       bulkClinicStock: json['bulkClinicStock'] ?? 0,
@@ -111,6 +111,7 @@ class Medicine {
  
   /// Recalculates aggregate stock fields and prices from individual batches.
   void recalculateStockFromBatches() {
+    if (batches.isEmpty) return;
     int totalMain = 0;
     int totalStore = 0;
     int totalBulkClinic = 0;

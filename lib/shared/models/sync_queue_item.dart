@@ -27,4 +27,33 @@ class SyncQueueItem {
   }) : timestamp = timestamp ?? DateTime.now();
 
   Map<String, dynamic> get data => jsonDecode(dataJson);
+
+  int get retryCount {
+    if (processingBy == null) return 0;
+    if (processingBy!.startsWith('retries:')) {
+      final parts = processingBy!.split(':');
+      if (parts.length >= 2) {
+        return int.tryParse(parts[1]) ?? 0;
+      }
+    }
+    if (processingBy!.startsWith('quarantined:')) return 999;
+    return 0;
+  }
+
+  bool get isQuarantined => processingBy?.startsWith('quarantined:') ?? false;
+
+  void recordFailure(String reason) {
+    final next = retryCount + 1;
+    final sanitized = reason.replaceAll(':', '_');
+    if (next >= 5) {
+      processingBy = 'quarantined:$sanitized';
+    } else {
+      processingBy = 'retries:$next:$sanitized';
+    }
+  }
+
+  void resetRetry() {
+    processingBy = null;
+  }
 }
+

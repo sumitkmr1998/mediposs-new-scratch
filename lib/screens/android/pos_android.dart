@@ -1,7 +1,4 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'dart:ui';
 
 import 'package:provider/provider.dart';
 import '../../shared/providers/inventory_provider.dart';
@@ -19,7 +16,6 @@ import '../../shared/providers/opd_provider.dart';
 import '../../shared/models/appointment.dart';
 import 'pos/widgets/cart_item_tile.dart';
 import '../../shared/services/objectbox_service.dart';
-import '../../shared/models/prescription.dart';
 import '../../objectbox.g.dart';
 import 'pos/widgets/mixed_payment_inputs.dart';
 import 'pos/widgets/payment_selector.dart';
@@ -59,6 +55,8 @@ class _PosAndroidState extends State<PosAndroid> {
   final Map<int, FocusNode> _qtyFocusNodes = {};
   final Map<int, TextEditingController> _qtyControllers = {};
 
+  int? _lastSyncedEditingSaleId;
+
   @override
   void initState() {
     super.initState();
@@ -69,6 +67,7 @@ class _PosAndroidState extends State<PosAndroid> {
     _mixCashCtrl.text = cart.mixedCash.toStringAsFixed(0);
     _mixUpiCtrl.text = cart.mixedUpi.toStringAsFixed(0);
     _mixCardCtrl.text = cart.mixedCard.toStringAsFixed(0);
+    _lastSyncedEditingSaleId = cart.editingSaleId;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -746,9 +745,22 @@ class _PosAndroidState extends State<PosAndroid> {
     final cart = context.watch<CartProvider>();
     final auth = context.watch<AuthProvider>();
 
+    // Synchronize UI controllers whenever loaded editing sale changes or is cleared
+    if (cart.editingSaleId != _lastSyncedEditingSaleId) {
+      _lastSyncedEditingSaleId = cart.editingSaleId;
+      _patientCtrl.text = cart.patientName;
+      _discountCtrl.text = cart.discountAmount > 0 ? cart.discountAmount.toStringAsFixed(0) : '';
+      _paymentMethod = cart.paymentMethod;
+      _mixCashCtrl.text = cart.mixedCash.toStringAsFixed(0);
+      _mixUpiCtrl.text = cart.mixedUpi.toStringAsFixed(0);
+      _mixCardCtrl.text = cart.mixedCard.toStringAsFixed(0);
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('New Sale'),
+        title: Text(cart.isEditingSale
+            ? 'Edit Sale'
+            : (cart.isReturnMode ? 'Sale Return' : 'New Sale')),
         backgroundColor:
             cart.isReturnMode ? AppTheme.danger.withValues(alpha: 0.8) : null,
         actions: [
@@ -1100,6 +1112,8 @@ class _PosAndroidState extends State<PosAndroid> {
                             itemBuilder: (ctx, i) {
                               final item = options.elementAt(i);
                               final isProc = item is Procedure;
+                              final proc = isProc ? item : null;
+                              final med = !isProc && item is Medicine ? item : null;
                               return ListTile(
                                 leading: Container(
                                   padding: const EdgeInsets.all(8),
@@ -1113,23 +1127,22 @@ class _PosAndroidState extends State<PosAndroid> {
                                       color: isProc ? AppTheme.accent : AppTheme.primary,
                                       size: 20),
                                 ),
-                                title: Text((item as dynamic).name,
+                                title: Text(proc?.name ?? med?.name ?? '',
                                     style: const TextStyle(
                                         fontWeight: FontWeight.bold)),
-                                subtitle: Text(isProc ? 'Procedure' : (item as Medicine).unit),
+                                subtitle: Text(isProc ? 'Procedure' : (med?.unit ?? '')),
                                 trailing: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Text(
-                                        '₹${isProc ? (item as Procedure).basePrice.toStringAsFixed(0) : (item as Medicine).sellingPrice.toStringAsFixed(0)}',
+                                        '₹${isProc ? proc?.basePrice.toStringAsFixed(0) ?? '0' : med?.sellingPrice.toStringAsFixed(0) ?? '0'}',
                                         style: const TextStyle(
                                             color: AppTheme.primaryLight,
                                             fontWeight: FontWeight.bold)),
-                                    if (!isProc) ...[
+                                    if (!isProc && med != null) ...[
                                       Builder(builder: (ctx) {
                                         final isClinical = cart.isClinicalDispense;
-                                        final med = item as Medicine;
                                         final stock = isClinical ? med.getNonExpiredMainStock() : med.getNonExpiredStoreStock();
                                         final isLow = isClinical ? stock <= med.lowStockThreshold : med.isLowStock;
                                         return Text('Stock: $stock',

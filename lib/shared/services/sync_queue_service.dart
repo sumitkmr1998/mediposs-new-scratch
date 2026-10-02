@@ -16,6 +16,7 @@ import '../models/medicine.dart';
 import '../models/prescription_template.dart';
 import '../models/procedure.dart';
 import '../models/schedule_h1_record.dart';
+import '../models/app_user.dart';
 import 'sync_service.dart';
 import '../../objectbox.g.dart';
 
@@ -28,6 +29,10 @@ class SyncQueueService extends ChangeNotifier {
 
   void init() {
     debugPrint('SyncQueueService: Initializing...');
+    if (SyncService.instance.isHub) {
+      debugPrint('SyncQueueService: Device is Windows Hub (Server). Client outbox timer disabled.');
+      return;
+    }
     _startAutoSync();
     processQueue(); // Run once at start
   }
@@ -42,6 +47,11 @@ class SyncQueueService extends ChangeNotifier {
     required String action,
     required Map<String, dynamic> data,
   }) async {
+    // Windows Hub is the central server and does not push to its own outbox queue
+    if (SyncService.instance.isHub) {
+      return;
+    }
+
     final item = SyncQueueItem(
       entity: entity,
       action: action,
@@ -55,6 +65,7 @@ class SyncQueueService extends ChangeNotifier {
 
   Future<void> processQueue() async {
     if (_isProcessing) return;
+    if (SyncService.instance.isHub) return;
     _isProcessing = true;
 
     bool queueFailed = false;
@@ -69,31 +80,51 @@ class SyncQueueService extends ChangeNotifier {
         
         if (items.isEmpty) break;
 
-        debugPrint('SyncQueueService: Processing ${items.length} items...');
+        debugPrint('SyncQueueService: Processing ${items.length} pending items...');
         bool hasFailed = false;
         
         for (final item in items) {
+          // If item is quarantined due to repeated failures, skip it to prevent blocking
+          if (item.isQuarantined) {
+            continue;
+          }
+
           final ok = await _pushItem(item);
           if (ok) {
             item.processed = true;
+            item.resetRetry();
             box.put(item);
             debugPrint('SyncQueueService: Successfully synced ${item.entity} (${item.action})');
           } else {
+            // Photos are bulky/optional and should never block the queue
             if (item.entity == 'photo') {
               debugPrint('SyncQueueService: Failed to sync photo. Skipping to next item to avoid blocking queue.');
               continue;
             }
-            debugPrint('SyncQueueService: Failed to sync ${item.entity}. Pausing queue.');
+
+            // Record failure and increment retry counter
+            item.recordFailure('Failed during sync attempt');
+            box.put(item);
+
+            if (item.isQuarantined) {
+              debugPrint('SyncQueueService: Item ${item.entity} (ID: ${item.id}) reached 5 retries. Quarantined to unblock queue.');
+              continue; // Skip to next item, do NOT halt the entire queue!
+            }
+
+            debugPrint('SyncQueueService: Failed to sync ${item.entity} (Attempt ${item.retryCount}/5). Pausing queue.');
             hasFailed = true;
-            break; // Stop on first failure to maintain order
+            break; // Stop on temporary failure to preserve transactional ordering
           }
         }
         
         if (hasFailed) {
           queueFailed = true;
-          break; // Stop outer loop if an item failed
+          break; // Stop outer loop if a non-quarantined item failed
         }
       }
+
+      // Automatically prune processed items older than 24 hours to prevent DB bloat
+      _pruneProcessedItems();
     } catch (e) {
       debugPrint('SyncQueueService error: $e');
       queueFailed = true;
@@ -101,6 +132,30 @@ class SyncQueueService extends ChangeNotifier {
       _isProcessing = false;
       SyncService.instance.setQueueSyncFailed(queueFailed);
       notifyListeners();
+    }
+  }
+
+  /// Removes processed items older than 24 hours to keep the ObjectBox store clean and fast.
+  void _pruneProcessedItems() {
+    try {
+      final box = ObjectBoxService.instance.syncQueueBox;
+      final cutoff = DateTime.now().subtract(const Duration(hours: 24));
+      final processedItems = box.query(SyncQueueItem_.processed.equals(true))
+          .build()
+          .find();
+      
+      final toRemoveIds = <int>[];
+      for (final item in processedItems) {
+        if (item.timestamp.isBefore(cutoff)) {
+          toRemoveIds.add(item.id);
+        }
+      }
+      if (toRemoveIds.isNotEmpty) {
+        box.removeMany(toRemoveIds);
+        debugPrint('SyncQueueService: Pruned ${toRemoveIds.length} processed items older than 24h.');
+      }
+    } catch (e) {
+      debugPrint('SyncQueueService: Error pruning processed items: $e');
     }
   }
 
@@ -116,10 +171,7 @@ class SyncQueueService extends ChangeNotifier {
           }
           return await syncService.pushPatient(Patient.fromJson(data), action: item.action);
         case 'medicine':
-          if (item.action == 'create') {
-            return await syncService.pushMedicine(Medicine.fromJson(data));
-          }
-          if (item.action == 'update') {
+          if (item.action == 'create' || item.action == 'update') {
             return await syncService.pushMedicine(Medicine.fromJson(data));
           }
           if (item.action == 'delete') {
@@ -128,7 +180,7 @@ class SyncQueueService extends ChangeNotifier {
           }
           break;
         case 'sale':
-          if (item.action == 'create') {
+          if (item.action == 'create' || item.action == 'update') {
             return await syncService.pushSale(Sale.fromJson(data));
           }
           if (item.action == 'delete') {
@@ -143,10 +195,21 @@ class SyncQueueService extends ChangeNotifier {
         case 'appointment':
           return await syncService.pushAppointment(Appointment.fromJson(data));
         case 'doctor':
-          if (item.action == 'delete') return await syncService.pushDoctorDelete(data['id']);
+          if (item.action == 'delete') {
+            return await syncService.pushDoctorDelete(
+              data['id'] as int? ?? 0,
+              name: data['name'] as String?,
+            );
+          }
           return await syncService.pushDoctor(Doctor.fromJson(data));
         case 'prescription':
-          if (item.action == 'delete') return await syncService.pushPrescriptionDelete(data['id']);
+          if (item.action == 'delete') {
+            return await syncService.pushPrescriptionDelete(
+              data['id'] as int? ?? 0,
+              uhid: data['patientUhid'] as String?,
+              createdAtStr: data['createdAt'] as String?,
+            );
+          }
           return await syncService.pushPrescription(Prescription.fromJson(data));
         case 'transfer':
           return await syncService.pushTransfer(StockTransfer.fromJson(data));
@@ -178,11 +241,17 @@ class SyncQueueService extends ChangeNotifier {
             return await syncService.pushProcedureDelete(data['name'] ?? '');
           }
           return await syncService.pushProcedure(Procedure.fromJson(data));
+        case 'procedure_record':
+          return await syncService.pushProcedureRecord(ProcedureRecord.fromJson(data));
         case 'attendance':
           if (item.action == 'delete') {
             return await syncService.pushAttendanceDelete(data['userId'], data['date']);
           }
           return await syncService.pushAttendance(AttendanceRecord.fromJson(data));
+        case 'user':
+          return await syncService.pushUser(AppUser.fromJson(data));
+        case 'settings':
+          return await syncService.pushSettings(AppSettings.fromJson(data));
         default:
           return true; // Ignore unknown entities
       }
@@ -193,3 +262,4 @@ class SyncQueueService extends ChangeNotifier {
     }
   }
 }
+

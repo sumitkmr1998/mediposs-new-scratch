@@ -990,7 +990,7 @@
     },
     {
       "id": "10:8864801482337884747",
-      "lastPropertyId": "11:3919612049272884166",
+      "lastPropertyId": "14:8110261495082115021",
       "name": "PurchaseRecord",
       "properties": [
         {
@@ -1048,6 +1048,23 @@
           "id": "11:3919612049272884166",
           "name": "finalQty",
           "type": 6
+        },
+        {
+          "id": "12:5331882725267461833",
+          "name": "uuid",
+          "type": 9,
+          "flags": 2048,
+          "indexId": "28:1114937650822053195"
+        },
+        {
+          "id": "13:3289758065563749741",
+          "name": "batchNo",
+          "type": 9
+        },
+        {
+          "id": "14:8110261495082115021",
+          "name": "expiryDate",
+          "type": 10
         }
       ],
       "relations": []
@@ -1197,7 +1214,7 @@
     },
     {
       "id": "12:7082812279176577223",
-      "lastPropertyId": "15:9213604143353209421",
+      "lastPropertyId": "16:546775676738218284",
       "name": "StockTransfer",
       "properties": [
         {
@@ -1275,6 +1292,13 @@
           "id": "15:9213604143353209421",
           "name": "finalToQty",
           "type": 6
+        },
+        {
+          "id": "16:546775676738218284",
+          "name": "uuid",
+          "type": 9,
+          "flags": 2048,
+          "indexId": "29:3656416187596038459"
         }
       ],
       "relations": []
@@ -1790,7 +1814,7 @@
     }
   ],
   "lastEntityId": "21:350610033777783143",
-  "lastIndexId": "27:6375441422444537847",
+  "lastIndexId": "29:3656416187596038459",
   "lastRelationId": "1:2143695166283597161",
   "lastSequenceId": "0:0",
   "modelVersion": 5,

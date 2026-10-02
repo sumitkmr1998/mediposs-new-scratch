@@ -31,10 +31,14 @@ class _MedicineDialogState extends State<MedicineDialog> {
       TextEditingController(text: widget.medicine?.category ?? 'General');
   late final _unitCtrl =
       TextEditingController(text: widget.medicine?.unit ?? 'Pcs');
-  late final _purchaseCtrl =
-      TextEditingController(text: '${widget.medicine?.purchasePrice ?? ''}');
-  late final _sellCtrl =
-      TextEditingController(text: '${widget.medicine?.sellingPrice ?? ''}');
+  late final _purchaseCtrl = TextEditingController(
+      text: (widget.medicine != null && widget.medicine!.purchasePrice > 0)
+          ? widget.medicine!.purchasePrice.toStringAsFixed(2)
+          : '');
+  late final _sellCtrl = TextEditingController(
+      text: (widget.medicine != null && widget.medicine!.sellingPrice > 0)
+          ? widget.medicine!.sellingPrice.toStringAsFixed(2)
+          : '');
   late final _mainStockCtrl =
       TextEditingController(text: '0'); // Default to 0 for adding batches
   late final _storeStockCtrl =
@@ -48,6 +52,8 @@ class _MedicineDialogState extends State<MedicineDialog> {
 
   Medicine? _selectedExisting;
   late final _batchNoCtrl = TextEditingController();
+  late final _batchSellCtrl = TextEditingController();
+  late final _batchPurchaseCtrl = TextEditingController();
   late DateTime _expiryDate = DateTime.now().add(const Duration(days: 365));
   bool _isScheduleH1 = false;
 
@@ -65,8 +71,29 @@ class _MedicineDialogState extends State<MedicineDialog> {
         final latestBatch = widget.medicine!.batches.reduce((a, b) => a.expiryDate.compareTo(b.expiryDate) > 0 ? a : b);
         _batchNoCtrl.text = latestBatch.batchNo;
         _expiryDate = latestBatch.expiryDate;
+        _batchSellCtrl.text = latestBatch.sellingPrice > 0 ? latestBatch.sellingPrice.toStringAsFixed(2) : '';
+        _batchPurchaseCtrl.text = latestBatch.purchasePrice > 0 ? latestBatch.purchasePrice.toStringAsFixed(2) : '';
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _barcodeCtrl.dispose();
+    _categoryCtrl.dispose();
+    _unitCtrl.dispose();
+    _purchaseCtrl.dispose();
+    _sellCtrl.dispose();
+    _mainStockCtrl.dispose();
+    _storeStockCtrl.dispose();
+    _bulkClinicCtrl.dispose();
+    _bulkStoreCtrl.dispose();
+    _thresholdCtrl.dispose();
+    _batchNoCtrl.dispose();
+    _batchSellCtrl.dispose();
+    _batchPurchaseCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -103,16 +130,36 @@ class _MedicineDialogState extends State<MedicineDialog> {
                 const SizedBox(height: 12),
                 Row(children: [
                   Expanded(
-                      child: _field(_purchaseCtrl, 'Purchase Price ₹',
-                          keyboardType: TextInputType.number, readOnly: !canEditFull)),
+                    child: _field(
+                      _purchaseCtrl,
+                      'Base Purchase Price ₹ (Optional)',
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      readOnly: !canEditFull,
+                      helperText: 'Default cost if batch cost is omitted',
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return null;
+                        final p = double.tryParse(v.trim());
+                        if (p == null || p < 0) return 'Invalid price';
+                        return null;
+                      },
+                    ),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
-                      child: _field(_sellCtrl, 'Selling Price ₹ *',
-                          keyboardType: TextInputType.number,
-                          readOnly: !canEditFull,
-                          validator: (v) => double.tryParse(v ?? '') == null
-                              ? 'Invalid price'
-                              : null)),
+                    child: _field(
+                      _sellCtrl,
+                      'Base Selling Price ₹ (Optional)',
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      readOnly: !canEditFull,
+                      helperText: 'Default MRP if batch price is omitted',
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return null;
+                        final p = double.tryParse(v.trim());
+                        if (p == null || p < 0) return 'Invalid price';
+                        return null;
+                      },
+                    ),
+                  ),
                 ]),
                 const SizedBox(height: 12),
                 Row(children: [
@@ -175,6 +222,26 @@ class _MedicineDialogState extends State<MedicineDialog> {
                      ),
                    ),
                 ]),
+                const SizedBox(height: 8),
+                Row(children: [
+                  Expanded(
+                    child: _field(
+                      _batchSellCtrl,
+                      'Batch Selling Price ₹ (MRP)',
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      helperText: 'Leave empty to use base price',
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _field(
+                      _batchPurchaseCtrl,
+                      'Batch Purchase Price ₹ (Cost)',
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      helperText: 'Supplier cost for this batch',
+                    ),
+                  ),
+                ]),
               ],
             ),
           ),
@@ -205,11 +272,16 @@ class _MedicineDialogState extends State<MedicineDialog> {
             onPressed: _addBatch,
             child: const Text('Add Batch'),
           ),
-        ] else
+        ] else ...[
+          OutlinedButton(
+            onPressed: _createMedicineOnly,
+            child: const Text('Create Medicine Only'),
+          ),
           ElevatedButton(
             onPressed: _addBatch,
-            child: const Text('Create & Add'),
+            child: const Text('Create & Add Stock'),
           ),
+        ],
       ],
     );
   }
@@ -255,8 +327,8 @@ class _MedicineDialogState extends State<MedicineDialog> {
           _barcodeCtrl.text = selection.barcode;
           _categoryCtrl.text = selection.category;
           _unitCtrl.text = selection.unit;
-          _purchaseCtrl.text = selection.purchasePrice.toString();
-          _sellCtrl.text = selection.sellingPrice.toString();
+          _purchaseCtrl.text = selection.purchasePrice > 0 ? selection.purchasePrice.toStringAsFixed(2) : '';
+          _sellCtrl.text = selection.sellingPrice > 0 ? selection.sellingPrice.toStringAsFixed(2) : '';
           _thresholdCtrl.text = selection.lowStockThreshold.toString();
           _isScheduleH1 = selection.isScheduleH1;
           // Quantities stay 0 for new batch entry unless editing established medicine
@@ -264,9 +336,13 @@ class _MedicineDialogState extends State<MedicineDialog> {
             final latestBatch = selection.batches.reduce((a, b) => a.expiryDate.compareTo(b.expiryDate) > 0 ? a : b);
             _batchNoCtrl.text = latestBatch.batchNo;
             _expiryDate = latestBatch.expiryDate;
+            _batchSellCtrl.text = latestBatch.sellingPrice > 0 ? latestBatch.sellingPrice.toStringAsFixed(2) : '';
+            _batchPurchaseCtrl.text = latestBatch.purchasePrice > 0 ? latestBatch.purchasePrice.toStringAsFixed(2) : '';
           } else {
             _batchNoCtrl.text = '';
             _expiryDate = DateTime.now().add(const Duration(days: 365));
+            _batchSellCtrl.text = '';
+            _batchPurchaseCtrl.text = '';
           }
         });
       },
@@ -297,13 +373,20 @@ class _MedicineDialogState extends State<MedicineDialog> {
   Widget _field(TextEditingController ctrl, String label,
       {TextInputType? keyboardType,
       String? Function(String?)? validator,
+      String? helperText,
       bool readOnly = false}) {
     return TextFormField(
       controller: ctrl,
       keyboardType: keyboardType,
       validator: validator,
       readOnly: readOnly,
-      decoration: InputDecoration(labelText: label, isDense: true, filled: readOnly, fillColor: readOnly ? Colors.grey.shade100 : null),
+      decoration: InputDecoration(
+        labelText: label,
+        helperText: helperText,
+        isDense: true,
+        filled: readOnly,
+        fillColor: readOnly ? Colors.grey.shade100 : null,
+      ),
     );
   }
 
@@ -315,21 +398,55 @@ class _MedicineDialogState extends State<MedicineDialog> {
     final m = _selectedExisting ?? widget.medicine;
     if (m == null) return;
 
+    final parsedBuy = double.tryParse(_purchaseCtrl.text.trim());
+    final parsedSell = double.tryParse(_sellCtrl.text.trim());
+
     m
       ..name = _nameCtrl.text.trim()
       ..barcode = _barcodeCtrl.text.trim()
       ..category = _categoryCtrl.text.trim()
       ..unit = _unitCtrl.text.trim()
-      ..purchasePrice = double.tryParse(_purchaseCtrl.text) ?? 0
-      ..sellingPrice = double.tryParse(_sellCtrl.text) ?? 0
       ..isScheduleH1 = _isScheduleH1
-      // We no longer update mainStock/storeStock here to prevent desync with batches
       ..lowStockThreshold = int.tryParse(_thresholdCtrl.text) ?? 10;
+
+    if (parsedBuy != null) m.purchasePrice = parsedBuy;
+    if (parsedSell != null) m.sellingPrice = parsedSell;
+
+    // Recalculate stock and prices from batches if batches exist
+    if (m.batches.isNotEmpty) {
+      m.recalculateStockFromBatches();
+      if (parsedSell != null && parsedSell > 0) m.sellingPrice = parsedSell;
+      if (parsedBuy != null && parsedBuy > 0) m.purchasePrice = parsedBuy;
+    }
 
     inv.updateMedicine(m, syncService: sync, actor: context.read<AuthProvider>().currentUser);
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Medicine details updated')),
+    );
+  }
+
+  void _createMedicineOnly() {
+    if (!_formKey.currentState!.validate()) return;
+    final inv = context.read<InventoryProvider>();
+    final sync = context.read<SyncService>();
+    final actor = context.read<AuthProvider>().currentUser;
+
+    final newM = Medicine(
+      name: _nameCtrl.text.trim(),
+      barcode: _barcodeCtrl.text.trim(),
+      category: _categoryCtrl.text.trim(),
+      unit: _unitCtrl.text.trim(),
+      purchasePrice: double.tryParse(_purchaseCtrl.text.trim()) ?? 0.0,
+      sellingPrice: double.tryParse(_sellCtrl.text.trim()) ?? 0.0,
+      lowStockThreshold: int.tryParse(_thresholdCtrl.text) ?? 10,
+      isScheduleH1: _isScheduleH1,
+    );
+    inv.addMedicine(newM, syncService: sync, actor: actor);
+
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Medicine registered successfully')),
     );
   }
 
@@ -352,6 +469,14 @@ class _MedicineDialogState extends State<MedicineDialog> {
 
     final m = _selectedExisting ?? widget.medicine;
     final actor = context.read<AuthProvider>().currentUser;
+
+    final batchSell = double.tryParse(_batchSellCtrl.text.trim());
+    final batchBuy = double.tryParse(_batchPurchaseCtrl.text.trim());
+    final baseSell = double.tryParse(_sellCtrl.text.trim()) ?? 0.0;
+    final baseBuy = double.tryParse(_purchaseCtrl.text.trim()) ?? 0.0;
+    final effectiveSell = (batchSell != null && batchSell > 0) ? batchSell : (baseSell > 0 ? baseSell : null);
+    final effectiveBuy = (batchBuy != null && batchBuy > 0) ? batchBuy : (baseBuy > 0 ? baseBuy : null);
+
     if (m == null) {
       // New medicine creation flow
       final newM = Medicine(
@@ -359,8 +484,8 @@ class _MedicineDialogState extends State<MedicineDialog> {
         barcode: _barcodeCtrl.text.trim(),
         category: _categoryCtrl.text.trim(),
         unit: _unitCtrl.text.trim(),
-        purchasePrice: double.tryParse(_purchaseCtrl.text) ?? 0,
-        sellingPrice: double.tryParse(_sellCtrl.text) ?? 0,
+        purchasePrice: effectiveBuy ?? 0.0,
+        sellingPrice: effectiveSell ?? 0.0,
         lowStockThreshold: int.tryParse(_thresholdCtrl.text) ?? 10,
         isScheduleH1: _isScheduleH1,
       );
@@ -373,6 +498,8 @@ class _MedicineDialogState extends State<MedicineDialog> {
         bulkStoreUpdates: {newM.id: inputBulkStore},
         batchNo: _batchNoCtrl.text.isNotEmpty ? _batchNoCtrl.text.trim() : 'B-${DateTime.now().millisecondsSinceEpoch}',
         expiryDate: _expiryDate,
+        sellingPrice: effectiveSell,
+        purchasePrice: effectiveBuy,
         syncService: sync,
         actor: actor,
       );
@@ -385,6 +512,8 @@ class _MedicineDialogState extends State<MedicineDialog> {
         bulkStoreUpdates: {m.id: inputBulkStore},
         batchNo: _batchNoCtrl.text.isNotEmpty ? _batchNoCtrl.text.trim() : 'B-${DateTime.now().millisecondsSinceEpoch}',
         expiryDate: _expiryDate,
+        sellingPrice: effectiveSell,
+        purchasePrice: effectiveBuy,
         syncService: sync,
         actor: actor,
       );

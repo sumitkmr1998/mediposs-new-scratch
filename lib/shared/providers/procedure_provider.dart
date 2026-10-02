@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/procedure.dart';
 import '../services/objectbox_service.dart';
 import '../services/sync_service.dart';
+import '../services/sync_queue_service.dart';
 import '../../objectbox.g.dart';
 
 class ProcedureProvider with ChangeNotifier {
@@ -72,8 +73,14 @@ class ProcedureProvider with ChangeNotifier {
   Future<void> saveRecord(ProcedureRecord record, {SyncService? syncService}) async {
     ObjectBoxService.instance.procedureRecordBox.put(record);
     loadRecords();
-    if (syncService != null) {
-      await syncService.syncEntity('ProcedureRecord', record.toJson());
+    if (syncService != null && syncService.isConnected) {
+      await syncService.pushProcedureRecord(record);
+    } else {
+      SyncQueueService.instance.addToQueue(
+        entity: 'procedure_record',
+        action: 'create',
+        data: record.toJson(),
+      );
     }
   }
 

@@ -918,20 +918,87 @@ class SyncService extends ChangeNotifier {
                 ..updatedAt = updatedAt;
 
               if (item['batches'] != null) {
-                existing.batches.clear();
-                for (var bItem in item['batches']) {
-                  existing.batches.add(MedicineBatch(
-                    id: 0,
-                    batchNo: bItem['batchNo'] ?? '',
-                    expiryDate: DateHelper.parseDateTime(bItem['expiryDate']) ?? DateTime.now(),
-                    mainStock: bItem['mainStock'] ?? 0,
-                    storeStock: bItem['storeStock'] ?? 0,
-                    bulkClinicStock: bItem['bulkClinicStock'] ?? 0,
-                    bulkStoreStock: bItem['bulkStoreStock'] ?? 0,
-                    purchasePrice: (bItem['purchasePrice'] as num?)?.toDouble() ?? 0.0,
-                    sellingPrice: (bItem['sellingPrice'] as num?)?.toDouble() ?? 0.0,
-                  ));
+                final batchBox = ObjectBoxService.instance.batchBox;
+                final existingDbBatches = batchBox
+                    .query(MedicineBatch_.medicine.equals(existing.id))
+                    .build()
+                    .find();
+                final existingBatchMap = <String, MedicineBatch>{};
+                final duplicateBatchIds = <int>[];
+                for (final b in existingDbBatches) {
+                  final k = b.batchNo.trim().toUpperCase();
+                  if (k.isEmpty) continue;
+                  if (!existingBatchMap.containsKey(k)) {
+                    existingBatchMap[k] = b;
+                  } else {
+                    duplicateBatchIds.add(b.id);
+                  }
                 }
+                if (duplicateBatchIds.isNotEmpty) {
+                  batchBox.removeMany(duplicateBatchIds);
+                }
+
+                final activeBatchNos = <String>{};
+                for (var bItem in item['batches']) {
+                  final bNo = (bItem['batchNo'] as String? ?? '').trim().toUpperCase();
+                  if (bNo.isEmpty) continue;
+                  activeBatchNos.add(bNo);
+                  final expDate = DateHelper.parseDateTime(bItem['expiryDate']) ?? DateTime.now();
+                  final pPrice = (bItem['purchasePrice'] as num?)?.toDouble() ?? 0.0;
+                  final sPrice = (bItem['sellingPrice'] as num?)?.toDouble() ?? 0.0;
+                  final mStock = (bItem['mainStock'] as num?)?.toInt() ?? 0;
+                  final sStock = (bItem['storeStock'] as num?)?.toInt() ?? 0;
+                  final bcStock = (bItem['bulkClinicStock'] as num?)?.toInt() ?? 0;
+                  final bsStock = (bItem['bulkStoreStock'] as num?)?.toInt() ?? 0;
+
+                  final existingBatch = existingBatchMap[bNo];
+                  if (existingBatch != null) {
+                    existingBatch
+                      ..expiryDate = expDate
+                      ..purchasePrice = pPrice
+                      ..sellingPrice = sPrice
+                      ..mainStock = mStock
+                      ..storeStock = sStock
+                      ..bulkClinicStock = bcStock
+                      ..bulkStoreStock = bsStock;
+                    existingBatch.medicine.target = existing;
+                    batchBox.put(existingBatch);
+                  } else {
+                    final newBatch = MedicineBatch(
+                      id: 0,
+                      batchNo: bItem['batchNo'] ?? '',
+                      expiryDate: expDate,
+                      mainStock: mStock,
+                      storeStock: sStock,
+                      bulkClinicStock: bcStock,
+                      bulkStoreStock: bsStock,
+                      purchasePrice: pPrice,
+                      sellingPrice: sPrice,
+                    );
+                    newBatch.medicine.target = existing;
+                    final nId = batchBox.put(newBatch);
+                    newBatch.id = nId;
+                    existingBatchMap[bNo] = newBatch;
+                  }
+                }
+
+                // Remove orphaned batches no longer present on Hub
+                final toRemove = <int>[];
+                for (final entry in existingBatchMap.entries) {
+                  if (!activeBatchNos.contains(entry.key) && entry.value.id > 0) {
+                    toRemove.add(entry.value.id);
+                  }
+                }
+                if (toRemove.isNotEmpty) {
+                  batchBox.removeMany(toRemove);
+                }
+
+                existing.batches.clear();
+                final refreshedBatches = batchBox
+                    .query(MedicineBatch_.medicine.equals(existing.id))
+                    .build()
+                    .find();
+                existing.batches.addAll(refreshedBatches);
                 existing.recalculateStockFromBatches();
               }
 
@@ -1980,6 +2047,11 @@ class SyncService extends ChangeNotifier {
         final box = ObjectBoxService.instance.transferBox;
         final allLocal = box.getAll();
 
+        final Map<String, StockTransfer> localByUuid = {
+          for (final t in allLocal)
+            if (t.uuid.isNotEmpty) t.uuid: t
+        };
+
         final Map<String, StockTransfer> localTransfersMap = {
           for (final t in allLocal)
             '${t.medicineName.toLowerCase().trim()}_${t.qty}_${t.fromWarehouse}_${t.toWarehouse}_${t.transferredAt.millisecondsSinceEpoch}_${t.batchNo}': t
@@ -1995,13 +2067,22 @@ class SyncService extends ChangeNotifier {
           final from = item['fromWarehouse'] as String? ?? '';
           final to = item['toWarehouse'] as String? ?? '';
           final batch = item['batchNo'] as String?;
+          final itemUuid = (item['uuid'] as String? ?? '').trim();
 
-          final key = '${medicineName.toLowerCase().trim()}_${qty}_${from}_${to}_${serverTime.millisecondsSinceEpoch}_$batch';
-          final existing = localTransfersMap[key];
+          StockTransfer? existing;
+          if (itemUuid.isNotEmpty && localByUuid.containsKey(itemUuid)) {
+            existing = localByUuid[itemUuid];
+          }
+
+          if (existing == null) {
+            final key = '${medicineName.toLowerCase().trim()}_${qty}_${from}_${to}_${serverTime.millisecondsSinceEpoch}_$batch';
+            existing = localTransfersMap[key];
+          }
 
           if (existing == null) {
             transfersToPut.add(StockTransfer(
               id: 0,
+              uuid: itemUuid.isNotEmpty ? itemUuid : null,
               medicineId: item['medicineId'] ?? 0,
               medicineName: medicineName,
               qty: qty,
@@ -2012,6 +2093,10 @@ class SyncService extends ChangeNotifier {
               transferredAt: serverTime,
               note: item['note'] ?? '',
               transferredBy: item['transferredBy'] ?? '',
+              initialFromQty: (item['initialFromQty'] as num?)?.toInt() ?? 0,
+              finalFromQty: (item['finalFromQty'] as num?)?.toInt() ?? 0,
+              initialToQty: (item['initialToQty'] as num?)?.toInt() ?? 0,
+              finalToQty: (item['finalToQty'] as num?)?.toInt() ?? 0,
             ));
           }
         }
@@ -2037,6 +2122,11 @@ class SyncService extends ChangeNotifier {
         final box = ObjectBoxService.instance.purchaseBox;
         final allLocal = box.getAll();
 
+        final Map<String, PurchaseRecord> localByUuid = {
+          for (final p in allLocal)
+            if (p.uuid.isNotEmpty) p.uuid: p
+        };
+
         final Map<String, PurchaseRecord> localPurchasesMap = {
           for (final p in allLocal)
             '${p.medicineName.toLowerCase().trim()}_${p.qty}_${p.location}_${p.purchasedAt.millisecondsSinceEpoch}': p
@@ -2050,21 +2140,34 @@ class SyncService extends ChangeNotifier {
           final medicineName = item['medicineName'] as String? ?? '';
           final qty = item['qty'] as int? ?? 0;
           final location = item['location'] as String? ?? '';
+          final itemUuid = (item['uuid'] as String? ?? '').trim();
 
-          final key = '${medicineName.toLowerCase().trim()}_${qty}_${location}_${serverTime.millisecondsSinceEpoch}';
-          final existing = localPurchasesMap[key];
+          PurchaseRecord? existing;
+          if (itemUuid.isNotEmpty && localByUuid.containsKey(itemUuid)) {
+            existing = localByUuid[itemUuid];
+          }
+
+          if (existing == null) {
+            final key = '${medicineName.toLowerCase().trim()}_${qty}_${location}_${serverTime.millisecondsSinceEpoch}';
+            existing = localPurchasesMap[key];
+          }
 
           if (existing == null) {
             purchasesToPut.add(PurchaseRecord(
               id: 0,
+              uuid: itemUuid.isNotEmpty ? itemUuid : null,
               medicineId: item['medicineId'] ?? 0,
               medicineName: medicineName,
               qty: qty,
-              purchasePrice: (item['purchasePrice'] as num).toDouble(),
+              purchasePrice: (item['purchasePrice'] as num?)?.toDouble() ?? 0.0,
               purchasedAt: serverTime,
               location: location,
               note: item['note'] ?? '',
               supplier: item['supplier'] ?? '',
+              batchNo: item['batchNo'] as String? ?? '',
+              expiryDate: DateTime.tryParse(item['expiryDate'] ?? ''),
+              initialQty: (item['initialQty'] as num?)?.toInt() ?? 0,
+              finalQty: (item['finalQty'] as num?)?.toInt() ?? 0,
             ));
           }
         }
@@ -2318,9 +2421,13 @@ class SyncService extends ChangeNotifier {
         entity: 'doctor', action: 'create');
   }
 
-  Future<bool> pushDoctorDelete(int id) async {
-    return await _unifiedPush('/api/doctors/delete', {'id': id},
-        entity: 'doctor', action: 'delete');
+  Future<bool> pushDoctorDelete(int id, {String? name}) async {
+    return await _unifiedPush(
+      '/api/doctors/delete',
+      {'id': id, if (name != null && name.isNotEmpty) 'name': name},
+      entity: 'doctor',
+      action: 'delete',
+    );
   }
 
   Future<bool> pushPatientDelete(String uhid) async {
@@ -2334,10 +2441,26 @@ class SyncService extends ChangeNotifier {
         entity: 'medicine', action: 'delete');
   }
 
-  Future<bool> pushPrescriptionDelete(int id) async {
-    // Prescriptions are tricky, keep ID for now or find better natural key
-    return await _unifiedPush('/api/prescriptions/delete', {'id': id},
-        entity: 'prescription', action: 'delete');
+  Future<bool> pushPrescriptionDelete(int id, {String? uhid, String? createdAtStr}) async {
+    return await _unifiedPush(
+      '/api/prescriptions/delete',
+      {
+        'id': id,
+        if (uhid != null && uhid.isNotEmpty) 'uhid': uhid,
+        if (createdAtStr != null && createdAtStr.isNotEmpty) 'createdAt': createdAtStr,
+      },
+      entity: 'prescription',
+      action: 'delete',
+    );
+  }
+
+  Future<bool> pushProcedureRecord(ProcedureRecord r) async {
+    return await _unifiedPush(
+      '/api/procedure-records/push',
+      r.toJson(),
+      entity: 'procedure_record',
+      action: 'create',
+    );
   }
 
   Future<bool> pushSaleDelete(String invoiceNo) async {
@@ -2820,6 +2943,11 @@ class WebSocketService extends ChangeNotifier {
       _connected = true;
       _reconnectAttempts = 0; // Reset on successful connect
       debugPrint('WebSocketService: Connected to $ip');
+
+      // Flush offline sync queue immediately upon reconnection
+      SyncQueueService.instance.processQueue().catchError((e) {
+        debugPrint('WebSocketService: Error flushing queue on connect: $e');
+      });
 
       _channel!.stream.listen(
         (data) {

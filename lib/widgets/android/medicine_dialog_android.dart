@@ -53,10 +53,12 @@ class _MedicineRegistrationSheetState
     _categoryCtrl =
         TextEditingController(text: widget.medicine?.category ?? 'General');
     _unitCtrl = TextEditingController(text: widget.medicine?.unit ?? 'Pcs');
-    _purchaseCtrl =
-        TextEditingController(text: '${widget.medicine?.purchasePrice ?? ''}');
-    _sellCtrl =
-        TextEditingController(text: '${widget.medicine?.sellingPrice ?? ''}');
+    final buyPrice = widget.medicine?.purchasePrice ?? 0.0;
+    final sellPrice = widget.medicine?.sellingPrice ?? 0.0;
+    _purchaseCtrl = TextEditingController(
+        text: buyPrice > 0 ? buyPrice.toStringAsFixed(2) : '');
+    _sellCtrl = TextEditingController(
+        text: sellPrice > 0 ? sellPrice.toStringAsFixed(2) : '');
     _thresholdCtrl = TextEditingController(
         text: '${widget.medicine?.lowStockThreshold ?? 10}');
     _isScheduleH1 = widget.medicine?.isScheduleH1 ?? false;
@@ -94,6 +96,7 @@ class _MedicineRegistrationSheetState
       {TextInputType? keyboardType,
       String? Function(String?)? validator,
       IconData? prefixIcon,
+      String? helperText,
       bool readOnly = false}) {
     return TextFormField(
       controller: ctrl,
@@ -103,6 +106,8 @@ class _MedicineRegistrationSheetState
       textInputAction: TextInputAction.next,
       decoration: InputDecoration(
         labelText: label,
+        helperText: helperText,
+        helperStyle: TextStyle(color: context.textMutedColor, fontSize: 10),
         labelStyle: TextStyle(color: context.textMutedColor, fontSize: 13, fontWeight: FontWeight.w600),
         prefixIcon: prefixIcon != null
             ? Icon(prefixIcon, color: AppTheme.primaryLight, size: 20)
@@ -128,11 +133,15 @@ class _MedicineRegistrationSheetState
   void _save() {
     if (!_formKey.currentState!.validate()) return;
     final inv = context.read<InventoryProvider>();
+
+    final enteredSell = double.tryParse(_sellCtrl.text.trim()) ?? 0.0;
+    final enteredBuy = double.tryParse(_purchaseCtrl.text.trim()) ?? 0.0;
+
     final m = widget.medicine ??
         Medicine(
           name: _nameCtrl.text.trim(),
-          purchasePrice: double.tryParse(_purchaseCtrl.text) ?? 0,
-          sellingPrice: double.tryParse(_sellCtrl.text) ?? 0,
+          purchasePrice: enteredBuy,
+          sellingPrice: enteredSell,
         );
 
     m
@@ -140,8 +149,8 @@ class _MedicineRegistrationSheetState
       ..barcode = _barcodeCtrl.text.trim()
       ..category = _categoryCtrl.text.trim()
       ..unit = _unitCtrl.text.trim()
-      ..purchasePrice = double.tryParse(_purchaseCtrl.text) ?? 0
-      ..sellingPrice = double.tryParse(_sellCtrl.text) ?? 0
+      ..purchasePrice = enteredBuy
+      ..sellingPrice = enteredSell
       ..isScheduleH1 = _isScheduleH1
       ..lowStockThreshold = int.tryParse(_thresholdCtrl.text) ?? 10;
 
@@ -172,6 +181,14 @@ class _MedicineRegistrationSheetState
       }
       b.medicine.target = m;
       m.batches.add(b);
+    }
+
+    // Always recalculate stock and price aggregates from batches!
+    if (m.batches.isNotEmpty) {
+      m.recalculateStockFromBatches();
+      // If user explicitly entered base prices, preserve them as default
+      if (enteredSell > 0) m.sellingPrice = enteredSell;
+      if (enteredBuy > 0) m.purchasePrice = enteredBuy;
     }
 
     final sync = context.read<SyncService>();
@@ -294,15 +311,43 @@ class _MedicineRegistrationSheetState
                       ),
                       const SizedBox(height: 16),
                       _buildFormSection(
-                        title: 'FINANCIALS',
+                        title: 'FINANCIALS (OPTIONAL)',
                         children: [
                           Row(
                             children: [
-                              Expanded(child: _field(_purchaseCtrl, 'PURCHASE PRICE (₹)', keyboardType: TextInputType.number, prefixIcon: Icons.currency_rupee_rounded, readOnly: !canEditFull)),
+                              Expanded(
+                                child: _field(
+                                  _purchaseCtrl,
+                                  'BASE PURCHASE PRICE (₹)',
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  prefixIcon: Icons.currency_rupee_rounded,
+                                  readOnly: !canEditFull,
+                                  helperText: 'Optional (derived from batches)',
+                                  validator: (v) {
+                                    if (v == null || v.trim().isEmpty) return null;
+                                    final p = double.tryParse(v.trim());
+                                    if (p == null || p < 0) return 'Invalid price';
+                                    return null;
+                                  },
+                                ),
+                              ),
                               const SizedBox(width: 8),
-                              Expanded(child: _field(_sellCtrl, 'SELLING PRICE (₹)', keyboardType: TextInputType.number, prefixIcon: Icons.sell_rounded,
-                                readOnly: !canEditFull,
-                                validator: (v) => double.tryParse(v ?? '') == null ? 'Invalid price' : null)),
+                              Expanded(
+                                child: _field(
+                                  _sellCtrl,
+                                  'BASE SELLING PRICE (₹)',
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  prefixIcon: Icons.sell_rounded,
+                                  readOnly: !canEditFull,
+                                  helperText: 'Optional (derived from batches)',
+                                  validator: (v) {
+                                    if (v == null || v.trim().isEmpty) return null;
+                                    final p = double.tryParse(v.trim());
+                                    if (p == null || p < 0) return 'Invalid price';
+                                    return null;
+                                  },
+                                ),
+                              ),
                             ],
                           ),
                         ],
@@ -392,6 +437,12 @@ class _MedicineRegistrationSheetState
               _localBatches[idx] = b;
             } else {
               _localBatches.add(b);
+            }
+            if (_sellCtrl.text.isEmpty && b.sellingPrice > 0) {
+              _sellCtrl.text = b.sellingPrice.toStringAsFixed(2);
+            }
+            if (_purchaseCtrl.text.isEmpty && b.purchasePrice > 0) {
+              _purchaseCtrl.text = b.purchasePrice.toStringAsFixed(2);
             }
           });
         },

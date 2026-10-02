@@ -1009,7 +1009,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(10, 8864801482337884747),
       name: 'PurchaseRecord',
-      lastPropertyId: const obx_int.IdUid(11, 3919612049272884166),
+      lastPropertyId: const obx_int.IdUid(14, 8110261495082115021),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -1066,6 +1066,22 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(11, 3919612049272884166),
             name: 'finalQty',
             type: 6,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(12, 5331882725267461833),
+            name: 'uuid',
+            type: 9,
+            flags: 2048,
+            indexId: const obx_int.IdUid(28, 1114937650822053195)),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(13, 3289758065563749741),
+            name: 'batchNo',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(14, 8110261495082115021),
+            name: 'expiryDate',
+            type: 10,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
@@ -1209,7 +1225,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(12, 7082812279176577223),
       name: 'StockTransfer',
-      lastPropertyId: const obx_int.IdUid(15, 9213604143353209421),
+      lastPropertyId: const obx_int.IdUid(16, 546775676738218284),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -1286,7 +1302,13 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(15, 9213604143353209421),
             name: 'finalToQty',
             type: 6,
-            flags: 0)
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(16, 546775676738218284),
+            name: 'uuid',
+            type: 9,
+            flags: 2048,
+            indexId: const obx_int.IdUid(29, 3656416187596038459))
       ],
       relations: <obx_int.ModelRelation>[],
       backlinks: <obx_int.ModelBacklink>[]),
@@ -1831,7 +1853,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
   final model = obx_int.ModelInfo(
       entities: _entities,
       lastEntityId: const obx_int.IdUid(21, 350610033777783143),
-      lastIndexId: const obx_int.IdUid(27, 6375441422444537847),
+      lastIndexId: const obx_int.IdUid(29, 3656416187596038459),
       lastRelationId: const obx_int.IdUid(1, 2143695166283597161),
       lastSequenceId: const obx_int.IdUid(0, 0),
       retiredEntityUids: const [],
@@ -2864,7 +2886,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final noteOffset = fbb.writeString(object.note);
           final supplierOffset = fbb.writeString(object.supplier);
           final locationOffset = fbb.writeString(object.location);
-          fbb.startTable(12);
+          final uuidOffset = fbb.writeString(object.uuid);
+          final batchNoOffset = fbb.writeString(object.batchNo);
+          fbb.startTable(15);
           fbb.addInt64(0, object.id);
           fbb.addInt64(1, object.medicineId);
           fbb.addOffset(2, medicineNameOffset);
@@ -2876,14 +2900,21 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addOffset(8, locationOffset);
           fbb.addInt64(9, object.initialQty);
           fbb.addInt64(10, object.finalQty);
+          fbb.addOffset(11, uuidOffset);
+          fbb.addOffset(12, batchNoOffset);
+          fbb.addInt64(13, object.expiryDate?.millisecondsSinceEpoch);
           fbb.finish(fbb.endTable());
           return object.id;
         },
         objectFromFB: (obx.Store store, ByteData fbData) {
           final buffer = fb.BufferContext(fbData);
           final rootOffset = buffer.derefObject(0);
+          final expiryDateValue =
+              const fb.Int64Reader().vTableGetNullable(buffer, rootOffset, 30);
           final idParam =
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0);
+          final uuidParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 26, '');
           final medicineIdParam =
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 6, 0);
           final medicineNameParam =
@@ -2901,12 +2932,18 @@ obx_int.ModelDefinition getObjectBoxModel() {
               .vTableGet(buffer, rootOffset, 16, '');
           final supplierParam = const fb.StringReader(asciiOptimization: true)
               .vTableGet(buffer, rootOffset, 18, '');
+          final batchNoParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 28, '');
+          final expiryDateParam = expiryDateValue == null
+              ? null
+              : DateTime.fromMillisecondsSinceEpoch(expiryDateValue);
           final initialQtyParam =
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 22, 0);
           final finalQtyParam =
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 24, 0);
           final object = PurchaseRecord(
               id: idParam,
+              uuid: uuidParam,
               medicineId: medicineIdParam,
               medicineName: medicineNameParam,
               qty: qtyParam,
@@ -2915,6 +2952,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               location: locationParam,
               note: noteParam,
               supplier: supplierParam,
+              batchNo: batchNoParam,
+              expiryDate: expiryDateParam,
               initialQty: initialQtyParam,
               finalQty: finalQtyParam);
 
@@ -3064,7 +3103,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final transferredByOffset = fbb.writeString(object.transferredBy);
           final batchNoOffset =
               object.batchNo == null ? null : fbb.writeString(object.batchNo!);
-          fbb.startTable(16);
+          final uuidOffset = fbb.writeString(object.uuid);
+          fbb.startTable(17);
           fbb.addInt64(0, object.id);
           fbb.addInt64(1, object.medicineId);
           fbb.addOffset(2, medicineNameOffset);
@@ -3080,6 +3120,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addInt64(12, object.finalFromQty);
           fbb.addInt64(13, object.initialToQty);
           fbb.addInt64(14, object.finalToQty);
+          fbb.addOffset(15, uuidOffset);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -3090,6 +3131,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.Int64Reader().vTableGetNullable(buffer, rootOffset, 24);
           final idParam =
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0);
+          final uuidParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 34, '');
           final medicineIdParam =
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 6, 0);
           final medicineNameParam =
@@ -3125,6 +3168,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.Int64Reader().vTableGet(buffer, rootOffset, 32, 0);
           final object = StockTransfer(
               id: idParam,
+              uuid: uuidParam,
               medicineId: medicineIdParam,
               medicineName: medicineNameParam,
               qty: qtyParam,
@@ -4491,6 +4535,18 @@ class PurchaseRecord_ {
   /// See [PurchaseRecord.finalQty].
   static final finalQty =
       obx.QueryIntegerProperty<PurchaseRecord>(_entities[9].properties[10]);
+
+  /// See [PurchaseRecord.uuid].
+  static final uuid =
+      obx.QueryStringProperty<PurchaseRecord>(_entities[9].properties[11]);
+
+  /// See [PurchaseRecord.batchNo].
+  static final batchNo =
+      obx.QueryStringProperty<PurchaseRecord>(_entities[9].properties[12]);
+
+  /// See [PurchaseRecord.expiryDate].
+  static final expiryDate =
+      obx.QueryDateProperty<PurchaseRecord>(_entities[9].properties[13]);
 }
 
 /// [Sale] entity fields to define ObjectBox queries.
@@ -4652,6 +4708,10 @@ class StockTransfer_ {
   /// See [StockTransfer.finalToQty].
   static final finalToQty =
       obx.QueryIntegerProperty<StockTransfer>(_entities[11].properties[14]);
+
+  /// See [StockTransfer.uuid].
+  static final uuid =
+      obx.QueryStringProperty<StockTransfer>(_entities[11].properties[15]);
 }
 
 /// [MedicineBatch] entity fields to define ObjectBox queries.

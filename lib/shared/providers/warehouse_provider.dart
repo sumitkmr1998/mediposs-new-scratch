@@ -10,7 +10,7 @@ import '../../objectbox.g.dart';
 import 'inventory_provider.dart';
 import 'sales_provider.dart';
 import '../domain/transfer_rules.dart';
-import 'dart:io';
+import '../services/mutation_service.dart';
 
 class WarehouseProvider extends ChangeNotifier {
   final InventoryProvider _inventoryProvider;
@@ -161,7 +161,7 @@ class WarehouseProvider extends ChangeNotifier {
     );
     ObjectBoxService.instance.transferBox.put(transfer);
 
-    if (Platform.isAndroid) {
+    if (MutationService.instance.isClientDevice) {
       SyncQueueService.instance.addToQueue(
         entity: 'transfer',
         action: 'create',

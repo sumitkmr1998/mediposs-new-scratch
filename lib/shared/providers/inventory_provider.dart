@@ -312,6 +312,16 @@ class InventoryProvider extends ChangeNotifier {
     m.updatedAt = DateTime.now();
     _box.put(m);
 
+    if (m.batches.isNotEmpty) {
+      for (final b in m.batches) {
+        b.medicine.target = m;
+        final bId = _batchBox.put(b);
+        b.id = bId;
+      }
+      m.recalculateStockFromBatches();
+      _box.put(m);
+    }
+
     // Log medicine creation
     AuditService.instance.log(
       action: 'CREATE',
@@ -323,6 +333,7 @@ class InventoryProvider extends ChangeNotifier {
     );
 
     load();
+    syncService?.pushMedicine(m);
 
     MutationService.instance.publishEntity(
       entity: 'medicine',
@@ -643,7 +654,26 @@ class InventoryProvider extends ChangeNotifier {
       int remaining = qty;
       final batches = m.batches.toList();
 
-      if (batchNo != null && batchNo.trim().isNotEmpty) {
+      if (batches.isEmpty) {
+        // Fallback for medicines with no batches
+        int getMedStock(String loc) {
+          if (loc == 'main' || loc == 'clinic') return m.mainStock;
+          if (loc == 'store') return m.storeStock;
+          if (loc == 'bulkClinic') return m.bulkClinicStock;
+          if (loc == 'bulkStore') return m.bulkStoreStock;
+          return 0;
+        }
+
+        void setMedStock(String loc, int val) {
+          if (loc == 'main' || loc == 'clinic') m.mainStock = val;
+          if (loc == 'store') m.storeStock = val;
+          if (loc == 'bulkClinic') m.bulkClinicStock = val;
+          if (loc == 'bulkStore') m.bulkStoreStock = val;
+        }
+
+        setMedStock(from, (getMedStock(from) - qty).clamp(0, 999999));
+        setMedStock(to, getMedStock(to) + qty);
+      } else if (batchNo != null && batchNo.trim().isNotEmpty) {
         // Transfer from a specific batch if specified (use case-insensitive trimmed match)
         final cleanBatchNo = batchNo.trim().toUpperCase();
         final batch = batches.where((b) => b.batchNo.trim().toUpperCase() == cleanBatchNo).firstOrNull;
@@ -697,20 +727,14 @@ class InventoryProvider extends ChangeNotifier {
       );
 
       load();
-      final isClient = Platform.isAndroid ||
-          (Platform.isWindows &&
-              ObjectBoxService.instance.settings.isWindowsClient);
       final isHub = Platform.isWindows &&
           !ObjectBoxService.instance.settings.isWindowsClient;
       if (isHub && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
-      } else if (isClient) {
-        SyncQueueService.instance.addToQueue(
-          entity: 'medicine',
-          action: 'update',
-          data: m.toJson(),
-        );
       }
+      // Note: On clients, warehouse transfers are queued and pushed exclusively as
+      // 'transfer' entities by WarehouseProvider. Do NOT enqueue 'medicine' update
+      // here as that would cause Hub to double-deduct the transfer.
     }
   }
 
@@ -788,63 +812,79 @@ class InventoryProvider extends ChangeNotifier {
         final initialBulkClinic = m.bulkClinicStock;
         final initialBulkStore = m.bulkStoreStock;
 
+        // If the medicine had existing stock before batches were introduced, create a 'GENERAL' batch to protect it
+        if (m.batches.isEmpty &&
+            (m.mainStock > 0 ||
+                m.storeStock > 0 ||
+                m.bulkClinicStock > 0 ||
+                m.bulkStoreStock > 0)) {
+          final initialGeneralBatch = MedicineBatch(
+            batchNo: 'GENERAL',
+            expiryDate: DateTime(2099, 12, 31),
+            mainStock: m.mainStock,
+            storeStock: m.storeStock,
+            bulkClinicStock: m.bulkClinicStock,
+            bulkStoreStock: m.bulkStoreStock,
+            purchasePrice: m.purchasePrice,
+            sellingPrice: m.sellingPrice,
+          );
+          initialGeneralBatch.medicine.target = m;
+          m.batches.add(initialGeneralBatch);
+          _batchBox.put(initialGeneralBatch);
+        }
+
         // Update or create batch
-        if (batchNo.isNotEmpty && expiryDate != null) {
-          final cleanBatchNo = batchNo.trim().toUpperCase();
-          var batch = m.batches
-              .where((b) => b.batchNo.trim().toUpperCase() == cleanBatchNo)
-              .firstOrNull;
+        final cleanBatchNo =
+            batchNo.trim().isNotEmpty ? batchNo.trim().toUpperCase() : 'GENERAL';
+        final effectiveExpiry = expiryDate ?? DateTime(2099, 12, 31);
 
-          if (batch == null) {
-            // Check the database directly to prevent duplicates if relation list is stale/uncached
-            final dbBatch = _batchBox
-                .query(MedicineBatch_.batchNo.equals(batchNo.trim(), caseSensitive: false)
-                    .and(MedicineBatch_.medicine.equals(m.id)))
-                .build()
-                .findFirst();
-            if (dbBatch != null) {
-              batch = dbBatch;
-              // Make sure it is added to the relation list
-              m.batches.add(batch);
-            }
-          }
+        var batch = m.batches
+            .where((b) => b.batchNo.trim().toUpperCase() == cleanBatchNo)
+            .firstOrNull;
 
-          if (batch == null) {
-            batch = MedicineBatch(
-              batchNo: batchNo.trim(),
-              expiryDate: expiryDate,
-              mainStock: mainQty,
-              storeStock: storeQty,
-              bulkClinicStock: bulkClinicQty,
-              bulkStoreStock: bulkStoreQty,
-              purchasePrice: purchasePrice ?? m.purchasePrice,
-              sellingPrice: sellingPrice ?? m.sellingPrice,
-            );
-            batch.medicine.target = m;
+        if (batch == null) {
+          // Check the database directly to prevent duplicates if relation list is stale/uncached
+          final dbBatch = _batchBox
+              .query(MedicineBatch_.batchNo.equals(cleanBatchNo, caseSensitive: false)
+                  .and(MedicineBatch_.medicine.equals(m.id)))
+              .build()
+              .findFirst();
+          if (dbBatch != null) {
+            batch = dbBatch;
+            // Make sure it is added to the relation list
             m.batches.add(batch);
-          } else {
-            batch.mainStock += mainQty;
-            batch.storeStock += storeQty;
-            batch.bulkClinicStock += bulkClinicQty;
-            batch.bulkStoreStock += bulkStoreQty;
-            if (purchasePrice != null && purchasePrice > 0) {
-              batch.purchasePrice = purchasePrice;
-            }
-            if (sellingPrice != null && sellingPrice > 0) {
-              batch.sellingPrice = sellingPrice;
-            }
-            _batchBox.put(batch);
           }
         }
 
-        if (batchNo.isNotEmpty && expiryDate != null) {
-          m.recalculateStockFromBatches();
+        if (batch == null) {
+          batch = MedicineBatch(
+            batchNo: cleanBatchNo,
+            expiryDate: effectiveExpiry,
+            mainStock: mainQty,
+            storeStock: storeQty,
+            bulkClinicStock: bulkClinicQty,
+            bulkStoreStock: bulkStoreQty,
+            purchasePrice: purchasePrice ?? m.purchasePrice,
+            sellingPrice: sellingPrice ?? m.sellingPrice,
+          );
+          batch.medicine.target = m;
+          m.batches.add(batch);
         } else {
-          m.mainStock += mainQty;
-          m.storeStock += storeQty;
-          m.bulkClinicStock += bulkClinicQty;
-          m.bulkStoreStock += bulkStoreQty;
+          batch.mainStock += mainQty;
+          batch.storeStock += storeQty;
+          batch.bulkClinicStock += bulkClinicQty;
+          batch.bulkStoreStock += bulkStoreQty;
+          if (purchasePrice != null && purchasePrice > 0) {
+            batch.purchasePrice = purchasePrice;
+          }
+          if (sellingPrice != null && sellingPrice > 0) {
+            batch.sellingPrice = sellingPrice;
+          }
+          _batchBox.put(batch);
         }
+
+        m.recalculateStockFromBatches();
+
         if (sellingPrice != null && sellingPrice > 0) {
           m.sellingPrice = sellingPrice;
         }
@@ -865,6 +905,8 @@ class InventoryProvider extends ChangeNotifier {
             location: 'clinic',
             note: note,
             supplier: supplier,
+            batchNo: cleanBatchNo,
+            expiryDate: effectiveExpiry,
             initialQty: initialClinic,
             finalQty: m.mainStock,
           ));
@@ -879,6 +921,8 @@ class InventoryProvider extends ChangeNotifier {
             location: 'store',
             note: note,
             supplier: supplier,
+            batchNo: cleanBatchNo,
+            expiryDate: effectiveExpiry,
             initialQty: initialStore,
             finalQty: m.storeStock,
           ));
@@ -893,6 +937,8 @@ class InventoryProvider extends ChangeNotifier {
             location: 'bulkClinic',
             note: note,
             supplier: supplier,
+            batchNo: cleanBatchNo,
+            expiryDate: effectiveExpiry,
             initialQty: initialBulkClinic,
             finalQty: m.bulkClinicStock,
           ));
@@ -907,6 +953,8 @@ class InventoryProvider extends ChangeNotifier {
             location: 'bulkStore',
             note: note,
             supplier: supplier,
+            batchNo: cleanBatchNo,
+            expiryDate: effectiveExpiry,
             initialQty: initialBulkStore,
             finalQty: m.bulkStoreStock,
           ));
@@ -996,18 +1044,27 @@ class InventoryProvider extends ChangeNotifier {
 
       // Also try to adjust a batch to keep them in sync
       if (m.batches.isNotEmpty) {
-        final latest = m.batches.toList()..sort((a, b) => b.id.compareTo(a.id));
-        final batch = latest.first;
+        MedicineBatch? batch;
+        if (p.batchNo.trim().isNotEmpty) {
+          batch = m.batches
+              .where((b) => b.batchNo.trim().toUpperCase() == p.batchNo.trim().toUpperCase())
+              .firstOrNull;
+        }
+        if (batch == null) {
+          final latest = m.batches.toList()..sort((a, b) => b.id.compareTo(a.id));
+          batch = latest.first;
+        }
         if (p.location == 'store') {
-          batch.storeStock += diff;
+          batch.storeStock = (batch.storeStock + diff).clamp(0, 999999);
         } else if (p.location == 'bulkClinic') {
-          batch.bulkClinicStock += diff;
+          batch.bulkClinicStock = (batch.bulkClinicStock + diff).clamp(0, 999999);
         } else if (p.location == 'bulkStore') {
-          batch.bulkStoreStock += diff;
+          batch.bulkStoreStock = (batch.bulkStoreStock + diff).clamp(0, 999999);
         } else {
-          batch.mainStock += diff;
+          batch.mainStock = (batch.mainStock + diff).clamp(0, 999999);
         }
         _batchBox.put(batch);
+        m.recalculateStockFromBatches();
       }
 
       _box.put(m);
@@ -1068,8 +1125,16 @@ class InventoryProvider extends ChangeNotifier {
 
       // Also adjust batch
       if (m.batches.isNotEmpty) {
-        final latest = m.batches.toList()..sort((a, b) => b.id.compareTo(a.id));
-        final batch = latest.first;
+        MedicineBatch? batch;
+        if (p.batchNo.trim().isNotEmpty) {
+          batch = m.batches
+              .where((b) => b.batchNo.trim().toUpperCase() == p.batchNo.trim().toUpperCase())
+              .firstOrNull;
+        }
+        if (batch == null) {
+          final latest = m.batches.toList()..sort((a, b) => b.id.compareTo(a.id));
+          batch = latest.first;
+        }
         if (p.location == 'store') {
           batch.storeStock = (batch.storeStock + diff).clamp(0, 999999);
         } else if (p.location == 'bulkClinic') {
@@ -1080,6 +1145,7 @@ class InventoryProvider extends ChangeNotifier {
           batch.mainStock = (batch.mainStock + diff).clamp(0, 999999);
         }
         _batchBox.put(batch);
+        m.recalculateStockFromBatches();
       }
 
       _box.put(m);
@@ -1315,6 +1381,82 @@ class InventoryProvider extends ChangeNotifier {
         'newPurchasePrice': batch.purchasePrice,
         'oldSellingPrice': oldSellingPrice,
         'newSellingPrice': batch.sellingPrice,
+      },
+      actor: actor,
+    );
+
+    load();
+
+    final isClient = Platform.isAndroid ||
+        (Platform.isWindows &&
+            ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows &&
+        !ObjectBoxService.instance.settings.isWindowsClient;
+    if (isHub && LocalServerService.instance.isRunning) {
+      LocalServerService.instance.broadcast({'event': 'medicines_updated'});
+    }
+    if (isClient) {
+      SyncQueueService.instance.addToQueue(
+        entity: 'medicine',
+        action: 'update',
+        data: m.toJson(),
+      );
+      if (syncService != null) {
+        syncService.pushMedicine(m);
+      }
+    }
+  }
+
+  Future<void> adjustStockForPhysicalAudit(
+    Medicine m, {
+    int? targetClinicStock,
+    int? targetStoreStock,
+    String reason = 'Physical stock verification',
+    AppUser? actor,
+    SyncService? syncService,
+  }) async {
+    final oldMainStock = m.mainStock;
+    final oldStoreStock = m.storeStock;
+
+    final newClinic = targetClinicStock ?? m.mainStock;
+    final newStore = targetStoreStock ?? m.storeStock;
+
+    final clinicDiff = newClinic - oldMainStock;
+    final storeDiff = newStore - oldStoreStock;
+
+    if (clinicDiff == 0 && storeDiff == 0) return;
+
+    if (m.batches.isNotEmpty) {
+      final active = m.batches.firstOrNull ?? m.batches.first;
+      if (clinicDiff != 0) {
+        active.mainStock = (active.mainStock + clinicDiff).clamp(0, 999999);
+      }
+      if (storeDiff != 0) {
+        active.storeStock = (active.storeStock + storeDiff).clamp(0, 999999);
+      }
+      _batchBox.put(active);
+      m.recalculateStockFromBatches();
+    } else {
+      m.mainStock = newClinic.clamp(0, 999999);
+      m.storeStock = newStore.clamp(0, 999999);
+    }
+
+    m.updatedAt = DateTime.now();
+    _box.put(m);
+
+    AuditService.instance.log(
+      action: 'PHYSICAL_AUDIT_ADJUSTMENT',
+      entityType: 'Medicine',
+      entityId: m.id.toString(),
+      description: 'Physical audit adjustment for ${m.name}: Clinic: $oldMainStock -> ${m.mainStock}, Store: $oldStoreStock -> ${m.storeStock} ($reason)',
+      details: {
+        'medicineId': m.id,
+        'medicineName': m.name,
+        'oldClinicStock': oldMainStock,
+        'newClinicStock': m.mainStock,
+        'oldStoreStock': oldStoreStock,
+        'newStoreStock': m.storeStock,
+        'reason': reason,
       },
       actor: actor,
     );

@@ -28,6 +28,7 @@ import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
 import '../../shared/widgets/app_kpi_card.dart';
+import '../../shared/services/clinic_reconciliation_service.dart';
 import 'medicine_detail_android.dart';
 
 class AnalysisHubScreenAndroid extends StatefulWidget {
@@ -47,6 +48,11 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
   Procedure? _selectedProcedure;
   bool _showProcedures = false;
   String _clinicSearchQuery = '';
+  bool _clinicViewSinceBaseline = true;
+  String _clinicScope = 'all'; // 'all', 'clinic', 'store'
+  String _clinicFilterStatus = 'all'; // 'all', 'deficit', 'surplus', 'balanced'
+  bool _isAuditMode = false;
+  final Map<int, int> _physicalCounts = {};
 
   String _detailPeriod = 'Last 30 Days';
   DateTimeRange? _detailCustomRange;
@@ -169,6 +175,9 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
   @override
   void initState() {
     super.initState();
+    ClinicReconciliationService.instance.init().then((_) {
+      if (mounted) setState(() {});
+    });
     final auth = context.read<AuthProvider>();
     _allowedTabTitles = [];
     if (auth.currentUser != null) {
@@ -1796,14 +1805,664 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
   }
 
   // ==========================================
+  // ==========================================
   // 6. CLINIC RECONCILIATION (Optimized for Mobile)
   // ==========================================
+  Future<void> _exportClinicReconciliationToExcel(List<_ClinicReconciliationRow> rows) async {
+    try {
+      final excel = excel_pkg.Excel.createExcel();
+      const sheetName = 'Stock Reconciliation';
+      final sheet = excel[sheetName];
+      excel.delete('Sheet1');
+
+      final service = ClinicReconciliationService.instance;
+      final dateFormat = DateFormat('dd MMM yyyy, hh:mm a');
+      final exportDate = dateFormat.format(DateTime.now());
+      final baselineInfo = service.hasActiveBaseline
+          ? 'Active since: ${dateFormat.format(service.baselineDate!)} by ${service.performedBy ?? "Staff"}'
+          : 'All-Time Cumulative History (No Baseline)';
+
+      final scopeLabel = _clinicScope == 'all'
+          ? 'All Stock (Clinic + Store)'
+          : (_clinicScope == 'clinic' ? 'Clinic Dispensary Only' : 'Store Warehouse Only');
+
+      sheet.appendRow([excel_pkg.TextCellValue('MEDIPOSS STOCK RECONCILIATION REPORT')]);
+      sheet.appendRow([excel_pkg.TextCellValue('Exported At: $exportDate')]);
+      sheet.appendRow([excel_pkg.TextCellValue('Scope: $scopeLabel')]);
+      sheet.appendRow([excel_pkg.TextCellValue('Baseline Status: $baselineInfo')]);
+      sheet.appendRow([]);
+
+      sheet.appendRow([
+        excel_pkg.TextCellValue('Medicine Name'),
+        excel_pkg.TextCellValue('Baseline Stock'),
+        excel_pkg.TextCellValue('Transferred (Net)'),
+        excel_pkg.TextCellValue('Dispensed (OPD)'),
+        excel_pkg.TextCellValue('Retail Sold (Store)'),
+        excel_pkg.TextCellValue('Total Outflow'),
+        excel_pkg.TextCellValue('Expected Stock'),
+        excel_pkg.TextCellValue('Current Physical Stock'),
+        if (_isAuditMode) excel_pkg.TextCellValue('Shelf Count'),
+        if (_isAuditMode) excel_pkg.TextCellValue('Shrinkage Discrepancy'),
+        excel_pkg.TextCellValue('System Variance'),
+        excel_pkg.TextCellValue('Status'),
+      ]);
+
+      for (final r in rows) {
+        String status = 'Balanced';
+        if (r.variance < 0) {
+          status = 'Deficit (Shortage)';
+        } else if (r.variance > 0) {
+          status = 'Surplus';
+        }
+
+        final physCount = _physicalCounts[r.medicineId] ?? r.currentStock;
+        final physDiff = physCount - r.currentStock;
+
+        final rowCells = <excel_pkg.CellValue>[
+          excel_pkg.TextCellValue(r.medicineName),
+          excel_pkg.IntCellValue(r.baselineStock),
+          excel_pkg.IntCellValue(r.totalTransferred),
+          excel_pkg.IntCellValue(r.dispensedQty),
+          excel_pkg.IntCellValue(r.retailSoldQty),
+          excel_pkg.IntCellValue(r.totalConsumed),
+          excel_pkg.IntCellValue(r.expectedStock),
+          excel_pkg.IntCellValue(r.currentStock),
+        ];
+
+        if (_isAuditMode) {
+          rowCells.add(excel_pkg.IntCellValue(physCount));
+          rowCells.add(excel_pkg.IntCellValue(physDiff));
+        }
+
+        rowCells.add(excel_pkg.IntCellValue(r.variance));
+        rowCells.add(excel_pkg.TextCellValue(status));
+
+        sheet.appendRow(rowCells);
+      }
+
+      final dir = await getApplicationDocumentsDirectory();
+      final dateStr = DateFormat('yyyyMMdd-HHmmss').format(DateTime.now());
+      final file = File(p.join(dir.path, 'Stock_Reconciliation_$dateStr.xlsx'));
+      final bytes = excel.encode();
+
+      if (bytes != null) {
+        await file.writeAsBytes(bytes);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Reconciliation report exported to:\n${file.path}'),
+              backgroundColor: AppTheme.success,
+              action: SnackBarAction(
+                label: 'Open Folder',
+                textColor: Colors.white,
+                onPressed: () {
+                  final uri = Uri.directory(dir.path);
+                  launchUrl(uri);
+                },
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to export report: $e'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _exportAndroidComparativeHistoryToExcel() async {
+    try {
+      final inv = context.read<InventoryProvider>();
+      final salesProvider = context.read<SalesProvider>();
+      final transfers = ObjectBoxService.instance.store.box<StockTransfer>().getAll();
+      final service = ClinicReconciliationService.instance;
+
+      final file = await service.exportAuditHistoryComparisonToExcel(
+        medicines: inv.rawMedicines,
+        allTransfers: transfers,
+        allSales: salesProvider.rawSales,
+      );
+
+      if (file != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Audit History comparison exported:\n${file.path}'),
+            backgroundColor: AppTheme.success,
+            action: SnackBarAction(
+              label: 'Open Folder',
+              textColor: Colors.white,
+              onPressed: () {
+                final uri = Uri.directory(file.parent.path);
+                launchUrl(uri);
+              },
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to export audit history: $e'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showAndroidSingleAdjustDialog(Medicine med, int currentStock) async {
+    final actor = context.read<AuthProvider>().currentUser;
+    final inv = context.read<InventoryProvider>();
+    final countCtrl = TextEditingController(text: currentStock.toString());
+    final reasonCtrl = TextEditingController(text: 'Physical shelf count adjustment');
+
+    final updated = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Adjust: ${med.name}', style: const TextStyle(fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Current recorded stock: $currentStock', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: countCtrl,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Actual Count on Shelf',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: reasonCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Reason for Adjustment',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Save Count'),
+          ),
+        ],
+      ),
+    );
+
+    if (updated == true) {
+      final newCount = int.tryParse(countCtrl.text.trim()) ?? currentStock;
+      if (_clinicScope == 'store') {
+        if (newCount != med.storeStock) {
+          await inv.adjustStockForPhysicalAudit(
+            med,
+            targetStoreStock: newCount,
+            reason: reasonCtrl.text.trim(),
+            actor: actor,
+          );
+        }
+      } else if (_clinicScope == 'clinic') {
+        if (newCount != med.mainStock) {
+          await inv.adjustStockForPhysicalAudit(
+            med,
+            targetClinicStock: newCount,
+            reason: reasonCtrl.text.trim(),
+            actor: actor,
+          );
+        }
+      } else {
+        // 'all' scope: compare against total stock (mainStock + storeStock)
+        final totalOld = med.mainStock + med.storeStock;
+        final diff = newCount - totalOld;
+        if (diff != 0) {
+          // Adjust clinic stock by the net difference
+          final newClinic = (med.mainStock + diff).clamp(0, 999999);
+          await inv.adjustStockForPhysicalAudit(
+            med,
+            targetClinicStock: newClinic,
+            reason: reasonCtrl.text.trim(),
+            actor: actor,
+          );
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Stock for ${med.name} updated to $newCount.'),
+            backgroundColor: AppTheme.success,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showAndroidApplyPhysicalAuditDialog(List<Medicine> medicines) async {
+    final actor = context.read<AuthProvider>().currentUser;
+    final inv = context.read<InventoryProvider>();
+
+    int changedCount = 0;
+    int netShrinkage = 0;
+
+    for (final m in medicines) {
+      final phys = _physicalCounts[m.id];
+      if (phys != null) {
+        final current = _clinicScope == 'store'
+            ? m.storeStock
+            : (_clinicScope == 'all' ? m.mainStock + m.storeStock : m.mainStock);
+        if (phys != current) {
+          changedCount++;
+          netShrinkage += (phys - current);
+        }
+      }
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Apply Shelf Stocktake', style: TextStyle(fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Discrepancies found in $changedCount medicines.', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            const SizedBox(height: 8),
+            Text(
+              '• App inventory will be updated to match physical shelf count.\n'
+              '• Net discrepancy: ${netShrinkage >= 0 ? "+$netShrinkage" : "$netShrinkage"} units.\n'
+              '• Discrepancies logged to permanent audit trail.\n'
+              '• Audit baseline will reset to 0 right now.',
+              style: const TextStyle(fontSize: 12, height: 1.4),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.success, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Apply & Reset'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      for (final m in medicines) {
+        final phys = _physicalCounts[m.id];
+        if (phys != null) {
+          if (_clinicScope == 'store') {
+            if (phys != m.storeStock) {
+              await inv.adjustStockForPhysicalAudit(
+                m,
+                targetStoreStock: phys,
+                reason: 'Physical stocktake verification',
+                actor: actor,
+              );
+            }
+          } else if (_clinicScope == 'clinic') {
+            if (phys != m.mainStock) {
+              await inv.adjustStockForPhysicalAudit(
+                m,
+                targetClinicStock: phys,
+                reason: 'Physical stocktake verification',
+                actor: actor,
+              );
+            }
+          } else {
+            // 'all' scope: count represents combined stock (mainStock + storeStock)
+            final currentTotal = m.mainStock + m.storeStock;
+            final diff = phys - currentTotal;
+            if (diff != 0) {
+              final newClinic = (m.mainStock + diff).clamp(0, 999999);
+              await inv.adjustStockForPhysicalAudit(
+                m,
+                targetClinicStock: newClinic,
+                reason: 'Physical stocktake verification (All scope)',
+                actor: actor,
+              );
+            }
+          }
+        }
+      }
+
+      await ClinicReconciliationService.instance.setBaseline(
+        medicines: inv.rawMedicines,
+        actor: actor,
+      );
+
+      if (mounted) {
+        setState(() {
+          _isAuditMode = false;
+          _physicalCounts.clear();
+          _clinicViewSinceBaseline = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Shelf counts applied! Stock synchronized and baseline reset to 0.'),
+            backgroundColor: AppTheme.success,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showAndroidResetBaselineDialog(List<Medicine> medicines) async {
+    final actor = context.read<AuthProvider>().currentUser;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.fact_check_rounded, color: AppTheme.primary),
+            SizedBox(width: 8),
+            Expanded(child: Text('Reset Baseline', style: TextStyle(fontSize: 17))),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Snapshot current clinic and store stock as verified audit baseline?',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '• All on-hand stock will be marked as verified.\n'
+              '• Previous discrepancies will reset to 0.\n'
+              '• New transfers, dispenses, and retail sales track from this moment.',
+              style: TextStyle(fontSize: 12, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'Total medicines to baseline: ${medicines.length}',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primary,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirm Reset'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await ClinicReconciliationService.instance.setBaseline(
+        medicines: medicines,
+        actor: actor,
+      );
+      if (mounted) {
+        setState(() => _clinicViewSinceBaseline = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Audit baseline active! All clinic variances reset to 0.'),
+            backgroundColor: AppTheme.success,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showAndroidClearBaselineDialog() async {
+    final actor = context.read<AuthProvider>().currentUser;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Revert to All-Time?'),
+        content: const Text(
+          'This removes the audit baseline and calculates variances across the complete database history.',
+          style: TextStyle(fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.danger),
+            child: const Text('Clear Baseline'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await ClinicReconciliationService.instance.clearBaseline(actor: actor);
+      if (mounted) {
+        setState(() => _clinicViewSinceBaseline = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Showing cumulative all-time history.')),
+        );
+      }
+    }
+  }
+
+  void _showAndroidBaselineHistorySheet() {
+    final service = ClinicReconciliationService.instance;
+    final history = service.baselineHistory;
+    final dateFormat = DateFormat('dd MMM yyyy, hh:mm a');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.55,
+        minChildSize: 0.35,
+        maxChildSize: 0.85,
+        expand: false,
+        builder: (context, scrollCtrl) => Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade400,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.history_rounded, color: AppTheme.primary, size: 20),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Audit Snapshot History',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  if (history.isNotEmpty)
+                    IconButton(
+                      tooltip: 'Export Comparison Excel',
+                      icon: const Icon(Icons.table_view_rounded, color: Colors.teal, size: 20),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _exportAndroidComparativeHistoryToExcel();
+                      },
+                    ),
+                  Text(
+                    '${history.length} snapshots',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: history.isEmpty
+                  ? const Center(
+                      child: Text('No previous audit snapshots recorded yet.'),
+                    )
+                  : ListView.separated(
+                      controller: scrollCtrl,
+                      padding: const EdgeInsets.all(12),
+                      itemCount: history.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, idx) {
+                        final b = history[idx];
+                        final isCurrent = service.activeBaseline?.id == b.id ||
+                            service.activeBaseline?.timestamp == b.timestamp;
+                        final isLatest = idx == 0;
+
+                        return InkWell(
+                          onTap: () {
+                            service.selectBaseline(b);
+                            setState(() => _clinicViewSinceBaseline = true);
+                            Navigator.pop(ctx);
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isCurrent
+                                  ? AppTheme.primary.withOpacity(0.08)
+                                  : context.surfaceColor,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isCurrent
+                                    ? AppTheme.primary
+                                    : context.borderColor.withOpacity(0.15),
+                                width: isCurrent ? 1.5 : 1.0,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  isCurrent
+                                      ? Icons.check_circle_rounded
+                                      : (isLatest ? Icons.schedule_rounded : Icons.history_rounded),
+                                  color: isCurrent
+                                      ? AppTheme.primary
+                                      : (isLatest ? AppTheme.success : Colors.grey),
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              dateFormat.format(b.timestamp),
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                                color: isCurrent ? AppTheme.primary : null,
+                                              ),
+                                            ),
+                                          ),
+                                          if (isLatest)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: AppTheme.success.withOpacity(0.12),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: const Text(
+                                                'Active Cycle',
+                                                style: TextStyle(
+                                                  color: AppTheme.success,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Verified by: ${b.performedBy} • ${b.medicineCount} medicines snapshotted',
+                                        style: TextStyle(fontSize: 11, color: context.textMutedColor),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Colors.grey),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildClinicReconciliationTab(List<Sale> sales, List<Medicine> medicines) {
+    final service = ClinicReconciliationService.instance;
+    final isBaselineActive = service.hasActiveBaseline;
+    final effectiveSinceBaseline = isBaselineActive && _clinicViewSinceBaseline;
+    final baselineDate = service.baselineDate;
+    final baselineEndDate = effectiveSinceBaseline ? service.currentBaselineEndDate : null;
+    final nextBaseline = effectiveSinceBaseline ? service.nextBaseline : null;
+    final isHistoricalCycle = effectiveSinceBaseline && baselineEndDate != null;
+
     final allTransfers = ObjectBoxService.instance.store.box<StockTransfer>().getAll();
     final medMap = {for (var m in medicines) m.name.toLowerCase().trim(): m.id};
 
     final transferMap = <int, int>{};
     for (final transfer in allTransfers) {
+      if (effectiveSinceBaseline && baselineDate != null) {
+        if (transfer.transferredAt.isBefore(baselineDate)) {
+          continue;
+        }
+        if (baselineEndDate != null && transfer.transferredAt.isAfter(baselineEndDate)) {
+          continue;
+        }
+      }
+
       final localId = medMap[transfer.medicineName.toLowerCase().trim()];
       if (localId != null) {
         if (transfer.toWarehouse == 'main' || transfer.toWarehouse == 'clinic') {
@@ -1815,14 +2474,28 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
       }
     }
 
-    final consumeMap = <int, int>{};
+    final dispenseMap = <int, int>{};
+    final retailMap = <int, int>{};
+
     for (final sale in sales) {
-      if (sale.isClinicalDispense) {
-        for (final item in AnalyticsHelper.getItems(sale)) {
-          if (!item.isProcedure) {
-            final localId = medMap[item.medicineName.toLowerCase().trim()];
-            if (localId != null) {
-              consumeMap[localId] = (consumeMap[localId] ?? 0) + item.qty;
+      if (effectiveSinceBaseline && baselineDate != null) {
+        if (sale.createdAt.isBefore(baselineDate)) {
+          continue;
+        }
+        if (baselineEndDate != null && sale.createdAt.isAfter(baselineEndDate)) {
+          continue;
+        }
+      }
+
+      final isClinical = sale.isClinicalDispense;
+      for (final item in AnalyticsHelper.getItems(sale)) {
+        if (!item.isProcedure) {
+          final localId = medMap[item.medicineName.toLowerCase().trim()];
+          if (localId != null) {
+            if (isClinical) {
+              dispenseMap[localId] = (dispenseMap[localId] ?? 0) + item.qty;
+            } else {
+              retailMap[localId] = (retailMap[localId] ?? 0) + item.qty;
             }
           }
         }
@@ -1833,16 +2506,25 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
     for (final mId in transferMap.keys) {
       relevantMedicineIds.add(mId);
     }
-    for (final mId in consumeMap.keys) {
+    for (final mId in dispenseMap.keys) {
+      relevantMedicineIds.add(mId);
+    }
+    for (final mId in retailMap.keys) {
       relevantMedicineIds.add(mId);
     }
     for (final med in medicines) {
-      if (med.mainStock > 0) {
+      if (med.mainStock > 0 || med.storeStock > 0) {
+        relevantMedicineIds.add(med.id);
+      } else if (effectiveSinceBaseline && service.getBaselineTotalStock(med.id) > 0) {
         relevantMedicineIds.add(med.id);
       }
     }
 
     final reconciliationRows = <_ClinicReconciliationRow>[];
+    int balancedCount = 0;
+    int deficitCount = 0;
+    int surplusCount = 0;
+
     for (final mId in relevantMedicineIds) {
       final med = medicines.firstWhere((m) => m.id == mId, orElse: () => Medicine(
         name: 'Unknown Medicine (ID: $mId)',
@@ -1850,21 +2532,70 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
         sellingPrice: 0,
       )..id = mId);
 
-      final totalTransferred = transferMap[mId] ?? 0;
-      final totalConsumed = consumeMap[mId] ?? 0;
-      final currentStock = med.mainStock;
-      final expectedStock = totalTransferred - totalConsumed;
+      final dispensed = dispenseMap[mId] ?? 0;
+      final retailSold = retailMap[mId] ?? 0;
+      final netTransfer = transferMap[mId] ?? 0;
+
+      int startingBaselineStock = 0;
+      int transferred = 0;
+      int totalOut = 0;
+      int currentStock = 0;
+      int expectedStock = 0;
+
+      if (_clinicScope == 'all') {
+        startingBaselineStock = effectiveSinceBaseline ? service.getBaselineTotalStock(mId) : 0;
+        transferred = 0;
+        totalOut = dispensed + retailSold;
+        currentStock = isHistoricalCycle && nextBaseline != null
+            ? (nextBaseline.totalStocks[mId] ?? ((nextBaseline.clinicStocks[mId] ?? 0) + (nextBaseline.storeStocks[mId] ?? 0)))
+            : (med.mainStock + med.storeStock);
+        expectedStock = effectiveSinceBaseline ? (startingBaselineStock - totalOut) : -totalOut;
+      } else if (_clinicScope == 'clinic') {
+        startingBaselineStock = effectiveSinceBaseline ? service.getBaselineClinicStock(mId) : 0;
+        transferred = netTransfer;
+        totalOut = dispensed;
+        currentStock = isHistoricalCycle && nextBaseline != null
+            ? (nextBaseline.clinicStocks[mId] ?? 0)
+            : med.mainStock;
+        expectedStock = effectiveSinceBaseline ? (startingBaselineStock + transferred - totalOut) : (transferred - totalOut);
+      } else {
+        startingBaselineStock = effectiveSinceBaseline ? service.getBaselineStoreStock(mId) : 0;
+        transferred = -netTransfer;
+        totalOut = retailSold;
+        currentStock = isHistoricalCycle && nextBaseline != null
+            ? (nextBaseline.storeStocks[mId] ?? 0)
+            : med.storeStock;
+        expectedStock = effectiveSinceBaseline ? (startingBaselineStock + transferred - totalOut) : (transferred - totalOut);
+      }
+
       final variance = currentStock - expectedStock;
+
+      if (variance == 0) {
+        balancedCount++;
+      } else if (variance < 0) {
+        deficitCount++;
+      } else {
+        surplusCount++;
+      }
 
       if (_clinicSearchQuery.isNotEmpty && !med.name.toLowerCase().contains(_clinicSearchQuery.toLowerCase())) {
         continue;
       }
 
+      if (_clinicFilterStatus == 'deficit' && variance >= 0) continue;
+      if (_clinicFilterStatus == 'surplus' && variance <= 0) continue;
+      if (_clinicFilterStatus == 'balanced' && variance != 0) continue;
+
       reconciliationRows.add(_ClinicReconciliationRow(
         medicineId: mId,
         medicineName: med.name,
-        totalTransferred: totalTransferred,
-        totalConsumed: totalConsumed,
+        medicine: med,
+        baselineStock: startingBaselineStock,
+        totalTransferred: transferred,
+        dispensedQty: dispensed,
+        retailSoldQty: retailSold,
+        totalConsumed: totalOut,
+        expectedStock: expectedStock,
         currentStock: currentStock,
         variance: variance,
       ));
@@ -1876,84 +2607,640 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
       return a.medicineName.compareTo(b.medicineName);
     });
 
+    final dateFormat = DateFormat('dd MMM, hh:mm a');
+
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Clinic Inventory & Sync Variances',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          // 1. Top Modern Header Card: Title, Status badge & Compact Action Row
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.sync_alt_rounded, color: AppTheme.primary, size: 18),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Stock Reconciliation',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: -0.2),
+                          ),
+                          Text(
+                            isBaselineActive
+                                ? (isHistoricalCycle
+                                    ? 'Viewing audit cycle: ${dateFormat.format(service.baselineDate!)}'
+                                    : 'Audited ${dateFormat.format(service.baselineDate!)}')
+                                : 'All-time transaction ledger (No baseline)',
+                            style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Quick Action Icons
+                    if (service.baselineHistory.isNotEmpty)
+                      IconButton(
+                        tooltip: 'Audit Snapshots History',
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.all(4),
+                        constraints: const BoxConstraints(),
+                        icon: Icon(
+                          Icons.history_rounded,
+                          color: isHistoricalCycle ? Colors.amber.shade900 : AppTheme.primary,
+                          size: 20,
+                        ),
+                        onPressed: _showAndroidBaselineHistorySheet,
+                      ),
+                    IconButton(
+                      tooltip: 'Export Excel Report',
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(),
+                      icon: const Icon(Icons.table_view_rounded, color: Colors.teal, size: 20),
+                      onPressed: reconciliationRows.isEmpty ? null : () => _exportClinicReconciliationToExcel(reconciliationRows),
+                    ),
+                    const SizedBox(width: 4),
+                    // Reset / New Baseline button
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                      icon: const Icon(Icons.restart_alt_rounded, size: 14),
+                      label: const Text('Reset'),
+                      onPressed: () => _showAndroidResetBaselineDialog(medicines),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                // Scope Selector Bar (Pill switches)
+                Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(child: _buildAndroidScopePill('All Stock', 'all')),
+                      Expanded(child: _buildAndroidScopePill('Clinic', 'clinic')),
+                      Expanded(child: _buildAndroidScopePill('Store', 'store')),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 8),
+
+          // 2. Shelf Audit Toggle Button & Active Banner
+          InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () {
+              setState(() {
+                _isAuditMode = !_isAuditMode;
+                if (_isAuditMode) {
+                  for (final r in reconciliationRows) {
+                    _physicalCounts[r.medicineId] = r.currentStock;
+                  }
+                }
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: _isAuditMode ? Colors.amber.shade900 : Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: _isAuditMode ? Colors.amber.shade900 : Colors.amber.shade300,
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _isAuditMode ? Icons.edit_note_rounded : Icons.inventory_2_outlined,
+                    size: 18,
+                    color: _isAuditMode ? Colors.white : Colors.amber.shade900,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _isAuditMode ? 'Shelf Count Mode ACTIVE (Tap + / - or tap numbers)' : 'Tap to Start Physical Shelf Audit',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: _isAuditMode ? Colors.white : Colors.amber.shade900,
+                      ),
+                    ),
+                  ),
+                  if (_isAuditMode)
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.success,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                      onPressed: () => _showAndroidApplyPhysicalAuditDialog(medicines),
+                      child: const Text('Apply Counts'),
+                    )
+                  else
+                    Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Colors.amber.shade900),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // 3. Baseline / History Status Info Strip
+          if (isBaselineActive)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: isHistoricalCycle ? Colors.amber.withValues(alpha: 0.1) : AppTheme.success.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isHistoricalCycle ? Colors.amber.withValues(alpha: 0.3) : AppTheme.success.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isHistoricalCycle ? Icons.history_toggle_off_rounded : Icons.verified_rounded,
+                    size: 14,
+                    color: isHistoricalCycle ? Colors.amber.shade900 : AppTheme.success,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      isHistoricalCycle
+                          ? 'Audit Cycle: ${dateFormat.format(service.baselineDate!)} ➔ ${dateFormat.format(baselineEndDate)}'
+                          : 'Audited by ${service.performedBy ?? "Staff"} on ${dateFormat.format(service.baselineDate!)}',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: isHistoricalCycle ? Colors.amber.shade900 : AppTheme.success,
+                      ),
+                    ),
+                  ),
+                  if (isHistoricalCycle)
+                    InkWell(
+                      onTap: () => service.selectLatestBaseline(),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade800,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'Back to Current',
+                          style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                    )
+                  else
+                    InkWell(
+                      onTap: () => setState(() => _clinicViewSinceBaseline = !_clinicViewSinceBaseline),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          _clinicViewSinceBaseline ? 'View All-Time' : 'View Since Audit',
+                          style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: AppTheme.primary),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(width: 4),
+                  InkWell(
+                    onTap: _showAndroidClearBaselineDialog,
+                    child: const Tooltip(
+                      message: 'Clear baseline',
+                      child: Icon(Icons.close_rounded, size: 15, color: Colors.grey),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 8),
+
+          // 4. Interactive KPI Summary Filter Chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildAndroidKpiChip(
+                  label: 'All Items',
+                  count: relevantMedicineIds.length,
+                  filterKey: 'all',
+                  color: AppTheme.primary,
+                  icon: Icons.list_alt_rounded,
+                ),
+                const SizedBox(width: 6),
+                _buildAndroidKpiChip(
+                  label: 'Shortage',
+                  count: deficitCount,
+                  filterKey: 'deficit',
+                  color: AppTheme.danger,
+                  icon: Icons.warning_amber_rounded,
+                ),
+                const SizedBox(width: 6),
+                _buildAndroidKpiChip(
+                  label: 'Surplus',
+                  count: surplusCount,
+                  filterKey: 'surplus',
+                  color: Colors.blueAccent,
+                  icon: Icons.add_circle_outline_rounded,
+                ),
+                const SizedBox(width: 6),
+                _buildAndroidKpiChip(
+                  label: 'Balanced',
+                  count: balancedCount,
+                  filterKey: 'balanced',
+                  color: AppTheme.success,
+                  icon: Icons.check_circle_outline_rounded,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // 5. Clean Search Bar
           TextField(
-            decoration: const InputDecoration(
-              hintText: 'Search clinic medicine...',
-              prefixIcon: Icon(Icons.search_rounded),
+            decoration: InputDecoration(
+              hintText: 'Search medicine name...',
+              hintStyle: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+              prefixIcon: const Icon(Icons.search_rounded, size: 18),
+              suffixIcon: _clinicSearchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear_rounded, size: 16),
+                      onPressed: () => setState(() => _clinicSearchQuery = ''),
+                    )
+                  : null,
               isDense: true,
+              filled: true,
+              fillColor: Theme.of(context).cardColor,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
+              ),
             ),
             onChanged: (val) => setState(() => _clinicSearchQuery = val),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
+
+          // 6. Reconciliation Medicine Cards List
           Expanded(
             child: reconciliationRows.isEmpty
-                ? const Center(child: Text('No clinic medicines or transaction data found.'))
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.inventory_2_outlined, size: 40, color: Colors.grey.shade400),
+                        const SizedBox(height: 8),
+                        Text(
+                          _clinicFilterStatus != 'all'
+                              ? 'No medicines match "$_clinicFilterStatus" filter.'
+                              : 'No medicines or transaction data found.',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
+                  )
                 : ListView.builder(
                     itemCount: reconciliationRows.length,
                     itemBuilder: (context, index) {
                       final row = reconciliationRows[index];
 
-                      Color varianceColor = Colors.grey;
-                      IconData? varianceIcon;
+                      Color varianceColor = AppTheme.success;
+                      IconData varianceIcon = Icons.check_circle_outline_rounded;
+                      String varianceBadgeText = 'Balanced';
+
                       if (row.variance < 0) {
                         varianceColor = AppTheme.danger;
                         varianceIcon = Icons.warning_amber_rounded;
+                        varianceBadgeText = '${row.variance} Shortage';
                       } else if (row.variance > 0) {
-                        varianceColor = AppTheme.success;
+                        varianceColor = Colors.blueAccent;
                         varianceIcon = Icons.add_circle_outline_rounded;
+                        varianceBadgeText = '+${row.variance} Surplus';
                       }
 
-                      final varianceText = row.variance > 0 ? '+${row.variance}' : '${row.variance}';
+                      final physCount = _physicalCounts[row.medicineId] ?? row.currentStock;
+                      final physDiff = physCount - row.currentStock;
 
-                      return Card(
+                      return Container(
                         margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).cardColor,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: row.variance < 0
+                                ? AppTheme.danger.withValues(alpha: 0.3)
+                                : Colors.grey.withValues(alpha: 0.15),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.02),
+                              blurRadius: 4,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
                         child: Padding(
                           padding: const EdgeInsets.all(12),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(row.medicineName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                              const SizedBox(height: 8),
+                              // Card Top Header: Medicine Name + Status Badge + Quick Edit
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('Transferred In: ${row.totalTransferred}', style: const TextStyle(fontSize: 11)),
-                                      Text('Consumed Out: ${row.totalConsumed}', style: const TextStyle(fontSize: 11)),
-                                    ],
+                                  Expanded(
+                                    child: Text(
+                                      row.medicineName,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                                    ),
                                   ),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                  const SizedBox(width: 6),
+                                  // Variance / Discrepancy Badge
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: varianceColor.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: varianceColor.withValues(alpha: 0.25)),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(varianceIcon, size: 12, color: varianceColor),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          varianceBadgeText,
+                                          style: TextStyle(
+                                            color: varianceColor,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 10.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  IconButton(
+                                    icon: const Icon(Icons.tune_rounded, size: 16, color: Colors.grey),
+                                    tooltip: 'Stock Adjustment',
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    onPressed: () => _showAndroidSingleAdjustDialog(row.medicine, row.currentStock),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+
+                              // Card Middle: Clean 4-Column Micro Metrics Grid
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.withValues(alpha: 0.05),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                  children: [
+                                    _buildMetricColumn('Starting', '${row.baselineStock}', Colors.grey.shade700),
+                                    _buildMetricColumn('Outflow', '-${row.totalConsumed}', Colors.deepOrange),
+                                    _buildMetricColumn('Expected', '${row.expectedStock}', Colors.blueGrey),
+                                    _buildMetricColumn(
+                                      'Recorded',
+                                      '${row.currentStock}',
+                                      row.variance < 0 ? AppTheme.danger : AppTheme.primary,
+                                      isBold: true,
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              // Secondary Outflow Breakdown line (if any dispensed or sold)
+                              if (row.dispensedQty > 0 || row.retailSoldQty > 0 || row.totalTransferred != 0) ...[
+                                const SizedBox(height: 6),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Dispensed: ${row.dispensedQty} • Retail Sold: ${row.retailSoldQty}',
+                                      style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                                    ),
+                                    if (_clinicScope != 'all')
+                                      Text(
+                                        'Net Transfers: ${row.totalTransferred >= 0 ? "+" : ""}${row.totalTransferred}',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: row.totalTransferred >= 0 ? AppTheme.success : AppTheme.danger,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
+
+                              // Shelf Audit Interactive Stepper (When Audit Mode Active)
+                              if (_isAuditMode) ...[
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Text('Current Stock: ${row.currentStock}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
                                       Row(
                                         children: [
-                                          if (varianceIcon != null) ...[
-                                            Icon(varianceIcon, size: 12, color: varianceColor),
-                                            const SizedBox(width: 4),
-                                          ],
+                                          Icon(Icons.inventory_2_rounded, size: 14, color: Colors.amber.shade900),
+                                          const SizedBox(width: 4),
                                           Text(
-                                            'Variance: $varianceText',
-                                            style: TextStyle(color: varianceColor, fontWeight: FontWeight.bold, fontSize: 11),
+                                            'Physical Count:',
+                                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                                          ),
+                                        ],
+                                      ),
+                                      Row(
+                                        children: [
+                                          // Status pill vs current system count
+                                          Container(
+                                            margin: const EdgeInsets.only(right: 8),
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: (physDiff == 0
+                                                      ? AppTheme.success
+                                                      : (physDiff < 0 ? AppTheme.danger : Colors.blueAccent))
+                                                  .withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              physDiff == 0 ? 'Equal' : (physDiff < 0 ? '$physDiff Diff' : '+$physDiff Diff'),
+                                              style: TextStyle(
+                                                color: physDiff == 0
+                                                    ? AppTheme.success
+                                                    : (physDiff < 0 ? AppTheme.danger : Colors.blueAccent),
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 10,
+                                              ),
+                                            ),
+                                          ),
+                                          // - button
+                                          InkWell(
+                                            borderRadius: BorderRadius.circular(12),
+                                            onTap: () {
+                                              setState(() {
+                                                _physicalCounts[row.medicineId] = (physCount - 1).clamp(0, 999999);
+                                              });
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.all(4),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                shape: BoxShape.circle,
+                                                border: Border.all(color: Colors.amber.shade400),
+                                              ),
+                                              child: const Icon(Icons.remove, size: 14, color: Colors.black87),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          // Tap-to-type number box
+                                          InkWell(
+                                            borderRadius: BorderRadius.circular(6),
+                                            onTap: () async {
+                                              final ctrl = TextEditingController(text: '$physCount');
+                                              final entered = await showDialog<int>(
+                                                context: context,
+                                                builder: (dCtx) => AlertDialog(
+                                                  title: Text('Shelf Count: ${row.medicineName}', style: const TextStyle(fontSize: 14)),
+                                                  content: TextField(
+                                                    controller: ctrl,
+                                                    keyboardType: TextInputType.number,
+                                                    autofocus: true,
+                                                    decoration: InputDecoration(
+                                                      labelText: 'Actual count on shelf',
+                                                      helperText: 'System recorded: ${row.currentStock}',
+                                                      border: const OutlineInputBorder(),
+                                                    ),
+                                                  ),
+                                                  actions: [
+                                                    TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel')),
+                                                    ElevatedButton(
+                                                      onPressed: () {
+                                                        final val = int.tryParse(ctrl.text.trim());
+                                                        Navigator.pop(dCtx, val);
+                                                      },
+                                                      child: const Text('Set Count'),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                              if (entered != null) {
+                                                setState(() {
+                                                  _physicalCounts[row.medicineId] = entered.clamp(0, 999999);
+                                                });
+                                              }
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius: BorderRadius.circular(6),
+                                                border: Border.all(color: Colors.amber.shade800, width: 1.2),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Text(
+                                                    '$physCount',
+                                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Icon(Icons.edit_rounded, size: 11, color: Colors.amber.shade900),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          // + button
+                                          InkWell(
+                                            borderRadius: BorderRadius.circular(12),
+                                            onTap: () {
+                                              setState(() {
+                                                _physicalCounts[row.medicineId] = physCount + 1;
+                                              });
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.all(4),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                shape: BoxShape.circle,
+                                                border: Border.all(color: Colors.amber.shade400),
+                                              ),
+                                              child: const Icon(Icons.add, size: 14, color: Colors.black87),
+                                            ),
                                           ),
                                         ],
                                       ),
                                     ],
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -1966,7 +3253,99 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
     );
   }
 
-  // ==========================================
+  Widget _buildMetricColumn(String label, String value, Color color, {bool isBold = false}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          label,
+          style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAndroidScopePill(String label, String scopeKey) {
+    final isSelected = _clinicScope == scopeKey;
+    return InkWell(
+      borderRadius: BorderRadius.circular(6),
+      onTap: () => setState(() => _clinicScope = scopeKey),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            color: isSelected ? Colors.white : Colors.black87,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAndroidKpiChip({
+    required String label,
+    required int count,
+    required String filterKey,
+    required Color color,
+    required IconData icon,
+  }) {
+    final isSelected = _clinicFilterStatus == filterKey;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => setState(() => _clinicFilterStatus = filterKey),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected ? color : color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? color : color.withValues(alpha: 0.25),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 13,
+              color: isSelected ? Colors.white : color,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '$label: $count',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: isSelected ? Colors.white : color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+
+
   // 7. SCHEDULE H1 COMPLIANCE (Optimized for Mobile)
   // ==========================================
   Widget _buildScheduleH1RegisterTab() {
@@ -2751,16 +4130,26 @@ class ProcedurePerformance {
 class _ClinicReconciliationRow {
   final int medicineId;
   final String medicineName;
+  final Medicine medicine;
+  final int baselineStock;
   final int totalTransferred;
+  final int dispensedQty;
+  final int retailSoldQty;
   final int totalConsumed;
+  final int expectedStock;
   final int currentStock;
   final int variance;
 
   _ClinicReconciliationRow({
     required this.medicineId,
     required this.medicineName,
+    required this.medicine,
+    required this.baselineStock,
     required this.totalTransferred,
+    required this.dispensedQty,
+    required this.retailSoldQty,
     required this.totalConsumed,
+    required this.expectedStock,
     required this.currentStock,
     required this.variance,
   });

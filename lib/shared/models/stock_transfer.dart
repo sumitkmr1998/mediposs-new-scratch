@@ -1,9 +1,13 @@
 import 'package:objectbox/objectbox.dart';
+import 'package:uuid/uuid.dart';
 
 @Entity()
 class StockTransfer {
   @Id()
   int id = 0;
+
+  @Index()
+  String uuid;
 
   int medicineId;
   String medicineName;
@@ -29,6 +33,7 @@ class StockTransfer {
 
   StockTransfer({
     this.id = 0,
+    String? uuid,
     required this.medicineId,
     required this.medicineName,
     required this.qty,
@@ -43,10 +48,12 @@ class StockTransfer {
     this.finalFromQty = 0,
     this.initialToQty = 0,
     this.finalToQty = 0,
-  }) : transferredAt = transferredAt ?? DateTime.now();
+  })  : uuid = (uuid != null && uuid.isNotEmpty) ? uuid : const Uuid().v4(),
+        transferredAt = transferredAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
         'id': id,
+        'uuid': uuid,
         'medicineId': medicineId,
         'medicineName': medicineName,
         'qty': qty,
@@ -65,11 +72,12 @@ class StockTransfer {
 
   factory StockTransfer.fromJson(Map<String, dynamic> json) => StockTransfer(
         id: json['id'] ?? 0,
-        medicineId: json['medicineId'],
-        medicineName: json['medicineName'],
-        qty: json['qty'],
-        fromWarehouse: json['fromWarehouse'],
-        toWarehouse: json['toWarehouse'],
+        uuid: json['uuid'] as String?,
+        medicineId: json['medicineId'] ?? 0,
+        medicineName: json['medicineName'] ?? '',
+        qty: json['qty'] ?? 0,
+        fromWarehouse: json['fromWarehouse'] ?? '',
+        toWarehouse: json['toWarehouse'] ?? '',
         batchNo: json['batchNo'],
         expiryDate: DateTime.tryParse(json['expiryDate'] ?? ''),
         transferredAt: DateTime.tryParse(json['transferredAt'] ?? ''),
@@ -81,3 +89,4 @@ class StockTransfer {
         finalToQty: json['finalToQty'] ?? 0,
       );
 }
+

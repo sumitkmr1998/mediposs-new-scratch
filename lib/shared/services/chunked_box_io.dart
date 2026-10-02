@@ -15,6 +15,7 @@ class ChunkedBoxIo {
     required Directory dir,
     required String filename,
     required Map<String, dynamic> Function(T item) toJson,
+    bool Function(T item)? filter,
     int chunkSize = defaultChunk,
     void Function(int written, int total)? onProgress,
   }) async {
@@ -40,6 +41,7 @@ class ChunkedBoxIo {
       if (batch.isEmpty) break;
 
       for (final item in batch) {
+        if (filter != null && !filter(item)) continue;
         if (!first) sink.write(',');
         first = false;
         sink.write(jsonEncode(toJson(item)));

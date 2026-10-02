@@ -545,11 +545,19 @@ class SalesProvider extends ChangeNotifier {
 
   List<SaleItem> getSaleItems(Sale sale) {
     try {
-      final list = jsonDecode(sale.itemsJson) as List;
-      return list
-          .map((e) => SaleItem.fromJson(e as Map<String, dynamic>))
-          .toList();
-    } catch (_) {
+      if (sale.itemsJson.isEmpty || sale.itemsJson == '[]') return [];
+      dynamic list = jsonDecode(sale.itemsJson);
+      if (list is String) {
+        list = jsonDecode(list);
+      }
+      if (list is List) {
+        return list
+            .map((e) => SaleItem.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      debugPrint('getSaleItems parse error: $e for itemsJson: ${sale.itemsJson}');
       return [];
     }
   }

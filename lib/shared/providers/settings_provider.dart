@@ -88,24 +88,18 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> performManualBackup() async {
-    if (!_settings.googleDriveSyncEnabled) {
-      _googleError = 'Google Drive Sync is disabled';
-      notifyListeners();
-      return false;
-    }
-    if (!isGoogleConnected) {
-      _googleError = 'Google Drive not connected';
-      notifyListeners();
-      return false;
-    }
-
+  Future<bool> performManualBackup({bool incremental = false}) async {
     _isGoogleLoading = true;
     _googleError = null;
     notifyListeners();
 
     try {
-      final success = await _googleDrive.uploadBackup();
+      final last = _settings.lastBackupMillis != null
+          ? DateTime.fromMillisecondsSinceEpoch(_settings.lastBackupMillis!)
+          : null;
+      final since = (incremental && last != null) ? last : null;
+
+      final success = await _googleDrive.uploadBackup(since: since);
       if (success) {
         _settings.lastBackupMillis = DateTime.now().millisecondsSinceEpoch;
         ObjectBoxService.instance.settingsBox.put(_settings);
@@ -152,27 +146,56 @@ class SettingsProvider extends ChangeNotifier {
     }
   }
 
+  Future<String?> exportIncrementalLocalBackup({DateTime? since}) async {
+    _isGoogleLoading = true;
+    notifyListeners();
+
+    try {
+      final effectiveSince = since ??
+          (_settings.lastBackupMillis != null
+              ? DateTime.fromMillisecondsSinceEpoch(_settings.lastBackupMillis!)
+              : DateTime.now().subtract(const Duration(days: 1)));
+
+      final zipFile = await _googleDrive.generateIncrementalBackupZip(since: effectiveSince);
+      if (zipFile == null) return null;
+
+      String? outputPath = Platform.isWindows
+          ? '${Platform.environment['USERPROFILE']}\\Downloads'
+          : (await getDownloadsDirectory())?.path;
+
+      if (outputPath == null) throw Exception('Downloads folder not found');
+
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final targetPath = "$outputPath/mediposs_incremental_backup_$timestamp.zip";
+
+      await zipFile.copy(targetPath);
+      await zipFile.delete(); // Clean up temp
+
+      _isGoogleLoading = false;
+      notifyListeners();
+      return targetPath;
+    } catch (e) {
+      debugPrint('Export Incremental Backup Err: $e');
+      _isGoogleLoading = false;
+      notifyListeners();
+      return null;
+    }
+  }
+
   /// Triggers auto-backup based on the specified logic ('At Startup', 'On Close', 'Periodic')
   Future<void> checkAndPerformAutoBackup(String trigger) async {
-    if (!_settings.googleDriveSyncEnabled) {
-      debugPrint(
-          'Auto-Backup: skipped because googleDriveSyncEnabled is false.');
-      return;
-    }
     if (_settings.autoBackupFrequency == 'Never') return;
-    if (_settings.autoBackupLogic != trigger) return;
 
-    // Logic for Daily/Weekly/Monthly timing (Simplified for check)
     final now = DateTime.now();
     final last = _settings.lastBackupMillis != null
         ? DateTime.fromMillisecondsSinceEpoch(_settings.lastBackupMillis!)
         : DateTime(2000);
 
-    bool shouldBackup = false;
+    final isDifferentDay = (last.year != now.year || last.month != now.month || last.day != now.day);
 
     // Check if we are past the scheduled time today
     bool isPastScheduledTime = true;
-    if (_settings.autoBackupTime != null) {
+    if (_settings.autoBackupTime != null && _settings.autoBackupTime!.isNotEmpty) {
       try {
         final parts = _settings.autoBackupTime!.split(':');
         final scheduledHour = int.parse(parts[0]);
@@ -184,32 +207,54 @@ class SettingsProvider extends ChangeNotifier {
       } catch (_) {}
     }
 
+    final isLogicMatch = _settings.autoBackupLogic == trigger;
+    // Allow 'Periodic' to act as a catch-up if today's scheduled time has passed and backup hasn't run yet today
+    final isPeriodicCatchUp = trigger == 'Periodic' && isDifferentDay && isPastScheduledTime;
+    if (!isLogicMatch && !isPeriodicCatchUp) return;
+
+    bool shouldBackup = false;
     if (_settings.autoBackupFrequency == 'Daily') {
-      if (now.difference(last).inDays >= 1 && isPastScheduledTime) {
+      if (isDifferentDay && isPastScheduledTime) {
         shouldBackup = true;
       }
     } else if (_settings.autoBackupFrequency == 'Weekly') {
-      if (now.difference(last).inDays >= 7 && isPastScheduledTime) {
+      final daysSince = now.difference(DateTime(last.year, last.month, last.day)).inDays;
+      if (daysSince >= 7 && isPastScheduledTime) {
         shouldBackup = true;
       }
     } else if (_settings.autoBackupFrequency == 'Monthly') {
-      if (now.difference(last).inDays >= 30 && isPastScheduledTime) {
+      final monthsDiff = (now.year - last.year) * 12 + (now.month - last.month);
+      if (monthsDiff >= 1 && isPastScheduledTime) {
         shouldBackup = true;
       }
     } else if (_settings.autoBackupFrequency == 'Always') {
       shouldBackup = true;
     }
 
-    if (shouldBackup) {
+    if (shouldBackup && !_isAutoBackingUp) {
       try {
         _isAutoBackingUp = true;
         notifyListeners();
 
-        debugPrint('Auto-Backup triggered by $trigger');
-        await _googleDrive.uploadBackup();
+        debugPrint('Auto-Backup triggered by $trigger (Frequency: ${_settings.autoBackupFrequency})');
 
-        _settings.lastBackupMillis = now.millisecondsSinceEpoch;
-        ObjectBoxService.instance.settingsBox.put(_settings);
+        // Incremental vs Full:
+        // If last backup was within 7 days, generate an incremental daily delta.
+        // Otherwise, run a full baseline snapshot.
+        DateTime? since;
+        if (_settings.lastBackupMillis != null) {
+          final daysSinceLast = now.difference(last).inDays;
+          if (daysSinceLast < 7) {
+            since = last;
+          }
+        }
+
+        final success = await _googleDrive.uploadBackup(since: since);
+        if (success) {
+          _settings.lastBackupMillis = now.millisecondsSinceEpoch;
+          ObjectBoxService.instance.settingsBox.put(_settings);
+          debugPrint('Auto-Backup succeeded ($trigger). Recorded timestamp: $now (Incremental: ${since != null})');
+        }
 
         _isAutoBackingUp = false;
         notifyListeners();

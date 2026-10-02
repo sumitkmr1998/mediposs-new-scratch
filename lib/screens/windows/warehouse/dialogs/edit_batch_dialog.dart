@@ -29,11 +29,15 @@ class EditBatchDialogState extends State<EditBatchDialog> {
   late final _sellingPriceCtrl = TextEditingController(
       text: widget.batch != null && widget.batch!.sellingPrice > 0
           ? widget.batch!.sellingPrice.toStringAsFixed(2)
-          : widget.medicine.sellingPrice.toStringAsFixed(2));
+          : (widget.medicine.sellingPrice > 0
+              ? widget.medicine.sellingPrice.toStringAsFixed(2)
+              : ''));
   late final _purchasePriceCtrl = TextEditingController(
       text: widget.batch != null && widget.batch!.purchasePrice > 0
           ? widget.batch!.purchasePrice.toStringAsFixed(2)
-          : widget.medicine.purchasePrice.toStringAsFixed(2));
+          : (widget.medicine.purchasePrice > 0
+              ? widget.medicine.purchasePrice.toStringAsFixed(2)
+              : ''));
   late DateTime _expiryDate =
       widget.batch?.expiryDate ?? DateTime.now().add(const Duration(days: 365));
 
