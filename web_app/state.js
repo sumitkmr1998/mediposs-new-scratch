@@ -100,156 +100,171 @@ class MediPossState {
 
     // 1. Listen to Medicines
     const unsubMeds = shopRef.collection('medicines').onSnapshot(snapshot => {
-      if (!snapshot.empty) {
-        const cloudMeds = [];
-        snapshot.forEach(doc => {
-          const d = doc.data();
-          cloudMeds.push({
-            id: d.id || doc.id,
-            name: d.name || 'Unnamed',
-            barcode: d.barcode || '',
-            category: d.category || 'General',
-            unit: d.unit || 'Unit',
-            purchasePrice: parseFloat(d.purchasePrice) || 0,
-            sellingPrice: parseFloat(d.sellingPrice) || 0,
-            storeStock: parseInt(d.storeStock, 10) || 0,
-            mainStock: parseInt(d.mainStock, 10) || 0,
-            bulkStoreStock: parseInt(d.bulkStoreStock, 10) || 0,
-            bulkClinicStock: parseInt(d.bulkClinicStock, 10) || 0,
-            lowStockThreshold: parseInt(d.lowStockThreshold, 10) || 20,
-            batches: Array.isArray(d.batches) ? d.batches : []
-          });
+      const cloudMeds = [];
+      snapshot.forEach(doc => {
+        const d = doc.data();
+        cloudMeds.push({
+          id: d.id || doc.id,
+          name: d.name || 'Unnamed',
+          barcode: d.barcode || '',
+          category: d.category || 'General',
+          unit: d.unit || 'Unit',
+          purchasePrice: parseFloat(d.purchasePrice) || 0,
+          sellingPrice: parseFloat(d.sellingPrice) || 0,
+          storeStock: parseInt(d.storeStock, 10) || 0,
+          mainStock: parseInt(d.mainStock, 10) || 0,
+          bulkStoreStock: parseInt(d.bulkStoreStock, 10) || 0,
+          bulkClinicStock: parseInt(d.bulkClinicStock, 10) || 0,
+          lowStockThreshold: parseInt(d.lowStockThreshold, 10) || 20,
+          batches: Array.isArray(d.batches) ? d.batches : []
         });
+      });
+      if (cloudMeds.length > 0) {
         this.medicines = cloudMeds;
         this.save();
+        this.updateSyncBadge(true, `Live: ${shopId} (${cloudMeds.length} meds)`);
         if (window.renderCurrentPage) window.renderCurrentPage();
       }
-    }, err => console.warn('Realtime medicines sync err:', err.message));
+    }, err => {
+      console.warn('Realtime medicines sync err:', err.message);
+      if (err.code === 'permission-denied') {
+        this.updateSyncBadge(false, 'Firestore Permission Denied');
+      }
+    });
     this.unsubscribers.push(unsubMeds);
 
     // 2. Listen to Sales
     const unsubSales = shopRef.collection('sales').onSnapshot(snapshot => {
-      if (!snapshot.empty) {
-        const cloudSales = [];
-        snapshot.forEach(doc => {
-          const s = doc.data();
-          const saleTotal = parseFloat(s.total != null ? s.total : s.totalAmount) || 0;
-          const payMode = s.paymentMethod || s.paymentMode || 'Cash';
-          const isClinic = !!(s.isClinicalDispense != null ? s.isClinicalDispense : s.isClinicDispense);
-          
-          let parsedItems = [];
-          if (Array.isArray(s.items)) {
-            parsedItems = s.items;
-          } else if (typeof s.itemsJson === 'string' && s.itemsJson.trim().length > 0) {
-            try { parsedItems = JSON.parse(s.itemsJson); } catch (_) { parsedItems = []; }
-          }
+      const cloudSales = [];
+      snapshot.forEach(doc => {
+        const s = doc.data();
+        const saleTotal = parseFloat(s.total != null ? s.total : s.totalAmount) || 0;
+        const payMode = s.paymentMethod || s.paymentMode || 'Cash';
+        const isClinic = !!(s.isClinicalDispense != null ? s.isClinicalDispense : s.isClinicDispense);
+        
+        let parsedItems = [];
+        if (Array.isArray(s.items)) {
+          parsedItems = s.items;
+        } else if (typeof s.itemsJson === 'string' && s.itemsJson.trim().length > 0) {
+          try { parsedItems = JSON.parse(s.itemsJson); } catch (_) { parsedItems = []; }
+        }
 
-          cloudSales.push({
-            id: s.id || doc.id,
-            invoiceNo: s.invoiceNo || doc.id,
-            createdAt: s.createdAt || s.updatedAt || new Date().toISOString(),
-            patientName: s.patientName || 'Counter Sale',
-            patientPhone: s.patientPhone || '',
-            patientUhid: s.patientUhid || '',
-            total: saleTotal,
-            totalAmount: saleTotal,
-            paymentMethod: payMode,
-            paymentMode: payMode,
-            isReturn: !!s.isReturn,
-            isClinicalDispense: isClinic,
-            isClinicDispense: isClinic,
-            items: parsedItems
-          });
+        cloudSales.push({
+          id: s.id || doc.id,
+          invoiceNo: s.invoiceNo || doc.id,
+          createdAt: s.createdAt || s.updatedAt || new Date().toISOString(),
+          patientName: s.patientName || 'Counter Sale',
+          patientPhone: s.patientPhone || '',
+          patientUhid: s.patientUhid || '',
+          total: saleTotal,
+          totalAmount: saleTotal,
+          paymentMethod: payMode,
+          paymentMode: payMode,
+          isReturn: !!s.isReturn,
+          isClinicalDispense: isClinic,
+          isClinicDispense: isClinic,
+          items: parsedItems
         });
-        // Sort descending by date
+      });
+      if (cloudSales.length > 0) {
         cloudSales.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         this.sales = cloudSales;
         this.save();
         if (window.renderCurrentPage) window.renderCurrentPage();
       }
-    }, err => console.warn('Realtime sales sync err:', err.message));
+    }, err => {
+      console.warn('Realtime sales sync err:', err.message);
+      if (err.code === 'permission-denied') {
+        this.updateSyncBadge(false, 'Firestore Permission Denied');
+      }
+    });
     this.unsubscribers.push(unsubSales);
 
     // 3. Listen to Appointments (OPD Queue)
     const unsubAppts = shopRef.collection('appointments').onSnapshot(snapshot => {
-      if (!snapshot.empty) {
-        const cloudAppts = [];
-        snapshot.forEach(doc => {
-          const a = doc.data();
-          const tokenNum = parseInt(a.tokenNumber != null ? a.tokenNumber : a.tokenNo, 10) || 1;
-          cloudAppts.push({
-            id: a.id || doc.id,
-            tokenNumber: tokenNum,
-            tokenNo: tokenNum,
-            patientName: a.patientName || 'Patient',
-            patientPhone: a.patientPhone || '',
-            patientUhid: a.patientUhid || '',
-            doctorName: a.doctorName || 'Doctor',
-            status: a.status || 'waiting',
-            scheduledAt: a.scheduledAt || new Date().toISOString(),
-            consultationFee: parseFloat(a.consultationFee) || 0,
-            paymentMethod: a.paymentMethod || 'cash',
-            notes: a.notes || ''
-          });
+      const cloudAppts = [];
+      snapshot.forEach(doc => {
+        const a = doc.data();
+        const tokenNum = parseInt(a.tokenNumber != null ? a.tokenNumber : a.tokenNo, 10) || 1;
+        cloudAppts.push({
+          id: a.id || doc.id,
+          tokenNumber: tokenNum,
+          tokenNo: tokenNum,
+          patientName: a.patientName || 'Patient',
+          patientPhone: a.patientPhone || '',
+          patientUhid: a.patientUhid || '',
+          doctorName: a.doctorName || 'Doctor',
+          status: a.status || 'waiting',
+          scheduledAt: a.scheduledAt || new Date().toISOString(),
+          consultationFee: parseFloat(a.consultationFee) || 0,
+          paymentMethod: a.paymentMethod || 'cash',
+          notes: a.notes || ''
         });
+      });
+      if (cloudAppts.length > 0) {
         cloudAppts.sort((a, b) => (a.tokenNumber || 0) - (b.tokenNumber || 0));
         this.appointments = cloudAppts;
         this.save();
         if (window.renderCurrentPage) window.renderCurrentPage();
       }
-    }, err => console.warn('Realtime appointments sync err:', err.message));
+    }, err => {
+      console.warn('Realtime appointments sync err:', err.message);
+    });
     this.unsubscribers.push(unsubAppts);
 
     // 4. Listen to Stock Transfers
     const unsubTransfers = shopRef.collection('stock_transfers').onSnapshot(snapshot => {
-      if (!snapshot.empty) {
-        const cloudTransfers = [];
-        snapshot.forEach(doc => {
-          const t = doc.data();
-          cloudTransfers.push({
-            id: t.id || doc.id,
-            uuid: t.uuid || doc.id,
-            medicineId: t.medicineId,
-            medicineName: t.medicineName || 'Medicine',
-            qty: parseInt(t.qty, 10) || 0,
-            fromWarehouse: t.fromWarehouse || 'main',
-            toWarehouse: t.toWarehouse || 'store',
-            batchNo: t.batchNo || '',
-            transferredAt: t.transferredAt || new Date().toISOString(),
-            transferredBy: t.transferredBy || '',
-            note: t.note || ''
-          });
+      const cloudTransfers = [];
+      snapshot.forEach(doc => {
+        const t = doc.data();
+        cloudTransfers.push({
+          id: t.id || doc.id,
+          uuid: t.uuid || doc.id,
+          medicineId: t.medicineId,
+          medicineName: t.medicineName || 'Medicine',
+          qty: parseInt(t.qty, 10) || 0,
+          fromWarehouse: t.fromWarehouse || 'main',
+          toWarehouse: t.toWarehouse || 'store',
+          batchNo: t.batchNo || '',
+          transferredAt: t.transferredAt || new Date().toISOString(),
+          transferredBy: t.transferredBy || '',
+          note: t.note || ''
         });
+      });
+      if (cloudTransfers.length > 0) {
         cloudTransfers.sort((a, b) => new Date(b.transferredAt) - new Date(a.transferredAt));
         this.transfers = cloudTransfers;
         this.save();
         if (window.renderCurrentPage) window.renderCurrentPage();
       }
-    }, err => console.warn('Realtime transfers sync err:', err.message));
+    }, err => {
+      console.warn('Realtime transfers sync err:', err.message);
+    });
     this.unsubscribers.push(unsubTransfers);
 
     // 5. Listen to Users (Staff credentials)
     const unsubUsers = shopRef.collection('users').onSnapshot(snapshot => {
-      if (!snapshot.empty) {
-        const cloudUsers = [];
-        snapshot.forEach(doc => {
-          const u = doc.data();
-          if (u.name && u.pin) {
-            cloudUsers.push({
-              id: u.id || doc.id,
-              name: u.name,
-              role: u.role || 'Staff',
-              pin: String(u.pin),
-              isActive: u.isActive !== false
-            });
-          }
-        });
-        if (cloudUsers.length > 0) {
-          this.users = cloudUsers;
-          this.save();
+      const cloudUsers = [];
+      snapshot.forEach(doc => {
+        const u = doc.data();
+        if (u.name && u.pin) {
+          cloudUsers.push({
+            id: u.id || doc.id,
+            name: u.name,
+            role: u.role || 'Staff',
+            pin: String(u.pin),
+            isActive: u.isActive !== false
+          });
         }
+      });
+      if (cloudUsers.length > 0) {
+        this.users = cloudUsers;
+        this.save();
+        if (window.renderSidebar) window.renderSidebar();
       }
-    }, err => console.warn('Realtime users sync err:', err.message));
+    }, err => {
+      console.warn('Realtime users sync err:', err.message);
+    });
     this.unsubscribers.push(unsubUsers);
 
     // 6. Listen to Hub Status (Cloudflare Tunnel & Online check)
@@ -261,7 +276,7 @@ class MediPossState {
           localStorage.setItem('mediposs_hub_url', this.hubUrl);
         }
         const isOnline = !!h.hubOnline;
-        this.updateSyncBadge(true, isOnline ? `Hub Online: ${shopId}` : `Cloud Synced: ${shopId}`);
+        this.updateSyncBadge(true, isOnline ? `Hub Online: ${shopId}` : `Cloud: ${shopId}`);
       }
     }, err => console.warn('Realtime hub_status sync err:', err.message));
     this.unsubscribers.push(unsubHub);
