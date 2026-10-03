@@ -32,6 +32,11 @@ Utility classes, network bindings, and database helpers.
 * [sync_service.dart](file:///c:/Users/sumit/Downloads/mediposs%20new%20scratch/lib/shared/services/sync_service.dart) - Bidirectional synchronization engine (Hub/Client).
 * [firebase_sync_service.dart](file:///c:/Users/sumit/Downloads/mediposs%20new%20scratch/lib/shared/services/firebase_sync_service.dart) - Offsite backup and multi-branch cloud sync.
 * [sync_queue_service.dart](file:///c:/Users/sumit/Downloads/mediposs%20new%20scratch/lib/shared/services/sync_queue_service.dart) - Local outbox tracking unsynced mutations on Android client.
+* `sync/outbox_drain.dart` - Finite ordered outbox pass with persisted retry delays; shared by Android and Windows terminals.
+* `sync/hub_health.dart`, `sync/sync_http.dart` - Hub identity/clock parsing and checked HTTP reads.
+* `sync/firestore_rest_reader.dart` - Authenticated paginated cloud document reads.
+* `hub/sale_commit.dart` - Atomic Hub sale/inventory commit and deletion for HTTP and legacy cloud delivery.
+* [Sync reliability audit](docs/plans/2026-10-03-sync-reliability-audit.md) - Windows Hub/Terminal and Android failure analysis, implemented safeguards, protocol gaps and fault-injection release gates.
 * [invoice_generator.dart](file:///c:/Users/sumit/Downloads/mediposs%20new%20scratch/lib/shared/services/invoice_generator.dart) - PDF creation templates for bills, receipts, and print orders.
 * [printing_service.dart](file:///c:/Users/sumit/Downloads/mediposs%20new%20scratch/lib/shared/services/printing_service.dart) - Thermal printer drivers, ESC/POS commands, and A4 print bridges.
 * [audit_service.dart](file:///c:/Users/sumit/Downloads/mediposs%20new%20scratch/lib/shared/services/audit_service.dart) - Action logging for user actions (CREATE, DELETE, etc.).

@@ -32,7 +32,8 @@ class SyncQueueService extends ChangeNotifier {
   void init() {
     debugPrint('SyncQueueService: Initializing...');
     if (SyncService.instance.isHub) {
-      debugPrint('SyncQueueService: Device is Windows Hub (Server). Client outbox timer disabled.');
+      debugPrint(
+          'SyncQueueService: Device is Windows Hub (Server). Client outbox timer disabled.');
       return;
     }
     _startAutoSync();
@@ -41,7 +42,8 @@ class SyncQueueService extends ChangeNotifier {
 
   void _startAutoSync() {
     _syncTimer?.cancel();
-    _syncTimer = Timer.periodic(const Duration(minutes: 2), (_) => processQueue());
+    _syncTimer =
+        Timer.periodic(const Duration(minutes: 2), (_) => processQueue());
   }
 
   Future<void> addToQueue({
@@ -87,9 +89,10 @@ class SyncQueueService extends ChangeNotifier {
     bool queueFailed = false;
     try {
       final box = ObjectBoxService.instance.syncQueueBox;
-      
+
       _needsDrain = false;
-      final query = box.query(SyncQueueItem_.processed.equals(false))
+      final query = box
+          .query(SyncQueueItem_.processed.equals(false))
           .order(SyncQueueItem_.timestamp)
           .order(SyncQueueItem_.id)
           .build();
@@ -125,10 +128,14 @@ class SyncQueueService extends ChangeNotifier {
     try {
       final box = ObjectBoxService.instance.syncQueueBox;
       final cutoff = DateTime.now().subtract(const Duration(hours: 24));
-      final processedItems = box.query(SyncQueueItem_.processed.equals(true))
-          .build()
-          .find();
-      
+      final query = box.query(SyncQueueItem_.processed.equals(true)).build();
+      final List<SyncQueueItem> processedItems;
+      try {
+        processedItems = query.find();
+      } finally {
+        query.close();
+      }
+
       final toRemoveIds = <int>[];
       for (final item in processedItems) {
         if (item.timestamp.isBefore(cutoff)) {
@@ -137,7 +144,8 @@ class SyncQueueService extends ChangeNotifier {
       }
       if (toRemoveIds.isNotEmpty) {
         box.removeMany(toRemoveIds);
-        debugPrint('SyncQueueService: Pruned ${toRemoveIds.length} processed items older than 24h.');
+        debugPrint(
+            'SyncQueueService: Pruned ${toRemoveIds.length} processed items older than 24h.');
       }
     } catch (e) {
       debugPrint('SyncQueueService: Error pruning processed items: $e');
@@ -154,7 +162,8 @@ class SyncQueueService extends ChangeNotifier {
           if (item.action == 'delete') {
             return await syncService.pushPatientDelete(data['uhid'] ?? '');
           }
-          return await syncService.pushPatient(Patient.fromJson(data), action: item.action);
+          return await syncService.pushPatient(Patient.fromJson(data),
+              action: item.action);
         case 'medicine':
           if (item.action == 'create' || item.action == 'update') {
             return await syncService.pushMedicine(Medicine.fromJson(data));
@@ -174,7 +183,8 @@ class SyncQueueService extends ChangeNotifier {
           break;
         case 'h1_record':
           if (item.action == 'create') {
-            return await syncService.pushH1Record(ScheduleH1Record.fromJson(data));
+            return await syncService
+                .pushH1Record(ScheduleH1Record.fromJson(data));
           }
           break;
         case 'appointment':
@@ -195,7 +205,8 @@ class SyncQueueService extends ChangeNotifier {
               createdAtStr: data['createdAt'] as String?,
             );
           }
-          return await syncService.pushPrescription(Prescription.fromJson(data));
+          return await syncService
+              .pushPrescription(Prescription.fromJson(data));
         case 'transfer':
           return await syncService.pushTransfer(StockTransfer.fromJson(data));
         case 'purchase':
@@ -203,14 +214,20 @@ class SyncQueueService extends ChangeNotifier {
         case 'audit_log':
           return await syncService.pushAuditLog(AuditLog.fromJson(data));
         case 'template':
-          if (item.action == 'delete') return await syncService.pushTemplateDelete(data['name']);
-          return await syncService.pushTemplate(PrescriptionTemplate.fromJson(data));
+          if (item.action == 'delete')
+            return await syncService.pushTemplateDelete(data['name']);
+          return await syncService
+              .pushTemplate(PrescriptionTemplate.fromJson(data));
         case 'photo':
-          if (item.action == 'delete') return await syncService.pushPatientPhotoDelete(data['uhid'], data['fileName']);
-          final patient = ObjectBoxService.instance.patientBox.get(data['patientId']);
+          if (item.action == 'delete')
+            return await syncService.pushPatientPhotoDelete(
+                data['uhid'], data['fileName']);
+          final patient =
+              ObjectBoxService.instance.patientBox.get(data['patientId']);
           final uhid = data['uhid'] as String? ?? patient?.uhid ?? '';
           if (uhid.isEmpty) return true;
-          final photo = ObjectBoxService.instance.patientImageBox.get(data['id']);
+          final photo =
+              ObjectBoxService.instance.patientImageBox.get(data['id']);
           if (photo == null) return true;
           return await syncService.pushPatientPhoto(photo, uhid);
         case 'procedure':
@@ -219,20 +236,23 @@ class SyncQueueService extends ChangeNotifier {
           }
           return await syncService.pushProcedure(Procedure.fromJson(data));
         case 'procedure_record':
-          return await syncService.pushProcedureRecord(ProcedureRecord.fromJson(data));
+          return await syncService
+              .pushProcedureRecord(ProcedureRecord.fromJson(data));
         case 'attendance':
           if (item.action == 'delete') {
-            return await syncService.pushAttendanceDelete(data['userId'], data['date']);
+            return await syncService.pushAttendanceDelete(
+                data['userId'], data['date']);
           }
-          return await syncService.pushAttendance(AttendanceRecord.fromJson(data));
+          return await syncService
+              .pushAttendance(AttendanceRecord.fromJson(data));
         case 'user':
           return await syncService.pushUser(AppUser.fromJson(data));
         case 'settings':
           return await syncService.pushSettings(AppSettings.fromJson(data));
         default:
-          throw FormatException('Unsupported outbox entity: ' + item.entity);
+          throw FormatException('Unsupported outbox entity: ${item.entity}');
       }
-      throw FormatException('Unsupported outbox action');
+      throw const FormatException('Unsupported outbox action');
     } on FormatException {
       rethrow;
     } catch (e) {
@@ -240,5 +260,10 @@ class SyncQueueService extends ChangeNotifier {
       return false;
     }
   }
-}
 
+  @override
+  void dispose() {
+    _syncTimer?.cancel();
+    super.dispose();
+  }
+}

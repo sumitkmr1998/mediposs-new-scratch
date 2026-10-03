@@ -336,7 +336,7 @@ void main(List<String> args) async {
 
     // Start Firebase Sync Listener (Tier 3 fallback)
     FirebaseSyncService.instance.startQueueListener((delta) {
-      LocalServerService.instance.handleExternalDelta(delta);
+      return LocalServerService.instance.handleExternalDelta(delta);
     });
   }
 

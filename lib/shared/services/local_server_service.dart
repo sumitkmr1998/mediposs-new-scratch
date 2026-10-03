@@ -100,10 +100,13 @@ class LocalServerService {
     router.get('/api/patient-photos', _withAuth(_patientPhotosGetHandler));
     router.post(
         '/api/patient-photos/push', _withAuth(_patientPhotosPushHandler));
-    router.post(
-        '/api/prescriptions/photos/push', _withAuth(_prescriptionPhotosPushHandler));
+    router.post('/api/prescriptions/photos/push',
+        _withAuth(_prescriptionPhotosPushHandler));
     router.post('/api/settings/push', _withAuth(_settingsPushHandler));
-    router.post('/api/settings', _withAuth(_settingsGetHandler)); // Allow GET settings via POST for some clients
+    router.post(
+        '/api/settings',
+        _withAuth(
+            _settingsGetHandler)); // Allow GET settings via POST for some clients
     router.get('/api/settings', _withAuth(_settingsGetHandler));
     router.post('/api/users/push', _withAuth(_usersPushHandler));
     router.get('/api/attendance', _withAuth(_attendanceGetHandler));
@@ -112,8 +115,10 @@ class LocalServerService {
     router.get('/api/procedures', _withAuth(_proceduresGetHandler));
     router.post('/api/procedures/push', _withAuth(_proceduresPushHandler));
     router.post('/api/procedures/delete', _withAuth(_proceduresDeleteHandler));
-    router.get('/api/procedure-records', _withAuth(_procedureRecordsGetHandler));
-    router.post('/api/procedure-records/push', _withAuth(_procedureRecordsPushHandler));
+    router.get(
+        '/api/procedure-records', _withAuth(_procedureRecordsGetHandler));
+    router.post(
+        '/api/procedure-records/push', _withAuth(_procedureRecordsPushHandler));
     router.post('/api/sync', _withAuth(_syncHandler));
     router.get('/api/audit', _withAuth(_auditGetHandler));
     router.post('/api/audit/push', _withAuth(_auditPushHandler));
@@ -127,7 +132,10 @@ class LocalServerService {
         '/api/patients/photos/delete', _withAuth(_patientPhotosDeleteHandler));
 
     // ------ WebSocket ------
-    router.get('/ws/updates', webSocketHandler(_onWsConnect, pingInterval: const Duration(seconds: 15)));
+    router.get(
+        '/ws/updates',
+        webSocketHandler(_onWsConnect,
+            pingInterval: const Duration(seconds: 15)));
 
     final pipeline = const Pipeline()
         .addMiddleware(logRequests())
@@ -137,7 +145,7 @@ class LocalServerService {
         .addHandler(router.call);
 
     _server = await io.serve(pipeline, InternetAddress.anyIPv4, _port);
-    
+
     // One-time migration for legacy records that lack sync metadata
     _migrateSyncMetadata();
 
@@ -145,22 +153,26 @@ class LocalServerService {
     if (ObjectBoxService.instance.settings.firebaseEnabled) {
       broadcastAllToCloud();
     }
-    
+
     // Scheduled daily cloud summary sync at autoBackupTime
     int? lastSyncDay;
     Timer.periodic(const Duration(seconds: 30), (_) async {
       final settings = ObjectBoxService.instance.settings;
       if (!settings.firebaseEnabled) return;
 
-      if (settings.connectionMode == 'summary' && settings.autoBackupTime != null) {
+      if (settings.connectionMode == 'summary' &&
+          settings.autoBackupTime != null) {
         final now = DateTime.now();
         final parts = settings.autoBackupTime!.split(':');
         if (parts.length == 2) {
           final targetHour = int.tryParse(parts[0]);
           final targetMinute = int.tryParse(parts[1]);
-          if (targetHour == now.hour && targetMinute == now.minute && lastSyncDay != now.day) {
+          if (targetHour == now.hour &&
+              targetMinute == now.minute &&
+              lastSyncDay != now.day) {
             lastSyncDay = now.day;
-            debugPrint('LocalServerService: Scheduled Daily Cloud Summary Upload triggered at ${settings.autoBackupTime}.');
+            debugPrint(
+                'LocalServerService: Scheduled Daily Cloud Summary Upload triggered at ${settings.autoBackupTime}.');
             await FirebaseSyncService.instance.uploadTodaysDataToCloud();
           }
         }
@@ -189,7 +201,8 @@ class LocalServerService {
       try {
         client.sink.add(pingPayload);
       } catch (e) {
-        debugPrint('LocalServerService: Failed to ping WebSocket client, removing: $e');
+        debugPrint(
+            'LocalServerService: Failed to ping WebSocket client, removing: $e');
         _removeWsClient(client);
       }
     }
@@ -199,7 +212,8 @@ class LocalServerService {
   void broadcast(Map<String, dynamic> message) {
     if (!isRunning) return;
     final data = jsonEncode(message);
-    debugPrint('LocalServerService: Broadcasting ${message['event']} to ${_wsClients.length} clients');
+    debugPrint(
+        'LocalServerService: Broadcasting ${message['event']} to ${_wsClients.length} clients');
     for (final client in _wsClients.toList()) {
       try {
         client.sink.add(data);
@@ -213,15 +227,18 @@ class LocalServerService {
     return (Handler innerHandler) {
       return (Request request) async {
         // Always allow health check and APK download for easier distribution
-        if (request.url.path == 'health' || request.url.path == 'download-apk') {
+        if (request.url.path == 'health' ||
+            request.url.path == 'download-apk') {
           return innerHandler(request);
         }
 
-        final secret = request.headers['X-MediPass-Secret'] ?? request.url.queryParameters['secret'];
+        final secret = request.headers['X-MediPass-Secret'] ??
+            request.url.queryParameters['secret'];
         final hubSecret = ObjectBoxService.instance.settings.jwtSecret;
 
         if (secret != hubSecret) {
-          debugPrint('Hub: Blocked request with invalid secret from ${request.context['shelf.io.connection_info']}');
+          debugPrint(
+              'Hub: Blocked request with invalid secret from ${request.context['shelf.io.connection_info']}');
           return Response.forbidden(
             jsonEncode({'error': 'Unauthorized: Invalid Hub Secret'}),
             headers: {'content-type': 'application/json'},
@@ -245,17 +262,20 @@ class LocalServerService {
   }
 
   void _onWsConnect(WebSocketChannel channel) {
-    debugPrint('LocalServerService: New WebSocket client connected! Total clients: ${_wsClients.length + 1}');
+    debugPrint(
+        'LocalServerService: New WebSocket client connected! Total clients: ${_wsClients.length + 1}');
     _addWsClient(channel);
     channel.stream.listen(
       (_) {},
       onDone: () {
         _removeWsClient(channel);
-        debugPrint('LocalServerService: WebSocket client disconnected. Total clients: ${_wsClients.length}');
+        debugPrint(
+            'LocalServerService: WebSocket client disconnected. Total clients: ${_wsClients.length}');
       },
       onError: (_) {
         _removeWsClient(channel);
-        debugPrint('LocalServerService: WebSocket client error. Total clients: ${_wsClients.length}');
+        debugPrint(
+            'LocalServerService: WebSocket client error. Total clients: ${_wsClients.length}');
       },
     );
   }
@@ -292,13 +312,15 @@ class LocalServerService {
     final token = jwt.sign(SecretKey(_jwtSecret));
 
     // Log terminal login on the Hub
-    final connInfo = req.context['shelf.io.connection_info'] as HttpConnectionInfo?;
+    final connInfo =
+        req.context['shelf.io.connection_info'] as HttpConnectionInfo?;
     final ipAddress = connInfo?.remoteAddress.address ?? 'Unknown';
     AuditService.instance.log(
       action: 'LOGIN',
       entityType: 'User',
       entityId: user.id.toString(),
-      description: 'User ${user.name} logged in successfully via Android Terminal ($ipAddress)',
+      description:
+          'User ${user.name} logged in successfully via Android Terminal ($ipAddress)',
       details: {
         'userId': user.id,
         'role': user.role,
@@ -313,10 +335,11 @@ class LocalServerService {
 
     return Response.ok(
       jsonEncode({
-        'token': token, 
-        'role': user.role, 
+        'token': token,
+        'role': user.role,
         'name': user.name,
-        'permissions': user.toJson(), // Full profile for immediate client-side auth refresh
+        'permissions': user
+            .toJson(), // Full profile for immediate client-side auth refresh
       }),
       headers: {'content-type': 'application/json'},
     );
@@ -361,8 +384,10 @@ class LocalServerService {
       final p = Procedure.fromJson(data);
       if (existing != null) {
         if (existing.updatedAt.isAfter(p.updatedAt)) {
-          debugPrint('Hub: Procedure sync conflict skipped (existing is newer)');
-          return Response.ok(jsonEncode({'success': true, 'reason': 'Existing record is newer'}));
+          debugPrint(
+              'Hub: Procedure sync conflict skipped (existing is newer)');
+          return Response.ok(jsonEncode(
+              {'success': true, 'reason': 'Existing record is newer'}));
         }
         p.id = existing.id;
       } else {
@@ -414,7 +439,8 @@ class LocalServerService {
         headers: {'content-type': 'application/json'},
       );
     } catch (e) {
-      return Response.internalServerError(body: jsonEncode({'error': e.toString()}));
+      return Response.internalServerError(
+          body: jsonEncode({'error': e.toString()}));
     }
   }
 
@@ -425,12 +451,15 @@ class LocalServerService {
       final box = ObjectBoxService.instance.procedureRecordBox;
 
       // Try finding existing record by matching date, patientName and procedureName
-      final existing = box.query(
-        ProcedureRecord_.patientName.equals(rec.patientName)
-            .and(ProcedureRecord_.procedureName.equals(rec.procedureName))
-      ).build().findFirst();
+      final existing = box
+          .query(ProcedureRecord_.patientName
+              .equals(rec.patientName)
+              .and(ProcedureRecord_.procedureName.equals(rec.procedureName)))
+          .build()
+          .findFirst();
 
-      if (existing != null && existing.date.difference(rec.date).inSeconds.abs() <= 5) {
+      if (existing != null &&
+          existing.date.difference(rec.date).inSeconds.abs() <= 5) {
         rec.id = existing.id;
       } else {
         rec.id = 0;
@@ -442,7 +471,8 @@ class LocalServerService {
       return Response.ok(jsonEncode({'success': true, 'id': rec.id}));
     } catch (e) {
       debugPrint('Hub procedure record push err: $e');
-      return Response.internalServerError(body: jsonEncode({'error': e.toString()}));
+      return Response.internalServerError(
+          body: jsonEncode({'error': e.toString()}));
     }
   }
 
@@ -450,7 +480,8 @@ class LocalServerService {
     const apkPath = 'build/app/outputs/flutter-apk/app-release.apk';
     final file = File(apkPath);
     if (!await file.exists()) {
-      return Response.notFound('APK not found on Hub. Please compile it first.');
+      return Response.notFound(
+          'APK not found on Hub. Please compile it first.');
     }
 
     final size = await file.length();
@@ -469,12 +500,14 @@ class LocalServerService {
       final item = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
       final box = ObjectBoxService.instance.userBox;
       final name = item['name'] as String? ?? '';
-      
+
       if (name.isEmpty) {
-        return Response.badRequest(body: jsonEncode({'error': 'Name is required'}));
+        return Response.badRequest(
+            body: jsonEncode({'error': 'Name is required'}));
       }
 
-      final existing = box.query(AppUser_.name.equals(name)).build().findFirst();
+      final existing =
+          box.query(AppUser_.name.equals(name)).build().findFirst();
       if (existing != null) {
         final u = AppUser.fromJson(item);
         u.id = existing.id;
@@ -492,7 +525,8 @@ class LocalServerService {
       _incomingDataController.add('users');
       return Response.ok(jsonEncode({'success': true}));
     } catch (e) {
-      return Response.internalServerError(body: jsonEncode({'error': e.toString()}));
+      return Response.internalServerError(
+          body: jsonEncode({'error': e.toString()}));
     }
   }
 
@@ -509,13 +543,13 @@ class LocalServerService {
       final item = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
       final box = ObjectBoxService.instance.settingsBox;
       final current = ObjectBoxService.instance.settings;
-      
+
       final updated = AppSettings.fromJson(item);
       updated.id = current.id;
       // Do not overwrite hub-specific or device-specific fields if pushed from companion
       updated.isWindowsClient = current.isWindowsClient;
       updated.deviceId = current.deviceId;
-      updated.hubIp = current.hubIp; 
+      updated.hubIp = current.hubIp;
       updated.serverPort = current.serverPort;
       updated.jwtSecret = current.jwtSecret;
       updated.autoLoginPin = current.autoLoginPin;
@@ -529,12 +563,13 @@ class LocalServerService {
       updated.navCollapsed = current.navCollapsed;
 
       box.put(updated);
-      
+
       broadcast({'event': 'settings_updated'});
       _incomingDataController.add('settings');
       return Response.ok(jsonEncode({'success': true}));
     } catch (e) {
-      return Response.internalServerError(body: jsonEncode({'error': e.toString()}));
+      return Response.internalServerError(
+          body: jsonEncode({'error': e.toString()}));
     }
   }
 
@@ -552,15 +587,21 @@ class LocalServerService {
 
       Medicine? existing;
       if (barcode.isNotEmpty) {
-        existing = box.query(Medicine_.barcode.equals(barcode)).build().findFirst();
+        existing =
+            box.query(Medicine_.barcode.equals(barcode)).build().findFirst();
       }
       if (existing == null && name.isNotEmpty) {
-        existing = box.query(Medicine_.name.equals(name, caseSensitive: false)).build().findFirst();
+        existing = box
+            .query(Medicine_.name.equals(name, caseSensitive: false))
+            .build()
+            .findFirst();
       }
       if (existing == null && name.isNotEmpty) {
         final all = box.getAll();
         final nameLower = name.toLowerCase();
-        existing = all.where((m) => m.name.trim().toLowerCase() == nameLower).firstOrNull;
+        existing = all
+            .where((m) => m.name.trim().toLowerCase() == nameLower)
+            .firstOrNull;
       }
 
       if (existing != null) {
@@ -574,13 +615,18 @@ class LocalServerService {
             ..barcode = barcode.isNotEmpty ? barcode : targetExisting.barcode
             ..category = item['category'] ?? targetExisting.category
             ..unit = item['unit'] ?? targetExisting.unit
-            ..purchasePrice = (item['purchasePrice'] as num?)?.toDouble() ?? targetExisting.purchasePrice
-            ..sellingPrice = (item['sellingPrice'] as num?)?.toDouble() ?? targetExisting.sellingPrice
+            ..purchasePrice = (item['purchasePrice'] as num?)?.toDouble() ??
+                targetExisting.purchasePrice
+            ..sellingPrice = (item['sellingPrice'] as num?)?.toDouble() ??
+                targetExisting.sellingPrice
             ..mainStock = item['mainStock'] ?? targetExisting.mainStock
             ..storeStock = item['storeStock'] ?? targetExisting.storeStock
-            ..bulkClinicStock = item['bulkClinicStock'] ?? targetExisting.bulkClinicStock
-            ..bulkStoreStock = item['bulkStoreStock'] ?? targetExisting.bulkStoreStock
-            ..lowStockThreshold = item['lowStockThreshold'] ?? targetExisting.lowStockThreshold
+            ..bulkClinicStock =
+                item['bulkClinicStock'] ?? targetExisting.bulkClinicStock
+            ..bulkStoreStock =
+                item['bulkStoreStock'] ?? targetExisting.bulkStoreStock
+            ..lowStockThreshold =
+                item['lowStockThreshold'] ?? targetExisting.lowStockThreshold
             ..isScheduleH1 = item['isScheduleH1'] ?? targetExisting.isScheduleH1
             ..updatedAt = DateTime.now();
 
@@ -616,12 +662,15 @@ class LocalServerService {
             final activeBatchNos = <String>{};
 
             for (var bItem in incomingBatches) {
-              final bNo = (bItem['batchNo'] as String? ?? '').trim().toUpperCase();
+              final bNo =
+                  (bItem['batchNo'] as String? ?? '').trim().toUpperCase();
               if (bNo.isEmpty) continue;
               activeBatchNos.add(bNo);
 
-              final expDate = DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now();
-              final pPrice = (bItem['purchasePrice'] as num?)?.toDouble() ?? 0.0;
+              final expDate = DateTime.tryParse(bItem['expiryDate'] ?? '') ??
+                  DateTime.now();
+              final pPrice =
+                  (bItem['purchasePrice'] as num?)?.toDouble() ?? 0.0;
               final sPrice = (bItem['sellingPrice'] as num?)?.toDouble() ?? 0.0;
               final mStock = (bItem['mainStock'] as num?)?.toInt() ?? 0;
               final sStock = (bItem['storeStock'] as num?)?.toInt() ?? 0;
@@ -708,12 +757,14 @@ class LocalServerService {
             final newBatch = MedicineBatch(
               id: 0,
               batchNo: bItem['batchNo'] ?? '',
-              expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now(),
+              expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ??
+                  DateTime.now(),
               mainStock: bItem['mainStock'] ?? 0,
               storeStock: bItem['storeStock'] ?? 0,
               bulkClinicStock: bItem['bulkClinicStock'] ?? 0,
               bulkStoreStock: bItem['bulkStoreStock'] ?? 0,
-              purchasePrice: (bItem['purchasePrice'] as num?)?.toDouble() ?? 0.0,
+              purchasePrice:
+                  (bItem['purchasePrice'] as num?)?.toDouble() ?? 0.0,
               sellingPrice: (bItem['sellingPrice'] as num?)?.toDouble() ?? 0.0,
             );
             newBatch.medicine.target = m;
@@ -747,15 +798,21 @@ class LocalServerService {
       // Robust matching: Check Barcode first (if present), then case-insensitive trimmed Name
       Medicine? existing;
       if (barcode.isNotEmpty) {
-        existing = box.query(Medicine_.barcode.equals(barcode)).build().findFirst();
+        existing =
+            box.query(Medicine_.barcode.equals(barcode)).build().findFirst();
       }
       if (existing == null && name.isNotEmpty) {
-        existing = box.query(Medicine_.name.equals(name, caseSensitive: false)).build().findFirst();
+        existing = box
+            .query(Medicine_.name.equals(name, caseSensitive: false))
+            .build()
+            .findFirst();
       }
       if (existing == null && name.isNotEmpty) {
         final all = box.getAll();
         final nameLower = name.toLowerCase();
-        existing = all.where((m) => m.name.trim().toLowerCase() == nameLower).firstOrNull;
+        existing = all
+            .where((m) => m.name.trim().toLowerCase() == nameLower)
+            .firstOrNull;
       }
 
       final batchBox = ObjectBoxService.instance.batchBox;
@@ -767,14 +824,17 @@ class LocalServerService {
         final duplicateIds = <int>[];
         for (final m in all) {
           if (m.id == targetExisting.id) continue;
-          final isSameBarcode = barcode.isNotEmpty && m.barcode.trim() == barcode;
-          final isSameName = name.isNotEmpty && m.name.trim().toLowerCase() == name.toLowerCase();
+          final isSameBarcode =
+              barcode.isNotEmpty && m.barcode.trim() == barcode;
+          final isSameName = name.isNotEmpty &&
+              m.name.trim().toLowerCase() == name.toLowerCase();
           if (isSameBarcode || isSameName) {
             duplicateIds.add(m.id);
           }
         }
         if (duplicateIds.isNotEmpty) {
-          debugPrint('Hub: Purging ${duplicateIds.length} redundant duplicate medicine records: $duplicateIds');
+          debugPrint(
+              'Hub: Purging ${duplicateIds.length} redundant duplicate medicine records: $duplicateIds');
           box.removeMany(duplicateIds);
         }
 
@@ -783,19 +843,24 @@ class LocalServerService {
           ..barcode = barcode.isNotEmpty ? barcode : targetExisting.barcode
           ..category = item['category'] ?? targetExisting.category
           ..unit = item['unit'] ?? targetExisting.unit
-          ..purchasePrice = (item['purchasePrice'] as num?)?.toDouble() ?? targetExisting.purchasePrice
-          ..sellingPrice = (item['sellingPrice'] as num?)?.toDouble() ?? targetExisting.sellingPrice
+          ..purchasePrice = (item['purchasePrice'] as num?)?.toDouble() ??
+              targetExisting.purchasePrice
+          ..sellingPrice = (item['sellingPrice'] as num?)?.toDouble() ??
+              targetExisting.sellingPrice
           ..mainStock = item['mainStock'] ?? targetExisting.mainStock
           ..storeStock = item['storeStock'] ?? targetExisting.storeStock
-          ..bulkClinicStock = item['bulkClinicStock'] ?? targetExisting.bulkClinicStock
-          ..bulkStoreStock = item['bulkStoreStock'] ?? targetExisting.bulkStoreStock
-          ..lowStockThreshold = item['lowStockThreshold'] ?? targetExisting.lowStockThreshold
+          ..bulkClinicStock =
+              item['bulkClinicStock'] ?? targetExisting.bulkClinicStock
+          ..bulkStoreStock =
+              item['bulkStoreStock'] ?? targetExisting.bulkStoreStock
+          ..lowStockThreshold =
+              item['lowStockThreshold'] ?? targetExisting.lowStockThreshold
           ..isScheduleH1 = item['isScheduleH1'] ?? targetExisting.isScheduleH1
           ..updatedAt = DateTime.now();
 
         if (item['batches'] != null) {
           final incomingBatches = (item['batches'] as List);
-          
+
           // Query all batches for this medicine directly from batchBox to avoid stale ToMany caching
           final allDbBatches = batchBox
               .query(MedicineBatch_.medicine.equals(targetExisting.id))
@@ -824,11 +889,13 @@ class LocalServerService {
           final activeBatchNos = <String>{};
 
           for (var bItem in incomingBatches) {
-            final bNo = (bItem['batchNo'] as String? ?? '').trim().toUpperCase();
+            final bNo =
+                (bItem['batchNo'] as String? ?? '').trim().toUpperCase();
             if (bNo.isEmpty) continue;
             activeBatchNos.add(bNo);
 
-            final expDate = DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now();
+            final expDate =
+                DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now();
             final pPrice = (bItem['purchasePrice'] as num?)?.toDouble() ?? 0.0;
             final sPrice = (bItem['sellingPrice'] as num?)?.toDouble() ?? 0.0;
             final mStock = (bItem['mainStock'] as num?)?.toInt() ?? 0;
@@ -914,12 +981,14 @@ class LocalServerService {
             final newBatch = MedicineBatch(
               id: 0,
               batchNo: bItem['batchNo'] ?? '',
-              expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ?? DateTime.now(),
+              expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ??
+                  DateTime.now(),
               mainStock: bItem['mainStock'] ?? 0,
               storeStock: bItem['storeStock'] ?? 0,
               bulkClinicStock: bItem['bulkClinicStock'] ?? 0,
               bulkStoreStock: bItem['bulkStoreStock'] ?? 0,
-              purchasePrice: (bItem['purchasePrice'] as num?)?.toDouble() ?? 0.0,
+              purchasePrice:
+                  (bItem['purchasePrice'] as num?)?.toDouble() ?? 0.0,
               sellingPrice: (bItem['sellingPrice'] as num?)?.toDouble() ?? 0.0,
             );
             newBatch.medicine.target = m;
@@ -940,24 +1009,6 @@ class LocalServerService {
       debugPrint('Hub medicine push error: $e');
       return Response.internalServerError();
     }
-  }
-
-  void _revertHubInventory(Sale oldSale) {
-    StockRules.revertInventory(
-      oldSale: oldSale,
-      getAllMedicines: () => ObjectBoxService.instance.medicineBox.getAll(),
-      putBatch: (MedicineBatch b) => ObjectBoxService.instance.batchBox.put(b),
-      putMedicine: (Medicine m) => ObjectBoxService.instance.medicineBox.put(m),
-    );
-  }
-
-  void _deductHubInventory(Sale sale) {
-    StockRules.deductInventory(
-      sale: sale,
-      getAllMedicines: () => ObjectBoxService.instance.medicineBox.getAll(),
-      putBatch: (MedicineBatch b) => ObjectBoxService.instance.batchBox.put(b),
-      putMedicine: (Medicine m) => ObjectBoxService.instance.medicineBox.put(m),
-    );
   }
 
   Future<Response> _salesPushHandler(Request req) async {
@@ -983,7 +1034,8 @@ class LocalServerService {
       if (hubPatientId == 0 && pName.isNotEmpty) {
         final patients = ObjectBoxService.instance.patientBox.getAll();
         final match = patients.where((p) {
-          final nMatch = p.name.trim().toLowerCase() == pName.trim().toLowerCase();
+          final nMatch =
+              p.name.trim().toLowerCase() == pName.trim().toLowerCase();
           final phMatch = pPhone.isNotEmpty && p.phone.trim() == pPhone.trim();
           return nMatch && (pPhone.isEmpty || phMatch);
         }).firstOrNull;
@@ -1009,7 +1061,8 @@ class LocalServerService {
         synced: true,
         isReturn: body['isReturn'] ?? false,
         isClinicalDispense: body['isClinicalDispense'] ?? false,
-        linkedAppointmentId: (body['linkedAppointmentId'] as num?)?.toInt() ?? 0,
+        linkedAppointmentId:
+            (body['linkedAppointmentId'] as num?)?.toInt() ?? 0,
         linkedProcedureId: (body['linkedProcedureId'] as num?)?.toInt() ?? 0,
         opdInvoiceNo: body['opdInvoiceNo'] as String? ?? '',
         itemsJson: body['itemsJson'] ?? '[]',
@@ -1041,8 +1094,10 @@ class LocalServerService {
   Future<Response> _patientsPushHandler(Request req) async {
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
-      final createdAt = DateTime.tryParse(body['createdAt'] ?? '') ?? DateTime.now();
-      final updatedAt = DateTime.tryParse(body['updatedAt'] ?? '') ?? DateTime.now();
+      final createdAt =
+          DateTime.tryParse(body['createdAt'] ?? '') ?? DateTime.now();
+      final updatedAt =
+          DateTime.tryParse(body['updatedAt'] ?? '') ?? DateTime.now();
       final p = Patient(
         uhid: body['uhid'] ?? '',
         name: body['name'] ?? '',
@@ -1071,7 +1126,8 @@ class LocalServerService {
       if (existing != null) {
         if (existing.updatedAt.isAfter(p.updatedAt)) {
           debugPrint('Hub: Patient sync conflict skipped (existing is newer)');
-          return Response.ok(jsonEncode({'success': true, 'reason': 'Existing record is newer'}));
+          return Response.ok(jsonEncode(
+              {'success': true, 'reason': 'Existing record is newer'}));
         }
         // Update existing record on Hub (preserve local ObjectBox id and original createdAt)
         p.id = existing.id;
@@ -1103,10 +1159,11 @@ class LocalServerService {
       final pUhid = body['patientUhid'] as String? ?? ''; // Future-proofing
 
       final patientBox = ObjectBoxService.instance.patientBox;
-      
+
       // Try by UHID first (Stable key)
       if (pUhid.isNotEmpty) {
-        final p = patientBox.query(Patient_.uhid.equals(pUhid)).build().findFirst();
+        final p =
+            patientBox.query(Patient_.uhid.equals(pUhid)).build().findFirst();
         if (p != null) hubPatientId = p.id;
       }
 
@@ -1114,11 +1171,12 @@ class LocalServerService {
       if (hubPatientId == 0 && pName.isNotEmpty) {
         final patients = patientBox.getAll();
         final match = patients.where((p) {
-          final nMatch = p.name.trim().toLowerCase() == pName.trim().toLowerCase();
+          final nMatch =
+              p.name.trim().toLowerCase() == pName.trim().toLowerCase();
           final phMatch = pPhone.isNotEmpty && p.phone.trim() == pPhone.trim();
           return nMatch && (pPhone.isEmpty || phMatch);
         }).firstOrNull;
-        
+
         if (match != null) hubPatientId = match.id;
       }
 
@@ -1171,10 +1229,13 @@ class LocalServerService {
 
       final isNew = existing == null;
       if (existing != null) {
-        final incomingUpdatedAt = DateTime.tryParse(body['updatedAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final incomingUpdatedAt = DateTime.tryParse(body['updatedAt'] ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0);
         if (existing.updatedAt.isAfter(incomingUpdatedAt)) {
-          debugPrint('Hub: Appointment sync conflict skipped (existing is newer)');
-          return Response.ok(jsonEncode({'success': true, 'reason': 'Existing record is newer'}));
+          debugPrint(
+              'Hub: Appointment sync conflict skipped (existing is newer)');
+          return Response.ok(jsonEncode(
+              {'success': true, 'reason': 'Existing record is newer'}));
         }
         a.id = existing.id;
       } else {
@@ -1233,7 +1294,8 @@ class LocalServerService {
     if (sinceStr != null && sinceStr.isNotEmpty) {
       final since = DateTime.tryParse(sinceStr);
       if (since != null) {
-        queryBuilder = box.query(Patient_.updatedAt.greaterThan(since.millisecondsSinceEpoch));
+        queryBuilder = box.query(
+            Patient_.updatedAt.greaterThan(since.millisecondsSinceEpoch));
       } else {
         queryBuilder = box.query();
       }
@@ -1382,7 +1444,8 @@ class LocalServerService {
     if (sinceStr != null && sinceStr.isNotEmpty) {
       final since = DateTime.tryParse(sinceStr);
       if (since != null) {
-        queryBuilder = box.query(Prescription_.updatedAt.greaterThan(since.millisecondsSinceEpoch));
+        queryBuilder = box.query(
+            Prescription_.updatedAt.greaterThan(since.millisecondsSinceEpoch));
       } else {
         queryBuilder = box.query();
       }
@@ -1440,12 +1503,13 @@ class LocalServerService {
   Future<Response> _prescriptionsPushHandler(Request req) async {
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
-      
+
       // 1. Resolve local IDs using natural keys (UHID and Token+Date)
       final uhid = body['patientUhid'] as String? ?? '';
       final token = body['tokenNumber'] as int? ?? 0;
-      final createdAt = DateTime.tryParse(body['createdAt'] ?? '') ?? DateTime.now();
-      
+      final createdAt =
+          DateTime.tryParse(body['createdAt'] ?? '') ?? DateTime.now();
+
       int resolvedPatientId = 0;
       if (uhid.isNotEmpty) {
         final p = ObjectBoxService.instance.patientBox
@@ -1470,8 +1534,11 @@ class LocalServerService {
 
       // 2. Create/Update Prescription object
       final p = Prescription(
-        appointmentId: resolvedApptId > 0 ? resolvedApptId : (body['appointmentId'] ?? 0),
-        patientId: resolvedPatientId > 0 ? resolvedPatientId : (body['patientId'] ?? 0),
+        appointmentId:
+            resolvedApptId > 0 ? resolvedApptId : (body['appointmentId'] ?? 0),
+        patientId: resolvedPatientId > 0
+            ? resolvedPatientId
+            : (body['patientId'] ?? 0),
         patientName: body['patientName'] ?? '',
         doctorId: body['doctorId'] ?? 0,
         doctorName: body['doctorName'] ?? '',
@@ -1498,28 +1565,36 @@ class LocalServerService {
           .firstOrNull;
 
       if (existing != null) {
-        final incomingUpdatedAt = DateTime.tryParse(body['updatedAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final incomingUpdatedAt = DateTime.tryParse(body['updatedAt'] ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0);
         if (existing.updatedAt.isAfter(incomingUpdatedAt)) {
-          debugPrint('Hub: Prescription sync conflict skipped (existing is newer)');
-          return Response.ok(jsonEncode({'success': true, 'reason': 'Existing record is newer'}));
+          debugPrint(
+              'Hub: Prescription sync conflict skipped (existing is newer)');
+          return Response.ok(jsonEncode(
+              {'success': true, 'reason': 'Existing record is newer'}));
         }
         p.id = existing.id;
       }
-      
+
       ObjectBoxService.instance.prescriptionBox.put(p);
-      
+
       // 3. Update appointment status to 'pharmacy' on Hub if needed
       if (resolvedApptId > 0) {
-        final appt = ObjectBoxService.instance.appointmentBox.get(resolvedApptId);
-        if (appt != null && (appt.status == kStatusWithDoctor || appt.status == kStatusWaiting)) {
+        final appt =
+            ObjectBoxService.instance.appointmentBox.get(resolvedApptId);
+        if (appt != null &&
+            (appt.status == kStatusWithDoctor ||
+                appt.status == kStatusWaiting)) {
           appt.status = kStatusPharmacy;
           ObjectBoxService.instance.appointmentBox.put(appt);
-          debugPrint('Hub: Updated appointment $resolvedApptId to pharmacy status');
+          debugPrint(
+              'Hub: Updated appointment $resolvedApptId to pharmacy status');
         }
       }
 
-      debugPrint('Hub: Processed prescription for ${p.patientName} (Resolved IDs: Patient=$resolvedPatientId, Appt=$resolvedApptId)');
-      
+      debugPrint(
+          'Hub: Processed prescription for ${p.patientName} (Resolved IDs: Patient=$resolvedPatientId, Appt=$resolvedApptId)');
+
       broadcast({'event': 'sync_received'});
       _incomingDataController.add('prescriptions');
 
@@ -1542,7 +1617,10 @@ class LocalServerService {
       Doctor? target;
 
       if (name.isNotEmpty) {
-        target = box.query(Doctor_.name.equals(name, caseSensitive: false)).build().findFirst();
+        target = box
+            .query(Doctor_.name.equals(name, caseSensitive: false))
+            .build()
+            .findFirst();
       }
       if (target == null && id != null && id > 0) {
         target = box.get(id);
@@ -1569,7 +1647,7 @@ class LocalServerService {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
       final id = body['id'] as int?;
       final uhid = body['uhid'] as String? ?? '';
-      
+
       final box = ObjectBoxService.instance.patientBox;
       Patient? p;
       if (id != null && id > 0) {
@@ -1602,10 +1680,16 @@ class LocalServerService {
       final box = ObjectBoxService.instance.medicineBox;
       Medicine? m;
       if (barcode.trim().isNotEmpty) {
-        m = box.query(Medicine_.barcode.equals(barcode.trim())).build().findFirst();
+        m = box
+            .query(Medicine_.barcode.equals(barcode.trim()))
+            .build()
+            .findFirst();
       }
       if (m == null && name.trim().isNotEmpty) {
-        m = box.query(Medicine_.name.equals(name.trim(), caseSensitive: false)).build().findFirst();
+        m = box
+            .query(Medicine_.name.equals(name.trim(), caseSensitive: false))
+            .build()
+            .findFirst();
       }
       if (m == null && id != null && id > 0) {
         m = box.get(id);
@@ -1645,8 +1729,11 @@ class LocalServerService {
             .findFirst();
         final cDate = DateTime.tryParse(createdAtStr);
         if (p != null && cDate != null) {
-          final scripts = box.query(Prescription_.patientId.equals(p.id)).build().find();
-          target = scripts.where((s) => s.createdAt.difference(cDate).inSeconds.abs() <= 5).firstOrNull;
+          final scripts =
+              box.query(Prescription_.patientId.equals(p.id)).build().find();
+          target = scripts
+              .where((s) => s.createdAt.difference(cDate).inSeconds.abs() <= 5)
+              .firstOrNull;
         }
       }
       if (target == null && id != null && id > 0) {
@@ -1711,8 +1798,10 @@ class LocalServerService {
             .build()
             .findFirst();
         if (existingTransfer != null) {
-          debugPrint('Hub: Transfer $transferUuid already processed; acknowledging idempotently.');
-          return Response.ok(jsonEncode({'status': 'success', 'note': 'already_processed'}));
+          debugPrint(
+              'Hub: Transfer $transferUuid already processed; acknowledging idempotently.');
+          return Response.ok(
+              jsonEncode({'status': 'success', 'note': 'already_processed'}));
         }
       }
 
@@ -1720,7 +1809,8 @@ class LocalServerService {
       final medName = (body['medicineName'] ?? '').toString().trim();
       if (medName.isNotEmpty) {
         final existingMed = ObjectBoxService.instance.medicineBox.get(hubMedId);
-        if (existingMed == null || existingMed.name.trim().toLowerCase() != medName.toLowerCase()) {
+        if (existingMed == null ||
+            existingMed.name.trim().toLowerCase() != medName.toLowerCase()) {
           final found = ObjectBoxService.instance.medicineBox
               .query(Medicine_.name.equals(medName, caseSensitive: false))
               .build()
@@ -1790,7 +1880,8 @@ class LocalServerService {
           setBatchLocStock(
             targetBatch,
             transfer.fromWarehouse,
-            (getBatchLocStock(targetBatch, transfer.fromWarehouse) - transfer.qty)
+            (getBatchLocStock(targetBatch, transfer.fromWarehouse) -
+                    transfer.qty)
                 .clamp(0, 999999),
           );
           setBatchLocStock(
@@ -1823,7 +1914,8 @@ class LocalServerService {
 
           setMedLocStock(
             transfer.fromWarehouse,
-            (getMedLocStock(transfer.fromWarehouse) - transfer.qty).clamp(0, 999999),
+            (getMedLocStock(transfer.fromWarehouse) - transfer.qty)
+                .clamp(0, 999999),
           );
           setMedLocStock(
             transfer.toWarehouse,
@@ -1884,8 +1976,10 @@ class LocalServerService {
             .build()
             .findFirst();
         if (existingPurchase != null) {
-          debugPrint('Hub: Purchase $purchaseUuid already recorded; acknowledging idempotently.');
-          return Response.ok(jsonEncode({'status': 'success', 'note': 'already_processed'}));
+          debugPrint(
+              'Hub: Purchase $purchaseUuid already recorded; acknowledging idempotently.');
+          return Response.ok(
+              jsonEncode({'status': 'success', 'note': 'already_processed'}));
         }
       }
 
@@ -1893,7 +1987,8 @@ class LocalServerService {
       final medName = (body['medicineName'] ?? '').toString().trim();
       if (medName.isNotEmpty) {
         final existingMed = ObjectBoxService.instance.medicineBox.get(hubMedId);
-        if (existingMed == null || existingMed.name.trim().toLowerCase() != medName.toLowerCase()) {
+        if (existingMed == null ||
+            existingMed.name.trim().toLowerCase() != medName.toLowerCase()) {
           final found = ObjectBoxService.instance.medicineBox
               .query(Medicine_.name.equals(medName, caseSensitive: false))
               .build()
@@ -1910,7 +2005,8 @@ class LocalServerService {
         medicineName: body['medicineName'] ?? '',
         qty: body['qty'] ?? 0,
         purchasePrice: (body['purchasePrice'] as num?)?.toDouble() ?? 0.0,
-        purchasedAt: DateTime.tryParse(body['purchasedAt'] ?? '') ?? DateTime.now(),
+        purchasedAt:
+            DateTime.tryParse(body['purchasedAt'] ?? '') ?? DateTime.now(),
         location: body['location'] ?? '',
         note: body['note'] ?? '',
         supplier: body['supplier'] ?? '',
@@ -2035,10 +2131,14 @@ class LocalServerService {
         // If caller requested a specific patient, check matching criteria
         if (filterUhid != null && filterUhid.isNotEmpty) {
           final filterLower = filterUhid.toLowerCase();
-          final matchesTarget = targetPatient != null && photo.patientId == targetPatient.id;
-          final matchesUhid = uhid.isNotEmpty && uhid.toLowerCase() == filterLower;
+          final matchesTarget =
+              targetPatient != null && photo.patientId == targetPatient.id;
+          final matchesUhid =
+              uhid.isNotEmpty && uhid.toLowerCase() == filterLower;
           final matchesPath = targetPatient != null &&
-              photo.imagePath.replaceAll('\\', '/').contains('/patient_photos/${targetPatient.id}/');
+              photo.imagePath
+                  .replaceAll('\\', '/')
+                  .contains('/patient_photos/${targetPatient.id}/');
 
           if (!matchesTarget && !matchesUhid && !matchesPath) {
             continue;
@@ -2047,11 +2147,14 @@ class LocalServerService {
 
         File file = File(photo.imagePath);
         if (!await file.exists()) {
-          final filename = photo.imagePath.replaceAll('\\', '/').split('/').last;
+          final filename =
+              photo.imagePath.replaceAll('\\', '/').split('/').last;
           final candidatePaths = [
             '${appDocDir.path}/patient_photos/${photo.patientId}/$filename',
-            if (patient != null) '${appDocDir.path}/patient_photos/${patient.id}/$filename',
-            if (targetPatient != null) '${appDocDir.path}/patient_photos/${targetPatient.id}/$filename',
+            if (patient != null)
+              '${appDocDir.path}/patient_photos/${patient.id}/$filename',
+            if (targetPatient != null)
+              '${appDocDir.path}/patient_photos/${targetPatient.id}/$filename',
             '${appDocDir.path}/prescription_photos/$filename',
             '${appDocDir.path}/prescriptions/images/$filename',
           ];
@@ -2072,7 +2175,8 @@ class LocalServerService {
 
         final bytes = await file.readAsBytes();
         final base64Data = base64Encode(bytes);
-        final resolvedUhid = uhid.isNotEmpty ? uhid : (targetPatient?.uhid ?? filterUhid ?? '');
+        final resolvedUhid =
+            uhid.isNotEmpty ? uhid : (targetPatient?.uhid ?? filterUhid ?? '');
         result.add({
           'patientUhid': resolvedUhid,
           'category': photo.category,
@@ -2085,12 +2189,14 @@ class LocalServerService {
 
       // Also scan disk folder for this patient in case images exist on disk but not in patientImageBox
       if (targetPatient != null) {
-        final photoDir = Directory('${appDocDir.path}/patient_photos/${targetPatient.id}');
+        final photoDir =
+            Directory('${appDocDir.path}/patient_photos/${targetPatient.id}');
         if (await photoDir.exists()) {
           final files = await photoDir.list().toList();
           for (final entity in files) {
             if (entity is File) {
-              final filename = entity.path.replaceAll('\\', '/').split('/').last;
+              final filename =
+                  entity.path.replaceAll('\\', '/').split('/').last;
               if (!includedFilenames.contains(filename)) {
                 includedFilenames.add(filename);
                 final bytes = await entity.readAsBytes();
@@ -2135,7 +2241,8 @@ class LocalServerService {
       // Resolve UHID → Hub's local patientId
       final patient = ObjectBoxService.instance.patientBox
           .getAll()
-          .where((p) => p.uhid.trim().toLowerCase() == patientUhid.toLowerCase())
+          .where(
+              (p) => p.uhid.trim().toLowerCase() == patientUhid.toLowerCase())
           .firstOrNull;
       if (patient == null) {
         debugPrint(
@@ -2160,8 +2267,10 @@ class LocalServerService {
       // Check if already exists in ObjectBox
       final existing = ObjectBoxService.instance.patientImageBox
           .getAll()
-          .where(
-              (p) => p.imagePath.replaceAll('\\', '/').split('/').last == cleanFilename && p.patientId == patientId)
+          .where((p) =>
+              p.imagePath.replaceAll('\\', '/').split('/').last ==
+                  cleanFilename &&
+              p.patientId == patientId)
           .firstOrNull;
 
       if (existing == null) {
@@ -2232,14 +2341,15 @@ class LocalServerService {
     final boxS = ObjectBoxService.instance.saleBox;
     final boxPr = ObjectBoxService.instance.prescriptionBox;
     final boxM = ObjectBoxService.instance.medicineBox;
-    
+
     int migrated = 0;
     final epoch = DateTime(2000);
 
     final List<Patient> patientsToPut = [];
     for (var p in boxP.getAll()) {
       if (p.updatedAt.isBefore(epoch)) {
-        p.updatedAt = p.createdAt.isBefore(epoch) ? DateTime.now() : p.createdAt;
+        p.updatedAt =
+            p.createdAt.isBefore(epoch) ? DateTime.now() : p.createdAt;
         patientsToPut.add(p);
         migrated++;
       }
@@ -2247,11 +2357,12 @@ class LocalServerService {
     if (patientsToPut.isNotEmpty) {
       boxP.putMany(patientsToPut);
     }
-    
+
     final List<Sale> salesToPut = [];
     for (var s in boxS.getAll()) {
       if (s.updatedAt.isBefore(epoch)) {
-        s.updatedAt = s.createdAt.isBefore(epoch) ? DateTime.now() : s.createdAt;
+        s.updatedAt =
+            s.createdAt.isBefore(epoch) ? DateTime.now() : s.createdAt;
         salesToPut.add(s);
         migrated++;
       }
@@ -2259,11 +2370,12 @@ class LocalServerService {
     if (salesToPut.isNotEmpty) {
       boxS.putMany(salesToPut);
     }
-    
+
     final List<Prescription> prescriptionsToPut = [];
     for (var pr in boxPr.getAll()) {
       if (pr.updatedAt.isBefore(epoch)) {
-        pr.updatedAt = pr.createdAt.isBefore(epoch) ? DateTime.now() : pr.createdAt;
+        pr.updatedAt =
+            pr.createdAt.isBefore(epoch) ? DateTime.now() : pr.createdAt;
         prescriptionsToPut.add(pr);
         migrated++;
       }
@@ -2275,7 +2387,8 @@ class LocalServerService {
     final List<Medicine> medicinesToPut = [];
     for (var m in boxM.getAll()) {
       if (m.updatedAt.isBefore(epoch)) {
-        m.updatedAt = m.createdAt.isBefore(epoch) ? DateTime.now() : m.createdAt;
+        m.updatedAt =
+            m.createdAt.isBefore(epoch) ? DateTime.now() : m.createdAt;
         medicinesToPut.add(m);
         migrated++;
       }
@@ -2283,9 +2396,10 @@ class LocalServerService {
     if (medicinesToPut.isNotEmpty) {
       boxM.putMany(medicinesToPut);
     }
-    
+
     if (migrated > 0) {
-      debugPrint('Hub: Migrated $migrated legacy records with missing sync metadata.');
+      debugPrint(
+          'Hub: Migrated $migrated legacy records with missing sync metadata.');
     }
   }
 
@@ -2303,6 +2417,7 @@ class LocalServerService {
       return Response.internalServerError();
     }
   }
+
   Future<Response> _templatesDeleteHandler(Request req) async {
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
@@ -2310,7 +2425,10 @@ class LocalServerService {
       if (name.isEmpty) return Response.badRequest();
 
       final box = ObjectBoxService.instance.templateBox;
-      final t = box.query(PrescriptionTemplate_.name.equals(name)).build().findFirst();
+      final t = box
+          .query(PrescriptionTemplate_.name.equals(name))
+          .build()
+          .findFirst();
       if (t != null) {
         box.remove(t.id);
         broadcast({'event': 'sync_received'});
@@ -2335,11 +2453,13 @@ class LocalServerService {
           .query(Patient_.uhid.equals(uhid))
           .build()
           .findFirst();
-      if (patient == null) return Response.notFound(jsonEncode({'error': 'Patient not found'}));
+      if (patient == null)
+        return Response.notFound(jsonEncode({'error': 'Patient not found'}));
 
       final box = ObjectBoxService.instance.patientImageBox;
-      final photos = box.query(PatientImage_.patientId.equals(patient.id)).build().find();
-      
+      final photos =
+          box.query(PatientImage_.patientId.equals(patient.id)).build().find();
+
       for (final photo in photos) {
         if (photo.imagePath.replaceAll('\\', '/').endsWith(filename)) {
           // Delete file
@@ -2396,7 +2516,8 @@ class LocalServerService {
               response.headers['content-encoding'] == 'gzip') {
             return response;
           }
-          final bodyBytes = await response.read().fold<List<int>>([], (p, e) => p..addAll(e));
+          final bodyBytes =
+              await response.read().fold<List<int>>([], (p, e) => p..addAll(e));
           final compressed = gzip.encode(bodyBytes);
           return response.change(
             body: compressed,
@@ -2414,10 +2535,10 @@ class LocalServerService {
 
   /// Processes data changes pushed from companion apps via Firebase Fallback (Tier 3).
   /// This ensures that even if the Hub is not directly reachable, it eventually catches up.
-  Future<void> handleExternalDelta(Map<String, dynamic> delta) async {
+  Future<bool> handleExternalDelta(Map<String, dynamic> delta) async {
     if (!ObjectBoxService.instance.settings.firebaseEnabled) {
       debugPrint('Hub: Firebase Sync is disabled. Skipping external delta.');
-      return;
+      return false;
     }
     final entity = delta['entity'];
     final action = delta['action'];
@@ -2433,18 +2554,22 @@ class LocalServerService {
         sale.patientId = 0;
         if (sale.patientUhid.isNotEmpty) {
           final query = ObjectBoxService.instance.patientBox
-              .query(Patient_.uhid.equals(sale.patientUhid)).build();
+              .query(Patient_.uhid.equals(sale.patientUhid))
+              .build();
           try {
             sale.patientId = query.findFirst()?.id ?? 0;
           } finally {
             query.close();
           }
         }
-        final committed = SaleCommit.apply(ObjectBoxService.instance.store, sale);
+        final committed =
+            SaleCommit.apply(ObjectBoxService.instance.store, sale);
         broadcast({'event': 'sales_updated'});
         broadcast({'event': 'medicines_updated'});
         _incomingDataController.add('sales');
-        await FirebaseSyncService.instance.broadcastUpdate('sales', committed.toJson());      } else if (entity == 'patient' && action == 'create') {
+        await FirebaseSyncService.instance
+            .broadcastUpdate('sales', committed.toJson());
+      } else if (entity == 'patient' && action == 'create') {
         final p = Patient(
           uhid: data['uhid'] ?? '',
           name: data['name'] ?? '',
@@ -2453,9 +2578,13 @@ class LocalServerService {
           address: data['address'] ?? '',
           bloodGroup: data['bloodGroup'] ?? '',
           age: data['age'] ?? 0,
-          createdAt: DateTime.tryParse(data['createdAt'] ?? '') ?? DateTime.now(),
+          createdAt:
+              DateTime.tryParse(data['createdAt'] ?? '') ?? DateTime.now(),
         );
-        final existing = ObjectBoxService.instance.patientBox.query(Patient_.uhid.equals(p.uhid)).build().findFirst();
+        final existing = ObjectBoxService.instance.patientBox
+            .query(Patient_.uhid.equals(p.uhid))
+            .build()
+            .findFirst();
         if (existing != null) {
           p.id = existing.id;
           p.createdAt = existing.createdAt;
@@ -2463,10 +2592,12 @@ class LocalServerService {
         ObjectBoxService.instance.patientBox.put(p);
         broadcast({'event': 'patients_updated'});
         _incomingDataController.add('patients');
-        
+
         // Mirror to cloud
-        await FirebaseSyncService.instance.broadcastUpdate('patients', p.toJson());
-      } else if (entity == 'medicine' && (action == 'create' || action == 'update')) {
+        await FirebaseSyncService.instance
+            .broadcastUpdate('patients', p.toJson());
+      } else if (entity == 'medicine' &&
+          (action == 'create' || action == 'update')) {
         final m = Medicine.fromJson(data);
         m.id = 0; // Force ID 0 for Hub (ObjectBox IDs are local)
         for (var b in m.batches) {
@@ -2478,8 +2609,11 @@ class LocalServerService {
         if (m.barcode.isNotEmpty) {
           cond = cond.and(Medicine_.barcode.equals(m.barcode));
         }
-        final existing = ObjectBoxService.instance.medicineBox.query(cond).build().findFirst();
-        
+        final existing = ObjectBoxService.instance.medicineBox
+            .query(cond)
+            .build()
+            .findFirst();
+
         if (existing != null) {
           m.id = existing.id;
         }
@@ -2490,22 +2624,25 @@ class LocalServerService {
       } else if (entity == 'appointment' && action == 'create') {
         final appt = Appointment.fromJson(data);
         appt.id = 0; // Force ID 0
-        
+
         // Deduplicate by patient name and date
-        final existing = ObjectBoxService.instance.appointmentBox.query(
-          Appointment_.patientName.equals(appt.patientName).and(
-          Appointment_.scheduledAt.equals(appt.scheduledAt.millisecondsSinceEpoch))
-        ).build().findFirst();
-        
+        final existing = ObjectBoxService.instance.appointmentBox
+            .query(Appointment_.patientName.equals(appt.patientName).and(
+                Appointment_.scheduledAt
+                    .equals(appt.scheduledAt.millisecondsSinceEpoch)))
+            .build()
+            .findFirst();
+
         if (existing != null) appt.id = existing.id;
         ObjectBoxService.instance.appointmentBox.put(appt);
-        
+
         broadcast({'event': 'appointments_updated'});
         broadcast({'event': 'sync_received'});
         _incomingDataController.add('appointments');
-        
+
         // Mirror to cloud
-        await FirebaseSyncService.instance.broadcastUpdate('appointments', appt.toJson());
+        await FirebaseSyncService.instance
+            .broadcastUpdate('appointments', appt.toJson());
       } else if (entity == 'prescription' && action == 'create') {
         final sc = Prescription.fromJson(data);
         sc.id = 0; // Reset ID for Hub
@@ -2513,15 +2650,18 @@ class LocalServerService {
             .query(Prescription_.patientName.equals(sc.patientName))
             .build()
             .find()
-            .where((x) => x.createdAt.millisecondsSinceEpoch == sc.createdAt.millisecondsSinceEpoch)
+            .where((x) =>
+                x.createdAt.millisecondsSinceEpoch ==
+                sc.createdAt.millisecondsSinceEpoch)
             .firstOrNull;
         if (existing != null) sc.id = existing.id;
         ObjectBoxService.instance.prescriptionBox.put(sc);
         broadcast({'event': 'sync_received'});
         _incomingDataController.add('prescriptions');
-        
+
         // Mirror to cloud
-        await FirebaseSyncService.instance.broadcastUpdate('prescriptions', sc.toJson());
+        await FirebaseSyncService.instance
+            .broadcastUpdate('prescriptions', sc.toJson());
       } else if (action == 'delete') {
         if (entity == 'sale') {
           final invoice = data['invoiceNo'] as String? ?? '';
@@ -2531,11 +2671,15 @@ class LocalServerService {
           _incomingDataController.add('sales');
         } else if (entity == 'patient') {
           final uhid = data['uhid'] as String? ?? '';
-          if (uhid.isEmpty) throw const FormatException('Patient UHID required');
-          final query = ObjectBoxService.instance.patientBox.query(Patient_.uhid.equals(uhid)).build();
+          if (uhid.isEmpty)
+            throw const FormatException('Patient UHID required');
+          final query = ObjectBoxService.instance.patientBox
+              .query(Patient_.uhid.equals(uhid))
+              .build();
           try {
             final patient = query.findFirst();
-            if (patient != null) ObjectBoxService.instance.patientBox.remove(patient.id);
+            if (patient != null)
+              ObjectBoxService.instance.patientBox.remove(patient.id);
           } finally {
             query.close();
           }
@@ -2544,24 +2688,34 @@ class LocalServerService {
         } else if (entity == 'medicine') {
           final barcode = data['barcode'] as String? ?? '';
           final name = data['name'] as String? ?? '';
-          if (name.isEmpty) throw const FormatException('Medicine name required');
-          final query = ObjectBoxService.instance.medicineBox.query(
-            Medicine_.name.equals(name).and(Medicine_.barcode.equals(barcode))).build();
+          if (name.isEmpty)
+            throw const FormatException('Medicine name required');
+          final query = ObjectBoxService.instance.medicineBox
+              .query(Medicine_.name
+                  .equals(name)
+                  .and(Medicine_.barcode.equals(barcode)))
+              .build();
           try {
             final medicine = query.findFirst();
-            if (medicine != null) ObjectBoxService.instance.medicineBox.remove(medicine.id);
+            if (medicine != null)
+              ObjectBoxService.instance.medicineBox.remove(medicine.id);
           } finally {
             query.close();
           }
-          broadcast({'event': 'medicine_deleted', 'barcode': barcode, 'name': name});
+          broadcast(
+              {'event': 'medicine_deleted', 'barcode': barcode, 'name': name});
           _incomingDataController.add('inventory');
         } else if (entity == 'procedure') {
           final name = data['name'] as String? ?? '';
-          if (name.isEmpty) throw const FormatException('Procedure name required');
-          final query = ObjectBoxService.instance.procedureBox.query(Procedure_.name.equals(name)).build();
+          if (name.isEmpty)
+            throw const FormatException('Procedure name required');
+          final query = ObjectBoxService.instance.procedureBox
+              .query(Procedure_.name.equals(name))
+              .build();
           try {
             final procedure = query.findFirst();
-            if (procedure != null) ObjectBoxService.instance.procedureBox.remove(procedure.id);
+            if (procedure != null)
+              ObjectBoxService.instance.procedureBox.remove(procedure.id);
           } finally {
             query.close();
           }
@@ -2581,10 +2735,9 @@ class LocalServerService {
         ObjectBoxService.instance.procedureBox.put(p);
         broadcast({'event': 'procedures_updated'});
         _incomingDataController.add('procedures');
-        await FirebaseSyncService.instance.broadcastUpdate('procedures', p.toJson());
-      }
-
-      else {
+        await FirebaseSyncService.instance
+            .broadcastUpdate('procedures', p.toJson());
+      } else {
         throw UnsupportedError('Unsupported cloud mutation');
       }
 
@@ -2602,11 +2755,13 @@ class LocalServerService {
   Future<void> broadcastAllToCloud() async {
     final settings = ObjectBoxService.instance.settings;
     if (!settings.firebaseEnabled) {
-      debugPrint('Hub: Firebase Sync is disabled. Skipping broadcastAllToCloud.');
+      debugPrint(
+          'Hub: Firebase Sync is disabled. Skipping broadcastAllToCloud.');
       return;
     }
     if (settings.connectionMode != 'firebase') {
-      debugPrint('Hub: Connection mode is not Firebase (mode=${settings.connectionMode}). Skipping database mirror upload to conserve quota.');
+      debugPrint(
+          'Hub: Connection mode is not Firebase (mode=${settings.connectionMode}). Skipping database mirror upload to conserve quota.');
       return;
     }
 
@@ -2615,20 +2770,23 @@ class LocalServerService {
       // Start tracking updates from this exact moment onwards to avoid uploading historical database
       settings.lastCloudflareSync = DateTime.now().millisecondsSinceEpoch;
       ObjectBoxService.instance.settingsBox.put(settings);
-      debugPrint('Hub: Initialized lastCloudflareSync to NOW (${settings.lastCloudflareSync}) to skip historical database upload.');
+      debugPrint(
+          'Hub: Initialized lastCloudflareSync to NOW (${settings.lastCloudflareSync}) to skip historical database upload.');
     }
 
     final lastSync = settings.lastCloudflareSync!;
-    debugPrint('Hub: Starting incremental Cloud Mirror Sync since $lastSync...');
+    debugPrint(
+        'Hub: Starting incremental Cloud Mirror Sync since $lastSync...');
     int pushCount = 0;
     int pruneCount = 0;
-    
+
     try {
       // --- 1. Mirror Users ---
       final users = ObjectBoxService.instance.userBox.getAll();
       if (isInitialSync) {
         final localUserNames = users.map((u) => u.name).toSet();
-        final cloudUsers = await FirebaseSyncService.instance.fetchCollection('users');
+        final cloudUsers =
+            await FirebaseSyncService.instance.fetchCollection('users');
         for (var cu in cloudUsers) {
           final name = cu['name']?.toString();
           if (name != null && !localUserNames.contains(name)) {
@@ -2644,57 +2802,71 @@ class LocalServerService {
 
       // --- 2. Mirror Medicines ---
       // Filter: Only upload medicines updated/added since the last sync
-      final meds = ObjectBoxService.instance.medicineBox.getAll()
+      final meds = ObjectBoxService.instance.medicineBox
+          .getAll()
           .where((m) => m.updatedAt.millisecondsSinceEpoch > lastSync)
           .toList();
-      
+
       if (isInitialSync && meds.isNotEmpty) {
-        final localBarcodes = meds.map((m) => m.barcode.isEmpty ? m.id.toString() : m.barcode).toSet();
-        final cloudMeds = await FirebaseSyncService.instance.fetchCollection('medicines');
+        final localBarcodes = meds
+            .map((m) => m.barcode.isEmpty ? m.id.toString() : m.barcode)
+            .toSet();
+        final cloudMeds =
+            await FirebaseSyncService.instance.fetchCollection('medicines');
         for (var cm in cloudMeds) {
           final cloudId = cm['cloudId']?.toString();
           if (cloudId != null && !localBarcodes.contains(cloudId)) {
-            await FirebaseSyncService.instance.deleteDocument('medicines', cloudId);
+            await FirebaseSyncService.instance
+                .deleteDocument('medicines', cloudId);
             pruneCount++;
           }
         }
       }
       for (var m in meds) {
-        await FirebaseSyncService.instance.broadcastUpdate('medicines', m.toJson());
+        await FirebaseSyncService.instance
+            .broadcastUpdate('medicines', m.toJson());
         pushCount++;
       }
 
       // --- 3. Mirror Patients ---
       // Filter: Only upload patients updated since last sync
-      final patients = ObjectBoxService.instance.patientBox.getAll()
+      final patients = ObjectBoxService.instance.patientBox
+          .getAll()
           .where((p) => p.updatedAt.millisecondsSinceEpoch > lastSync)
           .toList();
 
       if (isInitialSync && patients.isNotEmpty) {
-        final localUhids = patients.map((p) => p.uhid.isEmpty ? p.id.toString() : p.uhid).toSet();
-        final cloudPatients = await FirebaseSyncService.instance.fetchCollection('patients');
+        final localUhids = patients
+            .map((p) => p.uhid.isEmpty ? p.id.toString() : p.uhid)
+            .toSet();
+        final cloudPatients =
+            await FirebaseSyncService.instance.fetchCollection('patients');
         for (var cp in cloudPatients) {
           final cloudId = cp['cloudId']?.toString();
           if (cloudId != null && !localUhids.contains(cloudId)) {
-            await FirebaseSyncService.instance.deleteDocument('patients', cloudId);
+            await FirebaseSyncService.instance
+                .deleteDocument('patients', cloudId);
             pruneCount++;
           }
         }
       }
       for (var p in patients) {
-        await FirebaseSyncService.instance.broadcastUpdate('patients', p.toJson());
+        await FirebaseSyncService.instance
+            .broadcastUpdate('patients', p.toJson());
         pushCount++;
       }
 
       // --- 4. Mirror Sales ---
       // Filter: Only upload sales created/updated since last sync
-      final sales = ObjectBoxService.instance.saleBox.getAll()
+      final sales = ObjectBoxService.instance.saleBox
+          .getAll()
           .where((s) => s.updatedAt.millisecondsSinceEpoch > lastSync)
           .toList();
 
       if (isInitialSync && sales.isNotEmpty) {
         final localInvoices = sales.map((s) => s.invoiceNo).toSet();
-        final cloudSales = await FirebaseSyncService.instance.fetchCollection('sales');
+        final cloudSales =
+            await FirebaseSyncService.instance.fetchCollection('sales');
         for (var cs in cloudSales) {
           final cloudId = cs['cloudId']?.toString();
           if (cloudId != null && !localInvoices.contains(cloudId)) {
@@ -2710,24 +2882,30 @@ class LocalServerService {
 
       // --- 5. Mirror Procedures ---
       // Filter: Only upload procedures updated since last sync
-      final procs = ObjectBoxService.instance.procedureBox.getAll()
+      final procs = ObjectBoxService.instance.procedureBox
+          .getAll()
           .where((p) => p.updatedAt.millisecondsSinceEpoch > lastSync)
           .toList();
 
       if (isInitialSync && procs.isNotEmpty) {
         final localProcNames = procs.map((p) => p.name).toSet();
-        final cloudProcs = await FirebaseSyncService.instance.fetchCollection('procedures');
+        final cloudProcs =
+            await FirebaseSyncService.instance.fetchCollection('procedures');
         for (var cp in cloudProcs) {
           final cloudId = cp['cloudId']?.toString();
           final name = cp['name']?.toString();
-          if (cloudId != null && name != null && !localProcNames.contains(name)) {
-            await FirebaseSyncService.instance.deleteDocument('procedures', cloudId);
+          if (cloudId != null &&
+              name != null &&
+              !localProcNames.contains(name)) {
+            await FirebaseSyncService.instance
+                .deleteDocument('procedures', cloudId);
             pruneCount++;
           }
         }
       }
       for (var p in procs) {
-        await FirebaseSyncService.instance.broadcastUpdate('procedures', p.toJson());
+        await FirebaseSyncService.instance
+            .broadcastUpdate('procedures', p.toJson());
         pushCount++;
       }
 
@@ -2735,64 +2913,81 @@ class LocalServerService {
       final doctors = ObjectBoxService.instance.doctorBox.getAll();
       if (isInitialSync) {
         final localDoctorNames = doctors.map((d) => d.name).toSet();
-        final cloudDoctors = await FirebaseSyncService.instance.fetchCollection('doctors');
+        final cloudDoctors =
+            await FirebaseSyncService.instance.fetchCollection('doctors');
         for (var cd in cloudDoctors) {
           final cloudId = cd['cloudId']?.toString();
           final name = cd['name']?.toString();
-          if (cloudId != null && name != null && !localDoctorNames.contains(name)) {
-            await FirebaseSyncService.instance.deleteDocument('doctors', cloudId);
+          if (cloudId != null &&
+              name != null &&
+              !localDoctorNames.contains(name)) {
+            await FirebaseSyncService.instance
+                .deleteDocument('doctors', cloudId);
             pruneCount++;
           }
         }
       }
       for (var d in doctors) {
-        await FirebaseSyncService.instance.broadcastUpdate('doctors', d.toJson());
+        await FirebaseSyncService.instance
+            .broadcastUpdate('doctors', d.toJson());
         pushCount++;
       }
 
       // --- 7. Mirror Appointments ---
       // Filter: Only upload appointments updated since last sync
-      final appointments = ObjectBoxService.instance.appointmentBox.getAll()
+      final appointments = ObjectBoxService.instance.appointmentBox
+          .getAll()
           .where((a) => a.updatedAt.millisecondsSinceEpoch > lastSync)
           .toList();
 
       if (isInitialSync && appointments.isNotEmpty) {
         final localAppts = appointments.map((a) => a.id.toString()).toSet();
-        final cloudAppts = await FirebaseSyncService.instance.fetchCollection('appointments');
+        final cloudAppts =
+            await FirebaseSyncService.instance.fetchCollection('appointments');
         for (var ca in cloudAppts) {
           final cloudId = ca['cloudId']?.toString();
           final localId = ca['id']?.toString();
-          if (cloudId != null && localId != null && !localAppts.contains(localId)) {
-            await FirebaseSyncService.instance.deleteDocument('appointments', cloudId);
+          if (cloudId != null &&
+              localId != null &&
+              !localAppts.contains(localId)) {
+            await FirebaseSyncService.instance
+                .deleteDocument('appointments', cloudId);
             pruneCount++;
           }
         }
       }
       for (var a in appointments) {
-        await FirebaseSyncService.instance.broadcastUpdate('appointments', a.toJson());
+        await FirebaseSyncService.instance
+            .broadcastUpdate('appointments', a.toJson());
         pushCount++;
       }
 
       // --- 8. Mirror Prescriptions ---
       // Filter: Only upload prescriptions updated since last sync
-      final prescriptions = ObjectBoxService.instance.prescriptionBox.getAll()
+      final prescriptions = ObjectBoxService.instance.prescriptionBox
+          .getAll()
           .where((pr) => pr.updatedAt.millisecondsSinceEpoch > lastSync)
           .toList();
 
       if (isInitialSync && prescriptions.isNotEmpty) {
         final localScripts = prescriptions.map((p) => p.id.toString()).toSet();
-        final cloudScripts = await FirebaseSyncService.instance.fetchCollection('prescriptions');
+        final cloudScripts =
+            await FirebaseSyncService.instance.fetchCollection('prescriptions');
         for (var cs in cloudScripts) {
           final cloudId = cs['cloudId']?.toString();
           final localId = cs['id']?.toString();
-          if (cloudId != null && localId != null && !localScripts.contains(localId)) {
-            await FirebaseSyncService.instance.deleteDocument('prescriptions', cloudId);
+          if (cloudId != null &&
+              localId != null &&
+              !localScripts.contains(localId)) {
+            await FirebaseSyncService.instance
+                .deleteDocument('prescriptions', cloudId);
             pruneCount++;
           }
         }
       }
       for (var p in prescriptions) {
-        await FirebaseSyncService.instance.broadcastUpdate('prescriptions', p.toJson());
+        await FirebaseSyncService.instance
+            .broadcastUpdate('prescriptions', p.toJson());
         pushCount++;
       }
 
@@ -2800,25 +2995,31 @@ class LocalServerService {
       final templates = ObjectBoxService.instance.templateBox.getAll();
       if (isInitialSync) {
         final localTemplates = templates.map((t) => t.name).toSet();
-        final cloudTemplates = await FirebaseSyncService.instance.fetchCollection('templates');
+        final cloudTemplates =
+            await FirebaseSyncService.instance.fetchCollection('templates');
         for (var ct in cloudTemplates) {
           final cloudId = ct['cloudId']?.toString();
           final name = ct['name']?.toString();
-          if (cloudId != null && name != null && !localTemplates.contains(name)) {
-            await FirebaseSyncService.instance.deleteDocument('templates', cloudId);
+          if (cloudId != null &&
+              name != null &&
+              !localTemplates.contains(name)) {
+            await FirebaseSyncService.instance
+                .deleteDocument('templates', cloudId);
             pruneCount++;
           }
         }
       }
       for (var t in templates) {
-        await FirebaseSyncService.instance.broadcastUpdate('templates', t.toJson());
+        await FirebaseSyncService.instance
+            .broadcastUpdate('templates', t.toJson());
         pushCount++;
       }
 
       // Update sync marker to current time
       settings.lastCloudflareSync = DateTime.now().millisecondsSinceEpoch;
       ObjectBoxService.instance.settingsBox.put(settings);
-      debugPrint('Hub: Mirror Sync Complete. Pushed: $pushCount, Pruned: $pruneCount. Saved lastCloudflareSync: ${settings.lastCloudflareSync}');
+      debugPrint(
+          'Hub: Mirror Sync Complete. Pushed: $pushCount, Pruned: $pruneCount. Saved lastCloudflareSync: ${settings.lastCloudflareSync}');
     } catch (e) {
       debugPrint('Hub: Mirror Sync error: $e');
     }
@@ -2828,22 +3029,23 @@ class LocalServerService {
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
       final log = AuditLog.fromJson(body);
-      
+
       final box = ObjectBoxService.instance.store.box<AuditLog>();
-      final existing = box.query(
-        AuditLog_.deviceId.equals(log.deviceId)
-        .and(AuditLog_.timestamp.equals(log.timestamp.millisecondsSinceEpoch))
-      ).build().findFirst();
+      final existing = box
+          .query(AuditLog_.deviceId.equals(log.deviceId).and(
+              AuditLog_.timestamp.equals(log.timestamp.millisecondsSinceEpoch)))
+          .build()
+          .findFirst();
 
       if (existing == null) {
         log.id = 0; // Force insertion as a new log
         log.isSynced = true;
         box.put(log);
       }
-      
+
       broadcast({'event': 'audit_logs_updated'});
       _incomingDataController.add('audit_logs');
-      
+
       return Response.ok(jsonEncode({'success': true}));
     } catch (e) {
       debugPrint('Hub: Error receiving audit log push - $e');
@@ -2856,20 +3058,24 @@ class LocalServerService {
 
   Response _auditGetHandler(Request req) {
     final sinceStr = req.url.queryParameters['since'];
-    final sinceMs = int.tryParse(sinceStr ?? '') ?? (DateTime.tryParse(sinceStr ?? '')?.millisecondsSinceEpoch) ?? 0;
+    final sinceMs = int.tryParse(sinceStr ?? '') ??
+        (DateTime.tryParse(sinceStr ?? '')?.millisecondsSinceEpoch) ??
+        0;
     final limitStr = req.url.queryParameters['limit'];
     final offsetStr = req.url.queryParameters['offset'];
     final limit = int.tryParse(limitStr ?? '');
     final offset = int.tryParse(offsetStr ?? '');
 
     final box = ObjectBoxService.instance.store.box<AuditLog>();
-    final queryBuilder = box.query(AuditLog_.timestamp.greaterThan(sinceMs - 1));
+    final queryBuilder =
+        box.query(AuditLog_.timestamp.greaterThan(sinceMs - 1));
     final query = queryBuilder.build();
     if (offset != null) query.offset = offset;
     if (limit != null) query.limit = limit;
     final logs = query.find();
 
-    debugPrint('Hub: Audit log sync requested (since=$sinceMs, limit=$limit, offset=$offset). Returning ${logs.length} logs.');
+    debugPrint(
+        'Hub: Audit log sync requested (since=$sinceMs, limit=$limit, offset=$offset). Returning ${logs.length} logs.');
 
     final json = logs
         .map((l) => {
@@ -2886,31 +3092,37 @@ class LocalServerService {
             })
         .toList();
     return Response.ok(
-      jsonEncode({'data': json, 'serverTime': DateTime.now().millisecondsSinceEpoch}),
+      jsonEncode(
+          {'data': json, 'serverTime': DateTime.now().millisecondsSinceEpoch}),
       headers: {'content-type': 'application/json'},
     );
   }
 
   Response _h1RecordsGetHandler(Request req) {
     final sinceStr = req.url.queryParameters['since'];
-    final sinceMs = int.tryParse(sinceStr ?? '') ?? (DateTime.tryParse(sinceStr ?? '')?.millisecondsSinceEpoch) ?? 0;
+    final sinceMs = int.tryParse(sinceStr ?? '') ??
+        (DateTime.tryParse(sinceStr ?? '')?.millisecondsSinceEpoch) ??
+        0;
     final limitStr = req.url.queryParameters['limit'];
     final offsetStr = req.url.queryParameters['offset'];
     final limit = int.tryParse(limitStr ?? '');
     final offset = int.tryParse(offsetStr ?? '');
 
     final box = ObjectBoxService.instance.store.box<ScheduleH1Record>();
-    final queryBuilder = box.query(ScheduleH1Record_.saleDate.greaterThan(sinceMs - 1));
+    final queryBuilder =
+        box.query(ScheduleH1Record_.saleDate.greaterThan(sinceMs - 1));
     final query = queryBuilder.build();
     if (offset != null) query.offset = offset;
     if (limit != null) query.limit = limit;
     final records = query.find();
 
-    debugPrint('Hub: H1 sync requested (since=$sinceMs, limit=$limit, offset=$offset). Returning ${records.length} records.');
+    debugPrint(
+        'Hub: H1 sync requested (since=$sinceMs, limit=$limit, offset=$offset). Returning ${records.length} records.');
 
     final json = records.map((r) => r.toJson()).toList();
     return Response.ok(
-      jsonEncode({'data': json, 'serverTime': DateTime.now().millisecondsSinceEpoch}),
+      jsonEncode(
+          {'data': json, 'serverTime': DateTime.now().millisecondsSinceEpoch}),
       headers: {'content-type': 'application/json'},
     );
   }
@@ -2921,10 +3133,13 @@ class LocalServerService {
       final rec = ScheduleH1Record.fromJson(body);
 
       final box = ObjectBoxService.instance.store.box<ScheduleH1Record>();
-      final existing = box.getAll().where((r) =>
-          r.invoiceNo == rec.invoiceNo &&
-          r.medicineName == rec.medicineName &&
-          r.batchNo == rec.batchNo).firstOrNull;
+      final existing = box
+          .getAll()
+          .where((r) =>
+              r.invoiceNo == rec.invoiceNo &&
+              r.medicineName == rec.medicineName &&
+              r.batchNo == rec.batchNo)
+          .firstOrNull;
 
       if (existing != null) {
         rec.id = existing.id;
@@ -2956,10 +3171,11 @@ class LocalServerService {
     try {
       final dateStr = DateTime.now().toIso8601String().substring(0, 10);
       final box = ObjectBoxService.instance.attendanceBox;
-      final query = box.query(
-        AttendanceRecord_.userId.equals(user.id)
-        .and(AttendanceRecord_.date.equals(dateStr))
-      ).build();
+      final query = box
+          .query(AttendanceRecord_.userId
+              .equals(user.id)
+              .and(AttendanceRecord_.date.equals(dateStr)))
+          .build();
       final existing = query.findFirst();
       query.close();
 
@@ -2993,11 +3209,13 @@ class LocalServerService {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
       final record = AttendanceRecord.fromJson(body);
       final box = ObjectBoxService.instance.attendanceBox;
-      
-      final existing = box.query(
-        AttendanceRecord_.userId.equals(record.userId)
-        .and(AttendanceRecord_.date.equals(record.date))
-      ).build().findFirst();
+
+      final existing = box
+          .query(AttendanceRecord_.userId
+              .equals(record.userId)
+              .and(AttendanceRecord_.date.equals(record.date)))
+          .build()
+          .findFirst();
 
       if (existing != null) {
         existing.status = record.status;
@@ -3027,11 +3245,13 @@ class LocalServerService {
       final userId = body['userId'] as int;
       final date = body['date'] as String;
       final box = ObjectBoxService.instance.attendanceBox;
-      
-      final existing = box.query(
-        AttendanceRecord_.userId.equals(userId)
-        .and(AttendanceRecord_.date.equals(date))
-      ).build().findFirst();
+
+      final existing = box
+          .query(AttendanceRecord_.userId
+              .equals(userId)
+              .and(AttendanceRecord_.date.equals(date)))
+          .build()
+          .findFirst();
 
       if (existing != null) {
         box.remove(existing.id);
