@@ -46,7 +46,7 @@ function renderLoginScreen() {
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
-        ${DEFAULT_USERS.map(u => `
+        ${(appState.users || DEFAULT_USERS).map(u => `
           <button class="btn btn-outline" style="justify-content: flex-start; padding: 12px 16px; border-radius: var(--radius-md);" onclick="selectUserForLogin(${u.id})">
             <div class="user-avatar" style="width: 28px; height: 28px; font-size: 12px;">${u.name.substring(0, 1)}</div>
             <div style="text-align: left; margin-left: 6px;">
@@ -1017,45 +1017,70 @@ function renderReconcile(tabBody) {
   `;
 }
 
-// ----------------- LIVE HUB SYNC MODAL -----------------
-window.openHubSyncModal = () => {
+// ----------------- CLOUD & LIVE HUB CONFIG MODAL -----------------
+window.openCloudConfigModal = () => {
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
-  modal.id = 'syncModal';
+  modal.id = 'cloudModal';
   modal.innerHTML = `
-    <div class="modal-card">
+    <div class="modal-card" style="max-width: 480px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-        <h3 style="font-size: 16px; font-weight: 800;">Connect Live Windows Hub</h3>
-        <button class="btn btn-outline btn-sm" onclick="closeHubSyncModal()">✕</button>
+        <h3 style="font-size: 16px; font-weight: 800;">Realtime Cloud Setup</h3>
+        <button class="btn btn-outline btn-sm" onclick="closeCloudConfigModal()">✕</button>
       </div>
       <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
-        Enter your MediPoss Windows Hub Cloudflare Tunnel URL or Local LAN IP to fetch live data into this web app:
+        Connect this web app to your clinic's live Firebase Firestore partition or directly to your Windows Hub.
       </p>
 
-      <div style="margin-bottom: 12px;">
-        <label style="font-size: 11px; font-weight: 700; color: var(--text-dim); text-transform: uppercase;">Hub URL</label>
-        <input type="text" id="modalHubUrl" placeholder="https://your-tunnel.trycloudflare.com or http://192.168.1.X:8080" value="${appState.hubUrl}" style="width: 100%; background: var(--bg-input); border: 1px solid var(--border-subtle); padding: 8px 12px; border-radius: var(--radius-sm); color: var(--text-main); margin-top: 4px;">
+      <div style="margin-bottom: 16px; padding: 12px; background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: var(--radius-sm);">
+        <label style="font-size: 11px; font-weight: 800; color: #22c55e; text-transform: uppercase;">1. Firebase Shop ID (Realtime Cloud Sync)</label>
+        <p style="font-size: 11px; color: var(--text-muted); margin: 4px 0 8px;">
+          Matches the <b>Store Name / Shop ID</b> in your MediPoss settings. Common defaults:
+        </p>
+        <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+          <button type="button" class="btn btn-outline btn-sm" style="font-size: 11px; padding: 3px 8px;" onclick="document.getElementById('modalShopId').value='default_shop'">default_shop</button>
+          <button type="button" class="btn btn-outline btn-sm" style="font-size: 11px; padding: 3px 8px;" onclick="document.getElementById('modalShopId').value='mediposs_pharmacy'">mediposs_pharmacy</button>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="modalShopId" placeholder="e.g. default_shop or mediposs_pharmacy" value="${appState.shopId}" style="flex: 1; background: var(--bg-input); border: 1px solid var(--border-subtle); padding: 8px 12px; border-radius: var(--radius-sm); color: var(--text-main);">
+          <button class="btn btn-primary btn-sm" onclick="saveCloudShopId()">Connect Live</button>
+        </div>
       </div>
 
-      <div style="margin-bottom: 20px;">
-        <label style="font-size: 11px; font-weight: 700; color: var(--text-dim); text-transform: uppercase;">Hub JWT Secret</label>
-        <input type="password" id="modalHubSecret" placeholder="Enter Hub Secret" value="${appState.hubSecret}" style="width: 100%; background: var(--bg-input); border: 1px solid var(--border-subtle); padding: 8px 12px; border-radius: var(--radius-sm); color: var(--text-main); margin-top: 4px;">
+      <div style="margin-bottom: 16px; padding: 12px; background: var(--bg-card-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);">
+        <label style="font-size: 11px; font-weight: 700; color: var(--text-dim); text-transform: uppercase;">2. Direct Windows Hub / Cloudflare Tunnel</label>
+        <div style="margin-top: 8px; margin-bottom: 8px;">
+          <input type="text" id="modalHubUrl" placeholder="https://your-tunnel.trycloudflare.com or http://192.168.1.X:8080" value="${appState.hubUrl}" style="width: 100%; background: var(--bg-input); border: 1px solid var(--border-subtle); padding: 8px 12px; border-radius: var(--radius-sm); color: var(--text-main);">
+        </div>
+        <div>
+          <input type="password" id="modalHubSecret" placeholder="Hub JWT Secret (optional)" value="${appState.hubSecret}" style="width: 100%; background: var(--bg-input); border: 1px solid var(--border-subtle); padding: 8px 12px; border-radius: var(--radius-sm); color: var(--text-main);">
+        </div>
+        <div style="margin-top: 10px; display: flex; justify-content: flex-end;">
+          <button class="btn btn-outline btn-sm" id="btnRunSync" onclick="runLiveHubSync()">Test Direct Hub</button>
+        </div>
       </div>
 
       <div id="modalSyncError" style="font-size: 12px; color: var(--danger); margin-bottom: 10px;"></div>
 
-      <div style="display: flex; justify-content: flex-end; gap: 8px;">
-        <button class="btn btn-outline" onclick="closeHubSyncModal()">Cancel</button>
-        <button class="btn btn-primary" id="btnRunSync" onclick="runLiveHubSync()">Connect & Sync</button>
+      <div style="display: flex; justify-content: flex-end;">
+        <button class="btn btn-outline" onclick="closeCloudConfigModal()">Done</button>
       </div>
     </div>
   `;
   document.body.appendChild(modal);
 };
 
-window.closeHubSyncModal = () => {
-  const m = document.getElementById('syncModal');
+window.closeCloudConfigModal = () => {
+  const m = document.getElementById('cloudModal');
   if (m) m.remove();
+};
+
+window.saveCloudShopId = () => {
+  const val = document.getElementById('modalShopId').value.trim();
+  if (!val) return;
+  appState.setShopId(val);
+  closeCloudConfigModal();
+  alert(`Connected to cloud shop: "${val}". Realtime listeners active.`);
 };
 
 window.runLiveHubSync = async () => {
@@ -1074,12 +1099,12 @@ window.runLiveHubSync = async () => {
 
   const result = await appState.syncWithHub(url, secret);
   if (result.success) {
-    closeHubSyncModal();
+    closeCloudConfigModal();
     alert('Connected to Windows Hub successfully! Real-time data loaded.');
     renderCurrentPage();
   } else {
     err.innerText = `Connection failed: ${result.error || 'Could not connect'}`;
-    btn.innerText = 'Connect & Sync';
+    btn.innerText = 'Test Direct Hub';
     btn.disabled = false;
   }
 };

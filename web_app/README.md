@@ -24,7 +24,8 @@ A lightweight, zero-dependency, ultra-fast client-side web application mirroring
   3. **Reorder & Dead Stock**: Procurement suggestions based on sales consumption velocity, depletion horizon, and zero-sales dead stock capital tracker.
   4. **Stock Reconciliation & Audit**: Dispensary baseline snapshots, net transfers, clinic dispenses, retail deductions, expected vs current stock, and variance deficit/surplus indicators with Excel-compatible scope toggles.
 - **Live Sync Support**:
-  - Can optionally connect directly to your live Windows Hub via Cloudflare Tunnel or local LAN (`/api/medicines`, `/api/sales`, `/api/appointments`).
+  - **Firebase Firestore Realtime Sync**: Automatically listens to `shops/{shopId}` (`medicines`, `sales`, `appointments`, `stock_transfers`, `users`, and `settings/hub_status`). Any sale, transfer, or OPD queue change in MediPoss desktop/Android instantly updates the web app without refreshing.
+  - **Direct Windows Hub / Cloudflare Tunnel**: Option to connect directly to your local Windows Hub or tunnel URL (`/api/medicines`, `/api/sales`, `/api/appointments`).
 
 ## How to Deploy to Vercel in 1 Minute:
 
