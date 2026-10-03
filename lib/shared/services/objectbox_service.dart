@@ -106,18 +106,19 @@ class ObjectBoxService {
       final existing = svc.settingsBox.getAll().first;
       if (existing.isWindowsClient != isTerminalMode) {
         existing.isWindowsClient = isTerminalMode;
-        svc.settingsBox.put(existing);
       }
+      if (existing.autoLoginPin != null) existing.autoLoginPin = null;
+      svc.settingsBox.put(existing);
     }
 
     // Initialize device identity asynchronously
     DeviceIdentityService.initDeviceId();
 
-    if (svc.userBox.isEmpty()) {
+    if (svc.userBox.isEmpty() && Platform.isWindows && !isTerminalMode) {
       svc.userBox.put(AppUser(
         name: 'Admin',
         role: 'Admin',
-        pin: '1234',
+        pin: 'SETUP_REQUIRED',
         canAccessSettings: true,
         canManageUsers: true,
         canViewDashboard: true,
@@ -132,23 +133,6 @@ class ObjectBoxService {
         canProcessReturns: true,
       ));
     }
-
-    // Self-healing: if the Hub's local DB was overwritten by a sync call, restore PINs to default
-    if (!kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.windows ||
-            defaultTargetPlatform == TargetPlatform.macOS ||
-            defaultTargetPlatform == TargetPlatform.linux)) {
-      final allUsers = svc.userBox.getAll();
-      for (var u in allUsers) {
-        if (u.pin == 'xxxx') {
-          u.pin =
-              '1234'; // Restore to default since 'xxxx' is invalid for local login
-          svc.userBox.put(u);
-        }
-      }
-    }
-
-
 
     _repairMissingTimestamps(svc);
 

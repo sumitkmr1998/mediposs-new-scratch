@@ -1165,7 +1165,7 @@ class _InventoryAlertsSection extends StatelessWidget {
           color: AppTheme.warning,
           icon: Icons.warning_amber_rounded,
           items: replenishmentMeds,
-          subtitleBuilder: (m) => 'Store+Clinic: ${inv.getDispensingStock(m)} | Bulk: ${m.mainStock}',
+          subtitleBuilder: (m) => 'Store+Clinic: ${inv.getDispensingStock(m)} | Bulk: ${m.bulkStoreStock + m.bulkClinicStock}',
         ),
         const SizedBox(height: 12),
         _ExpandableHealthCard(

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import '../models/sale.dart';
 import '../models/medicine.dart';
 
@@ -10,7 +9,6 @@ class StockRules {
     required void Function(MedicineBatch batch) putBatch,
     required void Function(Medicine medicine) putMedicine,
   }) {
-    try {
       final list = jsonDecode(oldSale.itemsJson) as List;
       for (final jsonItem in list) {
         final item = SaleItem.fromJson(jsonItem as Map<String, dynamic>);
@@ -66,9 +64,6 @@ class StockRules {
           putMedicine(m);
         }
       }
-    } catch (e) {
-      debugPrint('Hub inventory revert error: $e');
-    }
   }
 
   static void deductInventory({
@@ -77,7 +72,6 @@ class StockRules {
     required void Function(MedicineBatch batch) putBatch,
     required void Function(Medicine medicine) putMedicine,
   }) {
-    try {
       final list = jsonDecode(sale.itemsJson) as List;
       for (final jsonItem in list) {
         final item = SaleItem.fromJson(jsonItem as Map<String, dynamic>);
@@ -86,8 +80,34 @@ class StockRules {
             .where((x) => x.name == item.medicineName)
             .firstOrNull;
 
-        if (m != null) {
+        if (m == null) {
+          throw StateError('Medicine not found: ${item.medicineName}');
+        }
           final int qty = item.qty.toInt();
+          if (qty > 0) {
+            final batches = m.batches.toList();
+            if (batches.isEmpty) {
+              final available = sale.isClinicalDispense ? m.mainStock : m.storeStock;
+              if (available < qty) {
+                throw StateError('Insufficient stock for ${m.name}');
+              }
+            } else {
+              final namedBatch = item.batchNo.trim().toUpperCase();
+              if (namedBatch.isNotEmpty && namedBatch != 'N/A') {
+                final exact = batches.where((b) =>
+                    b.batchNo.trim().toUpperCase() == namedBatch).firstOrNull;
+                if (exact != null && exact.expiryDate.isBefore(DateTime.now())) {
+                  throw StateError('Expired batch for ${m.name}');
+                }
+              }
+              final available = batches.where((b) =>
+                  !b.expiryDate.isBefore(DateTime.now())).fold<int>(0, (sum, b) =>
+                  sum + (sale.isClinicalDispense ? b.mainStock : b.storeStock));
+              if (available < qty) {
+                throw StateError('Insufficient stock for ${m.name}');
+              }
+            }
+          }
           
           if (qty > 0) {
             int remaining = qty;
@@ -149,6 +169,9 @@ class StockRules {
                 }
               }
             }
+            if (remaining > 0) {
+              throw StateError('Insufficient stock for ${m.name}');
+            }
           } else if (qty < 0) {
             int toRestore = qty.abs();
             final batches = m.batches.toList();
@@ -172,10 +195,6 @@ class StockRules {
 
           m.recalculateStockFromBatches();
           putMedicine(m);
-        }
       }
-    } catch (e) {
-      debugPrint('Hub inventory deduct error: $e');
-    }
   }
 }

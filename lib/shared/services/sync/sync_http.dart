@@ -1,4 +1,5 @@
 import 'package:http/http.dart' as http;
+import 'dart:io';
 
 /// Thin HTTP helper shared by extracted sync pull modules.
 class SyncHttp {
@@ -19,7 +20,21 @@ class SyncHttp {
   }
 
   Future<http.Response> get(String path, [Map<String, String>? query]) {
-    return http.get(uri(path, query), headers: headers);
+    return checkedGet(uri(path, query), headers: headers);
+  }
+
+  static Future<http.Response> checkedGet(Uri uri,
+      {Map<String, String>? headers,
+      http.Client? client,
+      Duration timeout = const Duration(seconds: 30)}) async {
+    final res = await (client == null
+            ? http.get(uri, headers: headers)
+            : client.get(uri, headers: headers))
+        .timeout(timeout);
+    if (res.statusCode != 200) {
+      throw HttpException('Hub pull failed: ${res.statusCode}', uri: uri);
+    }
+    return res;
   }
 
   Future<http.Response> post(String path, {Object? body}) {

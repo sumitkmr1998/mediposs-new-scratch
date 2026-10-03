@@ -91,7 +91,7 @@ class AuthProvider extends ChangeNotifier {
           (u) => u!.pin == pin && u.isActive,
           orElse: () => null,
         );
-    if (match != null) {
+    if (match != null && match.pin != 'SETUP_REQUIRED') {
       _currentUser = match;
       _isAuthenticated = true;
       _triggerAutoCheckIn(match);
@@ -112,7 +112,7 @@ class AuthProvider extends ChangeNotifier {
   bool loginWithUser(AppUser user, String pin) {
     debugPrint(
         'AuthProvider: loginWithUser check for ${user.name}. Input PIN match: ${user.pin == pin}. Active: ${user.isActive}');
-    if (user.pin == pin && user.isActive) {
+    if (user.pin == pin && user.isActive && user.pin != 'SETUP_REQUIRED') {
       _currentUser = user;
       _isAuthenticated = true;
       _triggerAutoCheckIn(user);

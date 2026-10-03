@@ -148,6 +148,45 @@ void main() {
   });
 
   group('StockRules Deduction & Reversion Tests', () {
+    test('rejects a sale that exceeds available stock', () {
+      final med = Medicine(
+        name: 'Limited medicine', purchasePrice: 1, sellingPrice: 3,
+        storeStock: 2,
+      );
+      final sale = Sale(
+        invoiceNo: 'INV-LOW', subtotal: 9, total: 9,
+        itemsJson: jsonEncode([SaleItem(
+          medicineId: med.id, medicineName: med.name,
+          qty: 3, unitPrice: 3,
+        ).toJson()]),
+      );
+      expect(() => StockRules.deductInventory(
+        sale: sale,
+        getAllMedicines: () => [med],
+        putBatch: (_) {},
+        putMedicine: (_) {},
+      ), throwsStateError);
+      expect(med.storeStock, 2);
+    });
+
+    test('rejects a named expired batch even if another batch has stock', () {
+      final med = Medicine(name: 'Batch medicine',
+          purchasePrice: 1, sellingPrice: 3);
+      med.batches.addAll([
+        MedicineBatch(batchNo: 'EXPIRED',
+            expiryDate: DateTime(2020), storeStock: 10),
+        MedicineBatch(batchNo: 'FRESH',
+            expiryDate: DateTime(2030), storeStock: 10),
+      ]);
+      final sale = Sale(invoiceNo: 'INV-EXP', subtotal: 3, total: 3,
+          itemsJson: jsonEncode([SaleItem(medicineId: med.id,
+              medicineName: med.name, qty: 1, unitPrice: 3,
+              batchNo: 'EXPIRED').toJson()]));
+      expect(() => StockRules.deductInventory(
+        sale: sale, getAllMedicines: () => [med],
+        putBatch: (_) {}, putMedicine: (_) {},
+      ), throwsStateError);
+    });
     test('deductInventory prioritizes exact batchNo matching over FIFO', () {
       final med = Medicine(
         name: 'Metformin 500mg',

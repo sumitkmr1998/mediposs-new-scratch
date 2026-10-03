@@ -71,9 +71,9 @@ class InventoryProvider extends ChangeNotifier {
     return _medicines.where((m) => isSmartLowStock(m, sales, precomputed: result)).toList();
   }
 
-  /// Store + Clinic Replenishment Helpers (Excludes Bulk/Main Stock)
+  /// Store + Clinic Replenishment Helpers (Excludes Bulk Warehouses)
   /// Evaluates whether Store + Clinic stock is below target coverage duration (in days)
-  int getDispensingStock(Medicine m) => m.storeStock + m.bulkClinicStock;
+  int getDispensingStock(Medicine m) => m.storeStock + m.mainStock;
 
   bool isStoreClinicReplenishmentNeeded(Medicine m, List<Sale> sales, {int targetDays = 15, ConsumptionResult? precomputed}) {
     final dispensingStock = getDispensingStock(m);

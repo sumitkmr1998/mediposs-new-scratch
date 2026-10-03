@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:uuid/uuid.dart';
 import 'package:flutter/foundation.dart';
 import '../models/medicine.dart';
 import '../models/sale.dart';
@@ -752,10 +753,11 @@ class CartProvider extends ChangeNotifier {
     final settings = db.settings;
     final isClient = Platform.isAndroid || (Platform.isWindows && settings.isWindowsClient);
     final isHub = Platform.isWindows && !settings.isWindowsClient;
+    final isEdit = _editingSaleId != null;
 
     // If editing a sale, revert the original stock deductions first
     Map<String, dynamic> oldSaleJson = {};
-    if (_editingSaleId != null) {
+    if (isEdit) {
       final oldSale = db.saleBox.get(_editingSaleId!);
       if (oldSale != null) {
         oldSaleJson = oldSale.toJson();
@@ -776,7 +778,7 @@ class CartProvider extends ChangeNotifier {
     final dateStr = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
     final timeStr = '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
     final msStr = now.millisecond.toString().padLeft(3, '0');
-    final invoiceNo = '$prefix-$dateStr-$timeStr-$msStr';
+    final invoiceNo = '$prefix-$dateStr-$timeStr-$msStr-${const Uuid().v4()}';
 
     // Build items and Deduct or Restock stock (storeStock vs mainStock)
     final saleItems = <SaleItem>[];
@@ -936,7 +938,16 @@ class CartProvider extends ChangeNotifier {
       createdAt: _editingCreatedAt ?? now,
     );
 
-    db.saleBox.put(sale);
+    db.store.runInTransaction(TxMode.write, () {
+      db.saleBox.put(sale);
+      if (isClient) {
+        SyncQueueService.instance.enqueue(
+          entity: 'sale',
+          action: isEdit ? 'update' : 'create',
+          data: sale.toJson(),
+        );
+      }
+    });
     _applySalesFacts(sale, isEdit: _editingSaleId != null, oldSaleJson: oldSaleJson);
 
     // Log the transaction
@@ -1116,13 +1127,8 @@ class CartProvider extends ChangeNotifier {
         }
       }
     } else if (isClient) {
-      SyncQueueService.instance.addToQueue(
-        entity: 'sale',
-        action: 'create',
-        data: sale.toJson(),
-      );
+      SyncQueueService.instance.processQueue();
     }
-
     return sale;
     } finally {
       _isCheckingOut = false;

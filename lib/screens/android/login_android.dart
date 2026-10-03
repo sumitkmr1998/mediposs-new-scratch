@@ -39,14 +39,17 @@ class _LoginAndroidState extends State<LoginAndroid> {
     });
   }
 
+  int get _expectedPinLength => (_selectedUser?.pin.length ?? 4) >= 6 && _selectedUser!.pin != 'xxxx' ? 6 : 4;
+
   void _tap(String digit) {
-    if (_pin.length < 6) {
+    final maxLen = _expectedPinLength;
+    if (_pin.length < maxLen) {
       setState(() {
         _pin += digit;
         _error = false;
       });
     }
-    if (_pin.length == 4 || _pin.length == 6) {
+    if (_pin.length == maxLen) {
       if (!_isLoading) _tryLogin();
     }
   }
@@ -325,7 +328,7 @@ class _LoginAndroidState extends State<LoginAndroid> {
                     // PIN Dots
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(4, (i) {
+                      children: List.generate(_expectedPinLength, (i) {
                         final filled = i < _pin.length;
                         return Container(
                           margin: const EdgeInsets.all(8),
@@ -394,7 +397,7 @@ class _LoginAndroidState extends State<LoginAndroid> {
                   ],
 
                   const SizedBox(height: 24),
-                  Text('Default PIN: 1234',
+                  Text('Enter your PIN',
                       style: Theme.of(context)
                           .textTheme
                           .bodySmall

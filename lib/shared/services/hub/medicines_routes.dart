@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:shelf/shelf.dart';
 
 import '../../models/medicine.dart';
+import '../../models/app_user.dart';
 import '../objectbox_service.dart';
+import '../hub_permissions.dart';
 import '../../../objectbox.g.dart';
 
 /// Hub HTTP handlers for medicine list/sync (extracted from LocalServerService).
@@ -33,7 +35,9 @@ class MedicinesRoutes {
       if (limit != null) query.limit = limit;
       final medicines = query.find();
 
-      final json = medicines.map(_medicineToJson).toList();
+      final user = req.context['auth.user'] as AppUser;
+      final showCosts = HubPermissions.allows(user, 'purchasePrice');
+      final json = medicines.map((m) => _medicineToJson(m, showCosts)).toList();
       return Response.ok(
         jsonEncode({
           'data': json,
@@ -52,13 +56,13 @@ class MedicinesRoutes {
     }
   }
 
-  static Map<String, dynamic> _medicineToJson(Medicine m) => {
+  static Map<String, dynamic> _medicineToJson(Medicine m, bool showCosts) => {
         'id': m.id,
         'name': m.name,
         'barcode': m.barcode,
         'category': m.category,
         'unit': m.unit,
-        'purchasePrice': m.purchasePrice,
+        if (showCosts) 'purchasePrice': m.purchasePrice,
         'sellingPrice': m.sellingPrice,
         'mainStock': m.mainStock,
         'storeStock': m.storeStock,
@@ -68,6 +72,10 @@ class MedicinesRoutes {
         'isScheduleH1': m.isScheduleH1,
         'createdAt': m.createdAt.toIso8601String(),
         'updatedAt': m.updatedAt.toIso8601String(),
-        'batches': m.batches.map((b) => b.toJson()).toList(),
+        'batches': m.batches.map((b) {
+          final data = b.toJson();
+          if (!showCosts) data.remove('purchasePrice');
+          return data;
+        }).toList(),
       };
 }

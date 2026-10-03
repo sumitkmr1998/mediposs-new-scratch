@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'objectbox_service.dart';
 import 'chunked_box_io.dart';
+import 'safe_file_paths.dart';
 import '../models/medicine.dart';
 import '../models/stock_transfer.dart';
 import '../models/sale.dart';
@@ -212,19 +213,34 @@ class BackupRestoreService {
 
   /// Imports and restores selected modules from a JSON-based ZIP backup
   static Future<void> importFromJsonBackup(File zipFile, RestoreConfig config) async {
+    Directory? stagingDir;
     try {
       final tempDir = await getTemporaryDirectory();
       final stagingName = 'mediposs_restore_staging_${DateTime.now().millisecondsSinceEpoch}';
-      final stagingDir = Directory(p.join(tempDir.path, stagingName));
+      stagingDir = Directory(p.join(tempDir.path, stagingName));
       await stagingDir.create(recursive: true);
 
       // 1. Unzip
+      if (await zipFile.length() > 256 * 1024 * 1024) {
+        throw const FormatException('Backup exceeds the import size limit');
+      }
       final bytes = await zipFile.readAsBytes();
       final archive = ZipDecoder().decodeBytes(bytes);
-      
+      if (archive.length > 10000) {
+        throw const FormatException('Backup contains too many entries');
+      }
+      var expandedBytes = 0;
+      final seenPaths = <String>{};
       for (final file in archive) {
+        final targetPath = SafeFilePaths.archiveDestination(stagingDir.path, file.name);
+        if (!seenPaths.add(targetPath.toLowerCase())) {
+          throw const FormatException('Duplicate backup entry');
+        }
         if (file.isFile) {
-          final targetPath = p.join(stagingDir.path, file.name);
+          expandedBytes += file.size;
+          if (expandedBytes > 512 * 1024 * 1024) {
+            throw const FormatException('Backup expands beyond the size limit');
+          }
           final outFile = File(targetPath);
           await outFile.create(recursive: true);
           await outFile.writeAsBytes(file.content as List<int>);
@@ -233,38 +249,71 @@ class BackupRestoreService {
 
       final db = ObjectBoxService.instance;
 
-      // Helper to read JSON
-      Future<List<dynamic>> readJson(String name) async {
-        final list = await stagingDir.list(recursive: true).toList();
-        for (var entity in list) {
-          if (entity is File && p.basename(entity.path) == name) {
-            final content = await entity.readAsString();
-            return jsonDecode(content) as List<dynamic>;
-          }
-        }
-        return [];
-      }
-
-      // Check if this is an incremental delta backup
-      bool isIncremental = false;
       final manifestList = await stagingDir.list(recursive: true).toList();
-      for (var entity in manifestList) {
-        if (entity is File && p.basename(entity.path) == 'manifest.json') {
-          try {
-            final mContent = await entity.readAsString();
-            final mMap = jsonDecode(mContent) as Map<String, dynamic>;
-            if (mMap['type'] == 'incremental') {
-              isIncremental = true;
-            }
-          } catch (_) {}
+      final filesByName = <String, File>{};
+      for (final entity in manifestList) {
+        if (entity is File) {
+          final name = p.basename(entity.path);
+          if (!name.endsWith('.json')) continue;
+          if (filesByName.containsKey(name)) {
+            throw FormatException('Duplicate backup module: $name');
+          }
+          filesByName[name] = entity;
         }
       }
+      final manifestFile = filesByName['manifest.json'];
+      if (manifestFile == null) {
+        throw const FormatException('Backup manifest is missing');
+      }
+      final manifest = jsonDecode(await manifestFile.readAsString());
+      if (manifest is! Map ||
+          (manifest['type'] != 'full' && manifest['type'] != 'incremental')) {
+        throw const FormatException('Backup manifest is invalid');
+      }
+      final isIncremental = manifest['type'] == 'incremental';
+      final requiredFiles = <String>{
+        if (config.inventory) ...{
+          'medicine.json', 'batch.json', 'transfer.json',
+          'purchase.json', 'restock.json',
+        },
+        if (config.salesHistory) ...{'sale.json', 'sales_facts.json'},
+        if (config.opd) ...{
+          'patient.json', 'doctor.json', 'appointment.json',
+          'prescription.json', 'template.json', 'patient_image.json',
+          'procedure.json', 'procedure_record.json',
+        },
+        if (config.settingsUsers) ...{'user.json', 'settings.json'},
+      };
+      final parsedModules = <String, List<dynamic>>{};
+      for (final name in requiredFiles) {
+        final source = filesByName[name];
+        if (source == null) throw FormatException('Backup is missing $name');
+        final parsed = jsonDecode(await source.readAsString());
+        if (parsed is! List || parsed.any((row) => row is! Map)) {
+          throw FormatException('Backup module $name is invalid');
+        }
+        parsedModules[name] = parsed;
+      }
+      List<dynamic> readJson(String name) => parsedModules[name]!;
+
+      // Keep a recovery copy if a later media operation or process crash fails.
+      final recoverySource = await exportBackupPackage(since: null);
+      if (recoverySource == null) {
+        throw StateError('Could not create a recovery backup');
+      }
+      final supportDir = await getApplicationSupportDirectory();
+      final recoveryDir = Directory(p.join(supportDir.path, 'restore_recovery'));
+      await recoveryDir.create(recursive: true);
+      await recoverySource.copy(p.join(recoveryDir.path,
+          'before_restore_${DateTime.now().millisecondsSinceEpoch}.zip'));
+
+      db.store.runInTransaction(TxMode.write, () {
 
       if (isIncremental) {
         debugPrint('BackupRestoreService: Performing Incremental Replay/Merge...');
         // Incremental: Merge and upsert without wiping existing data
         if (config.inventory) {
-          final medJson = await readJson('medicine.json');
+          final medJson = readJson('medicine.json');
           for (final mRaw in medJson) {
             final m = Medicine.fromJson(mRaw);
             final existing = db.medicineBox.query(Medicine_.barcode.equals(m.barcode)).build().findFirst()
@@ -273,7 +322,7 @@ class BackupRestoreService {
             db.medicineBox.put(m);
           }
 
-          final batchJson = await readJson('batch.json');
+          final batchJson = readJson('batch.json');
           for (final bRaw in batchJson) {
             final b = MedicineBatch.fromJson(bRaw);
             final existing = db.batchBox.query(MedicineBatch_.batchNo.equals(b.batchNo)).build().findFirst();
@@ -281,25 +330,28 @@ class BackupRestoreService {
             db.batchBox.put(b);
           }
 
-          final transJson = await readJson('transfer.json');
+          final transJson = readJson('transfer.json');
           db.transferBox.putMany(transJson.map((e) => StockTransfer.fromJson(e)).toList());
 
-          final purJson = await readJson('purchase.json');
+          final purJson = readJson('purchase.json');
           db.purchaseBox.putMany(purJson.map((e) => PurchaseRecord.fromJson(e)).toList());
         }
 
         if (config.salesHistory) {
-          final saleJson = await readJson('sale.json');
+          final saleJson = readJson('sale.json');
           for (final sRaw in saleJson) {
             final s = Sale.fromJson(sRaw);
             final existing = db.saleBox.query(Sale_.invoiceNo.equals(s.invoiceNo)).build().findFirst();
             s.id = existing?.id ?? 0;
             db.saleBox.put(s);
           }
+          db.salesFactBox.removeAll();
+          db.salesFactBox.putMany(readJson('sales_facts.json')
+              .map((e) => DailyMedicineSalesFact.fromJson(e)).toList());
         }
 
         if (config.opd) {
-          final patJson = await readJson('patient.json');
+          final patJson = readJson('patient.json');
           for (final pRaw in patJson) {
             final p = Patient.fromJson(pRaw);
             final existing = db.patientBox.query(Patient_.uhid.equals(p.uhid)).build().findFirst();
@@ -307,7 +359,7 @@ class BackupRestoreService {
             db.patientBox.put(p);
           }
 
-          final apptJson = await readJson('appointment.json');
+          final apptJson = readJson('appointment.json');
           for (final aRaw in apptJson) {
             final a = Appointment.fromJson(aRaw);
             final existing = db.appointmentBox.query(
@@ -318,35 +370,20 @@ class BackupRestoreService {
             db.appointmentBox.put(a);
           }
 
-          final presJson = await readJson('prescription.json');
+          final presJson = readJson('prescription.json');
           for (final prRaw in presJson) {
             final pr = Prescription.fromJson(prRaw);
             pr.id = 0; // Insert delta prescriptions
             db.prescriptionBox.put(pr);
           }
 
-          final procRecJson = await readJson('procedure_record.json');
+          final procRecJson = readJson('procedure_record.json');
           for (final prRaw in procRecJson) {
             final pr = ProcedureRecord.fromJson(prRaw);
             pr.id = 0;
             db.procedureRecordBox.put(pr);
           }
 
-          // Restore media without deleting existing target folders
-          final appDocDir = await getApplicationDocumentsDirectory();
-          final extractedPatientPhotos = _findDir(stagingDir, 'patient_photos');
-          if (extractedPatientPhotos != null) {
-            final target = Directory(p.join(appDocDir.path, 'patient_photos'));
-            await target.create(recursive: true);
-            await _copyDirectory(extractedPatientPhotos, target);
-          }
-
-          final extractedPrescriptions = _findDir(stagingDir, 'prescriptions');
-          if (extractedPrescriptions != null) {
-            final target = Directory(p.join(appDocDir.path, 'prescriptions'));
-            await target.create(recursive: true);
-            await _copyDirectory(extractedPrescriptions, target);
-          }
         }
       } else {
         // Full baseline restore: Wipe & Replace based on config
@@ -357,26 +394,29 @@ class BackupRestoreService {
           db.purchaseBox.removeAll();
           db.restockRequestBox.removeAll();
 
-          final medJson = await readJson('medicine.json');
+          final medJson = readJson('medicine.json');
           db.medicineBox.putMany(medJson.map((e) => Medicine.fromJson(e)).toList());
           
-          final batchJson = await readJson('batch.json');
+          final batchJson = readJson('batch.json');
           db.batchBox.putMany(batchJson.map((e) => MedicineBatch.fromJson(e)).toList());
 
-          final transJson = await readJson('transfer.json');
+          final transJson = readJson('transfer.json');
           db.transferBox.putMany(transJson.map((e) => StockTransfer.fromJson(e)).toList());
 
-          final purJson = await readJson('purchase.json');
+          final purJson = readJson('purchase.json');
           db.purchaseBox.putMany(purJson.map((e) => PurchaseRecord.fromJson(e)).toList());
 
-          final resJson = await readJson('restock.json');
+          final resJson = readJson('restock.json');
           db.restockRequestBox.putMany(resJson.map((e) => RestockRequest.fromJson(e)).toList());
         }
 
         if (config.salesHistory) {
           db.saleBox.removeAll();
-          final saleJson = await readJson('sale.json');
+          final saleJson = readJson('sale.json');
           db.saleBox.putMany(saleJson.map((e) => Sale.fromJson(e)).toList());
+          db.salesFactBox.removeAll();
+          db.salesFactBox.putMany(readJson('sales_facts.json')
+              .map((e) => DailyMedicineSalesFact.fromJson(e)).toList());
         }
 
         if (config.opd) {
@@ -389,70 +429,65 @@ class BackupRestoreService {
           db.procedureBox.removeAll();
           db.procedureRecordBox.removeAll();
 
-          final patJson = await readJson('patient.json');
+          final patJson = readJson('patient.json');
           db.patientBox.putMany(patJson.map((e) => Patient.fromJson(e)).toList());
 
-          final docJson = await readJson('doctor.json');
+          final docJson = readJson('doctor.json');
           db.doctorBox.putMany(docJson.map((e) => Doctor.fromJson(e)).toList());
 
-          final apptJson = await readJson('appointment.json');
+          final apptJson = readJson('appointment.json');
           db.appointmentBox.putMany(apptJson.map((e) => Appointment.fromJson(e)).toList());
 
-          final presJson = await readJson('prescription.json');
+          final presJson = readJson('prescription.json');
           db.prescriptionBox.putMany(presJson.map((e) => Prescription.fromJson(e)).toList());
 
-          final tempJson = await readJson('template.json');
+          final tempJson = readJson('template.json');
           db.templateBox.putMany(tempJson.map((e) => PrescriptionTemplate.fromJson(e)).toList());
 
-          final piJson = await readJson('patient_image.json');
+          final piJson = readJson('patient_image.json');
           db.patientImageBox.putMany(piJson.map((e) => PatientImage.fromJson(e)).toList());
 
-          final procJson = await readJson('procedure.json');
+          final procJson = readJson('procedure.json');
           db.procedureBox.putMany(procJson.map((e) => Procedure.fromJson(e)).toList());
 
-          final procRecJson = await readJson('procedure_record.json');
+          final procRecJson = readJson('procedure_record.json');
           db.procedureRecordBox.putMany(procRecJson.map((e) => ProcedureRecord.fromJson(e)).toList());
 
-          // Restore media folders if OPD is selected
-          final appDocDir = await getApplicationDocumentsDirectory();
-          
-          final extractedPatientPhotos = _findDir(stagingDir, 'patient_photos');
-          if (extractedPatientPhotos != null) {
-            final target = Directory(p.join(appDocDir.path, 'patient_photos'));
-            if (await target.exists()) await target.delete(recursive: true);
-            await target.create(recursive: true);
-            await _copyDirectory(extractedPatientPhotos, target);
-          }
-
-          final extractedPrescriptions = _findDir(stagingDir, 'prescriptions');
-          if (extractedPrescriptions != null) {
-            final target = Directory(p.join(appDocDir.path, 'prescriptions'));
-            if (await target.exists()) await target.delete(recursive: true);
-            await target.create(recursive: true);
-            await _copyDirectory(extractedPrescriptions, target);
-          }
         }
 
         if (config.settingsUsers) {
           db.userBox.removeAll();
           db.settingsBox.removeAll();
 
-          final userJson = await readJson('user.json');
+          final userJson = readJson('user.json');
           db.userBox.putMany(userJson.map((e) => AppUser.fromJson(e)).toList());
 
-          final setJson = await readJson('settings.json');
+          final setJson = readJson('settings.json');
           if (setJson.isNotEmpty) {
-            db.settingsBox.putMany(setJson.map((e) => AppSettings.fromJson(e)).toList());
+            db.settingsBox.putMany(setJson.map((e) =>
+                AppSettings.fromJson(e)..autoLoginPin = null).toList());
           }
         }
       }
+      });
 
-
-      // Cleanup
-      await stagingDir.delete(recursive: true);
+      if (config.opd) {
+        final appDocDir = await getApplicationDocumentsDirectory();
+        for (final dirname in ['patient_photos', 'prescriptions']) {
+          final source = _findDir(stagingDir, dirname);
+          if (source == null) continue;
+          final target = Directory(p.join(appDocDir.path, dirname));
+          await target.create(recursive: true);
+          await _copyDirectory(source, target);
+        }
+      }
     } catch (e) {
       debugPrint('Import Error: $e');
       rethrow;
+    } finally {
+      if (stagingDir != null && await stagingDir.exists()) {
+        await stagingDir.delete(recursive: true);
+      }
     }
   }
 

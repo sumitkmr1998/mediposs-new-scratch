@@ -25,6 +25,7 @@ import 'theme/app_theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/app_shell.dart';
 import 'screens/connection_screen.dart';
+import 'screens/admin_pin_setup_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'shared/services/local_server_service.dart';
 import 'shared/services/discovery_service.dart';
@@ -473,6 +474,11 @@ class _MediPossAppState extends State<MediPossApp> with WidgetsBindingObserver {
           final isMobileDevice = !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
           final isWindowsClient = defaultTargetPlatform == TargetPlatform.windows && ObjectBoxService.instance.settings.isWindowsClient;
           final isClient = isMobileDevice || isWindowsClient;
+
+          if (!isClient && ObjectBoxService.instance.userBox.getAll().any(
+              (u) => u.role.toLowerCase() == 'admin' && u.pin == 'SETUP_REQUIRED')) {
+            return const AdminPinSetupScreen();
+          }
 
           if (isClient && !sync.isConnected) {
             return const ConnectionScreen();

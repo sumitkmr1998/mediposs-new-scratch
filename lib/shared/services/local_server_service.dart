@@ -32,6 +32,7 @@ import '../domain/stock_rules.dart';
 import 'hub/json_handlers.dart';
 import 'hub/medicines_routes.dart';
 import 'hub/sales_routes.dart';
+import 'hub/sale_commit.dart';
 import 'package:flutter/foundation.dart';
 
 class LocalServerService {
@@ -1014,64 +1015,11 @@ class LocalServerService {
         itemsJson: body['itemsJson'] ?? '[]',
       );
 
-      // Deduplication: check if invoiceNo already exists
-      final existing = ObjectBoxService.instance.saleBox
-          .query(Sale_.invoiceNo.equals(sale.invoiceNo))
-          .build()
-          .findFirst();
-
-      if (existing != null) {
-        // Revert old inventory deductions on Hub
-        _revertHubInventory(existing);
-
-        // Update properties in-place
-        existing
-          ..patientId = sale.patientId
-          ..patientName = sale.patientName
-          ..patientPhone = sale.patientPhone
-          ..patientUhid = sale.patientUhid
-          ..subtotal = sale.subtotal
-          ..discount = sale.discount
-          ..taxRate = sale.taxRate
-          ..taxAmount = sale.taxAmount
-          ..total = sale.total
-          ..paymentMethod = sale.paymentMethod
-          ..cashAmount = sale.cashAmount
-          ..upiAmount = sale.upiAmount
-          ..cardAmount = sale.cardAmount
-          ..createdAt = sale.createdAt
-          ..updatedAt = DateTime.now()
-          ..isReturn = sale.isReturn
-          ..isClinicalDispense = sale.isClinicalDispense
-          ..linkedAppointmentId = sale.linkedAppointmentId
-          ..linkedProcedureId = sale.linkedProcedureId
-          ..opdInvoiceNo = sale.opdInvoiceNo
-          ..itemsJson = sale.itemsJson;
-
-        ObjectBoxService.instance.saleBox.put(existing);
-
-        // Apply new inventory deductions on Hub
-        _deductHubInventory(existing);
-
-        // Tell all clients that a new sync event occurred so they refresh
-        broadcast({'event': 'sync_received'});
-        broadcast({'event': 'medicines_updated'});
-        _incomingDataController.add('sales');
-
-        return Response.ok(
-          jsonEncode({'status': 'success', 'saleId': existing.id, 'note': 'updated'}),
-          headers: {'content-type': 'application/json'},
-        );
-      }
-
-      // Save sale to Hub DB
-      ObjectBoxService.instance.saleBox.put(sale);
-
-      // Deduct inventory on Hub
-      _deductHubInventory(sale);
+      SaleCommit.apply(ObjectBoxService.instance.store, sale);
 
       // Tell all clients that a new sync event occurred so they refresh
       broadcast({'event': 'sync_received'});
+      broadcast({'event': 'sales_updated'});
       // Specifically tell them medicines updated too
       broadcast({'event': 'medicines_updated'});
       // Tell Windows Hub UI to reload its providers
@@ -2345,61 +2293,16 @@ class LocalServerService {
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
       final invoiceNo = body['invoiceNo'] as String? ?? '';
-      if (invoiceNo.isEmpty) return Response.badRequest();
-
-      final box = ObjectBoxService.instance.saleBox;
-      final sale =
-          box.query(Sale_.invoiceNo.equals(invoiceNo)).build().findFirst();
-
-      if (sale != null) {
-        // Reverse inventory on Hub
-        final items = jsonDecode(sale.itemsJson) as List;
-        for (final jsonItem in items) {
-          final item = SaleItem.fromJson(jsonItem as Map<String, dynamic>);
-          final m = ObjectBoxService.instance.medicineBox
-              .getAll()
-              .where((x) => x.name == item.medicineName)
-              .firstOrNull;
-          if (m != null) {
-            final qtyToRestore = item.qty.toInt();
-            // Reversing: if it was a sale (positive qty), we add it back.
-            // If it was a return (negative qty), we deduct it.
-            // Also adjust batch
-            final batches = m.batches.toList();
-            if (batches.isNotEmpty) {
-              batches.sort((a, b) => b.expiryDate.compareTo(a.expiryDate));
-              final latest = batches.first;
-              if (sale.isClinicalDispense) {
-                latest.mainStock = (latest.mainStock + qtyToRestore).clamp(0, 999999);
-              } else {
-                latest.storeStock = (latest.storeStock + qtyToRestore).clamp(0, 999999);
-              }
-              ObjectBoxService.instance.batchBox.put(latest);
-            }
-
-            if (sale.isClinicalDispense) {
-              m.mainStock = (m.mainStock + qtyToRestore).clamp(0, 999999);
-            } else {
-              m.storeStock = (m.storeStock + qtyToRestore).clamp(0, 999999);
-            }
-            m.updatedAt = DateTime.now();
-            ObjectBoxService.instance.medicineBox.put(m);
-          }
-        }
-        box.remove(sale.id);
-        broadcast({'event': 'sync_received'});
-        broadcast({'event': 'medicines_updated'});
-        broadcast({'event': 'sale_deleted', 'invoiceNo': invoiceNo});
-        _incomingDataController.add('sales');
-      }
-
+      SaleCommit.delete(ObjectBoxService.instance.store, invoiceNo);
+      broadcast({'event': 'medicines_updated'});
+      broadcast({'event': 'sale_deleted', 'invoiceNo': invoiceNo});
+      _incomingDataController.add('sales');
       return Response.ok(jsonEncode({'status': 'success'}));
     } catch (e) {
       debugPrint('Hub: Sale Delete Err: $e');
       return Response.internalServerError();
     }
   }
-
   Future<Response> _templatesDeleteHandler(Request req) async {
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
@@ -2524,98 +2427,24 @@ class LocalServerService {
     debugPrint('Hub [Firebase Delta]: Processing $entity ($action)');
 
     try {
-      if (entity == 'sale' && action == 'create') {
-        final sale = Sale(
-          invoiceNo: data['invoiceNo'] ?? '',
-          patientId: data['patientId'] ?? 0,
-          patientName: data['patientName'] ?? '',
-          patientPhone: data['patientPhone'] ?? '',
-          subtotal: (data['subtotal'] as num?)?.toDouble() ?? 0.0,
-          discount: (data['discount'] as num?)?.toDouble() ?? 0.0,
-          taxRate: (data['taxRate'] as num?)?.toDouble() ?? 0.0,
-          taxAmount: (data['taxAmount'] as num?)?.toDouble() ?? 0.0,
-          total: (data['total'] as num?)?.toDouble() ?? 0.0,
-          paymentMethod: data['paymentMethod'] ?? 'cash',
-          cashAmount: (data['cashAmount'] as num?)?.toDouble() ?? 0.0,
-          upiAmount: (data['upiAmount'] as num?)?.toDouble() ?? 0.0,
-          cardAmount: (data['cardAmount'] as num?)?.toDouble() ?? 0.0,
-          createdAt: DateTime.tryParse(data['createdAt'] ?? '') ?? DateTime.now(),
-          synced: true,
-          isReturn: data['isReturn'] ?? false,
-          isClinicalDispense: data['isClinicalDispense'] ?? false,
-          itemsJson: data['itemsJson'] ?? '[]',
-        );
-
-        // Check for duplicates
-        final existing = ObjectBoxService.instance.saleBox.query(Sale_.invoiceNo.equals(sale.invoiceNo)).build().findFirst();
-        if (existing == null) {
-          ObjectBoxService.instance.saleBox.put(sale);
-          
-          // Deduct Inventory
-          _deductHubInventory(sale);
-          
-          broadcast({'event': 'sync_received'});
-          broadcast({'event': 'sales_updated'});
-          _incomingDataController.add('sales');
-
-          // Mirror back to Cloud so all devices (including the one that sent it) see it confirmed
-          await FirebaseSyncService.instance.broadcastUpdate('sales', sale.toJson());
-          // Also broadcast updated medicines (stock deducted)
-          final list = jsonDecode(sale.itemsJson) as List;
-          for (final jsonItem in list) {
-            final item = SaleItem.fromJson(jsonItem as Map<String, dynamic>);
-            final m = ObjectBoxService.instance.medicineBox.getAll().where((x) => x.name == item.medicineName).firstOrNull;
-            if (m != null) {
-              await FirebaseSyncService.instance.broadcastUpdate('medicines', m.toJson());
-            }
-          }
-        } else {
-          // Revert old inventory deductions on Hub
-          _revertHubInventory(existing);
-
-          // Update properties in-place
-          existing
-            ..patientId = sale.patientId
-            ..patientName = sale.patientName
-            ..patientPhone = sale.patientPhone
-            ..patientUhid = sale.patientUhid
-            ..subtotal = sale.subtotal
-            ..discount = sale.discount
-            ..taxRate = sale.taxRate
-            ..taxAmount = sale.taxAmount
-            ..total = sale.total
-            ..paymentMethod = sale.paymentMethod
-            ..cashAmount = sale.cashAmount
-            ..upiAmount = sale.upiAmount
-            ..cardAmount = sale.cardAmount
-            ..createdAt = sale.createdAt
-            ..updatedAt = DateTime.now()
-            ..isReturn = sale.isReturn
-            ..isClinicalDispense = sale.isClinicalDispense
-            ..itemsJson = sale.itemsJson;
-
-          ObjectBoxService.instance.saleBox.put(existing);
-
-          // Apply new inventory deductions on Hub
-          _deductHubInventory(existing);
-
-          broadcast({'event': 'sync_received'});
-          broadcast({'event': 'sales_updated'});
-          _incomingDataController.add('sales');
-
-          // Mirror back to Cloud so all devices see it confirmed
-          await FirebaseSyncService.instance.broadcastUpdate('sales', existing.toJson());
-          // Also broadcast updated medicines (stock deducted)
-          final list = jsonDecode(existing.itemsJson) as List;
-          for (final jsonItem in list) {
-            final item = SaleItem.fromJson(jsonItem as Map<String, dynamic>);
-            final m = ObjectBoxService.instance.medicineBox.getAll().where((x) => x.name == item.medicineName).firstOrNull;
-            if (m != null) {
-              await FirebaseSyncService.instance.broadcastUpdate('medicines', m.toJson());
-            }
+      if (entity == 'sale' && (action == 'create' || action == 'update')) {
+        final sale = Sale.fromJson(data);
+        // ObjectBox IDs are local to each device; resolve by stable UHID.
+        sale.patientId = 0;
+        if (sale.patientUhid.isNotEmpty) {
+          final query = ObjectBoxService.instance.patientBox
+              .query(Patient_.uhid.equals(sale.patientUhid)).build();
+          try {
+            sale.patientId = query.findFirst()?.id ?? 0;
+          } finally {
+            query.close();
           }
         }
-      } else if (entity == 'patient' && action == 'create') {
+        final committed = SaleCommit.apply(ObjectBoxService.instance.store, sale);
+        broadcast({'event': 'sales_updated'});
+        broadcast({'event': 'medicines_updated'});
+        _incomingDataController.add('sales');
+        await FirebaseSyncService.instance.broadcastUpdate('sales', committed.toJson());      } else if (entity == 'patient' && action == 'create') {
         final p = Patient(
           uhid: data['uhid'] ?? '',
           name: data['name'] ?? '',
@@ -2637,7 +2466,7 @@ class LocalServerService {
         
         // Mirror to cloud
         await FirebaseSyncService.instance.broadcastUpdate('patients', p.toJson());
-      } else if (entity == 'medicine') {
+      } else if (entity == 'medicine' && (action == 'create' || action == 'update')) {
         final m = Medicine.fromJson(data);
         m.id = 0; // Force ID 0 for Hub (ObjectBox IDs are local)
         for (var b in m.batches) {
@@ -2694,50 +2523,52 @@ class LocalServerService {
         // Mirror to cloud
         await FirebaseSyncService.instance.broadcastUpdate('prescriptions', sc.toJson());
       } else if (action == 'delete') {
-        if (entity == 'patient') {
+        if (entity == 'sale') {
+          final invoice = data['invoiceNo'] as String? ?? '';
+          SaleCommit.delete(ObjectBoxService.instance.store, invoice);
+          broadcast({'event': 'sale_deleted', 'invoiceNo': invoice});
+          broadcast({'event': 'medicines_updated'});
+          _incomingDataController.add('sales');
+        } else if (entity == 'patient') {
           final uhid = data['uhid'] as String? ?? '';
-          final p = ObjectBoxService.instance.patientBox.query(Patient_.uhid.equals(uhid)).build().findFirst();
-          if (p != null) {
-            ObjectBoxService.instance.patientBox.remove(p.id);
-            broadcast({'event': 'patient_deleted', 'uhid': uhid});
-            _incomingDataController.add('patients');
+          if (uhid.isEmpty) throw const FormatException('Patient UHID required');
+          final query = ObjectBoxService.instance.patientBox.query(Patient_.uhid.equals(uhid)).build();
+          try {
+            final patient = query.findFirst();
+            if (patient != null) ObjectBoxService.instance.patientBox.remove(patient.id);
+          } finally {
+            query.close();
           }
+          broadcast({'event': 'patient_deleted', 'uhid': uhid});
+          _incomingDataController.add('patients');
         } else if (entity == 'medicine') {
           final barcode = data['barcode'] as String? ?? '';
           final name = data['name'] as String? ?? '';
-          Condition<Medicine>? cond;
-          if (barcode.isNotEmpty) cond = Medicine_.barcode.equals(barcode);
-          if (name.isNotEmpty) {
-            final nameCond = Medicine_.name.equals(name);
-            cond = cond == null ? nameCond : cond.and(nameCond);
+          if (name.isEmpty) throw const FormatException('Medicine name required');
+          final query = ObjectBoxService.instance.medicineBox.query(
+            Medicine_.name.equals(name).and(Medicine_.barcode.equals(barcode))).build();
+          try {
+            final medicine = query.findFirst();
+            if (medicine != null) ObjectBoxService.instance.medicineBox.remove(medicine.id);
+          } finally {
+            query.close();
           }
-          if (cond != null) {
-            final m = ObjectBoxService.instance.medicineBox.query(cond).build().findFirst();
-            if (m != null) {
-              ObjectBoxService.instance.medicineBox.remove(m.id);
-              broadcast({'event': 'medicine_deleted', 'barcode': m.barcode, 'name': m.name});
-              _incomingDataController.add('inventory');
-            }
-          }
-        } else if (entity == 'sale') {
-          final invNo = data['invoiceNo'] as String? ?? '';
-          final s = ObjectBoxService.instance.saleBox.query(Sale_.invoiceNo.equals(invNo)).build().findFirst();
-          if (s != null) {
-            ObjectBoxService.instance.saleBox.remove(s.id);
-            broadcast({'event': 'sale_deleted', 'invoiceNo': invNo});
-            _incomingDataController.add('sales');
-          }
+          broadcast({'event': 'medicine_deleted', 'barcode': barcode, 'name': name});
+          _incomingDataController.add('inventory');
         } else if (entity == 'procedure') {
           final name = data['name'] as String? ?? '';
-          final p = ObjectBoxService.instance.procedureBox
-              .query(Procedure_.name.equals(name))
-              .build()
-              .findFirst();
-          if (p != null) {
-            ObjectBoxService.instance.procedureBox.remove(p.id);
-            broadcast({'event': 'procedures_updated'});
-            _incomingDataController.add('procedures');
+          if (name.isEmpty) throw const FormatException('Procedure name required');
+          final query = ObjectBoxService.instance.procedureBox.query(Procedure_.name.equals(name)).build();
+          try {
+            final procedure = query.findFirst();
+            if (procedure != null) ObjectBoxService.instance.procedureBox.remove(procedure.id);
+          } finally {
+            query.close();
           }
+          broadcast({'event': 'procedures_updated'});
+          _incomingDataController.add('procedures');
+        } else {
+          throw UnsupportedError('Unsupported cloud deletion');
         }
       } else if (entity == 'procedure') {
         final p = Procedure.fromJson(data);
@@ -2751,6 +2582,10 @@ class LocalServerService {
         broadcast({'event': 'procedures_updated'});
         _incomingDataController.add('procedures');
         await FirebaseSyncService.instance.broadcastUpdate('procedures', p.toJson());
+      }
+
+      else {
+        throw UnsupportedError('Unsupported cloud mutation');
       }
 
       // Mark as processed in Firebase

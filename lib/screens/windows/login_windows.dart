@@ -39,14 +39,17 @@ class _LoginWindowsState extends State<LoginWindows> {
     });
   }
 
+  int get _expectedPinLength => (_selectedUser?.pin.length ?? 4) >= 6 ? 6 : 4;
+
   void _tap(String digit) {
-    if (_pin.length < 6) {
+    final maxLen = _expectedPinLength;
+    if (_pin.length < maxLen) {
       setState(() {
         _pin += digit;
         _error = false;
       });
     }
-    if (_pin.length == 4 || _pin.length == 6) {
+    if (_pin.length == maxLen) {
       if (!_isLoading) _tryLogin();
     }
   }
@@ -295,7 +298,7 @@ class _LoginWindowsState extends State<LoginWindows> {
                     // PIN Dots
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(4, (i) {
+                      children: List.generate(_expectedPinLength, (i) {
                         final filled = i < _pin.length;
                         return Container(
                           margin: const EdgeInsets.all(8),
@@ -364,7 +367,7 @@ class _LoginWindowsState extends State<LoginWindows> {
                   ],
 
                   const SizedBox(height: 24),
-                  Text('Default PIN: 1234',
+                  Text('Enter your PIN',
                       style: Theme.of(context)
                           .textTheme
                           .bodySmall

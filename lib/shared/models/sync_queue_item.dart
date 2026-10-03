@@ -42,18 +42,40 @@ class SyncQueueItem {
 
   bool get isQuarantined => processingBy?.startsWith('quarantined:') ?? false;
 
-  void recordFailure(String reason) {
+  DateTime? get nextRetryAt {
+    final parts = processingBy?.split(':');
+    if (parts == null || parts.length < 3 || parts.first != 'retries') {
+      return null;
+    }
+    final millis = int.tryParse(parts[2]);
+    return millis == null ? null : DateTime.fromMillisecondsSinceEpoch(millis);
+  }
+
+  bool isReadyForRetry(DateTime now) =>
+      !isQuarantined && (nextRetryAt?.isAfter(now) != true);
+
+  void recordFailure(String reason, {DateTime? now}) {
     final next = retryCount + 1;
     final sanitized = reason.replaceAll(':', '_');
     if (next >= 5) {
       processingBy = 'quarantined:$sanitized';
     } else {
-      processingBy = 'retries:$next:$sanitized';
+      final delay = Duration(minutes: 1 << (next - 1));
+      final retryAt = (now ?? DateTime.now()).add(delay).millisecondsSinceEpoch;
+      processingBy = 'retries:$next:$retryAt:$sanitized';
     }
   }
 
   void resetRetry() {
     processingBy = null;
+  }
+
+  /// Unavailability has no retry limit: retain the mutation until acknowledged.
+  void recordTransientFailure(String reason, {DateTime? now}) {
+    final next = (retryCount + 1).clamp(1, 10);
+    final delay = Duration(minutes: 1 << (next - 1).clamp(0, 5));
+    final retryAt = (now ?? DateTime.now()).add(delay).millisecondsSinceEpoch;
+    processingBy = 'retries:$next:$retryAt:${reason.replaceAll(':', '_')}';
   }
 }
 

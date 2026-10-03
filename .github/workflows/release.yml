@@ -30,6 +30,25 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
+      - name: Check Dart sources
+        run: flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings
+
+      - name: Run domain and service tests
+        run: flutter test --no-pub test/domain test/services test/utils
+
+      - name: Prepare Android release signing
+        shell: pwsh
+        env:
+          MEDIPOSS_KEYSTORE_BASE64: ${{ secrets.MEDIPOSS_KEYSTORE_BASE64 }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:MEDIPOSS_KEYSTORE_BASE64)) {
+            throw 'MEDIPOSS_KEYSTORE_BASE64 is required to publish a release.'
+          }
+          [System.IO.File]::WriteAllBytes(
+            "$env:GITHUB_WORKSPACE/android/app/release-key.jks",
+            [Convert]::FromBase64String($env:MEDIPOSS_KEYSTORE_BASE64)
+          )
+
       - name: Determine Version
         id: prep
         shell: bash
@@ -40,6 +59,11 @@ jobs:
 
       - name: Build Universal Android APK (Not Split)
         run: flutter build apk --release
+        env:
+          MEDIPOSS_KEYSTORE_PATH: ${{ github.workspace }}/android/app/release-key.jks
+          MEDIPOSS_KEYSTORE_PASSWORD: ${{ secrets.MEDIPOSS_KEYSTORE_PASSWORD }}
+          MEDIPOSS_KEY_ALIAS: ${{ secrets.MEDIPOSS_KEY_ALIAS }}
+          MEDIPOSS_KEY_PASSWORD: ${{ secrets.MEDIPOSS_KEY_PASSWORD }}
 
       - name: Build Windows App
         run: flutter build windows --release
@@ -58,7 +82,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: "MediPoss v${{ steps.prep.outputs.version }}"
-          draft: false
+          draft: true
           prerelease: false
           files: |
             build/mediposs-windows-v${{ steps.prep.outputs.version }}.zip

@@ -30,6 +30,7 @@ import 'discovery_service.dart';
 import 'sync_delta.dart';
 import 'sales_fact_service.dart';
 import 'sync/sync_http.dart';
+import 'sync/hub_health.dart';
 import '../../objectbox.g.dart';
 
 class SyncService extends ChangeNotifier {
@@ -95,6 +96,8 @@ class SyncService extends ChangeNotifier {
   Map<String, dynamic>? _lastUserMap;
   bool _isConnected = false;
   bool _isSyncing = false;
+  bool _pullFailed = false;
+  bool get pullSyncFailed => _pullFailed;
   bool _isPullingSales = false;
   Future<int?>? _activeSalesPull;
   bool _isCloudMode = false;
@@ -139,7 +142,6 @@ class SyncService extends ChangeNotifier {
       final isUrl = address.startsWith('http');
       final ok = await testConnection(address);
       if (ok) {
-        _hubIp = address;
 
         // Fetch health endpoint body to get Hub's shopId
         final url = address.startsWith('http')
@@ -147,16 +149,14 @@ class SyncService extends ChangeNotifier {
             : Uri.parse('http://$address:8080/health');
         final res = await http.get(url, headers: _authHeaders()).timeout(const Duration(seconds: 4));
         
-        String hubShopId = '';
-        if (res.statusCode == 200) {
-          try {
-            final payload = jsonDecode(res.body);
-            hubShopId = payload['shopId'] as String? ?? '';
-          } catch (e) {
-            debugPrint('SyncService: Error parsing shopId from health check: $e');
-          }
+        if (res.statusCode != 200) return 'Hub identity could not be verified.';
+        final health = HubHealth.fromJson(jsonDecode(res.body));
+        final hubShopId = health.shopId;
+        final localShop = ObjectBoxService.instance.settings.shopId.trim();
+        if (localShop.isNotEmpty && localShop != hubShopId) {
+          return 'This terminal belongs to another shop. Back up and explicitly reset the terminal before pairing with a different shop.';
         }
-        
+        _hubIp = address;
         // On Windows, if we are currently not in terminal mode, we need to transition!
         if (defaultTargetPlatform == TargetPlatform.windows) {
           final prefs = await SharedPreferences.getInstance();
@@ -182,45 +182,7 @@ class SyncService extends ChangeNotifier {
         }
 
         final settings = ObjectBoxService.instance.settings;
-        final localShopId = settings.shopId;
 
-        final isDifferentShop = hubShopId.isNotEmpty &&
-            localShopId.isNotEmpty &&
-            localShopId.trim().toLowerCase() != hubShopId.trim().toLowerCase();
-
-        if (isDifferentShop) {
-          debugPrint('SyncService: Shop ID changed (Hub: $hubShopId, Local: $localShopId). Wiping local database and resetting sync state.');
-          
-          // 1. Logout (invalidate/clear session & credentials)
-          _jwtToken = null;
-          _connectedRole = null;
-          _lastUserMap = null;
-          settings.autoLoginPin = null;
-          settings.autoLoginName = null;
-
-          // 2. Clear previous database data
-          ObjectBoxService.instance.patientBox.removeAll();
-          ObjectBoxService.instance.medicineBox.removeAll();
-          ObjectBoxService.instance.batchBox.removeAll();
-          ObjectBoxService.instance.purchaseBox.removeAll();
-          ObjectBoxService.instance.restockRequestBox.removeAll();
-          ObjectBoxService.instance.saleBox.removeAll();
-          ObjectBoxService.instance.prescriptionBox.removeAll();
-          ObjectBoxService.instance.appointmentBox.removeAll();
-          ObjectBoxService.instance.doctorBox.removeAll();
-          ObjectBoxService.instance.transferBox.removeAll();
-          ObjectBoxService.instance.templateBox.removeAll();
-          ObjectBoxService.instance.patientImageBox.removeAll();
-          ObjectBoxService.instance.procedureBox.removeAll();
-          ObjectBoxService.instance.procedureRecordBox.removeAll();
-          ObjectBoxService.instance.attendanceBox.removeAll();
-          ObjectBoxService.instance.store.box<ScheduleH1Record>().removeAll();
-          ObjectBoxService.instance.store.box<AuditLog>().removeAll();
-
-          // 3. Clear previous sync state so it does a full sync next time
-          settings.lastGlobalSync = null;
-          settings.lastFirebaseSync = null;
-        }
 
         // Update shopId to the new one
         if (hubShopId.isNotEmpty) {
@@ -256,7 +218,8 @@ class SyncService extends ChangeNotifier {
       if (user != null) {
         // If the stored PIN is the masked 'xxxx', allow default '1234' as fallback.
         // Otherwise, enforce the actual synced PIN.
-        final bool isAuthorized = (user.pin == pin) || (user.pin == 'xxxx' && pin == '1234');
+        final bool isAuthorized = user.isActive &&
+            ((user.pin == pin) || (user.pin == 'xxxx' && pin == '1234'));
         if (isAuthorized) {
           _jwtToken = 'cloud_token_${DateTime.now().millisecondsSinceEpoch}';
           _connectedRole = user.role;
@@ -265,7 +228,7 @@ class SyncService extends ChangeNotifier {
           
           // Save credentials
           final settings = ObjectBoxService.instance.settings;
-          settings.autoLoginPin = pin;
+          settings.autoLoginPin = null;
           settings.autoLoginName = name;
           ObjectBoxService.instance.settingsBox.put(settings);
           
@@ -299,7 +262,7 @@ class SyncService extends ChangeNotifier {
 
         // Save the credentials
         final settings = ObjectBoxService.instance.settings;
-        settings.autoLoginPin = pin;
+        settings.autoLoginPin = null;
         settings.autoLoginName = name;
         ObjectBoxService.instance.settingsBox.put(settings);
 
@@ -702,28 +665,40 @@ class SyncService extends ChangeNotifier {
     }
 
     try {
-      final t1 = await pullMedicines(since: sinceStr, isNested: true, allowOrphanRemoval: isFullSync);
-      final t2 = await pullPatients(since: sinceStr, allowOrphanRemoval: isFullSync);
+      _pullFailed = false;
+      final cycleBaseUrl = _baseUrl;
+      final healthRes = await _pullGet(Uri.parse('$cycleBaseUrl/health'), headers: _authHeaders());
+      final health = HubHealth.fromJson(jsonDecode(healthRes.body));
+      if (health.shopId != settings.shopId.trim()) {
+        throw StateError('Hub shop identity changed during sync');
+      }
+      await pullUsers();
+      await pullSettings();
+      await pullMedicines(since: sinceStr, isNested: true, allowOrphanRemoval: isFullSync);
+      await pullPatients(since: sinceStr, allowOrphanRemoval: isFullSync);
       await pullAppointments();
       await pullDoctors();
       await pullProcedures();
       await pullPrescriptions(since: sinceStr);
       await pullAuditLogs(since: sinceStr);
-      final t3 = await pullSales(since: sinceStr);
+      await pullSales(since: sinceStr);
       await pullTransfers();
       await pullPurchases();
       await pullTemplates();
       await pullH1Records(since: sinceStr);
       await pullAttendance();
 
-      // Update sync timestamp using the Hub's reported time if available, or current time
-      final serverTime = t1 ?? t2 ?? t3;
-      settings.lastGlobalSync = serverTime ?? DateTime.now().millisecondsSinceEpoch;
-      ObjectBoxService.instance.settingsBox.put(settings);
-      debugPrint('SyncService: Updated lastGlobalSync to: ${settings.lastGlobalSync}');
-
+      if (_pullFailed || cycleBaseUrl != _baseUrl) {
+        throw StateError('Incomplete sync; previous checkpoint retained');
+      }
+      if (!isTodayOnly) {
+        final current = ObjectBoxService.instance.settings;
+        current.lastGlobalSync = health.serverTime;
+        ObjectBoxService.instance.settingsBox.put(current);
+      }
       debugPrint('SyncService: syncAll completed successfully.');
     } catch (e) {
+      _pullFailed = true;
       debugPrint('SyncService: syncAll error - $e');
     } finally {
       _isSyncing = false;
@@ -732,41 +707,57 @@ class SyncService extends ChangeNotifier {
   }
 
   Future<void> forceFullSync() async {
-    debugPrint('SyncService: FORCE FULL SYNC INITIATED. Wiping local data...');
-    
-    // Wipe all transactional/entity boxes
-    ObjectBoxService.instance.patientBox.removeAll();
-    ObjectBoxService.instance.medicineBox.removeAll();
-    ObjectBoxService.instance.batchBox.removeAll();
-    ObjectBoxService.instance.purchaseBox.removeAll();
-    ObjectBoxService.instance.restockRequestBox.removeAll();
-    ObjectBoxService.instance.saleBox.removeAll();
-    ObjectBoxService.instance.prescriptionBox.removeAll();
-    ObjectBoxService.instance.appointmentBox.removeAll();
-    ObjectBoxService.instance.doctorBox.removeAll();
-    ObjectBoxService.instance.transferBox.removeAll();
-    ObjectBoxService.instance.templateBox.removeAll();
-    ObjectBoxService.instance.patientImageBox.removeAll();
-    ObjectBoxService.instance.procedureBox.removeAll();
-    ObjectBoxService.instance.procedureRecordBox.removeAll();
-    ObjectBoxService.instance.attendanceBox.removeAll();
-    ObjectBoxService.instance.store.box<ScheduleH1Record>().removeAll();
-    // Do NOT wipe settings or users (critical for session)
-
-    final settings = ObjectBoxService.instance.settings;
-    settings.lastGlobalSync = null;
-    ObjectBoxService.instance.settingsBox.put(settings);
-
+    if (isHub || !_isConnected || _jwtToken == null || _isSyncing) return;
+    await SyncQueueService.instance.processQueue();
+    final query = ObjectBoxService.instance.syncQueueBox
+        .query(SyncQueueItem_.processed.equals(false)).build();
+    try {
+      if (query.count() > 0) {
+        setQueueSyncFailed(true);
+        return;
+      }
+    } finally {
+      query.close();
+    }
+    // Fetch and apply before reconciliation. Never erase the database to refresh.
     await syncAll(isFullSync: true);
     notifyListeners();
   }
 
+  bool _canPull(String entity) {
+    final query = ObjectBoxService.instance.syncQueueBox.query(
+      SyncQueueItem_.entity.equals(entity)
+          .and(SyncQueueItem_.processed.equals(false))).build();
+    try {
+      if (query.count() > 0) {
+        _pullFailed = true;
+        return false;
+      }
+      if (!_isConnected || _jwtToken == null) {
+        _pullFailed = true;
+        return false;
+      }
+      return true;
+    } finally {
+      query.close();
+    }
+  }
+
+  Future<http.Response> _pullGet(Uri url, {Map<String, String>? headers}) async {
+    try {
+      final res = await SyncHttp.checkedGet(url, headers: headers);
+      return res;
+    } catch (_) {
+      _pullFailed = true;
+      rethrow;
+    }
+  }
   Future<void> pullUsers() async {
+    if (!_canPull('user')) return ;
     if (_hubIp == null) return;
     try {
       final url = Uri.parse('$_baseUrl/api/users');
-      final res = await http
-          .get(url, headers: _authHeaders())
+      final res = await _pullGet(url, headers: _authHeaders())
           .timeout(const Duration(seconds: 5));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body)['data'] as List;
@@ -808,6 +799,7 @@ class SyncService extends ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
+      _pullFailed = true;
       debugPrint('pullUsers err: $e');
     }
   }
@@ -817,6 +809,7 @@ class SyncService extends ChangeNotifier {
       SyncHttp(baseUrl: _baseUrl, headers: _authHeaders());
 
   Future<int?> pullMedicines({String? since, bool isNested = false, bool allowOrphanRemoval = false}) async {
+    if (!_canPull('medicine')) return null;
     if (!_isConnected || _jwtToken == null || (_isSyncing && !isNested)) {
       debugPrint('SyncService: pullMedicines aborted (isConnected: $_isConnected, jwt: $_jwtToken, isSyncing: $_isSyncing)');
       return null;
@@ -864,7 +857,7 @@ class SyncService extends ChangeNotifier {
             'offset': '$offset',
           },
         );
-        final res = await http.get(url, headers: _authHeaders());
+        final res = await _pullGet(url, headers: _authHeaders());
         if (res.statusCode == 200) {
           final payload = jsonDecode(res.body);
           final data = payload['data'] as List;
@@ -1098,6 +1091,7 @@ class SyncService extends ChangeNotifier {
       debugPrint('SyncService: pullMedicines synced successfully.');
       return latestServerTime;
     } catch (e) {
+      _pullFailed = true;
       debugPrint('pullMedicines err: $e');
       if (_isCloudMode) {
         await syncAllFromCloud();
@@ -1112,6 +1106,7 @@ class SyncService extends ChangeNotifier {
   }
 
   Future<int?> pullPatients({String? since, bool allowOrphanRemoval = false}) async {
+    if (!_canPull('patient')) return null;
     if (!_isConnected || _jwtToken == null) return null;
     debugPrint('SyncService: pullPatients starting (since=$since, allowOrphanRemoval=$allowOrphanRemoval)...');
     try {
@@ -1141,7 +1136,7 @@ class SyncService extends ChangeNotifier {
             'offset': '$offset',
           },
         );
-        final res = await http.get(url, headers: _authHeaders());
+        final res = await _pullGet(url, headers: _authHeaders());
         if (res.statusCode == 200) {
           final payload = jsonDecode(res.body);
           final data = payload['data'] as List;
@@ -1215,6 +1210,7 @@ class SyncService extends ChangeNotifier {
       debugPrint('SyncService: pullPatients synced successfully.');
       return latestServerTime;
     } catch (e) {
+      _pullFailed = true;
       debugPrint('pullPatients err: $e');
       if (_isCloudMode) {
         await syncAllFromCloud();
@@ -1224,11 +1220,12 @@ class SyncService extends ChangeNotifier {
   }
 
   Future<void> pullAppointments() async {
+    if (!_canPull('appointment')) return ;
     if (!_isConnected || _jwtToken == null) return;
     debugPrint('SyncService: pullAppointments starting...');
     try {
       final url = Uri.parse('$_baseUrl/api/appointments');
-      final res = await http.get(url, headers: _authHeaders());
+      final res = await _pullGet(url, headers: _authHeaders());
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body)['data'] as List;
         final box = ObjectBoxService.instance.appointmentBox;
@@ -1387,17 +1384,19 @@ class SyncService extends ChangeNotifier {
         debugPrint('SyncService: pullAppointments synced ${data.length} appointments.');
       }
     } catch (e) {
+      _pullFailed = true;
       debugPrint('pullAppointments err: $e');
     }
     debugPrint('SyncService: pullAppointments done.');
   }
 
   Future<void> pullDoctors() async {
+    if (!_canPull('doctor')) return ;
     if (!_isConnected || _jwtToken == null) return;
     debugPrint('SyncService: pullDoctors starting...');
     try {
       final url = Uri.parse('$_baseUrl/api/doctors');
-      final res = await http.get(url, headers: _authHeaders());
+      final res = await _pullGet(url, headers: _authHeaders());
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body)['data'] as List;
         final box = ObjectBoxService.instance.doctorBox;
@@ -1461,17 +1460,19 @@ class SyncService extends ChangeNotifier {
         debugPrint('SyncService: pullDoctors synced ${data.length} doctors.');
       }
     } catch (e) {
+      _pullFailed = true;
       debugPrint('pullDoctors err: $e');
     }
     debugPrint('SyncService: pullDoctors done.');
   }
 
   Future<void> pullProcedures() async {
+    if (!_canPull('procedure')) return ;
     if (!_isConnected || _jwtToken == null) return;
     debugPrint('SyncService: pullProcedures starting...');
     try {
       final url = Uri.parse('$_baseUrl/api/procedures');
-      final res = await http.get(url, headers: _authHeaders());
+      final res = await _pullGet(url, headers: _authHeaders());
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body)['data'] as List;
         final box = ObjectBoxService.instance.procedureBox;
@@ -1517,11 +1518,13 @@ class SyncService extends ChangeNotifier {
             'SyncService: pullProcedures synced ${data.length} procedures.');
       }
     } catch (e) {
+      _pullFailed = true;
       debugPrint('pullProcedures err: $e');
     }
   }
 
   Future<int?> pullPrescriptions({String? since}) async {
+    if (!_canPull('prescription')) return null;
     if (!_isConnected || _jwtToken == null) return null;
     debugPrint('SyncService: pullPrescriptions starting (since=$since)...');
     try {
@@ -1576,7 +1579,7 @@ class SyncService extends ChangeNotifier {
             'offset': '$offset',
           },
         );
-        final res = await http.get(url, headers: _authHeaders());
+        final res = await _pullGet(url, headers: _authHeaders());
         if (res.statusCode == 200) {
           final payload = jsonDecode(res.body);
           final data = payload['data'] as List;
@@ -1676,12 +1679,14 @@ class SyncService extends ChangeNotifier {
       debugPrint('SyncService: pullPrescriptions synced successfully.');
       return latestServerTime;
     } catch (e) {
+      _pullFailed = true;
       debugPrint('pullPrescriptions err: $e');
     }
     return null;
   }
 
   Future<int?> pullSales({String? since}) async {
+    if (!_canPull('sale')) return null;
     if (!_isConnected || _jwtToken == null) {
       debugPrint('SyncService: pullSales aborted (isConnected: $_isConnected, jwt: $_jwtToken)');
       return null;
@@ -1731,6 +1736,7 @@ class SyncService extends ChangeNotifier {
           debugPrint('SyncService: pullSales deduplicated ${duplicateIdsToRemove.length} existing duplicate sale records.');
         }
       } catch (e) {
+      _pullFailed = true;
         debugPrint('SyncService: duplicate pre-clean warning: $e');
       }
 
@@ -1781,7 +1787,7 @@ class SyncService extends ChangeNotifier {
             'offset': '$offset',
           },
         );
-        final res = await http.get(url, headers: _authHeaders());
+        final res = await _pullGet(url, headers: _authHeaders());
         if (res.statusCode == 200) {
           final payload = jsonDecode(res.body);
           final data = payload['data'] as List;
@@ -1893,6 +1899,7 @@ class SyncService extends ChangeNotifier {
                 try {
                   SalesFactService.instance.applySale(s);
                 } catch (e) {
+      _pullFailed = true;
                   debugPrint('SyncService: fact apply failed: $e');
                 }
               }
@@ -1956,6 +1963,7 @@ class SyncService extends ChangeNotifier {
             }
           }
         } catch (e) {
+      _pullFailed = true;
           debugPrint('SyncService: Error during incremental sales cleanup: $e');
         }
       }
@@ -1964,6 +1972,7 @@ class SyncService extends ChangeNotifier {
       completer.complete(latestServerTime);
       return latestServerTime;
     } catch (e) {
+      _pullFailed = true;
       debugPrint('pullSales err: $e');
       completer.complete(null);
     } finally {
@@ -1975,6 +1984,7 @@ class SyncService extends ChangeNotifier {
   }
 
   Future<void> pullH1Records({String? since}) async {
+    if (!_canPull('h1_record')) return ;
     if (!_isConnected || _jwtToken == null) return;
     debugPrint('SyncService: pullH1Records starting (since=$since)...');
     try {
@@ -1997,7 +2007,7 @@ class SyncService extends ChangeNotifier {
             'offset': '$offset',
           },
         );
-        final res = await http.get(url, headers: _authHeaders());
+        final res = await _pullGet(url, headers: _authHeaders());
         if (res.statusCode == 200) {
           final payload = jsonDecode(res.body);
           final data = payload['data'] as List;
@@ -2032,16 +2042,18 @@ class SyncService extends ChangeNotifier {
       }
       debugPrint('SyncService: pullH1Records synced successfully.');
     } catch (e) {
+      _pullFailed = true;
       debugPrint('pullH1Records err: $e');
     }
   }
 
   Future<void> pullTransfers() async {
+    if (!_canPull('transfer')) return ;
     if (!_isConnected || _jwtToken == null) return;
     debugPrint('SyncService: pullTransfers starting...');
     try {
       final url = Uri.parse('$_baseUrl/api/transfers');
-      final res = await http.get(url, headers: _authHeaders());
+      final res = await _pullGet(url, headers: _authHeaders());
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body)['data'] as List;
         final box = ObjectBoxService.instance.transferBox;
@@ -2106,17 +2118,19 @@ class SyncService extends ChangeNotifier {
         }
       }
     } catch (e) {
+      _pullFailed = true;
       debugPrint('pullTransfers err: $e');
     }
     debugPrint('SyncService: pullTransfers done.');
   }
 
   Future<void> pullPurchases() async {
+    if (!_canPull('purchase')) return ;
     if (!_isConnected || _jwtToken == null) return;
     debugPrint('SyncService: pullPurchases starting...');
     try {
       final url = Uri.parse('$_baseUrl/api/purchases');
-      final res = await http.get(url, headers: _authHeaders());
+      final res = await _pullGet(url, headers: _authHeaders());
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body)['data'] as List;
         final box = ObjectBoxService.instance.purchaseBox;
@@ -2177,6 +2191,7 @@ class SyncService extends ChangeNotifier {
         }
       }
     } catch (e) {
+      _pullFailed = true;
       debugPrint('pullPurchases err: $e');
     }
     debugPrint('SyncService: pullPurchases done.');
@@ -2185,11 +2200,12 @@ class SyncService extends ChangeNotifier {
   // ─── Prescription Templates ───────────────────────────────────────────────
 
   Future<void> pullTemplates() async {
+    if (!_canPull('template')) return ;
     if (!_isConnected || _jwtToken == null) return;
     debugPrint('SyncService: pullTemplates starting...');
     try {
       final url = Uri.parse('$_baseUrl/api/templates');
-      final res = await http.get(url, headers: _authHeaders());
+      final res = await _pullGet(url, headers: _authHeaders());
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body)['data'] as List;
         final box = ObjectBoxService.instance.templateBox;
@@ -2251,6 +2267,7 @@ class SyncService extends ChangeNotifier {
         debugPrint('SyncService: pullTemplates synced ${data.length} records.');
       }
     } catch (e) {
+      _pullFailed = true;
       debugPrint('pullTemplates err: $e');
     }
     debugPrint('SyncService: pullTemplates done.');
@@ -2287,8 +2304,7 @@ class SyncService extends ChangeNotifier {
 
       final url = Uri.parse('$_baseUrl/api/patient-photos')
           .replace(queryParameters: {'uhid': uhid});
-      final res = await http
-          .get(url, headers: _authHeaders())
+      final res = await _pullGet(url, headers: _authHeaders())
           .timeout(const Duration(seconds: 60));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body)['data'] as List;
@@ -2351,6 +2367,7 @@ class SyncService extends ChangeNotifier {
             'SyncService: pullPatientPhotosForPatient($uhid) — ${newPhotos.length} new/updated photos.');
       }
     } catch (e) {
+      _pullFailed = true;
       debugPrint('pullPatientPhotosForPatient err: $e');
     }
     return newPhotos;
@@ -2576,11 +2593,12 @@ class SyncService extends ChangeNotifier {
   }
 
   Future<void> pullAttendance() async {
+    if (!_canPull('attendance')) return ;
     if (!_isConnected || _jwtToken == null) return;
     debugPrint('SyncService: pullAttendance starting...');
     try {
       final url = Uri.parse('$_baseUrl/api/attendance');
-      final res = await http.get(url, headers: _authHeaders());
+      final res = await _pullGet(url, headers: _authHeaders());
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body)['data'] as List;
         final box = ObjectBoxService.instance.attendanceBox;
@@ -2624,6 +2642,7 @@ class SyncService extends ChangeNotifier {
         debugPrint('SyncService: pullAttendance synced ${data.length} records.');
       }
     } catch (e) {
+      _pullFailed = true;
       debugPrint('pullAttendance err: $e');
     }
   }
@@ -2696,28 +2715,18 @@ class SyncService extends ChangeNotifier {
       }
     }
 
-    // 3. Firebase Delta Sync (Tier 3 - Fallback)
-    if ((_isCloudMode || mode == 'auto' || mode == 'firebase') && 
-        settings.firebaseEnabled && entity != null && action != null) {
-      try {
-        return await FirebaseSyncService.instance.pushDelta(
-          entity: entity,
-          action: action,
-          data: data,
-        );
-      } catch (e) {
-        debugPrint('SyncService: Firebase Fallback failed: $e');
-      }
-    }
-
+    // Firestore acceptance only proves staging, not Hub validation/commit.
+    // Keep this mutation in the durable local outbox until LAN/tunnel ACK.
+    // Legacy cloud deltas are still consumed, but no new unconfirmed handoffs
+    // are marked processed by this client.
     return false;
   }
-
   Future<void> pullSettings() async {
+    if (!_canPull('settings')) return ;
     if (!_isConnected || _jwtToken == null) return;
     try {
       final url = Uri.parse('$_baseUrl/api/settings');
-      final res = await http.get(url, headers: _authHeaders());
+      final res = await _pullGet(url, headers: _authHeaders());
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final box = ObjectBoxService.instance.settingsBox;
@@ -2729,6 +2738,8 @@ class SyncService extends ChangeNotifier {
         updated.isWindowsClient = current.isWindowsClient;
         updated.deviceId = current.deviceId;
         updated.hubIp = current.hubIp;
+        updated.connectionMode = current.connectionMode;
+        updated.cloudflareUrl = current.cloudflareUrl;
         updated.autoLoginPin = current.autoLoginPin;
         updated.autoLoginName = current.autoLoginName;
         updated.serverPort = current.serverPort;
@@ -2759,11 +2770,13 @@ class SyncService extends ChangeNotifier {
         debugPrint('SyncService: pullSettings completed.');
       }
     } catch (e) {
+      _pullFailed = true;
       debugPrint('SyncService: pullSettings err: $e');
     }
   }
 
   Future<void> pullAuditLogs({String? since}) async {
+    if (!_canPull('audit_log')) return ;
     if (!_isConnected || _jwtToken == null) return;
     debugPrint('SyncService: pullAuditLogs starting (since=$since)...');
     try {
@@ -2786,7 +2799,7 @@ class SyncService extends ChangeNotifier {
             'offset': '$offset',
           },
         );
-        final res = await http.get(url, headers: _authHeaders());
+        final res = await _pullGet(url, headers: _authHeaders());
         if (res.statusCode == 200) {
           final payload = jsonDecode(res.body);
           final data = payload['data'] as List;
@@ -2821,6 +2834,7 @@ class SyncService extends ChangeNotifier {
       }
       debugPrint('SyncService: pullAuditLogs synced successfully.');
     } catch (e) {
+      _pullFailed = true;
       debugPrint('pullAuditLogs err: $e');
     }
   }
@@ -2831,7 +2845,12 @@ class SyncService extends ChangeNotifier {
   }
 
   Future<bool> pushSettings(AppSettings settings) async {
-    return await _unifiedPush('/api/settings/push', settings.toJson(),
+    final sharedSettings = settings.toJson()
+      ..remove('jwtSecret')
+      ..remove('autoLoginPin')
+      ..remove('autoLoginName')
+      ..remove('googleAuthData');
+    return await _unifiedPush('/api/settings/push', sharedSettings,
         entity: 'settings', action: 'update');
   }
 
@@ -2935,7 +2954,7 @@ class WebSocketService extends ChangeNotifier {
         uri = Uri.parse('ws://$ip:8080/ws/updates?secret=$secret');
       }
       
-      debugPrint('WebSocketService: Connecting to $uri');
+      debugPrint('WebSocketService: Connecting to ${uri.host}:${uri.port}');
       final channel = WebSocketChannel.connect(uri);
       await channel.ready;
       

@@ -32,11 +32,31 @@ android {
         versionName = flutter.versionName
     }
 
+    val releaseKeystorePath = System.getenv("MEDIPOSS_KEYSTORE_PATH")
+    val releaseStorePassword = System.getenv("MEDIPOSS_KEYSTORE_PASSWORD")
+    val releaseKeyAlias = System.getenv("MEDIPOSS_KEY_ALIAS")
+    val releaseKeyPassword = System.getenv("MEDIPOSS_KEY_PASSWORD")
+    val hasReleaseSigning = listOf(releaseKeystorePath, releaseStorePassword,
+            releaseKeyAlias, releaseKeyPassword).none { it.isNullOrBlank() }
+
+    signingConfigs {
+        create("production") {
+            if (hasReleaseSigning) {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("production")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             
             isMinifyEnabled = false
             isShrinkResources = false

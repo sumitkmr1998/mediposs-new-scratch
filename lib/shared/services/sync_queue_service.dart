@@ -18,6 +18,7 @@ import '../models/procedure.dart';
 import '../models/schedule_h1_record.dart';
 import '../models/app_user.dart';
 import 'sync_service.dart';
+import 'sync/outbox_drain.dart';
 import '../../objectbox.g.dart';
 
 class SyncQueueService extends ChangeNotifier {
@@ -25,6 +26,7 @@ class SyncQueueService extends ChangeNotifier {
   SyncQueueService._();
 
   bool _isProcessing = false;
+  bool _needsDrain = false;
   Timer? _syncTimer;
 
   void init() {
@@ -52,6 +54,18 @@ class SyncQueueService extends ChangeNotifier {
       return;
     }
 
+    enqueue(entity: entity, action: action, data: data);
+    processQueue();
+  }
+
+  /// Synchronous persistence so callers can include an outbox row in their
+  /// entity write transaction. Network work starts only after that commit.
+  void enqueue({
+    required String entity,
+    required String action,
+    required Map<String, dynamic> data,
+  }) {
+    if (SyncService.instance.isHub) return;
     final item = SyncQueueItem(
       entity: entity,
       action: action,
@@ -60,69 +74,37 @@ class SyncQueueService extends ChangeNotifier {
     );
     ObjectBoxService.instance.syncQueueBox.put(item);
     debugPrint('SyncQueueService: Added $action for $entity to queue.');
-    processQueue();
   }
 
   Future<void> processQueue() async {
-    if (_isProcessing) return;
     if (SyncService.instance.isHub) return;
+    if (_isProcessing) {
+      _needsDrain = true;
+      return;
+    }
     _isProcessing = true;
 
     bool queueFailed = false;
     try {
       final box = ObjectBoxService.instance.syncQueueBox;
       
-      while (true) {
-        final items = box.query(SyncQueueItem_.processed.equals(false))
-            .order(SyncQueueItem_.timestamp)
-            .build()
-            .find();
-        
-        if (items.isEmpty) break;
-
-        debugPrint('SyncQueueService: Processing ${items.length} pending items...');
-        bool hasFailed = false;
-        
-        for (final item in items) {
-          // If item is quarantined due to repeated failures, skip it to prevent blocking
-          if (item.isQuarantined) {
-            continue;
-          }
-
-          final ok = await _pushItem(item);
-          if (ok) {
-            item.processed = true;
-            item.resetRetry();
-            box.put(item);
-            debugPrint('SyncQueueService: Successfully synced ${item.entity} (${item.action})');
-          } else {
-            // Photos are bulky/optional and should never block the queue
-            if (item.entity == 'photo') {
-              debugPrint('SyncQueueService: Failed to sync photo. Skipping to next item to avoid blocking queue.');
-              continue;
-            }
-
-            // Record failure and increment retry counter
-            item.recordFailure('Failed during sync attempt');
-            box.put(item);
-
-            if (item.isQuarantined) {
-              debugPrint('SyncQueueService: Item ${item.entity} (ID: ${item.id}) reached 5 retries. Quarantined to unblock queue.');
-              continue; // Skip to next item, do NOT halt the entire queue!
-            }
-
-            debugPrint('SyncQueueService: Failed to sync ${item.entity} (Attempt ${item.retryCount}/5). Pausing queue.');
-            hasFailed = true;
-            break; // Stop on temporary failure to preserve transactional ordering
-          }
-        }
-        
-        if (hasFailed) {
-          queueFailed = true;
-          break; // Stop outer loop if a non-quarantined item failed
-        }
+      _needsDrain = false;
+      final query = box.query(SyncQueueItem_.processed.equals(false))
+          .order(SyncQueueItem_.timestamp)
+          .order(SyncQueueItem_.id)
+          .build();
+      final List<SyncQueueItem> items;
+      try {
+        items = query.find();
+      } finally {
+        query.close();
       }
-
+      queueFailed = await OutboxDrain.run(
+        items: items,
+        push: _pushItem,
+        save: (item) => box.put(item),
+        now: DateTime.now,
+      );
       // Automatically prune processed items older than 24 hours to prevent DB bloat
       _pruneProcessedItems();
     } catch (e) {
@@ -132,6 +114,9 @@ class SyncQueueService extends ChangeNotifier {
       _isProcessing = false;
       SyncService.instance.setQueueSyncFailed(queueFailed);
       notifyListeners();
+      if (_needsDrain && !queueFailed) {
+        processQueue();
+      }
     }
   }
 
@@ -216,15 +201,7 @@ class SyncQueueService extends ChangeNotifier {
         case 'purchase':
           return await syncService.pushPurchase(PurchaseRecord.fromJson(data));
         case 'audit_log':
-          try {
-            final ok = await syncService.pushAuditLog(AuditLog.fromJson(data));
-            if (!ok) {
-              debugPrint('SyncQueueService: Failed to push audit log, but skipping to avoid blocking queue.');
-            }
-          } catch (e) {
-            debugPrint('SyncQueueService: Error pushing audit log: $e');
-          }
-          return true; // Never block queue on audit log sync failure
+          return await syncService.pushAuditLog(AuditLog.fromJson(data));
         case 'template':
           if (item.action == 'delete') return await syncService.pushTemplateDelete(data['name']);
           return await syncService.pushTemplate(PrescriptionTemplate.fromJson(data));
@@ -253,9 +230,11 @@ class SyncQueueService extends ChangeNotifier {
         case 'settings':
           return await syncService.pushSettings(AppSettings.fromJson(data));
         default:
-          return true; // Ignore unknown entities
+          throw FormatException('Unsupported outbox entity: ' + item.entity);
       }
-      return false;
+      throw FormatException('Unsupported outbox action');
+    } on FormatException {
+      rethrow;
     } catch (e) {
       debugPrint('SyncQueueService: Error pushing ${item.entity}: $e');
       return false;
