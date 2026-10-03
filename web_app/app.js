@@ -1038,11 +1038,12 @@ window.openCloudConfigModal = () => {
           Live real-time data syncs directly from Google Firebase Firestore without needing your Windows PC or Hub to be turned on.
         </p>
         <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+          <button type="button" class="btn btn-primary btn-sm" style="font-size: 11px; padding: 3px 10px;" onclick="document.getElementById('modalShopId').value='MEDIPOSS'">MEDIPOSS</button>
           <button type="button" class="btn btn-outline btn-sm" style="font-size: 11px; padding: 3px 8px;" onclick="document.getElementById('modalShopId').value='default_shop'">default_shop</button>
           <button type="button" class="btn btn-outline btn-sm" style="font-size: 11px; padding: 3px 8px;" onclick="document.getElementById('modalShopId').value='mediposs_pharmacy'">mediposs_pharmacy</button>
         </div>
         <div style="display: flex; gap: 8px;">
-          <input type="text" id="modalShopId" placeholder="e.g. default_shop or mediposs_pharmacy" value="${appState.shopId}" style="flex: 1; background: var(--bg-input); border: 1px solid var(--border-subtle); padding: 8px 12px; border-radius: var(--radius-sm); color: var(--text-main);">
+          <input type="text" id="modalShopId" placeholder="e.g. MEDIPOSS" value="${appState.shopId}" style="flex: 1; background: var(--bg-input); border: 1px solid var(--border-subtle); padding: 8px 12px; border-radius: var(--radius-sm); color: var(--text-main);">
           <button class="btn btn-primary btn-sm" onclick="saveCloudShopId()">Connect Live</button>
         </div>
       </div>

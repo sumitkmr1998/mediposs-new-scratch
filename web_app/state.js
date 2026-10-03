@@ -20,8 +20,8 @@ class MediPossState {
     this.baselineDate = localStorage.getItem('mediposs_baseline_date') || null;
     this.baselineStock = JSON.parse(localStorage.getItem('mediposs_baseline_stock')) || {};
     
-    // Cloud Shop ID partition
-    this.shopId = localStorage.getItem('mediposs_shop_id') || 'default_shop';
+    // Cloud Shop ID partition (defaults to MEDIPOSS)
+    this.shopId = localStorage.getItem('mediposs_shop_id') || 'MEDIPOSS';
     this.hubUrl = localStorage.getItem('mediposs_hub_url') || '';
     this.hubSecret = localStorage.getItem('mediposs_hub_secret') || '';
     
