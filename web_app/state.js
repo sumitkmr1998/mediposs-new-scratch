@@ -8,6 +8,22 @@ const FIREBASE_CONFIG = {
   appId: "1:363693923093:android:38f68ec56eeaac9b79271c"
 };
 
+// Helper function to safely parse Firestore timestamp or ISO string into a standard ISO string
+function parseFirestoreDate(val) {
+  if (!val) return new Date().toISOString();
+  if (typeof val === 'string') return val;
+  if (val.toDate && typeof val.toDate === 'function') {
+    try { return val.toDate().toISOString(); } catch (_) {}
+  }
+  if (val.seconds != null) {
+    try { return new Date(val.seconds * 1000).toISOString(); } catch (_) {}
+  }
+  if (val._seconds != null) {
+    try { return new Date(val._seconds * 1000).toISOString(); } catch (_) {}
+  }
+  return new Date().toISOString();
+}
+
 // MediPoss State Management, Realtime Firestore Sync & Analytics
 class MediPossState {
   constructor() {
@@ -20,8 +36,13 @@ class MediPossState {
     this.baselineDate = localStorage.getItem('mediposs_baseline_date') || null;
     this.baselineStock = JSON.parse(localStorage.getItem('mediposs_baseline_stock')) || {};
     
-    // Cloud Shop ID partition (defaults to MEDIPOSS)
-    this.shopId = localStorage.getItem('mediposs_shop_id') || 'MEDIPOSS';
+    // Cloud Shop ID partition (automatically migrate 'default_shop' to 'MEDIPOSS')
+    let savedShop = localStorage.getItem('mediposs_shop_id');
+    if (!savedShop || savedShop === 'default_shop') {
+      savedShop = 'MEDIPOSS';
+      localStorage.setItem('mediposs_shop_id', 'MEDIPOSS');
+    }
+    this.shopId = savedShop;
     this.hubUrl = localStorage.getItem('mediposs_hub_url') || '';
     this.hubSecret = localStorage.getItem('mediposs_hub_secret') || '';
     
@@ -98,32 +119,46 @@ class MediPossState {
 
     const shopRef = this.firestoreDb.collection('shops').doc(shopId);
 
-    // 1. Listen to Medicines
+    // 1. Listen to Medicines: Try shops/{shopId}/medicines first, then fallback to root medicines/ if empty
+    const parseMedicineDoc = (doc) => {
+      const d = doc.data();
+      return {
+        id: d.id || doc.id,
+        name: d.name || 'Unnamed',
+        barcode: d.barcode || '',
+        category: d.category || 'General',
+        unit: d.unit || 'Unit',
+        purchasePrice: parseFloat(d.purchasePrice) || 0,
+        sellingPrice: parseFloat(d.sellingPrice) || 0,
+        storeStock: parseInt(d.storeStock, 10) || 0,
+        mainStock: parseInt(d.mainStock, 10) || 0,
+        bulkStoreStock: parseInt(d.bulkStoreStock, 10) || 0,
+        bulkClinicStock: parseInt(d.bulkClinicStock, 10) || 0,
+        lowStockThreshold: parseInt(d.lowStockThreshold, 10) || 20,
+        batches: Array.isArray(d.batches) ? d.batches : []
+      };
+    };
+
     const unsubMeds = shopRef.collection('medicines').onSnapshot(snapshot => {
-      const cloudMeds = [];
-      snapshot.forEach(doc => {
-        const d = doc.data();
-        cloudMeds.push({
-          id: d.id || doc.id,
-          name: d.name || 'Unnamed',
-          barcode: d.barcode || '',
-          category: d.category || 'General',
-          unit: d.unit || 'Unit',
-          purchasePrice: parseFloat(d.purchasePrice) || 0,
-          sellingPrice: parseFloat(d.sellingPrice) || 0,
-          storeStock: parseInt(d.storeStock, 10) || 0,
-          mainStock: parseInt(d.mainStock, 10) || 0,
-          bulkStoreStock: parseInt(d.bulkStoreStock, 10) || 0,
-          bulkClinicStock: parseInt(d.bulkClinicStock, 10) || 0,
-          lowStockThreshold: parseInt(d.lowStockThreshold, 10) || 20,
-          batches: Array.isArray(d.batches) ? d.batches : []
-        });
-      });
-      if (cloudMeds.length > 0) {
+      if (!snapshot.empty) {
+        const cloudMeds = [];
+        snapshot.forEach(doc => cloudMeds.push(parseMedicineDoc(doc)));
         this.medicines = cloudMeds;
         this.save();
         this.updateSyncBadge(true, `Live: ${shopId} (${cloudMeds.length} meds)`);
         if (window.renderCurrentPage) window.renderCurrentPage();
+      } else {
+        // Fallback to root medicines collection
+        this.firestoreDb.collection('medicines').limit(1500).get().then(rootSnap => {
+          if (!rootSnap.empty) {
+            const rootMeds = [];
+            rootSnap.forEach(doc => rootMeds.push(parseMedicineDoc(doc)));
+            this.medicines = rootMeds;
+            this.save();
+            this.updateSyncBadge(true, `Live: ${shopId} (${rootMeds.length} meds)`);
+            if (window.renderCurrentPage) window.renderCurrentPage();
+          }
+        }).catch(err => console.warn('Root medicines fetch err:', err.message));
       }
     }, err => {
       console.warn('Realtime medicines sync err:', err.message);
@@ -149,11 +184,16 @@ class MediPossState {
           try { parsedItems = JSON.parse(s.itemsJson); } catch (_) { parsedItems = []; }
         }
 
+        const dateStr = parseFirestoreDate(s.createdAt || s.updatedAt);
+        const ptName = (s.patientName && s.patientName.trim()) 
+          ? s.patientName.trim() 
+          : (isClinic ? 'Clinical Patient' : 'Walk-in Customer');
+
         cloudSales.push({
           id: s.id || doc.id,
           invoiceNo: s.invoiceNo || doc.id,
-          createdAt: s.createdAt || s.updatedAt || new Date().toISOString(),
-          patientName: s.patientName || 'Counter Sale',
+          createdAt: dateStr,
+          patientName: ptName,
           patientPhone: s.patientPhone || '',
           patientUhid: s.patientUhid || '',
           total: saleTotal,
@@ -167,7 +207,11 @@ class MediPossState {
         });
       });
       if (cloudSales.length > 0) {
-        cloudSales.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        cloudSales.sort((a, b) => {
+          const timeA = new Date(a.createdAt).getTime() || 0;
+          const timeB = new Date(b.createdAt).getTime() || 0;
+          return timeB - timeA;
+        });
         this.sales = cloudSales;
         this.save();
         if (window.renderCurrentPage) window.renderCurrentPage();
@@ -195,7 +239,7 @@ class MediPossState {
           patientUhid: a.patientUhid || '',
           doctorName: a.doctorName || 'Doctor',
           status: a.status || 'waiting',
-          scheduledAt: a.scheduledAt || new Date().toISOString(),
+          scheduledAt: parseFirestoreDate(a.scheduledAt),
           consultationFee: parseFloat(a.consultationFee) || 0,
           paymentMethod: a.paymentMethod || 'cash',
           notes: a.notes || ''
@@ -226,13 +270,17 @@ class MediPossState {
           fromWarehouse: t.fromWarehouse || 'main',
           toWarehouse: t.toWarehouse || 'store',
           batchNo: t.batchNo || '',
-          transferredAt: t.transferredAt || new Date().toISOString(),
+          transferredAt: parseFirestoreDate(t.transferredAt),
           transferredBy: t.transferredBy || '',
           note: t.note || ''
         });
       });
       if (cloudTransfers.length > 0) {
-        cloudTransfers.sort((a, b) => new Date(b.transferredAt) - new Date(a.transferredAt));
+        cloudTransfers.sort((a, b) => {
+          const timeA = new Date(a.transferredAt).getTime() || 0;
+          const timeB = new Date(b.transferredAt).getTime() || 0;
+          return timeB - timeA;
+        });
         this.transfers = cloudTransfers;
         this.save();
         if (window.renderCurrentPage) window.renderCurrentPage();
