@@ -1032,10 +1032,10 @@ window.openCloudConfigModal = () => {
         Connect this web app to your clinic's live Firebase Firestore partition or directly to your Windows Hub.
       </p>
 
-      <div style="margin-bottom: 16px; padding: 12px; background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: var(--radius-sm);">
-        <label style="font-size: 11px; font-weight: 800; color: #22c55e; text-transform: uppercase;">1. Firebase Shop ID (Realtime Cloud Sync)</label>
+      <div style="margin-bottom: 16px; padding: 14px; background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.25); border-radius: var(--radius-sm);">
+        <label style="font-size: 11px; font-weight: 800; color: #22c55e; text-transform: uppercase;">Firebase Shop Partition (Active)</label>
         <p style="font-size: 11px; color: var(--text-muted); margin: 4px 0 8px;">
-          Matches the <b>Store Name / Shop ID</b> in your MediPoss settings. Common defaults:
+          Live real-time data syncs directly from Google Firebase Firestore without needing your Windows PC or Hub to be turned on.
         </p>
         <div style="display: flex; gap: 6px; margin-bottom: 8px;">
           <button type="button" class="btn btn-outline btn-sm" style="font-size: 11px; padding: 3px 8px;" onclick="document.getElementById('modalShopId').value='default_shop'">default_shop</button>
@@ -1047,18 +1047,22 @@ window.openCloudConfigModal = () => {
         </div>
       </div>
 
-      <div style="margin-bottom: 16px; padding: 12px; background: var(--bg-card-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);">
-        <label style="font-size: 11px; font-weight: 700; color: var(--text-dim); text-transform: uppercase;">2. Direct Windows Hub / Cloudflare Tunnel</label>
-        <div style="margin-top: 8px; margin-bottom: 8px;">
-          <input type="text" id="modalHubUrl" placeholder="https://your-tunnel.trycloudflare.com or http://192.168.1.X:8080" value="${appState.hubUrl}" style="width: 100%; background: var(--bg-input); border: 1px solid var(--border-subtle); padding: 8px 12px; border-radius: var(--radius-sm); color: var(--text-main);">
+      <!-- Advanced / Optional Direct Hub accordion -->
+      <details style="margin-bottom: 16px; font-size: 12px; color: var(--text-muted);">
+        <summary style="cursor: pointer; padding: 6px 0; font-weight: 600; color: var(--text-dim);">
+          ⚙️ Advanced: Direct Windows Hub / Cloudflare Tunnel (Optional)
+        </summary>
+        <div style="margin-top: 8px; padding: 12px; background: var(--bg-card-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);">
+          <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">
+            Only needed if you are NOT using Firebase and want to query your local Windows Hub directly over LAN or a Cloudflare Tunnel.
+          </p>
+          <input type="text" id="modalHubUrl" placeholder="https://your-tunnel.trycloudflare.com or http://192.168.1.X:8080" value="${appState.hubUrl}" style="width: 100%; margin-bottom: 8px; background: var(--bg-input); border: 1px solid var(--border-subtle); padding: 8px 12px; border-radius: var(--radius-sm); color: var(--text-main);">
+          <input type="password" id="modalHubSecret" placeholder="Hub JWT Secret (optional)" value="${appState.hubSecret}" style="width: 100%; margin-bottom: 8px; background: var(--bg-input); border: 1px solid var(--border-subtle); padding: 8px 12px; border-radius: var(--radius-sm); color: var(--text-main);">
+          <div style="display: flex; justify-content: flex-end;">
+            <button class="btn btn-outline btn-sm" id="btnRunSync" onclick="runLiveHubSync()">Test Direct Hub</button>
+          </div>
         </div>
-        <div>
-          <input type="password" id="modalHubSecret" placeholder="Hub JWT Secret (optional)" value="${appState.hubSecret}" style="width: 100%; background: var(--bg-input); border: 1px solid var(--border-subtle); padding: 8px 12px; border-radius: var(--radius-sm); color: var(--text-main);">
-        </div>
-        <div style="margin-top: 10px; display: flex; justify-content: flex-end;">
-          <button class="btn btn-outline btn-sm" id="btnRunSync" onclick="runLiveHubSync()">Test Direct Hub</button>
-        </div>
-      </div>
+      </details>
 
       <div id="modalSyncError" style="font-size: 12px; color: var(--danger); margin-bottom: 10px;"></div>
 
