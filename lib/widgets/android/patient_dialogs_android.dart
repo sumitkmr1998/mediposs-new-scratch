@@ -9,7 +9,6 @@ import '../../shared/providers/opd_provider.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/services/sync_service.dart';
 import '../../shared/services/objectbox_service.dart';
-import '../../shared/models/prescription.dart';
 import '../../objectbox.g.dart';
 import '../../theme/app_theme.dart';
 
@@ -388,6 +387,7 @@ class _PatientSearchSheetState extends State<_PatientSearchSheet> {
     final List<Patient> filteredPatients = rawQuery.isEmpty
         ? patientProvider.patients
         : patientProvider.searchPatients(rawQuery, limit: 50);
+
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.88,

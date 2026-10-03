@@ -1341,7 +1341,6 @@ class InventoryProvider extends ChangeNotifier {
         }
       }
     }
-
     if (purchasePrice != null && (actor == null || actor.role.toLowerCase() == 'admin' || actor.canEditInventory)) {
       batch.purchasePrice = purchasePrice.clamp(0.0, 9999999.0);
     }

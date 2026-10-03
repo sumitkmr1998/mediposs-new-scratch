@@ -526,7 +526,6 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
       case SalesFilter.custom:
         return "Custom";
     }
-    return "";
   }
 }
 

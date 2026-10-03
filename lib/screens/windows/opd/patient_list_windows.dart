@@ -70,6 +70,8 @@ class _PatientListWindowsState extends State<PatientListWindows> {
     final totalItems = filteredList.length;
     final totalRegistered = patients.totalCount;
 
+    final totalRegistered = patients.totalCount;
+
     return Scaffold(
       appBar: _buildAppBar(totalRegistered),
       body: SingleChildScrollView(

@@ -34,8 +34,6 @@ class PatientProvider extends ChangeNotifier {
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
 
-  Patient? getById(int id) => _repo.byId(id);
-
   /// Direct database search across all patients (not limited to loaded recent)
   List<Patient> searchPatients(String q, {int limit = 50}) {
     return _repo.search(q, limit: limit);
@@ -171,6 +169,12 @@ class PatientProvider extends ChangeNotifier {
     );
   }
 
+  Patient? getById(int id) {
+    if (id <= 0) return null;
+    final cached = _patients.where((p) => p.id == id).firstOrNull;
+    if (cached != null) return cached;
+    return _repo.byId(id);
+  }
   Patient? getByUhid(String uhid) {
     if (uhid.isEmpty) return null;
     final cached = _patients.where((p) => p.uhid == uhid).firstOrNull;
