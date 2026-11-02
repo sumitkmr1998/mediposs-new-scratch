@@ -67,9 +67,6 @@ class _PatientListWindowsState extends State<PatientListWindows> {
                     .where((p) => p.gender != 'Male' && p.gender != 'Female')
                     .toList();
 
-    final totalItems = filteredList.length;
-    final totalRegistered = patients.totalCount;
-
     final totalRegistered = patients.totalCount;
 
     return Scaffold(

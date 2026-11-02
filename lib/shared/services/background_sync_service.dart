@@ -20,6 +20,7 @@ import '../providers/patient_provider.dart';
 import '../providers/opd_provider.dart';
 import '../providers/prescription_provider.dart';
 import '../providers/template_provider.dart';
+import '../providers/warehouse_provider.dart';
 
 Future<void> initializeBackgroundService() async {
   final service = FlutterBackgroundService();
@@ -209,10 +210,15 @@ void onStart(ServiceInstance service) async {
       } else if (event == 'appointments_updated') {
         await syncService.pullAppointments();
         notifyForeground(event, msg);
+      } else if (event == 'transfers_updated') {
+        await syncService.pullTransfers();
+        await syncService.pullMedicines(allowOrphanRemoval: false);
+        notifyForeground(event, msg);
       } else if (event == 'sync_received') {
         await syncService.pullAppointments();
         await syncService.pullSales();
         await syncService.pullPatients(allowOrphanRemoval: false);
+        await syncService.pullTransfers();
         notifyForeground(event, msg);
       } else if (event == 'settings_updated') {
         await syncService.pullSettings();
@@ -324,8 +330,9 @@ void setupForegroundSyncListeners(
   PatientProvider patientProvider,
   OpdProvider opdProvider,
   PrescriptionProvider prescriptionProvider,
-  TemplateProvider templateProvider,
-) {
+  TemplateProvider templateProvider, {
+  WarehouseProvider? warehouseProvider,
+}) {
   if (kIsWeb) return;
   if (defaultTargetPlatform != TargetPlatform.android &&
       defaultTargetPlatform != TargetPlatform.iOS) {
@@ -351,9 +358,14 @@ void setupForegroundSyncListeners(
       bool reloadOpd = false;
       bool reloadPrescriptions = false;
       bool reloadTemplates = false;
+      bool reloadTransfers = false;
 
       for (final ev in events) {
         if (ev == 'medicines_updated' || ev == 'medicine_deleted') {
+          reloadMeds = true;
+          reloadTransfers = true;
+        } else if (ev == 'transfers_updated') {
+          reloadTransfers = true;
           reloadMeds = true;
         } else if (ev == 'sales_updated' || ev == 'sale_deleted') {
           reloadSales = true;
@@ -371,6 +383,7 @@ void setupForegroundSyncListeners(
           reloadOpd = true;
           reloadPrescriptions = true;
           reloadTemplates = true;
+          reloadTransfers = true;
         }
       }
 
@@ -380,6 +393,9 @@ void setupForegroundSyncListeners(
       if (reloadOpd) opdProvider.loadAll();
       if (reloadPrescriptions) prescriptionProvider.load();
       if (reloadTemplates) templateProvider.load();
+      if (reloadTransfers && warehouseProvider != null) {
+        warehouseProvider.loadTransfers();
+      }
     });
   });
 }

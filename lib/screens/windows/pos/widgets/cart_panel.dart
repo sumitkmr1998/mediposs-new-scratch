@@ -284,8 +284,30 @@ class CartPanel extends StatelessWidget {
                                       style: const TextStyle(fontSize: 12)),
                                 ],
                               )
-                            : Text(
-                                '₹${item.unitPrice.toStringAsFixed(2)} × ${item.qty}',
+                            : Builder(
+                                builder: (context) {
+                                  final allocations = item.batchBreakdown;
+                                  final hasMultipleRates = allocations.length > 1 &&
+                                      allocations.map((a) => a.unitPrice).toSet().length > 1;
+
+                                  if (hasMultipleRates) {
+                                    final breakdownStr = allocations
+                                        .map((a) => '${a.qty}×₹${a.unitPrice.toStringAsFixed(a.unitPrice.truncateToDouble() == a.unitPrice ? 0 : 2)}')
+                                        .join(' + ');
+                                    return Text(
+                                      breakdownStr,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppTheme.accent,
+                                      ),
+                                    );
+                                  }
+
+                                  return Text(
+                                    '₹${item.unitPrice.toStringAsFixed(2)} × ${item.qty}',
+                                  );
+                                },
                               ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,

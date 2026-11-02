@@ -28,7 +28,6 @@ import '../models/schedule_h1_record.dart';
 import '../models/purchase_record.dart';
 import '../models/attendance_record.dart';
 import '../../objectbox.g.dart';
-import '../domain/stock_rules.dart';
 import 'hub/json_handlers.dart';
 import 'hub/medicines_routes.dart';
 import 'hub/sales_routes.dart';
@@ -1927,6 +1926,7 @@ class LocalServerService {
       }
 
       broadcast({'event': 'medicines_updated'});
+      broadcast({'event': 'transfers_updated'});
       broadcast({'event': 'sync_received'});
       return Response.ok(jsonEncode({'status': 'success'}));
     } catch (e) {
@@ -2737,16 +2737,76 @@ class LocalServerService {
         _incomingDataController.add('procedures');
         await FirebaseSyncService.instance
             .broadcastUpdate('procedures', p.toJson());
+      } else if (entity == 'transfer' && action == 'create') {
+        final transfer = StockTransfer.fromJson(data);
+        transfer.id = 0;
+        final box = ObjectBoxService.instance.transferBox;
+        final allLocal = box.getAll();
+        StockTransfer? existing;
+        if (transfer.uuid.isNotEmpty) {
+          existing = allLocal.where((t) => t.uuid == transfer.uuid).firstOrNull;
+        }
+        if (existing == null) {
+          existing = allLocal
+              .where((t) =>
+                  t.medicineName.toLowerCase().trim() ==
+                      transfer.medicineName.toLowerCase().trim() &&
+                  t.qty == transfer.qty &&
+                  t.fromWarehouse == transfer.fromWarehouse &&
+                  t.toWarehouse == transfer.toWarehouse &&
+                  t.transferredAt.millisecondsSinceEpoch ==
+                      transfer.transferredAt.millisecondsSinceEpoch &&
+                  t.batchNo == transfer.batchNo)
+              .firstOrNull;
+        }
+
+        if (existing == null) {
+          box.put(transfer);
+          // Apply stock change to medicine if exists
+          final m = ObjectBoxService.instance.medicineBox.get(transfer.medicineId);
+          if (m != null) {
+            int getMedLocStock(String loc) {
+              if (loc == 'main' || loc == 'clinic') return m.mainStock;
+              if (loc == 'store') return m.storeStock;
+              if (loc == 'bulkClinic') return m.bulkClinicStock;
+              if (loc == 'bulkStore') return m.bulkStoreStock;
+              return 0;
+            }
+
+            void setMedLocStock(String loc, int val) {
+              if (loc == 'main' || loc == 'clinic') m.mainStock = val;
+              if (loc == 'store') m.storeStock = val;
+              if (loc == 'bulkClinic') m.bulkClinicStock = val;
+              if (loc == 'bulkStore') m.bulkStoreStock = val;
+            }
+
+            setMedLocStock(
+              transfer.fromWarehouse,
+              (getMedLocStock(transfer.fromWarehouse) - transfer.qty).clamp(0, 999999),
+            );
+            setMedLocStock(
+              transfer.toWarehouse,
+              getMedLocStock(transfer.toWarehouse) + transfer.qty,
+            );
+            m.updatedAt = DateTime.now();
+            ObjectBoxService.instance.medicineBox.put(m);
+          }
+          broadcast({'event': 'medicines_updated'});
+          broadcast({'event': 'transfers_updated'});
+          broadcast({'event': 'sync_received'});
+        }
       } else {
-        throw UnsupportedError('Unsupported cloud mutation');
+        throw UnsupportedError('Unsupported cloud mutation: $entity ($action)');
       }
 
       // Mark as processed in Firebase
       if (docId != null) {
         await FirebaseSyncService.instance.markAsProcessed(docId);
       }
+      return true;
     } catch (e) {
       debugPrint('Hub: Error processing Firebase delta: $e');
+      return false;
     }
   }
 

@@ -159,6 +159,7 @@ void main(List<String> args) async {
     if (delta.templates) templateProvider.load();
     if (delta.settings) settingsProvider.load();
     if (delta.users) authProvider.reloadUsers();
+    if (delta.transfers || delta.medicines) warehouseProvider.loadTransfers();
   }
 
   syncService.addListener(() {
@@ -178,13 +179,15 @@ void main(List<String> args) async {
       patientProvider,
       opdProvider,
       prescriptionProvider,
-      templateProvider);
+      templateProvider,
+      warehouseProvider: warehouseProvider);
 
   Timer? medsDebounce;
   Timer? salesDebounce;
   Timer? patientsDebounce;
   Timer? apptsDebounce;
   Timer? scriptsDebounce;
+  Timer? transfersDebounce;
   Timer? syncDebounceTimer;
 
   wsService.eventStream.listen((msg) {
@@ -200,8 +203,20 @@ void main(List<String> args) async {
             ? DateTime.fromMillisecondsSinceEpoch(lastSync).subtract(const Duration(minutes: 2)).toIso8601String()
             : null;
         syncService.pullMedicines(since: sinceStr, allowOrphanRemoval: false).then((_) {
-          syncService.markDelta(const SyncDelta(medicines: true));
+          syncService.markDelta(const SyncDelta(medicines: true, transfers: true));
           inventoryProvider.load();
+          warehouseProvider.loadTransfers();
+        });
+      });
+    } else if (event == 'transfers_updated') {
+      transfersDebounce?.cancel();
+      transfersDebounce = Timer(const Duration(milliseconds: 300), () {
+        syncService.pullTransfers().then((_) {
+          syncService.pullMedicines(allowOrphanRemoval: false).then((_) {
+            syncService.markDelta(const SyncDelta(transfers: true, medicines: true));
+            inventoryProvider.load();
+            warehouseProvider.loadTransfers();
+          });
         });
       });
     } else if (event == 'sales_updated') {
@@ -259,6 +274,10 @@ void main(List<String> args) async {
         syncService.pullPatients(allowOrphanRemoval: false).then((_) {
           syncService.markDelta(const SyncDelta(patients: true));
           patientProvider.load();
+        });
+        syncService.pullTransfers().then((_) {
+          syncService.markDelta(const SyncDelta(transfers: true));
+          warehouseProvider.loadTransfers();
         });
       });
     } else if (event == 'settings_updated') {

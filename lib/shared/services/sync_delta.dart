@@ -8,6 +8,7 @@ class SyncDelta {
   final bool templates;
   final bool settings;
   final bool users;
+  final bool transfers;
 
   const SyncDelta({
     this.medicines = false,
@@ -18,6 +19,7 @@ class SyncDelta {
     this.templates = false,
     this.settings = false,
     this.users = false,
+    this.transfers = false,
   });
 
   static const all = SyncDelta(
@@ -29,6 +31,7 @@ class SyncDelta {
     templates: true,
     settings: true,
     users: true,
+    transfers: true,
   );
 
   static const none = SyncDelta();
@@ -41,7 +44,8 @@ class SyncDelta {
       !prescriptions &&
       !templates &&
       !settings &&
-      !users;
+      !users &&
+      !transfers;
 
   SyncDelta merge(SyncDelta other) => SyncDelta(
         medicines: medicines || other.medicines,
@@ -52,9 +56,11 @@ class SyncDelta {
         templates: templates || other.templates,
         settings: settings || other.settings,
         users: users || other.users,
+        transfers: transfers || other.transfers,
       );
 
   @override
   String toString() =>
-      'SyncDelta(med=$medicines sales=$sales patients=$patients appt=$appointments rx=$prescriptions tpl=$templates set=$settings users=$users)';
+      'SyncDelta(med=$medicines sales=$sales patients=$patients appt=$appointments rx=$prescriptions tpl=$templates set=$settings users=$users transfers=$transfers)';
 }
+

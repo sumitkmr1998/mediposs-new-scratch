@@ -620,6 +620,71 @@ class SyncService extends ChangeNotifier {
         debugPrint('SyncService [Cloud]: Error syncing prescriptions: $e');
       }
 
+      // 8. Pull Transfers
+      try {
+        final fbTransfers = await FirebaseSyncService.instance.fetchCollection('transfers', since: lastSync);
+        if (fbTransfers.isNotEmpty) {
+          final box = ObjectBoxService.instance.transferBox;
+          final allLocal = box.getAll();
+          final Map<String, StockTransfer> localByUuid = {
+            for (final t in allLocal)
+              if (t.uuid.isNotEmpty) t.uuid: t
+          };
+          final Map<String, StockTransfer> localMap = {
+            for (final t in allLocal)
+              '${t.medicineName.toLowerCase().trim()}_${t.qty}_${t.fromWarehouse}_${t.toWarehouse}_${t.transferredAt.millisecondsSinceEpoch}_${t.batchNo}': t
+          };
+
+          final List<StockTransfer> transfersToPut = [];
+          for (var tMap in fbTransfers) {
+            final serverTime = DateHelper.parseDateTime(tMap['transferredAt']) ?? DateTime.now();
+            final medicineName = tMap['medicineName'] as String? ?? '';
+            final qty = tMap['qty'] as int? ?? 0;
+            final from = tMap['fromWarehouse'] as String? ?? '';
+            final to = tMap['toWarehouse'] as String? ?? '';
+            final batch = tMap['batchNo'] as String?;
+            final itemUuid = (tMap['uuid'] as String? ?? '').trim();
+
+            StockTransfer? existing;
+            if (itemUuid.isNotEmpty && localByUuid.containsKey(itemUuid)) {
+              existing = localByUuid[itemUuid];
+            }
+            if (existing == null) {
+              final key = '${medicineName.toLowerCase().trim()}_${qty}_${from}_${to}_${serverTime.millisecondsSinceEpoch}_$batch';
+              existing = localMap[key];
+            }
+
+            if (existing == null) {
+              transfersToPut.add(StockTransfer(
+                id: 0,
+                uuid: itemUuid.isNotEmpty ? itemUuid : null,
+                medicineId: tMap['medicineId'] ?? 0,
+                medicineName: medicineName,
+                qty: qty,
+                fromWarehouse: from,
+                toWarehouse: to,
+                batchNo: batch,
+                expiryDate: tMap['expiryDate'] != null ? DateTime.tryParse(tMap['expiryDate']) : null,
+                transferredAt: serverTime,
+                note: tMap['note'] ?? '',
+                transferredBy: tMap['transferredBy'] ?? '',
+                initialFromQty: (tMap['initialFromQty'] as num?)?.toInt() ?? 0,
+                finalFromQty: (tMap['finalFromQty'] as num?)?.toInt() ?? 0,
+                initialToQty: (tMap['initialToQty'] as num?)?.toInt() ?? 0,
+                finalToQty: (tMap['finalToQty'] as num?)?.toInt() ?? 0,
+              ));
+            }
+          }
+          if (transfersToPut.isNotEmpty) {
+            box.putMany(transfersToPut);
+            markDelta(const SyncDelta(transfers: true, medicines: true));
+          }
+          debugPrint('SyncService [Cloud]: Synced ${fbTransfers.length} transfers.');
+        }
+      } catch (e) {
+        debugPrint('SyncService [Cloud]: Error syncing transfers: $e');
+      }
+
       // Save last successful sync timestamp
       settings.lastFirebaseSync = DateTime.now().millisecondsSinceEpoch;
       ObjectBoxService.instance.settingsBox.put(settings);
@@ -2115,6 +2180,8 @@ class SyncService extends ChangeNotifier {
 
         if (transfersToPut.isNotEmpty) {
           box.putMany(transfersToPut);
+          markDelta(const SyncDelta(transfers: true, medicines: true));
+          notifyListeners();
         }
       }
     } catch (e) {
@@ -2188,6 +2255,8 @@ class SyncService extends ChangeNotifier {
 
         if (purchasesToPut.isNotEmpty) {
           box.putMany(purchasesToPut);
+          markDelta(const SyncDelta(medicines: true, transfers: true));
+          notifyListeners();
         }
       }
     } catch (e) {

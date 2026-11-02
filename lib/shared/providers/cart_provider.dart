@@ -29,27 +29,116 @@ import 'patient_provider.dart';
 import 'procedure_provider.dart';
 import '../domain/sale_calculator.dart';
 
+class CartItemBatchAllocation {
+  final String batchNo;
+  final int qty;
+  final double unitPrice;
+  final DateTime expiryDate;
+
+  CartItemBatchAllocation({
+    required this.batchNo,
+    required this.qty,
+    required this.unitPrice,
+    required this.expiryDate,
+  });
+
+  double get total => qty * unitPrice;
+}
+
 class CartItem {
   final Medicine? medicine;
   final Procedure? procedure;
   int qty;
   double? customPrice; // For procedures or price overrides
+  bool isClinicalDispense;
 
-  CartItem({this.medicine, this.procedure, this.qty = 1, this.customPrice});
+  CartItem({
+    this.medicine,
+    this.procedure,
+    this.qty = 1,
+    this.customPrice,
+    this.isClinicalDispense = false,
+  });
 
+  /// Returns the FIFO batch breakdown based on available non-expired batches
+  List<CartItemBatchAllocation> get batchBreakdown {
+    if (medicine == null) return [];
+    if (customPrice != null && customPrice! >= 0) {
+      return [
+        CartItemBatchAllocation(
+          batchNo: (medicine!.getActiveBatch(isClinicalDispense) ?? medicine!.soonestExpiringBatch)?.batchNo ?? 'N/A',
+          qty: qty,
+          unitPrice: customPrice!,
+          expiryDate: (medicine!.getActiveBatch(isClinicalDispense) ?? medicine!.soonestExpiringBatch)?.expiryDate ?? DateTime.now(),
+        ),
+      ];
+    }
+
+    final allocations = <CartItemBatchAllocation>[];
+    int remaining = qty;
+    final now = DateTime.now();
+
+    final batches = medicine!.batches.toList();
+    batches.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
+
+    for (final batch in batches) {
+      if (remaining <= 0) break;
+      if (batch.expiryDate.isBefore(now)) continue;
+
+      final stock = isClinicalDispense ? batch.mainStock : batch.storeStock;
+      if (stock > 0) {
+        final take = remaining > stock ? stock : remaining;
+        final price = batch.sellingPrice > 0 ? batch.sellingPrice : medicine!.sellingPrice;
+        allocations.add(CartItemBatchAllocation(
+          batchNo: batch.batchNo,
+          qty: take,
+          unitPrice: price,
+          expiryDate: batch.expiryDate,
+        ));
+        remaining -= take;
+      }
+    }
+
+    // Overflow or no stock available in batches - fallback to default medicine sellingPrice
+    if (remaining > 0) {
+      allocations.add(CartItemBatchAllocation(
+        batchNo: 'N/A',
+        qty: remaining,
+        unitPrice: medicine!.sellingPrice,
+        expiryDate: now,
+      ));
+    }
+
+    return allocations;
+  }
+
+  /// Average or effective unit price across the quantity
   double get unitPrice {
     if (customPrice != null && customPrice! >= 0) return customPrice!;
-    if (medicine != null) {
-      final ab = medicine!.activeBatch ?? medicine!.soonestExpiringBatch;
-      if (ab != null && ab.sellingPrice > 0) return ab.sellingPrice;
-      return medicine!.sellingPrice;
-    }
     if (procedure != null) return procedure!.basePrice;
+    if (medicine != null) {
+      if (qty <= 0) {
+        final ab = medicine!.getActiveBatch(isClinicalDispense) ?? medicine!.soonestExpiringBatch;
+        if (ab != null && ab.sellingPrice > 0) return ab.sellingPrice;
+        return medicine!.sellingPrice;
+      }
+      return lineTotal / qty;
+    }
     return 0;
   }
 
+  /// Exact total taking into account each batch's individual price and quantity
   double get lineTotal {
-    return unitPrice * qty;
+    if (customPrice != null && customPrice! >= 0) return customPrice! * qty;
+    if (procedure != null) return procedure!.basePrice * qty;
+    if (medicine != null) {
+      final allocations = batchBreakdown;
+      if (allocations.isNotEmpty) {
+        return allocations.fold(0.0, (sum, a) => sum + a.total);
+      }
+      return medicine!.sellingPrice * qty;
+    }
+    return 0;
   }
 
   String get name => medicine?.name ?? procedure?.name ?? 'Unknown';
@@ -202,6 +291,9 @@ class CartProvider extends ChangeNotifier {
 
   void setClinicalDispense(bool val) {
     _isClinicalDispense = val;
+    for (final item in _items) {
+      item.isClinicalDispense = val;
+    }
     notifyListeners();
   }
 
@@ -221,7 +313,11 @@ class CartProvider extends ChangeNotifier {
         finalQty = maxStock;
       }
       if (finalQty > 0 || _isReturnMode) {
-        _items.add(CartItem(medicine: medicine, qty: finalQty));
+        _items.add(CartItem(
+          medicine: medicine,
+          qty: finalQty,
+          isClinicalDispense: _isClinicalDispense,
+        ));
       }
     }
     notifyListeners();
@@ -232,7 +328,12 @@ class CartProvider extends ChangeNotifier {
     if (idx >= 0) {
       _items[idx].qty += qty;
     } else {
-      _items.add(CartItem(procedure: procedure, qty: qty, customPrice: price));
+      _items.add(CartItem(
+        procedure: procedure,
+        qty: qty,
+        customPrice: price,
+        isClinicalDispense: _isClinicalDispense,
+      ));
     }
     notifyListeners();
   }
@@ -659,6 +760,7 @@ class CartProvider extends ChangeNotifier {
             medicine: med,
             qty: item.qty.abs(),
             customPrice: item.unitPrice,
+            isClinicalDispense: _isClinicalDispense,
           ));
         }
       }
@@ -693,7 +795,8 @@ class CartProvider extends ChangeNotifier {
               medicine: i.medicine,
               procedure: i.procedure,
               qty: i.qty,
-              customPrice: i.customPrice))
+              customPrice: i.customPrice,
+              isClinicalDispense: i.isClinicalDispense))
           .toList(),
       discountAmount: _discountAmount,
       patientName: _patientName,

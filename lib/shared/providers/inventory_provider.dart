@@ -731,6 +731,7 @@ class InventoryProvider extends ChangeNotifier {
           !ObjectBoxService.instance.settings.isWindowsClient;
       if (isHub && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
+        LocalServerService.instance.broadcast({'event': 'transfers_updated'});
       }
       // Note: On clients, warehouse transfers are queued and pushed exclusively as
       // 'transfer' entities by WarehouseProvider. Do NOT enqueue 'medicine' update

@@ -107,17 +107,30 @@ class CartItemTile extends StatelessWidget {
                       const SizedBox(height: 2),
                       Row(
                         children: [
-                          Tag(
-                            label: '₹${item.unitPrice.toStringAsFixed(0)}',
-                            color: context.textMutedColor,
-                          ),
-                          const SizedBox(width: 4),
-                          Tag(
-                            label: item.isProcedure
-                                ? 'PROCEDURE'
-                                : 'BATCH: ${(item.medicine!.getActiveBatch(cart.isClinicalDispense) ?? (item.medicine!.batches.isNotEmpty ? item.medicine!.batches.first : null))?.batchNo ?? "N/A"}',
-                            color: AppTheme.accent,
-                          ),
+                          if (!item.isProcedure &&
+                              item.batchBreakdown.length > 1 &&
+                              item.batchBreakdown.map((a) => a.unitPrice).toSet().length > 1) ...[
+                            Tag(
+                              label: item.batchBreakdown
+                                  .map((a) => '${a.qty}×₹${a.unitPrice.toStringAsFixed(a.unitPrice.truncateToDouble() == a.unitPrice ? 0 : 2)}')
+                                  .join(' + '),
+                              color: AppTheme.accent,
+                            ),
+                          ] else ...[
+                            Tag(
+                              label: '₹${item.unitPrice.toStringAsFixed(item.unitPrice.truncateToDouble() == item.unitPrice ? 0 : 2)}',
+                              color: context.textMutedColor,
+                            ),
+                            const SizedBox(width: 4),
+                            Tag(
+                              label: item.isProcedure
+                                  ? 'PROCEDURE'
+                                  : (item.batchBreakdown.length > 1
+                                      ? '${item.batchBreakdown.length} BATCHES'
+                                      : 'BATCH: ${(item.medicine!.getActiveBatch(cart.isClinicalDispense) ?? (item.medicine!.batches.isNotEmpty ? item.medicine!.batches.first : null))?.batchNo ?? "N/A"}'),
+                              color: AppTheme.accent,
+                            ),
+                          ],
                         ],
                       ),
                     ],

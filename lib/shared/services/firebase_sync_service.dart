@@ -692,6 +692,7 @@ class FirebaseSyncService {
       return results;
     } catch (e) {
       debugPrint('Firebase [_fetchCollectionREST] Error: $e');
+      return [];
     }
   }
 
