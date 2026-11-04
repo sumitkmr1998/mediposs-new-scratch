@@ -1003,6 +1003,12 @@ class LocalServerService {
       broadcast({'event': 'medicines_updated'});
       broadcast({'event': 'sync_received'});
       _incomingDataController.add('medicines');
+      final savedMed = existing ?? (box.query(barcode.isNotEmpty ? Medicine_.barcode.equals(barcode) : Medicine_.name.equals(name)).build().findFirst());
+      if (savedMed != null) {
+        unawaited(FirebaseSyncService.instance
+            .broadcastUpdate('medicines', savedMed.toJson())
+            .catchError((_) {}));
+      }
       return Response.ok(jsonEncode({'status': 'success'}));
     } catch (e) {
       debugPrint('Hub medicine push error: $e');
@@ -1077,6 +1083,10 @@ class LocalServerService {
       // Tell Windows Hub UI to reload its providers
       _incomingDataController.add('sales');
 
+      unawaited(FirebaseSyncService.instance
+          .broadcastUpdate('sales', sale.toJson())
+          .catchError((_) {}));
+
       return Response.ok(
         jsonEncode({'status': 'success', 'saleId': sale.id}),
         headers: {'content-type': 'application/json'},
@@ -1137,6 +1147,10 @@ class LocalServerService {
       broadcast({'event': 'patients_updated', 'uhid': p.uhid});
       broadcast({'event': 'sync_received'});
       _incomingDataController.add('patients');
+
+      unawaited(FirebaseSyncService.instance
+          .broadcastUpdate('patients', p.toJson())
+          .catchError((_) {}));
 
       return Response.ok(
         jsonEncode({'status': 'success', 'patientId': p.id}),
@@ -1244,6 +1258,10 @@ class LocalServerService {
       ObjectBoxService.instance.appointmentBox.put(a);
       broadcast({'event': 'sync_received'});
       _incomingDataController.add('appointments');
+
+      unawaited(FirebaseSyncService.instance
+          .broadcastUpdate('appointments', a.toJson())
+          .catchError((_) {}));
 
       if (isNew) {
         final today = DateTime.now();
@@ -1421,6 +1439,10 @@ class LocalServerService {
       broadcast({'event': 'sync_received'});
       _incomingDataController.add('doctors');
 
+      unawaited(FirebaseSyncService.instance
+          .broadcastUpdate('doctors', d.toJson())
+          .catchError((_) {}));
+
       return Response.ok(
         jsonEncode({'status': 'success', 'doctorId': d.id}),
         headers: {'content-type': 'application/json'},
@@ -1597,6 +1619,10 @@ class LocalServerService {
       broadcast({'event': 'sync_received'});
       _incomingDataController.add('prescriptions');
 
+      unawaited(FirebaseSyncService.instance
+          .broadcastUpdate('prescriptions', p.toJson())
+          .catchError((_) {}));
+
       return Response.ok(
         jsonEncode({'status': 'success', 'prescriptionId': p.id}),
         headers: {'content-type': 'application/json'},
@@ -1630,6 +1656,9 @@ class LocalServerService {
         broadcast({'event': 'sync_received'});
         broadcast({'event': 'doctors_updated', 'name': target.name});
         _incomingDataController.add('doctors');
+        unawaited(FirebaseSyncService.instance
+            .deleteDocument('doctors', target.name)
+            .catchError((_) {}));
       }
       return Response.ok(
         jsonEncode({'status': 'success'}),
@@ -1661,6 +1690,9 @@ class LocalServerService {
         // Broadcast specific deletion so Android can remove it from local Box
         broadcast({'event': 'patient_deleted', 'uhid': actualUhid});
         _incomingDataController.add('patients');
+        unawaited(FirebaseSyncService.instance
+            .deleteDocument('patients', actualUhid)
+            .catchError((_) {}));
       }
       return Response.ok(jsonEncode({'status': 'success'}));
     } catch (e) {
@@ -1704,6 +1736,10 @@ class LocalServerService {
           'name': actualName
         });
         _incomingDataController.add('inventory');
+        final docId = actualBarcode.isNotEmpty ? actualBarcode : m.id.toString();
+        unawaited(FirebaseSyncService.instance
+            .deleteDocument('medicines', docId)
+            .catchError((_) {}));
       }
       return Response.ok(jsonEncode({'status': 'success'}));
     } catch (e) {
@@ -1744,6 +1780,9 @@ class LocalServerService {
         broadcast({'event': 'sync_received'});
         broadcast({'event': 'prescriptions_updated'});
         _incomingDataController.add('prescriptions');
+        unawaited(FirebaseSyncService.instance
+            .deleteDocument('prescriptions', target.id.toString())
+            .catchError((_) {}));
       }
       return Response.ok(jsonEncode({'status': 'success'}));
     } catch (e) {
@@ -1995,6 +2034,9 @@ class LocalServerService {
       broadcast({'event': 'medicines_updated'});
       broadcast({'event': 'transfers_updated'});
       broadcast({'event': 'sync_received'});
+      unawaited(FirebaseSyncService.instance
+          .broadcastUpdate('transfers', transfer.toJson())
+          .catchError((_) {}));
       return Response.ok(jsonEncode({'status': 'success'}));
     } catch (e) {
       debugPrint('Hub transfer push error: $e');
@@ -2151,6 +2193,10 @@ class LocalServerService {
       ObjectBoxService.instance.templateBox.put(t);
       broadcast({'event': 'sync_received'});
       _incomingDataController.add('templates');
+
+      unawaited(FirebaseSyncService.instance
+          .broadcastUpdate('templates', t.toJson())
+          .catchError((_) {}));
 
       return Response.ok(
         jsonEncode({'status': 'success', 'templateId': t.id}),

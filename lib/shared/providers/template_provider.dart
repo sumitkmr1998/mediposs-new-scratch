@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
+import '../services/firebase_sync_service.dart';
 import 'package:flutter/material.dart';
 import '../models/prescription_template.dart';
 import '../models/prescription.dart';
@@ -53,6 +55,9 @@ class TemplateProvider extends ChangeNotifier {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
       }
+      unawaited(FirebaseSyncService.instance
+          .broadcastUpdate('templates', t.toJson())
+          .catchError((_) {}));
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'template',
@@ -75,6 +80,9 @@ class TemplateProvider extends ChangeNotifier {
       final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
       if (isHub && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
+        unawaited(FirebaseSyncService.instance
+            .deleteDocument('templates', name)
+            .catchError((_) {}));
       } else if (isClient) {
         SyncQueueService.instance.addToQueue(
           entity: 'template',

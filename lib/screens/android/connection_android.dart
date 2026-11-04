@@ -36,6 +36,7 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
   bool _showAdvanced = false;
   bool _autoConnectToPrevious = true;
   bool _isScanning = false;
+  BuildContext? _networkDialogContext;
 
   Future<List<String>> _getRecentShopIds() async {
     final prefs = await SharedPreferences.getInstance();
@@ -305,6 +306,7 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
                   Navigator.pop(ctx);
                   
                   await _addRecentShopId(finalId);
+                  await ObjectBoxService.instance.switchToPartition(finalId);
                   
                   final settingsProv = context.read<SettingsProvider>();
                   final s = settingsProv.settings;
@@ -367,97 +369,109 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
   void _showNetworkSelectionDialog(List<Map<String, dynamic>> hubs) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.network_wifi, color: AppTheme.primary),
-            SizedBox(width: 8),
-            Text('Select Active Hub'),
-          ],
-        ),
-        content: SizedBox(
-          width: 350,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      builder: (ctx) {
+        _networkDialogContext = ctx;
+        return AlertDialog(
+          title: const Row(
             children: [
-              const Text(
-                'Multiple active hubs or tunnels were detected. Choose which one to connect to:',
-                style: TextStyle(fontSize: 12),
-              ),
-              const SizedBox(height: 12),
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: hubs.length,
-                  itemBuilder: (_, i) {
-                    final hub = hubs[i];
-                    final ip = hub['ip'] as String;
-                    final shopId = hub['shopId'] as String;
-                    final isLocal = hub['isLocal'] as bool;
-                    
-                    return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      child: ListTile(
-                        leading: Icon(
-                          isLocal ? Icons.router : Icons.cloud,
-                          color: isLocal ? Colors.green : Colors.blue,
-                        ),
-                        title: Text(
-                          shopId,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                        ),
-                        subtitle: Text(
-                          ip,
-                          style: const TextStyle(fontSize: 11, color: Colors.grey),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: isLocal ? Colors.green.withValues(alpha: 0.1) : Colors.blue.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            isLocal ? 'Local' : 'Cloud',
-                            style: TextStyle(
-                              color: isLocal ? Colors.green : Colors.blue,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        onTap: () async {
-                          Navigator.pop(ctx);
-                          _ipCtrl.text = ip;
-                          
-                          // Save to Shop ID history
-                          await _addRecentShopId(shopId);
-                          
-                          final settingsProv = context.read<SettingsProvider>();
-                          final s = settingsProv.settings;
-                          s.shopId = shopId;
-                          s.hubIp = ip;
-                          settingsProv.save(s);
-                          
-                          _connect();
-                        },
-                      ),
-                    );
-                  },
-                ),
-              ),
+              Icon(Icons.network_wifi, color: AppTheme.primary),
+              SizedBox(width: 8),
+              Text('Select Active Hub'),
             ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+          content: SizedBox(
+            width: 350,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Multiple active hubs or tunnels were detected. Choose which one to connect to:',
+                  style: TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 12),
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: hubs.length,
+                    itemBuilder: (_, i) {
+                      final hub = hubs[i];
+                      final ip = hub['ip'] as String;
+                      final shopId = hub['shopId'] as String;
+                      final isLocal = hub['isLocal'] as bool;
+                      
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        child: ListTile(
+                          leading: Icon(
+                            isLocal ? Icons.router : Icons.cloud,
+                            color: isLocal ? Colors.green : Colors.blue,
+                          ),
+                          title: Text(
+                            shopId,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          subtitle: Text(
+                            ip,
+                            style: const TextStyle(fontSize: 11, color: Colors.grey),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: isLocal ? Colors.green.withValues(alpha: 0.1) : Colors.blue.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              isLocal ? 'Local' : 'Cloud',
+                              style: TextStyle(
+                                color: isLocal ? Colors.green : Colors.blue,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          onTap: () async {
+                            Navigator.pop(ctx);
+                            _networkDialogContext = null;
+                            _ipCtrl.text = ip;
+                            
+                            // Save to Shop ID history
+                            await _addRecentShopId(shopId);
+                            if (shopId.isNotEmpty && shopId != 'Unknown') {
+                              await ObjectBoxService.instance.switchToPartition(shopId);
+                            }
+                            
+                            final settingsProv = context.read<SettingsProvider>();
+                            final s = settingsProv.settings;
+                            s.shopId = shopId;
+                            s.hubIp = ip;
+                            settingsProv.save(s);
+                            
+                            _connect();
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
-    );
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _networkDialogContext = null;
+              },
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    ).then((_) {
+      _networkDialogContext = null;
+    });
   }
 
   Future<void> _autoDetect() async {
@@ -468,19 +482,40 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
       _reachable = null;
     });
 
-    final List<Map<String, dynamic>> results = [];
+    final List<Map<String, dynamic>> rawResults = [];
     try {
       final scans = await Future.wait([
         DiscoveryService.discoverHubs(),
         FirebaseSyncService.instance.getAllActiveCloudTunnels(),
       ]).timeout(const Duration(seconds: 4));
       
-      results.addAll(scans[0]);
-      results.addAll(scans[1]);
+      rawResults.addAll(scans[0]);
+      rawResults.addAll(scans[1]);
     } catch (_) {}
 
-    // Save all scanned shop IDs to history automatically
-    for (final hub in results) {
+    // Deduplicate by IP: local UDP discovery takes priority over cloud tunnels
+    final Map<String, Map<String, dynamic>> uniqueMap = {};
+    for (final hub in rawResults) {
+      final ip = hub['ip'] as String? ?? '';
+      if (ip.isEmpty) continue;
+      if (!uniqueMap.containsKey(ip) || (hub['isLocal'] == true)) {
+        uniqueMap[ip] = hub;
+      }
+    }
+
+    final sync = context.read<SyncService>();
+    // Verify each discovered hub in parallel with a fast health probe
+    final List<Map<String, dynamic>> verifiedResults = [];
+    await Future.wait(uniqueMap.values.map((hub) async {
+      final ip = hub['ip'] as String;
+      final ok = await sync.testConnection(ip).timeout(const Duration(seconds: 2), onTimeout: () => false);
+      if (ok) {
+        verifiedResults.add(hub);
+      }
+    }));
+
+    // Save only verified reachable shop IDs to history automatically
+    for (final hub in verifiedResults) {
       final shopId = hub['shopId'] as String? ?? '';
       if (shopId.isNotEmpty && shopId != 'Unknown') {
         await _addRecentShopId(shopId);
@@ -493,16 +528,19 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
       _testing = false;
     });
 
-    if (results.isEmpty) {
+    if (verifiedResults.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('No active hubs detected. Try scanning the QR Code or manual entry.'),
+        content: Text('No reachable hubs detected. Try scanning the QR Code or manual entry.'),
         backgroundColor: AppTheme.warning,
       ));
-    } else if (results.length == 1) {
-      final hub = results.first;
+    } else if (verifiedResults.length == 1) {
+      final hub = verifiedResults.first;
       _ipCtrl.text = hub['ip'];
       final shopId = hub['shopId'];
       await _addRecentShopId(shopId);
+      if (shopId != null && shopId.toString().isNotEmpty && shopId != 'Unknown') {
+        await ObjectBoxService.instance.switchToPartition(shopId.toString());
+      }
       
       final settingsProv = context.read<SettingsProvider>();
       final s = settingsProv.settings;
@@ -510,18 +548,14 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
       s.hubIp = hub['ip'];
       settingsProv.save(s);
 
-      final sync = context.read<SyncService>();
-      final ok = await sync.testConnection(hub['ip']);
       if (mounted) {
         setState(() {
-          _reachable = ok;
+          _reachable = true;
         });
-        if (ok) {
-          _connect();
-        }
+        _connect();
       }
     } else {
-      _showNetworkSelectionDialog(results);
+      _showNetworkSelectionDialog(verifiedResults);
     }
   }
 
@@ -581,6 +615,19 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
   @override
   Widget build(BuildContext context) {
     final sync = context.watch<SyncService>();
+    if (sync.isConnected) {
+      if (_networkDialogContext != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_networkDialogContext != null && Navigator.canPop(_networkDialogContext!)) {
+            Navigator.pop(_networkDialogContext!);
+            _networkDialogContext = null;
+          }
+        });
+      }
+      if (sync.hubIp != null && sync.hubIp!.isNotEmpty && _ipCtrl.text != sync.hubIp) {
+        _ipCtrl.text = sync.hubIp!;
+      }
+    }
     final settingsProvider = context.watch<SettingsProvider>();
     final currentShopId = settingsProvider.settings.shopId.isEmpty ? 'default_shop' : settingsProvider.settings.shopId;
 

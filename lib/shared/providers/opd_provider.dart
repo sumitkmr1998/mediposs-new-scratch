@@ -11,6 +11,7 @@ import '../services/sync_service.dart';
 import '../services/sync_queue_service.dart';
 import '../services/firebase_sync_service.dart';
 import '../services/audit_service.dart';
+import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 import 'sales_provider.dart';
@@ -400,6 +401,9 @@ class OpdProvider extends ChangeNotifier {
         if (LocalServerService.instance.isRunning) {
           LocalServerService.instance.broadcast({'event': 'sales_updated'});
         }
+        unawaited(FirebaseSyncService.instance
+            .broadcastUpdate('sales', advanceSale.toJson())
+            .catchError((_) {}));
       } else if (isClient) {
         SyncQueueService.instance.addToQueue(
           entity: 'sale',
@@ -443,6 +447,10 @@ class OpdProvider extends ChangeNotifier {
             'activeQueueCount': activeCount,
           },
         );
+
+        unawaited(FirebaseSyncService.instance
+            .broadcastUpdate('appointments', appt.toJson())
+            .catchError((_) {}));
       }
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(
@@ -477,7 +485,11 @@ class OpdProvider extends ChangeNotifier {
     if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
+        LocalServerService.instance.broadcast({'event': 'appointments_updated'});
       }
+      unawaited(FirebaseSyncService.instance
+          .broadcastUpdate('appointments', appt.toJson())
+          .catchError((_) {}));
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'appointment',
@@ -541,6 +553,9 @@ class OpdProvider extends ChangeNotifier {
         if (LocalServerService.instance.isRunning) {
           LocalServerService.instance.broadcast({'event': 'sales_updated'});
         }
+        unawaited(FirebaseSyncService.instance
+            .deleteDocument('sales', linkedSale.invoiceNo)
+            .catchError((_) {}));
       } else if (isClient) {
         SyncQueueService.instance.addToQueue(
           entity: 'sale',
@@ -557,7 +572,11 @@ class OpdProvider extends ChangeNotifier {
     if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
+        LocalServerService.instance.broadcast({'event': 'appointments_updated'});
       }
+      unawaited(FirebaseSyncService.instance
+          .broadcastUpdate('appointments', appt.toJson())
+          .catchError((_) {}));
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'appointment',
@@ -591,7 +610,11 @@ class OpdProvider extends ChangeNotifier {
     if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
+        LocalServerService.instance.broadcast({'event': 'appointments_updated'});
       }
+      unawaited(FirebaseSyncService.instance
+          .broadcastUpdate('appointments', appt.toJson())
+          .catchError((_) {}));
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'appointment',
@@ -612,7 +635,11 @@ class OpdProvider extends ChangeNotifier {
     if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
+        LocalServerService.instance.broadcast({'event': 'doctors_updated'});
       }
+      unawaited(FirebaseSyncService.instance
+          .broadcastUpdate('doctors', d.toJson())
+          .catchError((_) {}));
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'doctor',
@@ -623,6 +650,8 @@ class OpdProvider extends ChangeNotifier {
   }
 
   void deleteDoctor(int id, {SyncService? syncService}) {
+    final doc = ObjectBoxService.instance.doctorBox.get(id);
+    final doctorName = doc?.name ?? id.toString();
     ObjectBoxService.instance.doctorBox.remove(id);
     loadAll();
 
@@ -632,12 +661,16 @@ class OpdProvider extends ChangeNotifier {
     if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'sync_received'});
+        LocalServerService.instance.broadcast({'event': 'doctors_updated'});
       }
+      unawaited(FirebaseSyncService.instance
+          .deleteDocument('doctors', doctorName)
+          .catchError((_) {}));
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'doctor',
         action: 'delete',
-        data: {'id': id},
+        data: {'id': id, 'name': doctorName},
       );
     }
   }

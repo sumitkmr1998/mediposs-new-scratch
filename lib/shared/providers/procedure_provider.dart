@@ -1,4 +1,8 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import '../services/local_server_service.dart';
+import '../services/firebase_sync_service.dart';
 import '../models/procedure.dart';
 import '../services/objectbox_service.dart';
 import '../services/sync_service.dart';
@@ -55,6 +59,15 @@ class ProcedureProvider with ChangeNotifier {
     if (syncService != null) {
       await syncService.syncEntity('Procedure', p.toJson());
     }
+    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    if (isHub) {
+      if (LocalServerService.instance.isRunning) {
+        LocalServerService.instance.broadcast({'event': 'procedures_updated'});
+      }
+      unawaited(FirebaseSyncService.instance
+          .broadcastUpdate('procedures', p.toJson())
+          .catchError((_) {}));
+    }
   }
 
   Future<void> deleteProcedure(int id, {SyncService? syncService}) async {
@@ -66,6 +79,15 @@ class ProcedureProvider with ChangeNotifier {
       loadProcedures();
       if (syncService != null) {
         await syncService.pushProcedureDelete(name);
+      }
+      final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+      if (isHub) {
+        if (LocalServerService.instance.isRunning) {
+          LocalServerService.instance.broadcast({'event': 'procedures_updated'});
+        }
+        unawaited(FirebaseSyncService.instance
+            .deleteDocument('procedures', name)
+            .catchError((_) {}));
       }
     }
   }

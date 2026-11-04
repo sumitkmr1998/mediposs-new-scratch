@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import 'firebase_sync_service.dart';
 import 'local_server_service.dart';
 import 'objectbox_service.dart';
 import 'sync_queue_service.dart';
@@ -25,7 +27,7 @@ class MutationService {
       Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
 
   /// After a successful local mutation:
-  /// - Hub: broadcast WS events so clients refresh
+  /// - Hub: broadcast WS events so clients refresh & mirror to Firebase in real time
   /// - Client: enqueue for later push to hub
   void publish({
     required String entity,
@@ -35,20 +37,24 @@ class MutationService {
     Map<String, dynamic>? hubPayload,
   }) {
     if (isHubDevice) {
-      if (!LocalServerService.instance.isRunning) return;
-      if (hubEvents.isEmpty) {
-        LocalServerService.instance.broadcast({
-          'event': 'sync_received',
-          if (hubPayload != null) ...hubPayload,
-        });
-        return;
+      if (LocalServerService.instance.isRunning) {
+        if (hubEvents.isEmpty) {
+          LocalServerService.instance.broadcast({
+            'event': 'sync_received',
+            if (hubPayload != null) ...hubPayload,
+          });
+        } else {
+          for (final event in hubEvents) {
+            LocalServerService.instance.broadcast({
+              'event': event,
+              if (hubPayload != null) ...hubPayload,
+            });
+          }
+        }
       }
-      for (final event in hubEvents) {
-        LocalServerService.instance.broadcast({
-          'event': event,
-          if (hubPayload != null) ...hubPayload,
-        });
-      }
+
+      // Real-time Cloud Mirroring on Hub
+      _mirrorToCloud(entity: entity, action: action, data: data);
       return;
     }
 
@@ -64,6 +70,63 @@ class MutationService {
         data: data,
       );
     }
+  }
+
+  void _mirrorToCloud({
+    required String entity,
+    required String action,
+    Map<String, dynamic>? data,
+  }) {
+    final settings = ObjectBoxService.instance.settings;
+    if (!settings.firebaseEnabled) return;
+    if (settings.connectionMode == 'summary') return;
+
+    if (action == 'create' || action == 'update') {
+      if (data != null) {
+        unawaited(FirebaseSyncService.instance
+            .broadcastUpdate(entity, data)
+            .catchError((e) {
+          debugPrint(
+              'MutationService: real-time cloud broadcast failed for $entity: $e');
+        }));
+      }
+    } else if (action == 'delete') {
+      final docId = _resolveDocId(entity, data);
+      if (docId != null && docId.isNotEmpty) {
+        unawaited(FirebaseSyncService.instance
+            .deleteDocument(entity, docId)
+            .catchError((e) {
+          debugPrint(
+              'MutationService: real-time cloud delete failed for $entity/$docId: $e');
+        }));
+      }
+    }
+  }
+
+  String? _resolveDocId(String entity, Map<String, dynamic>? data) {
+    if (data == null) return null;
+    if (entity.contains('medicine')) {
+      final b = data['barcode']?.toString();
+      if (b != null && b.isNotEmpty) return b;
+      return data['id']?.toString();
+    }
+    if (entity.contains('sale')) {
+      final inv = data['invoiceNo']?.toString();
+      if (inv != null && inv.isNotEmpty) return inv;
+      return data['id']?.toString();
+    }
+    if (entity.contains('patient')) {
+      final uhid = data['uhid']?.toString();
+      if (uhid != null && uhid.isNotEmpty) return uhid;
+      return data['id']?.toString();
+    }
+    if (entity.contains('user') ||
+        entity.contains('doctor') ||
+        entity.contains('procedure') ||
+        entity.contains('template')) {
+      return data['name']?.toString() ?? data['id']?.toString();
+    }
+    return data['id']?.toString();
   }
 
   /// Convenience for entity create/update that clients push as full JSON.

@@ -241,6 +241,11 @@ class SyncService extends ChangeNotifier {
         final health = HubHealth.fromJson(jsonDecode(res.body));
         final hubShopId = health.shopId;
         final localShop = ObjectBoxService.instance.settings.shopId.trim();
+        final isClient = !kIsWeb &&
+            (defaultTargetPlatform == TargetPlatform.android ||
+                defaultTargetPlatform == TargetPlatform.iOS ||
+                ObjectBoxService.instance.settings.isWindowsClient);
+
         if (localShop.isNotEmpty &&
             localShop != 'legacy_hub' &&
             localShop != 'default_shop' &&
@@ -248,7 +253,14 @@ class SyncService extends ChangeNotifier {
             hubShopId != 'legacy_hub' &&
             hubShopId != 'default_shop' &&
             localShop != hubShopId) {
-          return 'This terminal belongs to another shop. Back up and explicitly reset the terminal before pairing with a different shop.';
+          if (isClient) {
+            debugPrint('SyncService: Auto-switching partition from "$localShop" to "$hubShopId"');
+            await ObjectBoxService.instance.switchToPartition(hubShopId);
+          } else {
+            return 'This terminal belongs to another shop. Back up and explicitly reset the terminal before pairing with a different shop.';
+          }
+        } else if (isClient && hubShopId.isNotEmpty && hubShopId != 'legacy_hub' && hubShopId != 'default_shop') {
+          await ObjectBoxService.instance.switchToPartition(hubShopId);
         }
         _hubIp = address;
         // On Windows, if we are currently not in terminal mode, we need to transition!

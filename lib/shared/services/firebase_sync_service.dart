@@ -455,20 +455,38 @@ class FirebaseSyncService {
         .delete();
   }
 
+  String _normalizeCollection(String entity) {
+    switch (entity) {
+      case 'patient': return 'patients';
+      case 'medicine': return 'medicines';
+      case 'sale': return 'sales';
+      case 'appointment': return 'appointments';
+      case 'prescription': return 'prescriptions';
+      case 'procedure': return 'procedures';
+      case 'doctor': return 'doctors';
+      case 'user': return 'users';
+      case 'template': return 'templates';
+      case 'transfer': return 'transfers';
+      default: return entity;
+    }
+  }
+
   /// Hub-side: Broadcasts an update to all devices via Firestore.
-  /// Used for "after sync, hub should also post updated data to all other devices"
+  /// Used for real-time cloud sync and companion app mirroring.
   Future<void> broadcastUpdate(String entity, Map<String, dynamic> data,
       {bool force = false}) async {
     if (!_isEnabled) return;
 
-    // Check connection mode: Only sync/mirror database to Firebase if connectionMode is explicitly 'firebase' or if force=true
+    // Only skip if explicitly in 'summary' (daily summary only) and not forced
     final connectionMode = ObjectBoxService.instance.settings.connectionMode;
-    if (connectionMode != 'firebase' && !force) {
+    if (connectionMode == 'summary' && !force) {
       return;
     }
 
+    final collection = _normalizeCollection(entity);
+
     if (defaultTargetPlatform == TargetPlatform.windows) {
-      await _broadcastUpdateREST(entity, data, force: force);
+      await _broadcastUpdateREST(collection, data, force: force);
       return;
     }
 
@@ -477,18 +495,18 @@ class FirebaseSyncService {
         data['id']?.toString() ?? data['barcode']?.toString() ?? 'unknown';
 
     // Use natural keys for better cloud visibility and deduplication
-    if (entity == 'sales' || entity == 'sale') {
+    if (collection == 'sales') {
       docId = data['invoiceNo']?.toString() ?? docId;
-    } else if (entity == 'patients' || entity == 'patient') {
+    } else if (collection == 'patients') {
       docId = data['uhid']?.toString() ?? docId;
-    } else if (entity == 'users' || entity == 'user') {
+    } else if (collection == 'users' || collection == 'doctors' || collection == 'procedures' || collection == 'templates') {
       docId = data['name']?.toString() ?? docId;
     }
 
     await _db
         .collection('shops')
         .doc(_shopId)
-        .collection(entity)
+        .collection(collection)
         .doc(docId)
         .set({
       ...data,
@@ -503,20 +521,21 @@ class FirebaseSyncService {
     try {
       final projectId = DefaultFirebaseOptions.windows.projectId;
       final apiKey = DefaultFirebaseOptions.windows.apiKey;
+      final collection = _normalizeCollection(entity);
 
       // Prioritize global unique keys over local ObjectBox IDs to prevent collisions between hubs
       String? rawId;
-      if (entity.contains('medicine')) {
+      if (collection.contains('medicine')) {
         rawId = data['barcode']?.toString();
         if (rawId == null || rawId.isEmpty) rawId = data['id']?.toString();
-      } else if (entity.contains('sale')) {
+      } else if (collection.contains('sale')) {
         rawId = data['invoiceNo']?.toString();
         if (rawId == null || rawId.isEmpty) rawId = data['id']?.toString();
-      } else if (entity.contains('patient')) {
+      } else if (collection.contains('patient')) {
         rawId = data['uhid']?.toString();
         if (rawId == null || rawId.isEmpty) rawId = data['id']?.toString();
-      } else if (entity.contains('user') || entity.contains('doctor')) {
-        rawId = data['name']?.toString();
+      } else if (collection.contains('user') || collection.contains('doctor') || collection.contains('procedure') || collection.contains('template')) {
+        rawId = data['name']?.toString() ?? data['id']?.toString();
       } else {
         rawId = data['id']?.toString();
       }
@@ -530,7 +549,7 @@ class FirebaseSyncService {
           docId.replaceAll('/', '_').replaceAll('\\', '_').replaceAll(' ', '_');
 
       final url = Uri.parse(
-          'https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops/$_shopId/$entity/$docId?key=$apiKey');
+          'https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops/$_shopId/$collection/$docId?key=$apiKey');
 
       final body = jsonEncode({
         'fields': {
@@ -548,7 +567,7 @@ class FirebaseSyncService {
           body: body);
       if (res.statusCode != 200) {
         debugPrint(
-            'Firebase [REST] Broadcast FAIL ($entity): ${res.statusCode} - ${res.body}');
+            'Firebase [REST] Broadcast FAIL ($collection): ${res.statusCode} - ${res.body}');
       }
     } catch (e) {
       debugPrint('Firebase [REST] Broadcast Error ($entity): $e');
@@ -560,11 +579,13 @@ class FirebaseSyncService {
       {bool force = false}) async {
     if (!_isEnabled) return;
 
-    // Only perform deletes if mirroring is enabled via connectionMode == 'firebase' or if force=true
+    // Only skip if explicitly in 'summary' mode and not forced
     final connectionMode = ObjectBoxService.instance.settings.connectionMode;
-    if (connectionMode != 'firebase' && !force) {
+    if (connectionMode == 'summary' && !force) {
       return;
     }
+
+    final collection = _normalizeCollection(entity);
 
     if (defaultTargetPlatform == TargetPlatform.windows) {
       try {
@@ -576,7 +597,7 @@ class FirebaseSyncService {
             .replaceAll('\\', '_')
             .replaceAll(' ', '_');
         final url = Uri.parse(
-            'https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops/$_shopId/$entity/$sanitizedId?key=$apiKey');
+            'https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops/$_shopId/$collection/$sanitizedId?key=$apiKey');
 
         final token = await _getIdToken();
         final res = await http.delete(
@@ -598,7 +619,7 @@ class FirebaseSyncService {
       await _db
           .collection('shops')
           .doc(_shopId)
-          .collection(entity)
+          .collection(collection)
           .doc(docId)
           .delete();
     } catch (e) {
@@ -797,16 +818,32 @@ class FirebaseSyncService {
               .timeout(const Duration(seconds: 2));
           if (doc.exists) {
             final data = doc.data();
-            if (data != null &&
-                data['cloudflareUrl'] != null &&
-                data['cloudflareUrl'].toString().isNotEmpty) {
-              // Found a shop with an active tunnel URL! Save it in settings so subsequent calls use it
-              final settings = ObjectBoxService.instance.settings;
-              settings.shopId = id;
-              ObjectBoxService.instance.settingsBox.put(settings);
-              debugPrint(
-                  'Firebase getHubStatus: Auto-detected active shop partition: $id');
-              return data;
+            if (data != null) {
+              final isOnline = data['hubOnline'] == true;
+              final syncRaw = data['lastGlobalSync'];
+              DateTime? lastSync;
+              if (syncRaw is Timestamp) {
+                lastSync = syncRaw.toDate();
+              } else if (syncRaw is String) {
+                lastSync = DateTime.tryParse(syncRaw);
+              } else if (syncRaw is int) {
+                lastSync = DateTime.fromMillisecondsSinceEpoch(syncRaw);
+              }
+              final isFresh = lastSync == null ||
+                  DateTime.now().toUtc().difference(lastSync.toUtc()).abs().inSeconds <= 180;
+
+              if (isOnline &&
+                  isFresh &&
+                  data['cloudflareUrl'] != null &&
+                  data['cloudflareUrl'].toString().isNotEmpty) {
+                // Found a shop with an active tunnel URL! Save it in settings so subsequent calls use it
+                final settings = ObjectBoxService.instance.settings;
+                settings.shopId = id;
+                ObjectBoxService.instance.settingsBox.put(settings);
+                debugPrint(
+                    'Firebase getHubStatus: Auto-detected active shop partition: $id');
+                return data;
+              }
             }
           }
         } catch (_) {}
@@ -1003,15 +1040,7 @@ class FirebaseSyncService {
               final payload = jsonDecode(res.body);
               final fields = payload['fields'] as Map<String, dynamic>?;
               if (fields != null) {
-                final urlField =
-                    fields['cloudflareUrl'] as Map<String, dynamic>?;
-                if (urlField != null) {
-                  final cloudflareUrl =
-                      urlField['stringValue'] as String? ?? '';
-                  if (cloudflareUrl.isNotEmpty) {
-                    data = {'cloudflareUrl': cloudflareUrl};
-                  }
-                }
+                data = _convertFromFirestoreMap(fields);
               }
             }
           } else {
@@ -1028,6 +1057,27 @@ class FirebaseSyncService {
           }
 
           if (data != null) {
+            final isOnline = data['hubOnline'] == true;
+            if (!isOnline) continue;
+
+            final syncRaw = data['lastGlobalSync'];
+            DateTime? lastSync;
+            if (syncRaw is Timestamp) {
+              lastSync = syncRaw.toDate();
+            } else if (syncRaw is String) {
+              lastSync = DateTime.tryParse(syncRaw);
+            } else if (syncRaw is int) {
+              lastSync = DateTime.fromMillisecondsSinceEpoch(syncRaw);
+            }
+
+            // Exclude hubs that have not checked in within the last 3 minutes
+            if (lastSync != null) {
+              final diff = DateTime.now().toUtc().difference(lastSync.toUtc()).abs();
+              if (diff.inSeconds > 180) {
+                continue;
+              }
+            }
+
             final urlStr = data['cloudflareUrl'] as String? ?? '';
             if (urlStr.isNotEmpty) {
               tunnels.add({

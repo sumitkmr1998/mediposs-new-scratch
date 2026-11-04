@@ -89,12 +89,17 @@ class DiscoveryService {
               if (payload['id'] == 'MediPoss_Hub') {
                 final hubShopId = payload['shopId'] as String? ?? '';
                 final advertisedIp = payload['ip'] as String?;
-                final targetIp = (advertisedIp != null &&
-                        advertisedIp.isNotEmpty &&
-                        advertisedIp != '127.0.0.1' &&
-                        !advertisedIp.startsWith('172.30.'))
-                    ? advertisedIp
-                    : datagram.address.address;
+                final senderIp = datagram.address.address;
+                final targetIp = (senderIp.isNotEmpty &&
+                        senderIp != '127.0.0.1' &&
+                        !senderIp.startsWith('172.30.'))
+                    ? senderIp
+                    : (advertisedIp != null &&
+                            advertisedIp.isNotEmpty &&
+                            advertisedIp != '127.0.0.1' &&
+                            !advertisedIp.startsWith('172.30.'))
+                        ? advertisedIp
+                        : senderIp;
                 if (targetShopId == null ||
                     targetShopId.isEmpty ||
                     targetShopId == 'default_shop' ||
@@ -182,12 +187,17 @@ class DiscoveryService {
               final payload = jsonDecode(utf8.decode(datagram.data));
               if (payload['id'] == 'MediPoss_Hub') {
                 final advertisedIp = payload['ip'] as String?;
-                final ip = (advertisedIp != null &&
-                        advertisedIp.isNotEmpty &&
-                        advertisedIp != '127.0.0.1' &&
-                        !advertisedIp.startsWith('172.30.'))
-                    ? advertisedIp
-                    : datagram.address.address;
+                final senderIp = datagram.address.address;
+                final ip = (senderIp.isNotEmpty &&
+                        senderIp != '127.0.0.1' &&
+                        !senderIp.startsWith('172.30.'))
+                    ? senderIp
+                    : (advertisedIp != null &&
+                            advertisedIp.isNotEmpty &&
+                            advertisedIp != '127.0.0.1' &&
+                            !advertisedIp.startsWith('172.30.'))
+                        ? advertisedIp
+                        : senderIp;
                 if (!seenIps.contains(ip)) {
                   seenIps.add(ip);
                   hubs.add({
@@ -203,25 +213,28 @@ class DiscoveryService {
         }
       });
 
-      // Send to broadcast addresses
-      socket.send(utf8.encode(_magicPing), InternetAddress(broadcastAddr), _udpPort);
-      
-      final fallbacks = [
+      final targets = <String>{
+        broadcastAddr,
         '255.255.255.255',
         '192.168.1.255',
         '192.168.0.255',
         '192.168.43.255',
         '192.168.8.255',
         '10.0.2.255',
-      ];
-      for (final addr in fallbacks) {
-        if (addr != broadcastAddr) {
-          socket.send(utf8.encode(_magicPing), InternetAddress(addr), _udpPort);
+      };
+
+      // Blast 3 pulses to ensure reliable reception across Wi-Fi
+      for (int pulse = 0; pulse < 3; pulse++) {
+        for (final addr in targets) {
+          try {
+            socket.send(utf8.encode(_magicPing), InternetAddress(addr), _udpPort);
+          } catch (_) {}
         }
+        await Future.delayed(const Duration(milliseconds: 250));
       }
 
-      // Wait 1.5 seconds to gather all responses
-      await Future.delayed(const Duration(milliseconds: 1500));
+      // Wait 1.0 second to gather all incoming responses
+      await Future.delayed(const Duration(milliseconds: 1000));
     } catch (e) {
       debugPrint('UDP Discovery error: $e');
     } finally {

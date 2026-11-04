@@ -7,7 +7,9 @@ import '../services/objectbox_service.dart';
 import '../services/sync_service.dart';
 import '../services/sync_queue_service.dart';
 import '../services/audit_service.dart';
+import 'dart:async';
 import 'dart:io';
+import '../services/firebase_sync_service.dart';
 import '../services/local_server_service.dart';
 import '../utils/consumption_aggregator.dart';
 import '../models/sale.dart';
@@ -17,11 +19,11 @@ import '../../objectbox.g.dart';
 
 class InventoryProvider extends ChangeNotifier {
   final MedicineRepository _medRepo = MedicineRepository();
-  final Box<Medicine> _box = ObjectBoxService.instance.medicineBox;
-  final Box<PurchaseRecord> _purchaseBox =
+  Box<Medicine> get _box => ObjectBoxService.instance.medicineBox;
+  Box<PurchaseRecord> get _purchaseBox =>
       ObjectBoxService.instance.purchaseBox;
-  final Box<MedicineBatch> _batchBox = ObjectBoxService.instance.batchBox;
-  final Box<RestockRequest> _restockBox =
+  Box<MedicineBatch> get _batchBox => ObjectBoxService.instance.batchBox;
+  Box<RestockRequest> get _restockBox =>
       ObjectBoxService.instance.restockRequestBox;
 
   List<Medicine> _medicines = [];
@@ -517,6 +519,9 @@ class InventoryProvider extends ChangeNotifier {
         if (LocalServerService.instance.isRunning) {
           LocalServerService.instance.broadcast({'event': 'medicines_updated'});
         }
+        unawaited(FirebaseSyncService.instance
+            .broadcastUpdate('medicines', m.toJson())
+            .catchError((_) {}));
       }
     }
     return deducted;
@@ -629,6 +634,9 @@ class InventoryProvider extends ChangeNotifier {
         if (LocalServerService.instance.isRunning) {
           LocalServerService.instance.broadcast({'event': 'medicines_updated'});
         }
+        unawaited(FirebaseSyncService.instance
+            .broadcastUpdate('medicines', m.toJson())
+            .catchError((_) {}));
       }
     }
     return deducted;
@@ -732,6 +740,9 @@ class InventoryProvider extends ChangeNotifier {
       if (isHub && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
         LocalServerService.instance.broadcast({'event': 'transfers_updated'});
+        unawaited(FirebaseSyncService.instance
+            .broadcastUpdate('medicines', m.toJson())
+            .catchError((_) {}));
       }
       // Note: On clients, warehouse transfers are queued and pushed exclusively as
       // 'transfer' entities by WarehouseProvider. Do NOT enqueue 'medicine' update
@@ -1271,6 +1282,9 @@ class InventoryProvider extends ChangeNotifier {
         !ObjectBoxService.instance.settings.isWindowsClient;
     if (isHub && LocalServerService.instance.isRunning) {
       LocalServerService.instance.broadcast({'event': 'medicines_updated'});
+      unawaited(FirebaseSyncService.instance
+          .broadcastUpdate('medicines', m.toJson())
+          .catchError((_) {}));
     }
     if (isClient && syncService != null) {
       syncService.pushMedicine(m);
@@ -1394,6 +1408,9 @@ class InventoryProvider extends ChangeNotifier {
         !ObjectBoxService.instance.settings.isWindowsClient;
     if (isHub && LocalServerService.instance.isRunning) {
       LocalServerService.instance.broadcast({'event': 'medicines_updated'});
+      unawaited(FirebaseSyncService.instance
+          .broadcastUpdate('medicines', m.toJson())
+          .catchError((_) {}));
     }
     if (isClient) {
       SyncQueueService.instance.addToQueue(
@@ -1470,6 +1487,9 @@ class InventoryProvider extends ChangeNotifier {
         !ObjectBoxService.instance.settings.isWindowsClient;
     if (isHub && LocalServerService.instance.isRunning) {
       LocalServerService.instance.broadcast({'event': 'medicines_updated'});
+      unawaited(FirebaseSyncService.instance
+          .broadcastUpdate('medicines', m.toJson())
+          .catchError((_) {}));
     }
     if (isClient) {
       SyncQueueService.instance.addToQueue(

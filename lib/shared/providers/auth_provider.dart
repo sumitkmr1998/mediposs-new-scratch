@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'dart:io';
+import '../services/local_server_service.dart';
+import '../services/firebase_sync_service.dart';
 import 'package:flutter/foundation.dart';
 import '../models/app_user.dart';
 import '../models/attendance_record.dart';
@@ -185,6 +188,15 @@ class AuthProvider extends ChangeNotifier {
     if (syncService != null && syncService.isConnected) {
       syncService.pushUser(user);
     }
+    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    if (isHub) {
+      if (LocalServerService.instance.isRunning) {
+        LocalServerService.instance.broadcast({'event': 'users_updated'});
+      }
+      unawaited(FirebaseSyncService.instance
+          .broadcastUpdate('users', user.toJson())
+          .catchError((_) {}));
+    }
     notifyListeners();
   }
 
@@ -206,6 +218,15 @@ class AuthProvider extends ChangeNotifier {
 
       if (syncService != null && syncService.isConnected) {
         syncService.pushUser(user);
+      }
+      final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+      if (isHub) {
+        if (LocalServerService.instance.isRunning) {
+          LocalServerService.instance.broadcast({'event': 'users_updated'});
+        }
+        unawaited(FirebaseSyncService.instance
+            .broadcastUpdate('users', user.toJson())
+            .catchError((_) {}));
       }
       notifyListeners();
     }

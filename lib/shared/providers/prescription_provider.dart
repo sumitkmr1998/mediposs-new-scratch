@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
+import '../services/firebase_sync_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
@@ -17,7 +19,6 @@ import '../models/patient.dart';
 import 'patient_provider.dart';
 import 'opd_provider.dart';
 import '../repositories/prescription_repository.dart';
-import '../../objectbox.g.dart';
 
 class PrescriptionProvider extends ChangeNotifier {
   final PrescriptionRepository _rxRepo = PrescriptionRepository();
@@ -205,6 +206,15 @@ class PrescriptionProvider extends ChangeNotifier {
 
     if (isHub) {
       LocalServerService.instance.broadcast({'event': 'sync_received'});
+      LocalServerService.instance.broadcast({'event': 'prescriptions_updated'});
+      unawaited(FirebaseSyncService.instance
+          .broadcastUpdate('prescriptions', prescription.toJson())
+          .catchError((_) {}));
+      if (appt != null) {
+        unawaited(FirebaseSyncService.instance
+            .broadcastUpdate('appointments', appt.toJson())
+            .catchError((_) {}));
+      }
     } else if (isClient) {
       final patient = ObjectBoxService.instance.patientBox.get(patientId);
       final syncData = prescription.toJson();
@@ -337,6 +347,9 @@ class PrescriptionProvider extends ChangeNotifier {
 
     if (isHub) {
       LocalServerService.instance.broadcast({'event': 'sync_received'});
+      unawaited(FirebaseSyncService.instance
+          .broadcastUpdate('prescriptions', p.toJson())
+          .catchError((_) {}));
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'prescription',
@@ -377,6 +390,10 @@ class PrescriptionProvider extends ChangeNotifier {
 
     if (isHub) {
       LocalServerService.instance.broadcast({'event': 'sync_received'});
+      LocalServerService.instance.broadcast({'event': 'prescriptions_updated'});
+      unawaited(FirebaseSyncService.instance
+          .deleteDocument('prescriptions', id.toString())
+          .catchError((_) {}));
     } else if (isClient) {
       SyncQueueService.instance.addToQueue(
         entity: 'prescription',

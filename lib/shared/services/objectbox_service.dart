@@ -28,37 +28,68 @@ class ObjectBoxService {
   static bool get isInitialized => _instance != null;
   static ObjectBoxService get instance => _instance!;
 
-  late final Store _store;
-  late final String _dbDirectory;
+  late Store _store;
+  late String _dbDirectory;
+  String _currentShopId = 'default_shop';
+  String get currentShopId => _currentShopId;
 
-  late final Box<Medicine> medicineBox;
-  late final Box<StockTransfer> transferBox;
-  late final Box<Sale> saleBox;
-  late final Box<AppUser> userBox;
-  late final Box<AppSettings> settingsBox;
-  late final Box<PurchaseRecord> purchaseBox;
-  late final Box<MedicineBatch> batchBox;
-  late final Box<RestockRequest> restockRequestBox;
-  late final Box<SyncQueueItem> syncQueueBox;
-  late final Box<AuditLog> auditLogBox;
-  late final Box<AttendanceRecord> attendanceBox;
+  late Box<Medicine> medicineBox;
+  late Box<StockTransfer> transferBox;
+  late Box<Sale> saleBox;
+  late Box<AppUser> userBox;
+  late Box<AppSettings> settingsBox;
+  late Box<PurchaseRecord> purchaseBox;
+  late Box<MedicineBatch> batchBox;
+  late Box<RestockRequest> restockRequestBox;
+  late Box<SyncQueueItem> syncQueueBox;
+  late Box<AuditLog> auditLogBox;
+  late Box<AttendanceRecord> attendanceBox;
 
   // OPD Boxes
-  late final Box<Patient> patientBox;
-  late final Box<Doctor> doctorBox;
-  late final Box<Appointment> appointmentBox;
-  late final Box<Prescription> prescriptionBox;
-  late final Box<PrescriptionTemplate> templateBox;
-  late final Box<PatientImage> patientImageBox;
-  late final Box<Procedure> procedureBox;
-  late final Box<ProcedureRecord> procedureRecordBox;
-  late final Box<DailyMedicineSalesFact> salesFactBox;
+  late Box<Patient> patientBox;
+  late Box<Doctor> doctorBox;
+  late Box<Appointment> appointmentBox;
+  late Box<Prescription> prescriptionBox;
+  late Box<PrescriptionTemplate> templateBox;
+  late Box<PatientImage> patientImageBox;
+  late Box<Procedure> procedureBox;
+  late Box<ProcedureRecord> procedureRecordBox;
+  late Box<DailyMedicineSalesFact> salesFactBox;
 
   ObjectBoxService._();
 
+  static String sanitizeShopId(String shopId) {
+    final sanitized = shopId.trim().replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_');
+    return sanitized.isNotEmpty ? sanitized : 'default_shop';
+  }
+
+  void _bindBoxes() {
+    medicineBox = _store.box<Medicine>();
+    transferBox = _store.box<StockTransfer>();
+    saleBox = _store.box<Sale>();
+    userBox = _store.box<AppUser>();
+    settingsBox = _store.box<AppSettings>();
+    purchaseBox = _store.box<PurchaseRecord>();
+    batchBox = _store.box<MedicineBatch>();
+    restockRequestBox = _store.box<RestockRequest>();
+    syncQueueBox = _store.box<SyncQueueItem>();
+    auditLogBox = _store.box<AuditLog>();
+    attendanceBox = _store.box<AttendanceRecord>();
+
+    // OPD boxes
+    patientBox = _store.box<Patient>();
+    doctorBox = _store.box<Doctor>();
+    appointmentBox = _store.box<Appointment>();
+    prescriptionBox = _store.box<Prescription>();
+    templateBox = _store.box<PrescriptionTemplate>();
+    patientImageBox = _store.box<PatientImage>();
+    procedureBox = _store.box<Procedure>();
+    procedureRecordBox = _store.box<ProcedureRecord>();
+    salesFactBox = _store.box<DailyMedicineSalesFact>();
+  }
+
   static Future<ObjectBoxService> init({bool forceTerminal = false}) async {
     if (_instance != null) return _instance!;
-
 
     final svc = ObjectBoxService._();
     
@@ -66,46 +97,55 @@ class ObjectBoxService {
     final appSupportDir = await getApplicationSupportDirectory();
     final prefs = await SharedPreferences.getInstance();
     final isTerminalMode = forceTerminal || (prefs.getBool('isTerminalMode') ?? false);
+    final isMobile = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS);
 
-    if (isTerminalMode) {
-      svc._dbDirectory = p.join(appSupportDir.path, 'mediposs_terminal_db');
+    if (isMobile || isTerminalMode) {
+      String activeShop = prefs.getString('activeShopId') ?? '';
+      if (activeShop.isEmpty) {
+        activeShop = 'default_shop';
+      }
+      final cleanShop = sanitizeShopId(activeShop);
+      svc._currentShopId = cleanShop;
+      svc._dbDirectory = p.join(appSupportDir.path, 'partitions', cleanShop);
+
+      // Legacy migration: if legacy DB exists and partitions/cleanShop does not, migrate
+      final legacyDir = Directory(p.join(appSupportDir.path, isTerminalMode ? 'mediposs_terminal_db' : 'mediposs_db'));
+      final targetDir = Directory(svc._dbDirectory);
+      if (legacyDir.existsSync() && !targetDir.existsSync()) {
+        try {
+          debugPrint('ObjectBoxService: Migrating legacy DB to partition $cleanShop');
+          await targetDir.create(recursive: true);
+          await svc._copyDir(legacyDir, targetDir);
+        } catch (e) {
+          debugPrint('ObjectBoxService: Migration error: $e');
+        }
+      }
     } else {
       svc._dbDirectory = p.join(appSupportDir.path, 'mediposs_db');
     }
     debugPrint('ObjectBoxService.init: isTerminalMode=$isTerminalMode, dbDirectory=${svc._dbDirectory}');
     
+    final dir = Directory(svc._dbDirectory);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
     svc._store = await openStore(directory: svc._dbDirectory);
-
-    svc.medicineBox = svc._store.box<Medicine>();
-    svc.transferBox = svc._store.box<StockTransfer>();
-    svc.saleBox = svc._store.box<Sale>();
-    svc.userBox = svc._store.box<AppUser>();
-    svc.settingsBox = svc._store.box<AppSettings>();
-    svc.purchaseBox = svc._store.box<PurchaseRecord>();
-    svc.batchBox = svc._store.box<MedicineBatch>();
-    svc.restockRequestBox = svc._store.box<RestockRequest>();
-    svc.syncQueueBox = svc._store.box<SyncQueueItem>();
-    svc.auditLogBox = svc._store.box<AuditLog>();
-    svc.attendanceBox = svc._store.box<AttendanceRecord>();
-
-    // OPD boxes
-    svc.patientBox = svc._store.box<Patient>();
-    svc.doctorBox = svc._store.box<Doctor>();
-    svc.appointmentBox = svc._store.box<Appointment>();
-    svc.prescriptionBox = svc._store.box<Prescription>();
-    svc.templateBox = svc._store.box<PrescriptionTemplate>();
-    svc.patientImageBox = svc._store.box<PatientImage>();
-    svc.procedureBox = svc._store.box<Procedure>();
-    svc.procedureRecordBox = svc._store.box<ProcedureRecord>();
-    svc.salesFactBox = svc._store.box<DailyMedicineSalesFact>();
+    svc._bindBoxes();
 
     // Seed default settings if empty
     if (svc.settingsBox.isEmpty()) {
-      svc.settingsBox.put(AppSettings()..isWindowsClient = isTerminalMode);
+      svc.settingsBox.put(AppSettings()
+        ..isWindowsClient = isTerminalMode
+        ..shopId = svc._currentShopId);
     } else {
       final existing = svc.settingsBox.getAll().first;
       if (existing.isWindowsClient != isTerminalMode) {
         existing.isWindowsClient = isTerminalMode;
+      }
+      if (isMobile || isTerminalMode) {
+        existing.shopId = svc._currentShopId;
       }
       if (existing.autoLoginPin != null) existing.autoLoginPin = null;
       svc.settingsBox.put(existing);
@@ -201,6 +241,51 @@ class ObjectBoxService {
     }
   }
  
+  /// Switches active ObjectBox database partition to the specified shop.
+  /// Used by companion clients (Android/iOS/Terminal) to maintain isolated local caches per shop.
+  Future<void> switchToPartition(String shopId) async {
+    final cleanShop = sanitizeShopId(shopId);
+    if (_currentShopId == cleanShop) {
+      debugPrint('ObjectBoxService: Already on partition $cleanShop');
+      return;
+    }
+
+    final appSupportDir = await getApplicationSupportDirectory();
+    final newDbDirectory = p.join(appSupportDir.path, 'partitions', cleanShop);
+
+    debugPrint('ObjectBoxService: Switching partition from $_currentShopId to $cleanShop ($newDbDirectory)');
+
+    // 1. Close current store
+    _store.close();
+
+    // 2. Open new store
+    _currentShopId = cleanShop;
+    _dbDirectory = newDbDirectory;
+    final targetDir = Directory(newDbDirectory);
+    if (!await targetDir.exists()) {
+      await targetDir.create(recursive: true);
+    }
+
+    _store = await openStore(directory: newDbDirectory);
+    _bindBoxes();
+
+    // 3. Persist activeShopId in SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('activeShopId', cleanShop);
+
+    // 4. Update or seed settings for this shop
+    if (settingsBox.isEmpty()) {
+      settingsBox.put(AppSettings()..shopId = cleanShop);
+    } else {
+      final s = settingsBox.getAll().first;
+      s.shopId = cleanShop;
+      settingsBox.put(s);
+    }
+
+    _repairMissingTimestamps(this);
+    debugPrint('ObjectBoxService: Switched to partition $cleanShop successfully.');
+  }
+
   Future<void> close() async {
     _store.close();
   }
