@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import '../../../../shared/services/cloudflare_service.dart';
+import '../../../../shared/services/ngrok_service.dart';
 import '../../../../shared/services/local_server_service.dart';
 import '../../../../shared/services/ota_update_service.dart';
 import '../../../../shared/services/sync_service.dart';
@@ -235,8 +235,8 @@ class _NetworkingSectionState extends State<NetworkingSection> {
                 ),
                 const SizedBox(height: 16),
                 _buildInfoCard(
-                  'Cloudflare Tunnel Link',
-                  CloudflareService.instance.currentUrl ?? 'No active tunnel',
+                  'Remote Tunnel Link (Ngrok)',
+                  NgrokService.instance.currentUrl ?? 'No active tunnel',
                   LucideIcons.globe,
                   'Use this URL to connect remotely from anywhere in the world.',
                   isLink: true,
@@ -254,17 +254,17 @@ class _NetworkingSectionState extends State<NetworkingSection> {
                             children: [
                               CircularProgressIndicator(),
                               SizedBox(width: 20),
-                              Text('Redeploying Cloudflare Tunnel...'),
+                              Text('Redeploying Ngrok Tunnel...'),
                             ],
                           ),
                         ),
                       );
                       try {
-                        await CloudflareService.instance.redeploy();
+                        await NgrokService.instance.redeploy();
                         if (mounted) {
                           Navigator.of(context).pop();
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Cloudflare Tunnel redeployed successfully!')),
+                            const SnackBar(content: Text('Ngrok Tunnel redeployed successfully!')),
                           );
                           setState(() {});
                         }
@@ -278,7 +278,7 @@ class _NetworkingSectionState extends State<NetworkingSection> {
                       }
                     },
                     icon: const Icon(LucideIcons.refreshCw, size: 16),
-                    label: const Text('Redeploy Cloudflare Tunnel'),
+                    label: const Text('Redeploy Ngrok Tunnel'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppTheme.primary,
                       side: const BorderSide(color: AppTheme.primary),
@@ -435,3 +435,4 @@ class UpdatesSection extends StatelessWidget {
     );
   }
 }
+

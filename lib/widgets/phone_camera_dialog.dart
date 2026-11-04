@@ -1,3 +1,4 @@
+import '../shared/utils/network_helper.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -37,8 +38,7 @@ class _PhoneCameraDialogState extends State<PhoneCameraDialog> {
 
   Future<void> _initConnection() async {
     try {
-      final info = NetworkInfo();
-      _localIp = await info.getWifiIP();
+      _localIp = await NetworkHelper.getLocalIp();
       
       if (_localIp == null) {
         // Fallback or handle no WiFi

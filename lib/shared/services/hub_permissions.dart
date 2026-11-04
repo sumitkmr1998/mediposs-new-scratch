@@ -19,6 +19,7 @@ class HubPermissions {
       case 'patients': return user.canAccessOPD || user.canAccessPOS;
       case 'warehouse': return user.canViewWarehouse;
       case 'transferStock': return user.canTransferStock;
+      case 'editTransfers': return user.canEditTransfers;
       case 'purchasePrice': return user.canViewPurchasePrice || user.canAddStock;
       case 'salesHistory': return user.canViewSalesHistory || user.canAccessPOS;
       case 'voidSales': return user.canVoidSales;

@@ -1,3 +1,4 @@
+import '../utils/network_helper.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -20,17 +21,19 @@ class DiscoveryService {
           await RawDatagramSocket.bind(InternetAddress.anyIPv4, _udpPort);
       _udpServer!.broadcastEnabled = true;
 
-      _udpServer!.listen((RawSocketEvent event) {
+      _udpServer!.listen((RawSocketEvent event) async {
         if (event == RawSocketEvent.read) {
           final datagram = _udpServer!.receive();
           if (datagram != null) {
             final msg = utf8.decode(datagram.data);
             if (msg == _magicPing) {
               // Valid ping received, send back our Hub IP and shopId
+              final localIp = await NetworkHelper.getLocalIp();
               final replyPayload = jsonEncode({
                 'id': 'MediPoss_Hub',
                 'apiPort': apiPort,
                 'shopId': shopId,
+                'ip': localIp,
               });
               _udpServer!.send(
                 utf8.encode(replyPayload),
@@ -85,11 +88,21 @@ class DiscoveryService {
               final payload = jsonDecode(utf8.decode(datagram.data));
               if (payload['id'] == 'MediPoss_Hub') {
                 final hubShopId = payload['shopId'] as String? ?? '';
+                final advertisedIp = payload['ip'] as String?;
+                final targetIp = (advertisedIp != null &&
+                        advertisedIp.isNotEmpty &&
+                        advertisedIp != '127.0.0.1' &&
+                        !advertisedIp.startsWith('172.30.'))
+                    ? advertisedIp
+                    : datagram.address.address;
                 if (targetShopId == null ||
                     targetShopId.isEmpty ||
+                    targetShopId == 'default_shop' ||
+                    hubShopId.isEmpty ||
+                    hubShopId == 'legacy_hub' ||
                     hubShopId.trim().toLowerCase() == targetShopId.trim().toLowerCase()) {
                   if (!completer.isCompleted) {
-                    completer.complete(datagram.address.address);
+                    completer.complete(targetIp);
                   }
                 } else {
                   debugPrint('DiscoveryService: Discovered Hub (Shop: $hubShopId) does not match target ($targetShopId). Skipping.');
@@ -168,7 +181,13 @@ class DiscoveryService {
             try {
               final payload = jsonDecode(utf8.decode(datagram.data));
               if (payload['id'] == 'MediPoss_Hub') {
-                final ip = datagram.address.address;
+                final advertisedIp = payload['ip'] as String?;
+                final ip = (advertisedIp != null &&
+                        advertisedIp.isNotEmpty &&
+                        advertisedIp != '127.0.0.1' &&
+                        !advertisedIp.startsWith('172.30.'))
+                    ? advertisedIp
+                    : datagram.address.address;
                 if (!seenIps.contains(ip)) {
                   seenIps.add(ip);
                   hubs.add({

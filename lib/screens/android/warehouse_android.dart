@@ -10,6 +10,8 @@ import '../../shared/models/purchase_record.dart';
 import '../../shared/services/sync_service.dart';
 import '../../theme/app_theme.dart';
 import 'package:intl/intl.dart';
+import '../../shared/services/objectbox_service.dart';
+import '../../objectbox.g.dart';
 import '../../widgets/android/medicine_dialog_android.dart';
 import '../../widgets/android/bulk_purchase_dialog_android.dart';
 import '../../widgets/android/bulk_transfer_dialog_android.dart';
@@ -756,12 +758,14 @@ class _TransferDialog extends StatefulWidget {
   final String from;
   final String to;
   final WarehouseProvider wh;
+  final StockTransfer? existingTransfer;
 
   const _TransferDialog(
       {required this.medicine,
       required this.from,
       required this.to,
-      required this.wh});
+      required this.wh,
+      this.existingTransfer});
 
   @override
   State<_TransferDialog> createState() => _TransferDialogState();
@@ -797,8 +801,17 @@ class _TransferDialogState extends State<_TransferDialog> {
   @override
   void initState() {
     super.initState();
-    _fromLoc = widget.from;
-    _toLoc = widget.to;
+    if (widget.existingTransfer != null) {
+      _qtyCtrl.text = widget.existingTransfer!.qty.toString();
+      _noteCtrl.text = widget.existingTransfer!.note;
+      _fromLoc = widget.existingTransfer!.fromWarehouse;
+      _toLoc = widget.existingTransfer!.toWarehouse;
+    } else {
+      _fromLoc = widget.from;
+      _toLoc = widget.to;
+  
+    }
+
     _updateSelectedBatch();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _qtyCtrl.selection = TextSelection(
@@ -817,7 +830,11 @@ class _TransferDialogState extends State<_TransferDialog> {
       'store': 'Store',
     };
 
-    final available = _selectedBatch != null
+    final isSameFrom = widget.existingTransfer != null &&
+        _fromLoc == widget.existingTransfer!.fromWarehouse;
+    final int existingCredit = isSameFrom ? widget.existingTransfer!.qty : 0;
+
+    final available = existingCredit + (_selectedBatch != null
         ? _getStock(_selectedBatch!, _fromLoc)
         : (_fromLoc == 'main' || _fromLoc == 'clinic'
             ? widget.medicine.mainStock
@@ -825,7 +842,7 @@ class _TransferDialogState extends State<_TransferDialog> {
                 ? widget.medicine.storeStock
                 : (_fromLoc == 'bulkClinic'
                     ? widget.medicine.bulkClinicStock
-                    : widget.medicine.bulkStoreStock)));
+                    : widget.medicine.bulkStoreStock))));
 
     final toStore = _toLoc == 'store' || _toLoc == 'bulkStore';
     final accentColor = toStore ? AppTheme.success : AppTheme.indigo;
@@ -858,7 +875,7 @@ class _TransferDialogState extends State<_TransferDialog> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Stock Transfer',
+                Text(widget.existingTransfer != null ? 'Edit Stock Transfer' : 'Stock Transfer',
                     style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
                 Text(widget.medicine.name,
                     maxLines: 1,
@@ -1053,17 +1070,40 @@ class _TransferDialogState extends State<_TransferDialog> {
                   setState(() => _isSubmitting = true);
                   try {
                     final qty = int.tryParse(_qtyCtrl.text) ?? 0;
-                    final err = await widget.wh.transfer(
-                      medicine: widget.medicine,
-                      qty: qty,
-                      from: _fromLoc,
-                      to: _toLoc,
-                      batchNo: _selectedBatch?.batchNo,
-                      expiryDate: _selectedBatch?.expiryDate,
-                      note: _noteCtrl.text,
-                      syncService: context.read<SyncService>(),
-                      actor: context.read<AuthProvider>().currentUser,
-                    );
+                    final auth = context.read<AuthProvider>();
+                    if (widget.existingTransfer != null && !auth.canEditTransfers) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Unauthorized: You do not have permission to edit stock transfers.'),
+                        backgroundColor: AppTheme.danger,
+                      ));
+                      return;
+                    }
+                    final String? err;
+                    if (widget.existingTransfer != null) {
+                      err = await widget.wh.editTransfer(
+                        originalTransfer: widget.existingTransfer!,
+                        newQty: qty,
+                        newFrom: _fromLoc,
+                        newTo: _toLoc,
+                        newBatchNo: _selectedBatch?.batchNo,
+                        newExpiryDate: _selectedBatch?.expiryDate,
+                        newNote: _noteCtrl.text,
+                        syncService: context.read<SyncService>(),
+                        actor: context.read<AuthProvider>().currentUser,
+                      );
+                    } else {
+                      err = await widget.wh.transfer(
+                        medicine: widget.medicine,
+                        qty: qty,
+                        from: _fromLoc,
+                        to: _toLoc,
+                        batchNo: _selectedBatch?.batchNo,
+                        expiryDate: _selectedBatch?.expiryDate,
+                        note: _noteCtrl.text,
+                        syncService: context.read<SyncService>(),
+                        actor: context.read<AuthProvider>().currentUser,
+                      );
+                    }
                     if (!context.mounted) return;
                     if (err == null) {
                       Navigator.pop(context);
@@ -1077,7 +1117,7 @@ class _TransferDialogState extends State<_TransferDialog> {
                     }
                   }
                 },
-          child: const Text('CONFIRM',
+          child: Text(widget.existingTransfer != null ? 'SAVE CHANGES' : 'CONFIRM',
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
         ),
       ],
@@ -1640,6 +1680,47 @@ void _showTransferDetailsDialog(BuildContext context, StockTransfer t) {
           _detailItem(context, 'Transferred At', '${t.transferredAt.day}/${t.transferredAt.month}/${t.transferredAt.year} ${t.transferredAt.hour.toString().padLeft(2, '0')}:${t.transferredAt.minute.toString().padLeft(2, '0')}'),
           _detailItem(context, 'Transferred By', t.transferredBy.isEmpty ? 'System' : t.transferredBy),
           _detailItem(context, 'Notes', t.note.isEmpty ? '-' : t.note, isItalic: true),
+          if (context.read<AuthProvider>().canEditTransfers) ...[
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+              icon: const Icon(Icons.edit_rounded, size: 18),
+              label: const Text('Edit Transfer', style: TextStyle(fontWeight: FontWeight.bold)),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                final med = ObjectBoxService.instance.medicineBox.get(t.medicineId) ??
+                    ObjectBoxService.instance.medicineBox
+                        .query(Medicine_.name.equals(t.medicineName))
+                        .build()
+                        .findFirst();
+                if (med != null) {
+                  final wh = context.read<WarehouseProvider>();
+                  showDialog(
+                    context: context,
+                    builder: (_) => _TransferDialog(
+                      medicine: med,
+                      from: t.fromWarehouse,
+                      to: t.toWarehouse,
+                      wh: wh,
+                      existingTransfer: t,
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('Medicine record not found in inventory'),
+                    backgroundColor: AppTheme.danger,
+                  ));
+                }
+              },
+            ),
+          ),
+          ],
         ],
       ),
     ),

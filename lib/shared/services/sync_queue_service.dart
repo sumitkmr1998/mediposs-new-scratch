@@ -57,7 +57,7 @@ class SyncQueueService extends ChangeNotifier {
     }
 
     enqueue(entity: entity, action: action, data: data);
-    processQueue();
+    processQueue(force: true);
   }
 
   /// Synchronous persistence so callers can include an outbox row in their
@@ -78,7 +78,7 @@ class SyncQueueService extends ChangeNotifier {
     debugPrint('SyncQueueService: Added $action for $entity to queue.');
   }
 
-  Future<void> processQueue() async {
+  Future<void> processQueue({bool force = false}) async {
     if (SyncService.instance.isHub) return;
     if (_isProcessing) {
       _needsDrain = true;
@@ -89,6 +89,18 @@ class SyncQueueService extends ChangeNotifier {
     bool queueFailed = false;
     try {
       final box = ObjectBoxService.instance.syncQueueBox;
+
+      if (force) {
+        final pendingQuery = box.query(SyncQueueItem_.processed.equals(false)).build();
+        final pendingItems = pendingQuery.find();
+        pendingQuery.close();
+        for (final item in pendingItems) {
+          if (item.processingBy?.startsWith('quarantined') != true) {
+            item.resetRetry();
+            box.put(item);
+          }
+        }
+      }
 
       _needsDrain = false;
       final query = box
@@ -208,11 +220,17 @@ class SyncQueueService extends ChangeNotifier {
           return await syncService
               .pushPrescription(Prescription.fromJson(data));
         case 'transfer':
-          return await syncService.pushTransfer(StockTransfer.fromJson(data));
+          return await syncService.pushTransfer(StockTransfer.fromJson(data),
+              action: item.action);
         case 'purchase':
           return await syncService.pushPurchase(PurchaseRecord.fromJson(data));
         case 'audit_log':
-          return await syncService.pushAuditLog(AuditLog.fromJson(data));
+          try {
+            await syncService.pushAuditLog(AuditLog.fromJson(data));
+          } catch (e) {
+            debugPrint('SyncQueueService: Error pushing audit log: $e');
+          }
+          return true; // Never block queue on audit log sync failure
         case 'template':
           if (item.action == 'delete')
             return await syncService.pushTemplateDelete(data['name']);

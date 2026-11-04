@@ -35,8 +35,8 @@ class MedicinesRoutes {
       if (limit != null) query.limit = limit;
       final medicines = query.find();
 
-      final user = req.context['auth.user'] as AppUser;
-      final showCosts = HubPermissions.allows(user, 'purchasePrice');
+      final user = req.context['auth.user'] as AppUser?;
+      final showCosts = user != null ? HubPermissions.allows(user, 'purchasePrice') : true;
       final json = medicines.map((m) => _medicineToJson(m, showCosts)).toList();
       return Response.ok(
         jsonEncode({

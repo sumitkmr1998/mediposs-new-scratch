@@ -13,6 +13,8 @@ import '../../shared/services/firebase_sync_service.dart';
 import '../../shared/providers/settings_provider.dart';
 import 'package:battery_optimization_helper/battery_optimization_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../shared/services/sync_queue_service.dart';
+import '../../objectbox.g.dart';
 
 class ConnectionAndroid extends StatefulWidget {
   const ConnectionAndroid({super.key});
@@ -927,6 +929,43 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
                         side: BorderSide(color: AppTheme.primary.withValues(alpha: 0.5)),
                       ),
                     ),
+                    Builder(builder: (context) {
+                      final box = ObjectBoxService.instance.syncQueueBox;
+                      final q = box.query(SyncQueueItem_.processed.equals(false)).build();
+                      final pending = q.count();
+                      q.close();
+                      if (pending == 0) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AppTheme.warning.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppTheme.warning.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.outbox, color: AppTheme.warning, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Pending outbox: $pending item(s)',
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () async {
+                                  await SyncQueueService.instance.processQueue(force: true);
+                                  if (mounted) setState(() {});
+                                },
+                                child: const Text('Flush', style: TextStyle(fontSize: 12)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
                   ],
                 ],
               ),

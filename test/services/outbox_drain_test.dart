@@ -89,16 +89,17 @@ void main() {
     expect(attempts, 0);
   });
 
-  test('failed audit remains pending and blocks later changes', () async {
+  test('failed audit remains pending without blocking later sales', () async {
     final audit = item('audit_log');
     final sale = item('sale');
     await OutboxDrain.run(
         items: [audit, sale],
-        push: (_) async => false,
+        push: (row) async => row.entity == 'sale',
         save: (_) {},
         now: () => start);
     expect(audit.processed, isFalse);
-    expect(sale.processed, isFalse);
+    expect(sale.processed, isTrue);
+    expect(audit.nextRetryAt, isNotNull);
   });
 
   test('bad payload is preserved for repair and never acknowledged', () async {

@@ -37,7 +37,7 @@ import 'objectbox.g.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'shared/services/firebase_sync_service.dart';
-import 'shared/services/cloudflare_service.dart';
+import 'shared/services/ngrok_service.dart';
 import 'firebase_options.dart';
 
 import 'shared/services/background_sync_service.dart';
@@ -99,9 +99,9 @@ void main(List<String> args) async {
   }
 
   try {
-    await CloudflareService.init();
+    await NgrokService.init();
   } catch (e) {
-    debugPrint('Cloudflare Initialization Failed: $e');
+    debugPrint('Ngrok Initialization Failed: $e');
   }
 
   // 2. Set high refresh rate for Android
@@ -350,8 +350,8 @@ void main(List<String> args) async {
         ObjectBoxService.instance.settings.serverPort,
         ObjectBoxService.instance.settings.shopId);
     
-    // Start Cloudflare Tunnel if enabled or always for remote discovery
-    await CloudflareService.instance.start();
+    // Start Ngrok Tunnel if enabled or always for remote discovery
+    await NgrokService.instance.start();
 
     // Start Firebase Sync Listener (Tier 3 fallback)
     FirebaseSyncService.instance.startQueueListener((delta) {
@@ -511,3 +511,4 @@ class _MediPossAppState extends State<MediPossApp> with WidgetsBindingObserver {
     );
   }
 }
+

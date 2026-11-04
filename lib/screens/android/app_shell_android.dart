@@ -37,6 +37,7 @@ import 'dart:async';
 import 'analysis_hub_android.dart';
 import '../../shared/services/ota_update_service.dart';
 import '../../objectbox.g.dart';
+import '../../shared/services/sync_queue_service.dart';
 
 class AppShellAndroid extends StatefulWidget {
   const AppShellAndroid({super.key});
@@ -89,7 +90,9 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
       // Start debounce timer if not already running and not currently showing overlay
       if (_offlineDebounceTimer == null && !_isOfflineOverlayVisible) {
         _offlineDebounceTimer = Timer(const Duration(seconds: 7), () {
-          if (mounted && !(_webSocketService?.connected ?? false)) {
+          if (!mounted) return;
+          final isHttpConnected = context.read<SyncService>().isConnected;
+          if (!(_webSocketService?.connected ?? false) && !isHttpConnected) {
             setState(() {
               _isOfflineOverlayVisible = true;
             });
@@ -384,7 +387,7 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
             ),
           
           // --- HUB OFFLINE OVERLAY (BLOCKING) ---
-          if (!sync.isCloudMode && sync.queueSyncFailed && sync.hubIp != null)
+          if (!sync.isCloudMode && _isOfflineOverlayVisible && !sync.isConnected && sync.hubIp != null)
             ConnectivityOverlay(
               title: 'Hub Connection Lost',
               message: 'The Windows Hub is offline or unreachable. What would you like to do?',
@@ -408,13 +411,34 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
-                  onPressed: () {
-                    wsvc.connect(sync.hubIp!, sync.secret);
+                  onPressed: () async {
+                    setState(() {
+                      _isOfflineOverlayVisible = false;
+                    });
+                    sync.setQueueSyncFailed(false);
+                    final reachable = await sync.testConnection(sync.hubIp!);
+                    if (reachable) {
+                      wsvc.connect(sync.hubIp!, sync.secret);
+                      SyncQueueService.instance.processQueue();
+                    }
                   },
                   icon: const Icon(Icons.refresh),
                   label: const Text('Retry Connection'),
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(double.infinity, 50),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _isOfflineOverlayVisible = false;
+                    });
+                  },
+                  icon: const Icon(Icons.close),
+                  label: const Text('Dismiss / Continue Working Offline'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.grey,
                   ),
                 ),
               ],

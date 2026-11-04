@@ -47,4 +47,29 @@ class TransferRules {
 
     return null; // Valid
   }
+
+  static String? validateEditTransfer({
+    required Medicine medicine,
+    required int qty,
+    required String from,
+    required String to,
+    DateTime? expiryDate,
+    AppUser? actor,
+  }) {
+    if (actor != null &&
+        !(actor.role.toLowerCase() == 'admin' ||
+            actor.role.toLowerCase() == 'owner' ||
+            actor.canEditTransfers)) {
+      return 'Unauthorized: You do not have permission to edit stock transfers.';
+    }
+
+    return validateTransfer(
+      medicine: medicine,
+      qty: qty,
+      from: from,
+      to: to,
+      expiryDate: expiryDate,
+      actor: actor,
+    );
+  }
 }

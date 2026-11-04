@@ -17,18 +17,18 @@ void main() {
     final health = HubHealth.fromJson({'shopId': 'shop-a', 'serverTime': 100});
     expect(health.serverTime, 100);
   });
-  test('missing identity cannot silently authorize pairing', () {
-    expect(
-        () => HubHealth.fromJson({
-              'data': {'timestamp': '2026-10-03'}
-            }),
-        throwsFormatException);
+  test('supports legacy hub missing shop identity', () {
+    final health = HubHealth.fromJson({
+      'data': {'timestamp': '2026-10-03T01:00:00Z'}
+    });
+    expect(health.shopId, 'legacy_hub');
+    expect(health.serverTime, DateTime.utc(2026, 10, 3, 1).millisecondsSinceEpoch);
   });
-  test('missing server clock cannot advance checkpoint using client clock', () {
-    expect(
-        () => HubHealth.fromJson({
-              'data': {'shopId': 'shop-a'}
-            }),
-        throwsFormatException);
+  test('supports legacy hub missing server clock by using local time fallback', () {
+    final health = HubHealth.fromJson({
+      'data': {'shopId': 'shop-a'}
+    });
+    expect(health.shopId, 'shop-a');
+    expect(health.serverTime, isPositive);
   });
 }

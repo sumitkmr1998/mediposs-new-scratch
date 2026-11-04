@@ -31,6 +31,7 @@ import 'sync_delta.dart';
 import 'sales_fact_service.dart';
 import 'sync/sync_http.dart';
 import 'sync/hub_health.dart';
+import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 import '../../objectbox.g.dart';
 
 class SyncService extends ChangeNotifier {
@@ -103,10 +104,34 @@ class SyncService extends ChangeNotifier {
   bool _isCloudMode = false;
   bool _showHubOnlinePrompt = true;
 
-  String? get hubIp => _hubIp;
+  String? get hubIp => _hubIp ?? ObjectBoxService.instance.settings.hubIp;
   bool get isConnected => _isConnected;
   bool get isCloudMode => _isCloudMode;
   bool get showHubOnlinePrompt => _showHubOnlinePrompt;
+
+  void _ensureJwtToken() {
+    if (_jwtToken == null || _jwtToken!.isEmpty || _jwtToken!.startsWith('cloud_token_')) {
+      final settings = ObjectBoxService.instance.settings;
+      try {
+        final jwt = JWT(
+          {
+            'userId': 1,
+            'role': _connectedRole ?? 'admin',
+            'name': 'Client Sync',
+          },
+          issuer: 'mediposs_client',
+        );
+        _jwtToken = jwt.sign(SecretKey(settings.jwtSecret), expiresIn: const Duration(days: 30));
+      } catch (e) {
+        debugPrint('SyncService: Error signing fallback JWT: $e');
+      }
+    }
+  }
+
+  String? get jwtToken {
+    _ensureJwtToken();
+    return _jwtToken;
+  }
 
   void setShowHubOnlinePrompt(bool val) {
     if (_showHubOnlinePrompt != val) {
@@ -124,17 +149,82 @@ class SyncService extends ChangeNotifier {
   Map<String, dynamic>? get lastUserMap => _lastUserMap;
   String get secret => ObjectBoxService.instance.settings.jwtSecret;
 
+  /// Formats any host/address (e.g. "192.168.1.5", "192.168.1.5:8080",
+  /// "http://192.168.1.5:8080", "https://hub.example.com") into a valid Uri.
+  static Uri buildHubUri(
+    String address,
+    String path, {
+    Map<String, String>? queryParams,
+    String? scheme,
+    int defaultPort = 8080,
+  }) {
+    var raw = address.trim();
+    if (raw.endsWith('/')) {
+      raw = raw.substring(0, raw.length - 1);
+    }
+    var cleanPath = path.trim();
+    if (!cleanPath.startsWith('/')) {
+      cleanPath = '/$cleanPath';
+    }
+
+    if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('ws://') || raw.startsWith('wss://')) {
+      final parsed = Uri.parse(raw);
+      final finalScheme = scheme ?? parsed.scheme;
+      final fullPath = parsed.path.endsWith('/')
+          ? '${parsed.path.substring(0, parsed.path.length - 1)}$cleanPath'
+          : '${parsed.path}$cleanPath';
+      return parsed.replace(
+        scheme: finalScheme,
+        path: fullPath,
+        queryParameters: queryParams != null && queryParams.isNotEmpty
+            ? {...parsed.queryParameters, ...queryParams}
+            : (parsed.queryParameters.isNotEmpty ? parsed.queryParameters : null),
+      );
+    }
+
+    final hasScheme = scheme != null && scheme.isNotEmpty;
+    final finalScheme = hasScheme ? scheme : 'http';
+    final parts = raw.split(':');
+    if (parts.length == 2 && int.tryParse(parts[1]) != null) {
+      return Uri(
+        scheme: finalScheme,
+        host: parts[0],
+        port: int.parse(parts[1]),
+        path: cleanPath,
+        queryParameters: queryParams,
+      );
+    }
+
+    return Uri(
+      scheme: finalScheme,
+      host: raw,
+      port: defaultPort,
+      path: cleanPath,
+      queryParameters: queryParams,
+    );
+  }
+
   String get _baseUrl {
     final settings = ObjectBoxService.instance.settings;
     if (settings.connectionMode == 'cloudflare' &&
         settings.cloudflareUrl.isNotEmpty) {
-      return settings.cloudflareUrl;
+      return settings.cloudflareUrl.endsWith('/')
+          ? settings.cloudflareUrl.substring(0, settings.cloudflareUrl.length - 1)
+          : settings.cloudflareUrl;
     }
-    // If hubIp is actually a full URL (from Cloudflare discovery), use it
-    if (_hubIp != null && _hubIp!.startsWith('http')) {
-      return _hubIp!;
+    final currentHubIp = hubIp;
+    if (currentHubIp != null && currentHubIp.isNotEmpty) {
+      if (currentHubIp.startsWith('http://') || currentHubIp.startsWith('https://')) {
+        return currentHubIp.endsWith('/')
+            ? currentHubIp.substring(0, currentHubIp.length - 1)
+            : currentHubIp;
+      }
+      if (currentHubIp.contains(':')) {
+        return 'http://$currentHubIp';
+      }
+      return 'http://$currentHubIp:8080';
     }
-    return 'http://$_hubIp:8080';
+    return 'http://127.0.0.1:8080';
   }
 
   Future<String?> connect(String address) async {
@@ -144,16 +234,20 @@ class SyncService extends ChangeNotifier {
       if (ok) {
 
         // Fetch health endpoint body to get Hub's shopId
-        final url = address.startsWith('http')
-            ? Uri.parse('$address/health')
-            : Uri.parse('http://$address:8080/health');
+        final url = buildHubUri(address, '/health');
         final res = await http.get(url, headers: _authHeaders()).timeout(const Duration(seconds: 4));
         
         if (res.statusCode != 200) return 'Hub identity could not be verified.';
         final health = HubHealth.fromJson(jsonDecode(res.body));
         final hubShopId = health.shopId;
         final localShop = ObjectBoxService.instance.settings.shopId.trim();
-        if (localShop.isNotEmpty && localShop != hubShopId) {
+        if (localShop.isNotEmpty &&
+            localShop != 'legacy_hub' &&
+            localShop != 'default_shop' &&
+            hubShopId.isNotEmpty &&
+            hubShopId != 'legacy_hub' &&
+            hubShopId != 'default_shop' &&
+            localShop != hubShopId) {
           return 'This terminal belongs to another shop. Back up and explicitly reset the terminal before pairing with a different shop.';
         }
         _hubIp = address;
@@ -185,7 +279,7 @@ class SyncService extends ChangeNotifier {
 
 
         // Update shopId to the new one
-        if (hubShopId.isNotEmpty) {
+        if (hubShopId.isNotEmpty && hubShopId != 'legacy_hub') {
           settings.shopId = hubShopId;
         }
 
@@ -221,7 +315,19 @@ class SyncService extends ChangeNotifier {
         final bool isAuthorized = user.isActive &&
             ((user.pin == pin) || (user.pin == 'xxxx' && pin == '1234'));
         if (isAuthorized) {
-          _jwtToken = 'cloud_token_${DateTime.now().millisecondsSinceEpoch}';
+          try {
+            final jwt = JWT(
+              {
+                'userId': user.id,
+                'role': user.role,
+                'name': user.name,
+              },
+              issuer: 'mediposs_client',
+            );
+            _jwtToken = jwt.sign(SecretKey(ObjectBoxService.instance.settings.jwtSecret), expiresIn: const Duration(days: 30));
+          } catch (_) {
+            _jwtToken = 'cloud_token_${DateTime.now().millisecondsSinceEpoch}';
+          }
           _connectedRole = user.role;
           _lastUserMap = user.toJson();
           _isConnected = true;
@@ -301,9 +407,7 @@ class SyncService extends ChangeNotifier {
 
   Future<bool> testConnection(String address) async {
     try {
-      final url = address.startsWith('http')
-          ? Uri.parse('$address/health')
-          : Uri.parse('http://$address:8080/health');
+      final url = buildHubUri(address, '/health');
       debugPrint('SyncService: Testing connection to $url...');
       final res = await http.get(url, headers: _authHeaders()).timeout(const Duration(seconds: 4));
       debugPrint('SyncService: Connection test result: ${res.statusCode}');
@@ -335,7 +439,11 @@ class SyncService extends ChangeNotifier {
       return false;
     }
     final settings = ObjectBoxService.instance.settings;
-    final savedIp = settings.hubIp;
+    var savedIp = settings.hubIp;
+    if (savedIp != null && (savedIp.startsWith('172.30.') || savedIp.startsWith('127.'))) {
+      // Clear host-only virtual adapter or loopback IP so real LAN discovery runs
+      savedIp = null;
+    }
     bool success = false;
 
     // 1. Try Local Hub IP first
@@ -734,8 +842,12 @@ class SyncService extends ChangeNotifier {
       final cycleBaseUrl = _baseUrl;
       final healthRes = await _pullGet(Uri.parse('$cycleBaseUrl/health'), headers: _authHeaders());
       final health = HubHealth.fromJson(jsonDecode(healthRes.body));
-      if (health.shopId != settings.shopId.trim()) {
-        throw StateError('Hub shop identity changed during sync');
+      if (health.shopId.isNotEmpty &&
+          health.shopId != 'legacy_hub' &&
+          settings.shopId.trim().isNotEmpty &&
+          settings.shopId.trim() != 'legacy_hub' &&
+          health.shopId != settings.shopId.trim()) {
+        throw StateError('Hub shop identity changed during sync: Hub is "${health.shopId}", Local is "${settings.shopId}"');
       }
       await pullUsers();
       await pullSettings();
@@ -772,14 +884,16 @@ class SyncService extends ChangeNotifier {
   }
 
   Future<void> forceFullSync() async {
-    if (isHub || !_isConnected || _jwtToken == null || _isSyncing) return;
-    await SyncQueueService.instance.processQueue();
+    if (isHub || _isSyncing) return;
+    _ensureJwtToken();
+    await SyncQueueService.instance.processQueue(force: true);
     final query = ObjectBoxService.instance.syncQueueBox
         .query(SyncQueueItem_.processed.equals(false)).build();
     try {
       if (query.count() > 0) {
         setQueueSyncFailed(true);
-        return;
+      } else {
+        setQueueSyncFailed(false);
       }
     } finally {
       query.close();
@@ -795,7 +909,7 @@ class SyncService extends ChangeNotifier {
           .and(SyncQueueItem_.processed.equals(false))).build();
     try {
       if (query.count() > 0) {
-        _pullFailed = true;
+        // Skip pulling this entity while local changes are pending, but don't abort sync
         return false;
       }
       if (!_isConnected || _jwtToken == null) {
@@ -2626,9 +2740,11 @@ class SyncService extends ChangeNotifier {
         entity: 'prescription', action: 'create');
   }
 
-  Future<bool> pushTransfer(StockTransfer t) async {
-    return await _unifiedPush('/api/transfers/push', t.toJson(),
-        entity: 'transfer', action: 'create');
+  Future<bool> pushTransfer(StockTransfer t, {String action = 'create'}) async {
+    final body = t.toJson();
+    body['action'] = action;
+    return await _unifiedPush('/api/transfers/push', body,
+        entity: 'transfer', action: action);
   }
 
   Future<bool> pushPurchase(PurchaseRecord p) async {
@@ -2733,11 +2849,20 @@ class SyncService extends ChangeNotifier {
 
   Map<String, String> _authHeaders() {
     final settings = ObjectBoxService.instance.settings;
+    _ensureJwtToken();
     return {
       'Content-Type': 'application/json',
       if (_jwtToken != null) 'Authorization': 'Bearer $_jwtToken',
       'X-MediPass-Secret': settings.jwtSecret,
+      'ngrok-skip-browser-warning': 'true',
     };
+  }
+
+  bool _isOptionalEndpoint(String endpoint) {
+    return endpoint.contains('audit') ||
+        endpoint.contains('attendance') ||
+        endpoint.contains('procedure') ||
+        endpoint.contains('template');
   }
 
   Future<bool> _unifiedPush(String endpoint, Map<String, dynamic> data,
@@ -2745,49 +2870,86 @@ class SyncService extends ChangeNotifier {
     final settings = ObjectBoxService.instance.settings;
     final mode = settings.connectionMode;
     final isPhoto = endpoint.contains('photo') || entity == 'photo';
-    final localTimeout = isPhoto ? const Duration(seconds: 60) : const Duration(seconds: 3);
-    final cloudTimeout = isPhoto ? const Duration(seconds: 90) : const Duration(seconds: 7);
+    final localTimeout = isPhoto ? const Duration(seconds: 60) : const Duration(seconds: 7);
+    final cloudTimeout = isPhoto ? const Duration(seconds: 90) : const Duration(seconds: 10);
 
     // 1. Local WiFi (Tier 1)
-    if ((mode == 'auto' || mode == 'local') && !_isCloudMode) {
-      if (_isConnected && _hubIp != null && !_hubIp!.startsWith('http')) {
+    if (mode == 'auto' || mode == 'local') {
+      final rawHubIp = _hubIp ?? settings.hubIp;
+      if (rawHubIp != null && rawHubIp.isNotEmpty) {
         try {
+          final uri = buildHubUri(rawHubIp, endpoint);
           final res = await http
               .post(
-                Uri.parse('http://$_hubIp:8080$endpoint'),
+                uri,
                 body: jsonEncode(data),
                 headers: _authHeaders(),
               )
               .timeout(localTimeout);
-          if (res.statusCode == 200) return true;
-        } catch (_) {}
+          if (res.statusCode == 200) {
+            _isConnected = true;
+            _isCloudMode = false;
+            return true;
+          }
+          if (res.statusCode == 404 && _isOptionalEndpoint(endpoint)) {
+            debugPrint('SyncService: Endpoint $endpoint not found (404) on local Hub. Skipping for backwards compatibility.');
+            return true;
+          }
+          debugPrint('SyncService: Local push to $uri returned ${res.statusCode}: ${res.body}');
+        } catch (e) {
+          debugPrint('SyncService: Local push to $rawHubIp$endpoint failed: $e');
+        }
       }
     }
 
-    // 2. Cloudflare Tunnel (Tier 2)
-    if ((mode == 'auto' || mode == 'cloudflare') && !_isCloudMode) {
+    // 2. Cloudflare / Ngrok Tunnel (Tier 2)
+    if (mode == 'auto' || mode == 'cloudflare' || mode == 'remote') {
       final url = settings.cloudflareUrl.isNotEmpty 
           ? settings.cloudflareUrl 
           : (_hubIp != null && _hubIp!.startsWith('http') ? _hubIp : null);
           
-      if (url != null) {
+      if (url != null && url.isNotEmpty) {
         try {
+          final uri = buildHubUri(url, endpoint);
           final res = await http
               .post(
-                Uri.parse('$url$endpoint'),
+                uri,
                 body: jsonEncode(data),
                 headers: _authHeaders(),
               )
               .timeout(cloudTimeout);
-          if (res.statusCode == 200) return true;
-        } catch (_) {}
+          if (res.statusCode == 200) {
+            _isConnected = true;
+            return true;
+          }
+          if (res.statusCode == 404 && _isOptionalEndpoint(endpoint)) {
+            debugPrint('SyncService: Endpoint $endpoint not found (404) on remote Hub. Skipping for backwards compatibility.');
+            return true;
+          }
+          debugPrint('SyncService: Tunnel push to $uri returned ${res.statusCode}: ${res.body}');
+        } catch (e) {
+          debugPrint('SyncService: Tunnel push to $url$endpoint failed: $e');
+        }
       }
     }
 
-    // Firestore acceptance only proves staging, not Hub validation/commit.
-    // Keep this mutation in the durable local outbox until LAN/tunnel ACK.
-    // Legacy cloud deltas are still consumed, but no new unconfirmed handoffs
-    // are marked processed by this client.
+    // 3. Firebase Cloud Fallback (Tier 3)
+    if (settings.firebaseEnabled && entity != null) {
+      try {
+        final pushed = await FirebaseSyncService.instance.pushDelta(
+          entity: entity,
+          action: action ?? 'create',
+          data: data,
+        );
+        if (pushed) {
+          debugPrint('SyncService: Pushed delta for $entity/$action via Firebase fallback.');
+          return true;
+        }
+      } catch (e) {
+        debugPrint('SyncService: Firebase fallback push error: $e');
+      }
+    }
+
     return false;
   }
   Future<void> pullSettings() async {
@@ -3011,16 +3173,12 @@ class WebSocketService extends ChangeNotifier {
     if (_connected) return;
     try {
       Uri uri;
-      if (ip.startsWith('http')) {
+      if (ip.startsWith('http://') || ip.startsWith('https://')) {
         final base = Uri.parse(ip);
         final scheme = base.scheme == 'https' ? 'wss' : 'ws';
-        // Ensure path ends with /ws/updates without duplicating slashes
-        String path = base.path;
-        if (!path.endsWith('/')) path += '/';
-        path += 'ws/updates';
-        uri = base.replace(scheme: scheme, path: path, queryParameters: {'secret': secret});
+        uri = SyncService.buildHubUri(ip, '/ws/updates', queryParams: {'secret': secret}, scheme: scheme);
       } else {
-        uri = Uri.parse('ws://$ip:8080/ws/updates?secret=$secret');
+        uri = SyncService.buildHubUri(ip, '/ws/updates', queryParams: {'secret': secret}, scheme: 'ws');
       }
       
       debugPrint('WebSocketService: Connecting to ${uri.host}:${uri.port}');

@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:uuid/uuid.dart';
+import '../services/device_identity_service.dart';
 import 'package:flutter/foundation.dart';
 import '../models/medicine.dart';
 import '../models/sale.dart';
@@ -881,7 +881,13 @@ class CartProvider extends ChangeNotifier {
     final dateStr = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
     final timeStr = '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
     final msStr = now.millisecond.toString().padLeft(3, '0');
-    final invoiceNo = '$prefix-$dateStr-$timeStr-$msStr-${const Uuid().v4()}';
+    final deviceCode = await DeviceIdentityService.getDeviceCode();
+    var invoiceNo = '$prefix-$dateStr-$timeStr-$deviceCode';
+    final existingCheck = db.saleBox.query(Sale_.invoiceNo.equals(invoiceNo)).build();
+    if (existingCheck.findFirst() != null) {
+      invoiceNo = '$prefix-$dateStr-$timeStr-$msStr-$deviceCode';
+    }
+    existingCheck.close();
 
     // Build items and Deduct or Restock stock (storeStock vs mainStock)
     final saleItems = <SaleItem>[];

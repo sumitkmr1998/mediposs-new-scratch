@@ -1,13 +1,62 @@
 import 'dart:io';
+import 'dart:math';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'objectbox_service.dart';
 
 class DeviceIdentityService {
   static String? _cachedDeviceId;
+  static String? _cachedDeviceCode;
 
   static String get cachedDeviceId => _cachedDeviceId ?? 'Unknown-Device';
+  static String get cachedDeviceCode => _cachedDeviceCode ?? _fallbackDeviceCode();
+
+  static String _fallbackDeviceCode() {
+    if (Platform.isWindows) {
+      final isTerminal = ObjectBoxService.isInitialized &&
+          ObjectBoxService.instance.settings.isWindowsClient;
+      return isTerminal ? 'W1' : 'H0';
+    }
+    return 'A1';
+  }
+
+  /// Returns a persistent 2-character device code (e.g. 'H0' for Windows Hub, 'A1', 'A7' for Android).
+  static Future<String> getDeviceCode() async {
+    if (_cachedDeviceCode != null) return _cachedDeviceCode!;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      var code = prefs.getString('persistent_device_code');
+      if (code != null && code.trim().isNotEmpty) {
+        _cachedDeviceCode = code.trim().toUpperCase();
+        return _cachedDeviceCode!;
+      }
+
+      final isHub = Platform.isWindows &&
+          ObjectBoxService.isInitialized &&
+          !ObjectBoxService.instance.settings.isWindowsClient;
+
+      if (isHub) {
+        code = 'H0';
+      } else {
+        final prefix = Platform.isWindows ? 'W' : 'A';
+        const chars = '0123456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+        final rand = Random();
+        code = '$prefix${chars[rand.nextInt(chars.length)]}';
+      }
+
+      await prefs.setString('persistent_device_code', code);
+      _cachedDeviceCode = code;
+      return code;
+    } catch (e) {
+      debugPrint('DeviceIdentityService: Error getting device code: $e');
+      final fallback = _fallbackDeviceCode();
+      _cachedDeviceCode = fallback;
+      return fallback;
+    }
+  }
 
   /// Resolves a human-readable, persistent device identifier.
   /// Example outputs:
@@ -15,6 +64,8 @@ class DeviceIdentityService {
   /// - "Windows: DESKTOP-MAIN (Hub)"
   /// - "Windows: LAPTOP-FRONT (Terminal)"
   static Future<String> initDeviceId() async {
+    // Warm up device code asynchronously
+    getDeviceCode();
     try {
       if (ObjectBoxService.isInitialized) {
         final settings = ObjectBoxService.instance.settings;

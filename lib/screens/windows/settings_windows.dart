@@ -1,3 +1,4 @@
+import '../../shared/utils/network_helper.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,7 +12,7 @@ import 'package:network_info_plus/network_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../shared/services/cloudflare_service.dart';
+import '../../shared/services/ngrok_service.dart';
 import '../../shared/services/sync_service.dart';
 import '../../shared/services/ota_update_service.dart';
 
@@ -148,8 +149,7 @@ class _SettingsWindowsState extends State<SettingsWindows> {
 
   Future<void> _loadHubIp() async {
     try {
-      final info = NetworkInfo();
-      final ip = await info.getWifiIP();
+      final ip = await NetworkHelper.getLocalIp();
       if (mounted) setState(() => _hubIp = ip);
     } catch (e) {
       debugPrint('Error loading Hub IP: $e');
@@ -1312,3 +1312,4 @@ class _NavModel {
   final Color color;
   _NavModel(this.icon, this.label, this.color);
 }
+

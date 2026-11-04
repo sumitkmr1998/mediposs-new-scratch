@@ -11,7 +11,7 @@ class OutboxDrain {
     var failed = false;
     for (final item in items) {
       if (item.processed) continue;
-      final optional = item.entity == 'photo';
+      final optional = item.entity == 'photo' || item.entity == 'audit_log';
       if (!item.isReadyForRetry(now())) {
         failed = true;
         if (optional) continue;

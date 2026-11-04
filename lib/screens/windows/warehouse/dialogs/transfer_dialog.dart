@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../shared/models/medicine.dart';
+import '../../../../shared/models/stock_transfer.dart';
 import '../../../../shared/providers/warehouse_provider.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/services/sync_service.dart';
@@ -12,6 +13,7 @@ class TransferDialog extends StatefulWidget {
   final String to;
   final WarehouseProvider wh;
   final int? initialQty;
+  final StockTransfer? existingTransfer;
 
   const TransferDialog({
     super.key,
@@ -20,6 +22,7 @@ class TransferDialog extends StatefulWidget {
     required this.to,
     required this.wh,
     this.initialQty,
+    this.existingTransfer,
   });
 
   @override
@@ -59,11 +62,29 @@ class TransferDialogState extends State<TransferDialog> {
   @override
   void initState() {
     super.initState();
-    final initVal = (widget.initialQty != null && widget.initialQty! > 0) ? widget.initialQty.toString() : '1';
-    _qtyCtrl = TextEditingController(text: initVal);
-    _fromLoc = widget.from;
-    _toLoc = widget.to;
+    if (widget.existingTransfer != null) {
+      _qtyCtrl = TextEditingController(text: widget.existingTransfer!.qty.toString());
+      _noteCtrl.text = widget.existingTransfer!.note;
+      _fromLoc = widget.existingTransfer!.fromWarehouse;
+      _toLoc = widget.existingTransfer!.toWarehouse;
+    } else {
+      final initVal = (widget.initialQty != null && widget.initialQty! > 0)
+          ? widget.initialQty.toString()
+          : '1';
+      _qtyCtrl = TextEditingController(text: initVal);
+      _fromLoc = widget.from;
+      _toLoc = widget.to;
+    }
     _updateSelectedBatch();
+    if (widget.existingTransfer != null &&
+        widget.existingTransfer!.batchNo != null &&
+        widget.existingTransfer!.batchNo!.isNotEmpty) {
+      final clean = widget.existingTransfer!.batchNo!.trim().toUpperCase();
+      final match = widget.medicine.batches
+          .where((b) => b.batchNo.trim().toUpperCase() == clean)
+          .firstOrNull;
+      if (match != null) _selectedBatch = match;
+    }
   }
 
   @override
@@ -75,16 +96,21 @@ class TransferDialogState extends State<TransferDialog> {
       'store': 'Store',
     };
 
-    // Calculate available stock based on selected batch or total
-    final available = _selectedBatch != null
-        ? _getStock(_selectedBatch!, _fromLoc)
-        : (_fromLoc == 'main' || _fromLoc == 'clinic'
-            ? widget.medicine.mainStock
-            : (_fromLoc == 'store'
-                ? widget.medicine.storeStock
-                : (_fromLoc == 'bulkClinic'
-                    ? widget.medicine.bulkClinicStock
-                    : widget.medicine.bulkStoreStock)));
+    final isSameFrom = widget.existingTransfer != null &&
+        _fromLoc == widget.existingTransfer!.fromWarehouse;
+    final int existingCredit = isSameFrom ? widget.existingTransfer!.qty : 0;
+
+    // Calculate available stock based on selected batch or total, crediting reverted transfer
+    final available = (_selectedBatch != null
+            ? _getStock(_selectedBatch!, _fromLoc)
+            : (_fromLoc == 'main' || _fromLoc == 'clinic'
+                ? widget.medicine.mainStock
+                : (_fromLoc == 'store'
+                    ? widget.medicine.storeStock
+                    : (_fromLoc == 'bulkClinic'
+                        ? widget.medicine.bulkClinicStock
+                        : widget.medicine.bulkStoreStock)))) +
+        existingCredit;
 
     final primaryColor = _toLoc == 'store' || _toLoc == 'bulkStore'
         ? const Color(0xFF14B8A6)
@@ -94,15 +120,23 @@ class TransferDialogState extends State<TransferDialog> {
         .where((b) => _getStock(b, _fromLoc) > 0)
         .toList();
 
-    final batchList = availableBatches.isNotEmpty ? availableBatches : widget.medicine.batches.toList();
+    final batchList = availableBatches.isNotEmpty
+        ? availableBatches
+        : widget.medicine.batches.toList();
+
+    final isEdit = widget.existingTransfer != null;
 
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Row(
         children: [
-          Icon(Icons.swap_horiz, color: primaryColor),
+          Icon(isEdit ? Icons.edit_note_rounded : Icons.swap_horiz,
+              color: primaryColor),
           const SizedBox(width: 12),
-          Expanded(child: Text('Transfer ${widget.medicine.name}')),
+          Expanded(
+              child: Text(isEdit
+                  ? 'Edit Transfer: ${widget.medicine.name}'
+                  : 'Transfer ${widget.medicine.name}')),
         ],
       ),
       content: SizedBox(
@@ -223,21 +257,10 @@ class TransferDialogState extends State<TransferDialog> {
             final qty = int.tryParse(_qtyCtrl.text) ?? 0;
             final sync = context.read<SyncService>();
 
-            // Re-validate against selected batch
-            final maxAvail = _selectedBatch != null
-                ? _getStock(_selectedBatch!, _fromLoc)
-                : (_fromLoc == 'main' || _fromLoc == 'clinic'
-                    ? widget.medicine.mainStock
-                    : (_fromLoc == 'store'
-                        ? widget.medicine.storeStock
-                        : (_fromLoc == 'bulkClinic'
-                            ? widget.medicine.bulkClinicStock
-                            : widget.medicine.bulkStoreStock)));
-
-            if (qty > maxAvail) {
+            if (qty > available) {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                 content: Text(
-                    'Insufficient stock in selected batch (Available: $maxAvail)'),
+                    'Insufficient stock in selected batch (Available: $available)'),
                 backgroundColor: AppTheme.danger,
                 behavior: SnackBarBehavior.floating,
               ));
@@ -245,17 +268,45 @@ class TransferDialogState extends State<TransferDialog> {
               return;
             }
 
-            final err = await widget.wh.transfer(
-              medicine: widget.medicine,
-              qty: qty,
-              from: _fromLoc,
-              to: _toLoc,
-              batchNo: _selectedBatch?.batchNo,
-              expiryDate: _selectedBatch?.expiryDate,
-              note: _noteCtrl.text,
-              syncService: sync,
-              actor: context.read<AuthProvider>().currentUser,
-            );
+            if (widget.existingTransfer != null &&
+                !context.read<AuthProvider>().canEditTransfers) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text(
+                    'Unauthorized: You do not have permission to edit stock transfers.'),
+                backgroundColor: AppTheme.danger,
+                behavior: SnackBarBehavior.floating,
+              ));
+              setState(() => _isSubmitting = false);
+              return;
+            }
+
+            final String? err;
+            if (widget.existingTransfer != null) {
+              err = await widget.wh.editTransfer(
+                originalTransfer: widget.existingTransfer!,
+                newQty: qty,
+                newFrom: _fromLoc,
+                newTo: _toLoc,
+                newBatchNo: _selectedBatch?.batchNo,
+                newExpiryDate: _selectedBatch?.expiryDate,
+                newNote: _noteCtrl.text,
+                syncService: sync,
+                actor: context.read<AuthProvider>().currentUser,
+              );
+            } else {
+              err = await widget.wh.transfer(
+                medicine: widget.medicine,
+                qty: qty,
+                from: _fromLoc,
+                to: _toLoc,
+                batchNo: _selectedBatch?.batchNo,
+                expiryDate: _selectedBatch?.expiryDate,
+                note: _noteCtrl.text,
+                syncService: sync,
+                actor: context.read<AuthProvider>().currentUser,
+              );
+            }
+
             if (!context.mounted) return;
             if (err != null) {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -267,14 +318,16 @@ class TransferDialogState extends State<TransferDialog> {
             } else {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: const Text('Stock transferred successfully'),
+                content: Text(isEdit
+                    ? 'Transfer updated successfully'
+                    : 'Stock transferred successfully'),
                 backgroundColor: AppTheme.success,
                 behavior: SnackBarBehavior.floating,
                 margin: const EdgeInsets.all(20),
               ));
             }
           },
-          child: const Text('Confirm Transfer'),
+          child: Text(isEdit ? 'Save Changes' : 'Confirm Transfer'),
         ),
       ],
     );

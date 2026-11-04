@@ -29,6 +29,7 @@ class AppUser {
   // Warehouse
   bool canViewWarehouse;
   bool canTransferStock;
+  bool canEditTransfers;
 
   // POS
   bool canAccessPOS;
@@ -76,6 +77,7 @@ class AppUser {
     this.canDeleteInventory = false,
     this.canViewWarehouse = false,
     this.canTransferStock = false,
+    this.canEditTransfers = false,
     this.canAccessPOS = true,
     this.canDiscountSales = false,
     this.canOverridePrice = false,
@@ -119,6 +121,7 @@ class AppUser {
         canDeleteInventory = true;
         canViewWarehouse = true;
         canTransferStock = true;
+        canEditTransfers = true;
         canAccessPOS = true;
         canProcessRetailSales = true;
         canProcessClinicalDispenses = true;
@@ -141,12 +144,27 @@ class AppUser {
         canExportData = true;
         canViewFinancialAnalytics = true;
         break;
+      case 'warehouse':
+      case 'warehouse manager':
+      case 'store keeper':
+        canViewInventory = true;
+        canEditInventory = true;
+        canAddStock = true;
+        canOverrideStock = true;
+        canViewWarehouse = true;
+        canTransferStock = true;
+        canEditTransfers = true;
+        canViewPurchasePrice = true;
+        canExportData = true;
+        canViewHistoricalData = true;
+        break;
       case 'pharmacist':
         canViewInventory = true;
         canEditInventory = true;
         canAddStock = true;
         canViewWarehouse = true;
         canTransferStock = true;
+        canEditTransfers = false;
         canAccessPOS = true;
         canProcessRetailSales = true;
         canProcessClinicalDispenses = true;
@@ -188,6 +206,7 @@ class AppUser {
         canViewFinancialAnalytics = true;
         break;
     }
+    _applyPermissionShield(preset);
   }
 
   void _applyPermissionShield(String preset) {
@@ -197,6 +216,9 @@ class AppUser {
       case 'manager':
       case 'doctor':
       case 'accountant':
+      case 'warehouse':
+      case 'warehouse manager':
+      case 'store keeper':
         canViewHistoricalData = true;
         break;
       case 'cashier':
@@ -220,6 +242,7 @@ class AppUser {
     canDeleteInventory = val;
     canViewWarehouse = val;
     canTransferStock = val;
+    canEditTransfers = val;
     canAccessPOS = val;
     canProcessRetailSales = val;
     canProcessClinicalDispenses = val;
@@ -260,6 +283,7 @@ class AppUser {
         'canDeleteInventory': canDeleteInventory,
         'canViewWarehouse': canViewWarehouse,
         'canTransferStock': canTransferStock,
+        'canEditTransfers': canEditTransfers,
         'canAccessPOS': canAccessPOS,
         'canProcessRetailSales': canProcessRetailSales,
         'canProcessClinicalDispenses': canProcessClinicalDispenses,
@@ -300,6 +324,7 @@ class AppUser {
         canDeleteInventory: json['canDeleteInventory'] ?? false,
         canViewWarehouse: json['canViewWarehouse'] ?? false,
         canTransferStock: json['canTransferStock'] ?? false,
+        canEditTransfers: json['canEditTransfers'] ?? false,
         canAccessPOS: json['canAccessPOS'] ?? true,
         canProcessRetailSales: json['canProcessRetailSales'] ?? true,
         canProcessClinicalDispenses: json['canProcessClinicalDispenses'] ?? true,

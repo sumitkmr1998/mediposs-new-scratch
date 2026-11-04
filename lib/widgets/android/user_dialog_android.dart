@@ -56,6 +56,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
   // Warehouse
   bool _canViewWarehouse = false;
   bool _canTransferStock = false;
+  bool _canEditTransfers = false;
 
   // POS
   bool _canAccessPOS = true;
@@ -111,6 +112,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
 
       _canViewWarehouse = u.canViewWarehouse;
       _canTransferStock = u.canTransferStock;
+      _canEditTransfers = u.canEditTransfers;
 
       _canAccessPOS = u.canAccessPOS;
       _canDiscountSales = u.canDiscountSales;
@@ -154,6 +156,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
       _canOverrideStock = tempUser.canOverrideStock;
       _canViewWarehouse = tempUser.canViewWarehouse;
       _canTransferStock = tempUser.canTransferStock;
+      _canEditTransfers = tempUser.canEditTransfers;
       _canAccessPOS = tempUser.canAccessPOS;
       _canDiscountSales = tempUser.canDiscountSales;
       _canOverridePrice = tempUser.canOverridePrice;
@@ -219,6 +222,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
 
     u.canViewWarehouse = _canViewWarehouse;
     u.canTransferStock = _canTransferStock;
+    u.canEditTransfers = _canEditTransfers;
 
     u.canAccessPOS = _canAccessPOS;
     u.canDiscountSales = _canDiscountSales;
@@ -407,6 +411,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                       children: [
                         _presetChip('CASHIER', Icons.point_of_sale_rounded, () => _applyPreset('Cashier')),
                         _presetChip('PHARMACIST', Icons.medication_rounded, () => _applyPreset('Pharmacist')),
+                        _presetChip('WAREHOUSE', Icons.warehouse_rounded, () => _applyPreset('Warehouse')),
                         _presetChip('DOCTOR', Icons.medical_services_rounded, () => _applyPreset('Doctor')),
                         _presetChip('MANAGER', Icons.supervisor_account_rounded, () => _applyPreset('Manager')),
                         _presetChip('ADMIN', Icons.admin_panel_settings_rounded, () => _applyPreset('Admin')),
@@ -594,7 +599,10 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                               _canViewWarehouse,
                               (v) => setState(() {
                                     _canViewWarehouse = v;
-                                    if (!v) _canTransferStock = false;
+                                    if (!v) {
+                                      _canTransferStock = false;
+                                      _canEditTransfers = false;
+                                    }
                                   })),
                           _buildPermToggle(
                               'Execute Transfers',
@@ -603,6 +611,18 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                               (v) => setState(() {
                                     _canTransferStock = v;
                                     if (v) _canViewWarehouse = true;
+                                    if (!v) _canEditTransfers = false;
+                                  })),
+                          _buildPermToggle(
+                              'Edit Transfers',
+                              'Can modify or cancel past stock movements',
+                              _canEditTransfers,
+                              (v) => setState(() {
+                                    _canEditTransfers = v;
+                                    if (v) {
+                                      _canTransferStock = true;
+                                      _canViewWarehouse = true;
+                                    }
                                   })),
                         ],
                       ),

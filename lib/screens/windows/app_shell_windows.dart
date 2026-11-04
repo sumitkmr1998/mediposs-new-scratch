@@ -1,3 +1,4 @@
+import '../../shared/utils/network_helper.dart';
 import 'dart:io';
 import 'dart:ui';
 import 'dart:async';
@@ -391,6 +392,7 @@ class _AppShellWindowsState extends State<AppShellWindows> {
         if (settings.isWindowsClient &&
             !sync.isCloudMode &&
             !wsvc.connected &&
+            !sync.isConnected &&
             sync.hubIp != null)
           ConnectivityOverlay(
             title: 'Hub Connection Lost',
@@ -736,21 +738,7 @@ class _SideNav extends StatelessWidget {
   }
 
   Future<String> _getLocalIp() async {
-    try {
-      final wifiIp = await NetworkInfo().getWifiIP();
-      if (wifiIp != null && wifiIp.isNotEmpty) return wifiIp;
-    } catch (_) {}
-    try {
-      final interfaces = await NetworkInterface.list(type: InternetAddressType.IPv4);
-      for (final interface in interfaces) {
-        for (final addr in interface.addresses) {
-          if (!addr.isLoopback) {
-            return addr.address;
-          }
-        }
-      }
-    } catch (_) {}
-    return '127.0.0.1';
+    return NetworkHelper.getLocalIp();
   }
 
   void _showHubQrDialog(BuildContext context) async {

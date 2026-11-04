@@ -259,7 +259,7 @@
     },
     {
       "id": "2:1561353773588181738",
-      "lastPropertyId": "39:3143693917650965998",
+      "lastPropertyId": "40:2345312840265281175",
       "name": "AppUser",
       "properties": [
         {
@@ -446,6 +446,11 @@
         {
           "id": "39:3143693917650965998",
           "name": "canAddStock",
+          "type": 1
+        },
+        {
+          "id": "40:2345312840265281175",
+          "name": "canEditTransfers",
           "type": 1
         }
       ],

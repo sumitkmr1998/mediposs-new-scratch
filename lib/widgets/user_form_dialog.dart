@@ -41,6 +41,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
   // Warehouse
   bool _canViewWarehouse = false;
   bool _canTransferStock = false;
+  bool _canEditTransfers = false;
 
   // POS
   bool _canAccessPOS = true;
@@ -95,6 +96,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
       _canOverrideStock = u.canOverrideStock;
       _canViewWarehouse = u.canViewWarehouse;
       _canTransferStock = u.canTransferStock;
+      _canEditTransfers = u.canEditTransfers;
 
       _canAccessPOS = u.canAccessPOS;
       _canDiscountSales = u.canDiscountSales;
@@ -139,6 +141,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
       _canOverrideStock = tempUser.canOverrideStock;
       _canViewWarehouse = tempUser.canViewWarehouse;
       _canTransferStock = tempUser.canTransferStock;
+      _canEditTransfers = tempUser.canEditTransfers;
       _canAccessPOS = tempUser.canAccessPOS;
       _canDiscountSales = tempUser.canDiscountSales;
       _canViewSalesHistory = tempUser.canViewSalesHistory;
@@ -201,6 +204,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
     u.canOverrideStock = _canOverrideStock;
     u.canViewWarehouse = _canViewWarehouse;
     u.canTransferStock = _canTransferStock;
+    u.canEditTransfers = _canEditTransfers;
 
     u.canAccessPOS = _canAccessPOS;
     u.canDiscountSales = _canDiscountSales;
@@ -302,6 +306,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
                           _PresetChip('Cashier', Icons.point_of_sale, () => _applyPreset('Cashier')),
                           const SizedBox(width: 8),
                           _PresetChip('Pharmacist', Icons.medication, () => _applyPreset('Pharmacist')),
+                          const SizedBox(width: 8),
+                          _PresetChip('Warehouse', Icons.warehouse_rounded, () => _applyPreset('Warehouse')),
                           const SizedBox(width: 8),
                           _PresetChip('Doctor', Icons.medical_services_rounded, () => _applyPreset('Doctor')),
                           const SizedBox(width: 8),
@@ -505,11 +511,22 @@ class _UserFormDialogState extends State<UserFormDialog> {
                                           })),
                                           _PermTile('Warehouse HQ', 'Manage main distribution', _canViewWarehouse, (v) => setState(() {
                                             _canViewWarehouse = v;
-                                            if (!v) _canTransferStock = false;
+                                            if (!v) {
+                                              _canTransferStock = false;
+                                              _canEditTransfers = false;
+                                            }
                                           })),
                                           _PermTile('Execute Transfers', 'Move stock between locations', _canTransferStock, (v) => setState(() {
                                             _canTransferStock = v;
                                             if (v) _canViewWarehouse = true;
+                                            if (!v) _canEditTransfers = false;
+                                          })),
+                                          _PermTile('Edit Transfers', 'Modify and revert past stock transfers', _canEditTransfers, (v) => setState(() {
+                                            _canEditTransfers = v;
+                                            if (v) {
+                                              _canTransferStock = true;
+                                              _canViewWarehouse = true;
+                                            }
                                           })),
                                         ],
                                       ),

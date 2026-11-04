@@ -4,6 +4,10 @@ import '../../../../shared/providers/warehouse_provider.dart';
 import '../../../../shared/providers/sales_provider.dart'; // For SalesFilter enum
 import '../../../../theme/app_theme.dart';
 import '../widgets/location_badge.dart';
+import '../dialogs/transfer_dialog.dart';
+import '../../../../shared/services/objectbox_service.dart';
+import '../../../../shared/providers/auth_provider.dart';
+import '../../../../objectbox.g.dart';
 
 class TransferHistoryTab extends StatefulWidget {
   const TransferHistoryTab({super.key});
@@ -19,6 +23,7 @@ class TransferHistoryTabState extends State<TransferHistoryTab> {
   @override
   Widget build(BuildContext context) {
     final wh = context.watch<WarehouseProvider>();
+    final canEdit = context.watch<AuthProvider>().canEditTransfers;
 
     var history = wh.transfers;
 
@@ -33,13 +38,6 @@ class TransferHistoryTabState extends State<TransferHistoryTab> {
           (t.batchNo ?? '').toLowerCase().contains(q) ||
           t.transferredBy.toLowerCase().contains(q)).toList();
     }
-
-    final locations = const {
-      'bulkClinic': 'Clinic Bulk',
-      'clinic': 'Clinic',
-      'bulkStore': 'Store Bulk',
-      'store': 'Store',
-    };
 
     return Column(
       children: [
@@ -220,6 +218,7 @@ class TransferHistoryTabState extends State<TransferHistoryTab> {
                                   DataColumn(label: Text('Stock Changes (From / To)')),
                                   DataColumn(label: Text('Notes')),
                                   DataColumn(label: Text('Transferred By')),
+                                  DataColumn(label: Text('Actions')),
                                 ],
                                 rows: history.take(_limit).map((t) {
                                   final dateStr = '${t.transferredAt.day.toString().padLeft(2,'0')}/${t.transferredAt.month.toString().padLeft(2,'0')}/${t.transferredAt.year} ${t.transferredAt.hour.toString().padLeft(2,'0')}:${t.transferredAt.minute.toString().padLeft(2,'0')}';
@@ -253,6 +252,43 @@ class TransferHistoryTabState extends State<TransferHistoryTab> {
                                         child: Text(t.note.isEmpty ? '-' : t.note, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: context.textMutedColor, fontStyle: FontStyle.italic)),
                                       )),
                                       DataCell(Text(t.transferredBy, style: const TextStyle(fontSize: 13))),
+                                      DataCell(
+                                        canEdit
+                                            ? IconButton(
+                                                icon: const Icon(Icons.edit_outlined,
+                                                    size: 18, color: AppTheme.primary),
+                                                tooltip: 'Edit Transfer',
+                                                onPressed: () {
+                                                  final med = ObjectBoxService.instance.medicineBox.get(t.medicineId) ??
+                                                      ObjectBoxService.instance.medicineBox
+                                                          .query(Medicine_.name.equals(t.medicineName))
+                                                          .build()
+                                                          .findFirst();
+                                                  if (med != null) {
+                                                    showDialog(
+                                                      context: context,
+                                                      builder: (_) => TransferDialog(
+                                                        medicine: med,
+                                                        from: t.fromWarehouse,
+                                                        to: t.toWarehouse,
+                                                        wh: wh,
+                                                        existingTransfer: t,
+                                                      ),
+                                                    );
+                                                  } else {
+                                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                                                      content: Text('Medicine record not found in inventory'),
+                                                      backgroundColor: AppTheme.danger,
+                                                    ));
+                                                  }
+                                                },
+                                              )
+                                            : Tooltip(
+                                                message: 'Permission required to edit transfers',
+                                                child: Icon(Icons.lock_outline_rounded,
+                                                    size: 16, color: context.textMutedColor.withValues(alpha: 0.4)),
+                                              ),
+                                      ),
                                     ],
                                   );
                                 }).toList(),

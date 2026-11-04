@@ -169,6 +169,15 @@ class FirebaseSyncService {
       final token = await _getIdToken();
       final projectId = DefaultFirebaseOptions.windows.projectId;
       final apiKey = DefaultFirebaseOptions.windows.apiKey;
+      // Ensure parent shop doc exists so fetchShopIds() will detect it
+      try {
+        final shopDocUrl = Uri.parse(
+            'https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops?documentId=$_shopId&key=$apiKey');
+        await http.post(shopDocUrl,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'fields': {'name': {'stringValue': _shopId}}})).timeout(const Duration(seconds: 2));
+      } catch (_) {}
+
       final url = Uri.parse(
           'https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/shops/$_shopId/settings/hub_status?key=$apiKey');
 
@@ -979,7 +988,8 @@ class FirebaseSyncService {
     final List<Map<String, dynamic>> tunnels = [];
     try {
       final shopIds = await fetchShopIds();
-      for (final id in shopIds) {
+      final targetShopIds = <String>{_shopId, ...shopIds}..removeWhere((s) => s.isEmpty || s == 'default_shop');
+      for (final id in targetShopIds) {
         try {
           Map<String, dynamic>? data;
           if (defaultTargetPlatform == TargetPlatform.windows) {

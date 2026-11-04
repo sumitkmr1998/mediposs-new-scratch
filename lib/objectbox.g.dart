@@ -293,7 +293,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(2, 1561353773588181738),
       name: 'AppUser',
-      lastPropertyId: const obx_int.IdUid(39, 3143693917650965998),
+      lastPropertyId: const obx_int.IdUid(40, 2345312840265281175),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -479,6 +479,11 @@ final _entities = <obx_int.ModelEntity>[
         obx_int.ModelProperty(
             id: const obx_int.IdUid(39, 3143693917650965998),
             name: 'canAddStock',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(40, 2345312840265281175),
+            name: 'canEditTransfers',
             type: 1,
             flags: 0)
       ],
@@ -2163,7 +2168,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final nameOffset = fbb.writeString(object.name);
           final roleOffset = fbb.writeString(object.role);
           final pinOffset = fbb.writeString(object.pin);
-          fbb.startTable(40);
+          fbb.startTable(41);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, nameOffset);
           fbb.addOffset(2, roleOffset);
@@ -2201,6 +2206,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addBool(36, object.canViewFinancialAnalytics);
           fbb.addBool(37, object.canDispenseMedicines);
           fbb.addBool(38, object.canAddStock);
+          fbb.addBool(39, object.canEditTransfers);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -2239,6 +2245,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.BoolReader().vTableGet(buffer, rootOffset, 24, false);
           final canTransferStockParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 26, false);
+          final canEditTransfersParam =
+              const fb.BoolReader().vTableGet(buffer, rootOffset, 82, false);
           final canAccessPOSParam =
               const fb.BoolReader().vTableGet(buffer, rootOffset, 28, false);
           final canDiscountSalesParam =
@@ -2298,6 +2306,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
               canDeleteInventory: canDeleteInventoryParam,
               canViewWarehouse: canViewWarehouseParam,
               canTransferStock: canTransferStockParam,
+              canEditTransfers: canEditTransfersParam,
               canAccessPOS: canAccessPOSParam,
               canDiscountSales: canDiscountSalesParam,
               canOverridePrice: canOverridePriceParam,
@@ -4111,6 +4120,10 @@ class AppUser_ {
   /// See [AppUser.canAddStock].
   static final canAddStock =
       obx.QueryBooleanProperty<AppUser>(_entities[1].properties[36]);
+
+  /// See [AppUser.canEditTransfers].
+  static final canEditTransfers =
+      obx.QueryBooleanProperty<AppUser>(_entities[1].properties[37]);
 }
 
 /// [Appointment] entity fields to define ObjectBox queries.

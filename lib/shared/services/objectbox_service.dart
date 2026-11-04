@@ -126,6 +126,7 @@ class ObjectBoxService {
         canEditInventory: true,
         canViewWarehouse: true,
         canTransferStock: true,
+        canEditTransfers: true,
         canAccessPOS: true,
         canDiscountSales: true,
         canViewSalesHistory: true,
