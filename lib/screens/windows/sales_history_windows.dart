@@ -355,6 +355,11 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
                     label: Text('Clinical Dispenses'),
                     icon: Icon(Icons.medical_services_outlined, size: 16),
                   ),
+                  ButtonSegment(
+                    value: 'opd',
+                    label: Text('OPD Consultations'),
+                    icon: Icon(Icons.receipt_long_outlined, size: 16),
+                  ),
                 ],
                 selected: {sales.typeFilter},
                 onSelectionChanged: (set) => sales.setTypeFilter(set.first),

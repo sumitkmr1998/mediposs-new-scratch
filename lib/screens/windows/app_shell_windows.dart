@@ -1,3 +1,4 @@
+import '../../shared/models/exit_backup_status.dart';
 import '../../shared/utils/network_helper.dart';
 import 'dart:io';
 import 'dart:ui';
@@ -7,7 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:network_info_plus/network_info_plus.dart';
 
 import '../../shared/services/objectbox_service.dart';
 import '../../shared/providers/inventory_provider.dart';
@@ -160,11 +160,11 @@ class _AppShellWindowsState extends State<AppShellWindows> {
           return AppExitResponse.exit;
         }
 
-        if (!s.firebaseEnabled && !s.googleDriveSyncEnabled) {
+        if (s.autoBackupFrequency == 'Never' && !s.firebaseEnabled) {
           return AppExitResponse.exit;
         }
 
-        // We always want to perform Cloud Sync on exit, even if GDrive backup is off
+        // Show exit backup dialog
         _showExitBackupDialog();
         return AppExitResponse.cancel;
       },
@@ -172,10 +172,13 @@ class _AppShellWindowsState extends State<AppShellWindows> {
   }
 
   void _showExitBackupDialog() {
+    final statusNotifier = ValueNotifier<ExitBackupStatus>(ExitBackupStatus.initial());
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => ExitBackupDialog(
+        statusNotifier: statusNotifier,
         onForceExit: () {
           setState(() => _isForcedExit = true);
           SystemChannels.platform.invokeMethod('SystemNavigator.pop');
@@ -184,29 +187,101 @@ class _AppShellWindowsState extends State<AppShellWindows> {
     );
 
     final s = context.read<SettingsProvider>().settings;
-    final futures = <Future>[];
-    if (s.googleDriveSyncEnabled) {
-      futures.add(context
-          .read<SettingsProvider>()
-          .checkAndPerformAutoBackup('On Close'));
-    }
-    if (s.firebaseEnabled) {
-      futures.add(
-        LocalServerService.instance.broadcastAllToCloud().timeout(
-          const Duration(seconds: 5),
-          onTimeout: () {
-            debugPrint('Final Cloud Sync timed out on exit (AppShell).');
-          },
-        ),
+
+    void updateStatus(ExitBackupPhase phase, String title, String detail, int step, double? progress) {
+      statusNotifier.value = statusNotifier.value.copyWith(
+        phase: phase,
+        title: title,
+        detail: detail,
+        currentStep: step,
+        progressFraction: progress,
       );
     }
 
-    Future.wait(futures).then((_) {
-      if (mounted && !_isForcedExit) {
-        setState(() => _isForcedExit = true);
-        SystemChannels.platform.invokeMethod('SystemNavigator.pop');
+    Future<void> runExitPipeline() async {
+      try {
+        final hasBackup = s.autoBackupFrequency != 'Never';
+        if (hasBackup) {
+          updateStatus(
+            ExitBackupPhase.makingZip,
+            'Creating Zip Archive',
+            'Exporting database tables & packaging into ZIP...',
+            1,
+            0.15,
+          );
+          await context.read<SettingsProvider>().checkAndPerformAutoBackup(
+            'On Close',
+            onProgress: (phase, title, detail, progress) {
+              int step = 1;
+              if (phase == ExitBackupPhase.makingZip) {
+                step = 1;
+              } else if (phase == ExitBackupPhase.savingLocal) {
+                step = 2;
+              } else if (phase == ExitBackupPhase.uploadingDrive) {
+                step = 3;
+              } else if (phase == ExitBackupPhase.complete) {
+                step = 3;
+              }
+              updateStatus(phase, title, detail, step, progress);
+            },
+          );
+        } else {
+          updateStatus(
+            ExitBackupPhase.savingLocal,
+            'Auto-Backup Disabled',
+            'Auto-backup frequency is set to Never in Settings.',
+            3,
+            0.85,
+          );
+        }
+
+        if (s.firebaseEnabled && !_isForcedExit) {
+          updateStatus(
+            ExitBackupPhase.syncingCloud,
+            'Syncing Cloud Mirror',
+            'Broadcasting recent mutations to Cloud...',
+            4,
+            0.9,
+          );
+          await LocalServerService.instance.broadcastAllToCloud(
+            onProgress: (detail) {
+              updateStatus(
+                ExitBackupPhase.syncingCloud,
+                'Syncing Cloud Mirror',
+                detail,
+                4,
+                0.95,
+              );
+            },
+          ).timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              debugPrint('Final Cloud Sync timed out on exit (AppShell).');
+            },
+          );
+        }
+
+        updateStatus(
+          ExitBackupPhase.complete,
+          'Backup Complete!',
+          'All data secured. Closing MediPoss...',
+          4,
+          1.0,
+        );
+
+        // Brief delay so user sees green completion confirmation
+        await Future.delayed(const Duration(milliseconds: 500));
+      } catch (e) {
+        debugPrint('Exit backup error: $e');
+      } finally {
+        if (mounted && !_isForcedExit) {
+          setState(() => _isForcedExit = true);
+          SystemChannels.platform.invokeMethod('SystemNavigator.pop');
+        }
       }
-    });
+    }
+
+    runExitPipeline();
   }
 
   List<_Dest> _buildDestinations(BuildContext context) {

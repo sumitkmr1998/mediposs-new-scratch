@@ -193,6 +193,18 @@ void onStart(ServiceInstance service) async {
             : null;
         await syncService.pullMedicines(since: sinceStr, allowOrphanRemoval: false);
         notifyForeground(event, msg);
+      } else if (event == 'sale_deleted') {
+        final inv = msg['invoiceNo'] as String? ?? '';
+        if (inv.isNotEmpty) {
+          final box = ObjectBoxService.instance.saleBox;
+          final q = box.query(Sale_.invoiceNo.equals(inv)).build();
+          final s = q.findFirst();
+          q.close();
+          if (s != null) {
+            box.remove(s.id);
+          }
+        }
+        notifyForeground(event, msg);
       } else if (event == 'sales_updated') {
         final lastSync = ObjectBoxService.instance.settings.lastGlobalSync;
         final sinceStr = lastSync != null 
@@ -212,12 +224,20 @@ void onStart(ServiceInstance service) async {
         notifyForeground(event, msg);
       } else if (event == 'transfers_updated') {
         await syncService.pullTransfers();
-        await syncService.pullMedicines(allowOrphanRemoval: false);
+        final lastSync = ObjectBoxService.instance.settings.lastGlobalSync;
+        final sinceStr = lastSync != null 
+            ? DateTime.fromMillisecondsSinceEpoch(lastSync).subtract(const Duration(minutes: 2)).toIso8601String()
+            : null;
+        await syncService.pullMedicines(since: sinceStr, allowOrphanRemoval: false);
         notifyForeground(event, msg);
       } else if (event == 'sync_received') {
+        final lastSync = ObjectBoxService.instance.settings.lastGlobalSync;
+        final sinceStr = lastSync != null 
+            ? DateTime.fromMillisecondsSinceEpoch(lastSync).subtract(const Duration(minutes: 2)).toIso8601String()
+            : DateTime.now().subtract(const Duration(minutes: 5)).toIso8601String();
         await syncService.pullAppointments();
-        await syncService.pullSales();
-        await syncService.pullPatients(allowOrphanRemoval: false);
+        await syncService.pullSales(since: sinceStr);
+        await syncService.pullPatients(since: sinceStr, allowOrphanRemoval: false);
         await syncService.pullTransfers();
         notifyForeground(event, msg);
       } else if (event == 'settings_updated') {

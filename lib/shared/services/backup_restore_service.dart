@@ -45,7 +45,10 @@ class BackupRestoreService {
   }
 
   /// Exports either a full baseline backup (since == null) or an incremental delta update (since != null).
-  static Future<File?> exportBackupPackage({DateTime? since}) async {
+  static Future<File?> exportBackupPackage({
+    DateTime? since,
+    void Function(String message)? onProgress,
+  }) async {
     try {
       final tempDir = await getTemporaryDirectory();
       final isIncremental = since != null;
@@ -55,12 +58,14 @@ class BackupRestoreService {
       final stagingDir = Directory(p.join(tempDir.path, stagingName));
       await stagingDir.create(recursive: true);
 
+      onProgress?.call('Exporting database records (Medicines, Sales, OPD)...');
+
       final db = ObjectBoxService.instance;
 
       // Write manifest
       final manifest = {
         'type': isIncremental ? 'incremental' : 'full',
-        'version': '3.0.12',
+        'version': '3.0.13',
         'timestamp': DateTime.now().toIso8601String(),
         if (since != null) 'since': since.toIso8601String(),
       };
@@ -157,6 +162,7 @@ class BackupRestoreService {
       );
 
       // 2. Export Media Folders (Patient Photos, Prescriptions)
+      onProgress?.call('Exporting patient photos and prescriptions...');
       final appDocDir = await getApplicationDocumentsDirectory();
       final sources = {
         'patient_photos': Directory(p.join(appDocDir.path, 'patient_photos')),
@@ -173,11 +179,13 @@ class BackupRestoreService {
 
       // 3. Zip it
       final zipFileName = '${typePrefix}_backup_$timestamp.zip';
+      onProgress?.call('Compressing database & media into ZIP ($zipFileName)...');
       final zipFilePath = p.join(tempDir.path, zipFileName);
       final encoder = ZipFileEncoder();
       encoder.create(zipFilePath);
       encoder.addDirectory(stagingDir);
       encoder.close();
+      onProgress?.call('ZIP archive generated successfully.');
 
       // Cleanup
       await stagingDir.delete(recursive: true);

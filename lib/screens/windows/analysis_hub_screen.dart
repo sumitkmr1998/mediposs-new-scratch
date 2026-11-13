@@ -7,8 +7,6 @@ import 'analysis/tabs/medicine_stock_explorer_tab.dart';
 import 'analysis/tabs/product_performance_tab.dart';
 import 'analysis/tabs/reorder_dead_stock_tab.dart';
 import 'analysis/tabs/replenishment_tab.dart';
-import 'analysis/tabs/patient_analytics_tab.dart';
-import 'analysis/tabs/clinic_reconciliation_tab.dart';
 import 'analysis/tabs/schedule_h1_register_tab.dart';
 
 class AnalysisHubScreen extends StatefulWidget {
@@ -38,12 +36,6 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
       if (auth.hasInventoryWriteAccess) {
         _allowedTabTitles.add('Reorder');
         _allowedTabTitles.add('Replenishment');
-      }
-      if (auth.canAccessOPD) {
-        _allowedTabTitles.add('Patients');
-      }
-      if (auth.canViewFinancialAnalytics) {
-        _allowedTabTitles.add('Reconcile');
       }
       if (auth.canViewOpdReports) {
         _allowedTabTitles.add('H1 Compliance');
@@ -166,40 +158,6 @@ class _AnalysisHubScreenState extends State<AnalysisHubScreen> with SingleTicker
           ),
         );
         tabViews.add(const ReplenishmentTab());
-      } else if (title == 'Patients') {
-        tabWidgets.add(
-          const Tab(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.people_rounded, size: 16),
-                  SizedBox(width: 6),
-                  Text('Patient Analytics'),
-                ],
-              ),
-            ),
-          ),
-        );
-        tabViews.add(const PatientAnalyticsTab());
-      } else if (title == 'Reconcile') {
-        tabWidgets.add(
-          const Tab(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.compare_arrows_rounded, size: 16),
-                  SizedBox(width: 6),
-                  Text('Clinic Reconciliation'),
-                ],
-              ),
-            ),
-          ),
-        );
-        tabViews.add(const ClinicReconciliationTab());
       } else if (title == 'H1 Compliance') {
         tabWidgets.add(
           const Tab(

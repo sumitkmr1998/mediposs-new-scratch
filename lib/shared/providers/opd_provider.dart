@@ -11,6 +11,7 @@ import '../services/sync_service.dart';
 import '../services/sync_queue_service.dart';
 import '../services/firebase_sync_service.dart';
 import '../services/audit_service.dart';
+import '../services/device_identity_service.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
@@ -319,6 +320,7 @@ class OpdProvider extends ChangeNotifier {
       paymentMethod: paymentMethod,
       scheduledAt: scheduledAt ?? robustNow,
       isWalkIn: isWalkIn,
+      consultationBilled: false,
     );
     ObjectBoxService.instance.appointmentBox.put(appt);
 
@@ -348,7 +350,11 @@ class OpdProvider extends ChangeNotifier {
       final dateStr = '${robustNow.year}${robustNow.month.toString().padLeft(2, '0')}${robustNow.day.toString().padLeft(2, '0')}';
       final timeStr = '${robustNow.hour.toString().padLeft(2, '0')}${robustNow.minute.toString().padLeft(2, '0')}${robustNow.second.toString().padLeft(2, '0')}';
       final msStr = robustNow.millisecond.toString().padLeft(3, '0');
-      final invNo = 'OPD-$dateStr-$timeStr-$msStr';
+      final deviceCode = await DeviceIdentityService.getDeviceCode();
+      final invNo = 'OPD-$dateStr-$timeStr-$msStr-$deviceCode';
+      final invMarker = '[OPD_INV:$invNo]';
+      appt.notes = appt.notes.isEmpty ? invMarker : '${appt.notes} $invMarker';
+      ObjectBoxService.instance.appointmentBox.put(appt);
 
       final consultationItem = SaleItem(
         medicineId: 0,

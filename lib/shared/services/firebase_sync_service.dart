@@ -837,11 +837,13 @@ class FirebaseSyncService {
                   data['cloudflareUrl'] != null &&
                   data['cloudflareUrl'].toString().isNotEmpty) {
                 // Found a shop with an active tunnel URL! Save it in settings so subsequent calls use it
+                final cleanId = ObjectBoxService.sanitizeShopId(id);
+                await ObjectBoxService.instance.switchToPartition(cleanId);
                 final settings = ObjectBoxService.instance.settings;
-                settings.shopId = id;
+                settings.shopId = cleanId;
                 ObjectBoxService.instance.settingsBox.put(settings);
                 debugPrint(
-                    'Firebase getHubStatus: Auto-detected active shop partition: $id');
+                    'Firebase getHubStatus: Auto-detected active shop partition: $cleanId');
                 return data;
               }
             }

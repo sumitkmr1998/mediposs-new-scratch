@@ -1,3 +1,4 @@
+import '../models/exit_backup_status.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -70,65 +71,173 @@ class GoogleDriveService {
   }
 
   /// Generates a backup package (full if since == null, incremental if since != null).
-  Future<File?> generateBackupZip({DateTime? since}) async {
-    return await BackupRestoreService.exportBackupPackage(since: since);
+  Future<File?> generateBackupZip({
+    DateTime? since,
+    void Function(String message)? onProgress,
+  }) async {
+    return await BackupRestoreService.exportBackupPackage(
+      since: since,
+      onProgress: onProgress,
+    );
   }
 
   /// Performs a system backup (Local + Google Drive).
   /// If [since] is provided, an incremental delta backup package is generated.
   /// If [since] is null, a full baseline backup package is generated.
   /// Local offline backup is ALWAYS saved to disk regardless of Google Drive connection.
-  Future<bool> uploadBackup({DateTime? since}) async {
+  Future<bool> uploadBackup({
+    DateTime? since,
+    void Function(ExitBackupPhase phase, String title, String detail, double? progress)? onProgress,
+  }) async {
+    File? zipFile;
     try {
       final isIncremental = since != null;
-      final zipFile = await generateBackupZip(since: since);
-      if (zipFile == null) return false;
+      final backupTypeStr = isIncremental ? 'Incremental (Daily)' : 'Full (Complete)';
+
+      onProgress?.call(
+        ExitBackupPhase.makingZip,
+        'Creating Zip Archive',
+        'Exporting $backupTypeStr records and database tables...',
+        0.15,
+      );
+
+      zipFile = await generateBackupZip(
+        since: since,
+        onProgress: (msg) {
+          onProgress?.call(
+            ExitBackupPhase.makingZip,
+            'Creating Zip Archive',
+            msg,
+            0.35,
+          );
+        },
+      );
+      if (zipFile == null) {
+        debugPrint('Backup generation returned null');
+        return false;
+      }
 
       final zipFileName = p.basename(zipFile.path);
 
-      // STEP 1: Offline Local Backup (Guaranteed)
-      await _handleLocalBackup(zipFile, isIncremental: isIncremental);
+      // STEP 1: Offline Local Backup (Guaranteed First)
+      onProgress?.call(
+        ExitBackupPhase.savingLocal,
+        'Saving Local Backup',
+        'Writing local archive ($zipFileName) to disk...',
+        0.5,
+      );
+      final savedLocalPath = await _handleLocalBackup(zipFile, isIncremental: isIncremental);
 
-      // STEP 2: Google Drive Upload (If Connected)
-      if (_client != null) {
-        final driveApi = drive.DriveApi(_client!);
-        final media = drive.Media(zipFile.openRead(), zipFile.lengthSync());
-        final rootFolderId = await _getOrCreateFolder(driveApi);
-        final targetFolderId = await _getOrCreateSubfolder(
-          driveApi,
-          rootFolderId,
-          isIncremental ? 'daily' : 'full',
-        );
+      final displayLocalPath = savedLocalPath != null
+          ? '${p.basename(p.dirname(savedLocalPath))}\\${p.basename(savedLocalPath)}'
+          : zipFileName;
 
-        final fileToUpload = drive.File()
-          ..name = zipFileName
-          ..parents = [targetFolderId]
-          ..description = isIncremental
-              ? 'MediPoss incremental delta backup (Cloud)'
-              : 'MediPoss complete baseline backup (Cloud)';
+      onProgress?.call(
+        ExitBackupPhase.savingLocal,
+        'Local Backup Saved',
+        'Saved to Documents\\MediPoss Backups\\$displayLocalPath',
+        0.65,
+      );
 
-        await driveApi.files.create(fileToUpload, uploadMedia: media);
-        debugPrint('Google Drive upload succeeded: $zipFileName in ${isIncremental ? "daily" : "full"}');
+      // STEP 2: Google Drive Upload (If Connected & Enabled)
+      final driveEnabled = ObjectBoxService.isInitialized
+          ? ObjectBoxService.instance.settings.googleDriveSyncEnabled
+          : true;
 
-        // Clean up cloud files older than retention policy
-        if (isIncremental) {
-          await _cleanupOldDriveBackups(driveApi, targetFolderId, daysToKeep: 14);
+      // If client is not initialized but credentials are saved, attempt silent login
+      if (_client == null && ObjectBoxService.isInitialized) {
+        final authData = ObjectBoxService.instance.settings.googleAuthData;
+        if (ObjectBoxService.instance.settings.googleDriveLinked && authData != null && authData.isNotEmpty) {
+          try {
+            await loginWithCredentials(authData);
+          } catch (e) {
+            debugPrint('Silent Google login failed before upload: $e');
+          }
         }
-      } else {
-        debugPrint('Google Drive not connected - Cloud upload skipped, local backup saved.');
       }
 
-      // STEP 3: Clean up staging temp zip
-      if (await zipFile.exists()) await zipFile.delete();
+      if (_client != null && driveEnabled) {
+        onProgress?.call(
+          ExitBackupPhase.uploadingDrive,
+          'Connecting to Google Drive',
+          'Authenticating with Drive API & verifying folders...',
+          0.70,
+        );
+        try {
+          final driveApi = drive.DriveApi(_client!);
+          final media = drive.Media(zipFile.openRead(), zipFile.lengthSync());
+          final rootFolderId = await _getOrCreateFolder(driveApi);
+          final targetFolderId = await _getOrCreateSubfolder(
+            driveApi,
+            rootFolderId,
+            isIncremental ? 'daily' : 'full',
+          );
+
+          onProgress?.call(
+            ExitBackupPhase.uploadingDrive,
+            'Uploading to Google Drive',
+            'Uploading $zipFileName to Google Drive...',
+            0.85,
+          );
+
+          final fileToUpload = drive.File()
+            ..name = zipFileName
+            ..parents = [targetFolderId]
+            ..description = isIncremental
+                ? 'MediPoss incremental delta backup (Cloud)'
+                : 'MediPoss complete baseline backup (Cloud)';
+
+          await driveApi.files.create(fileToUpload, uploadMedia: media);
+          debugPrint('Google Drive upload succeeded: $zipFileName in ${isIncremental ? "daily" : "full"}');
+
+          onProgress?.call(
+            ExitBackupPhase.uploadingDrive,
+            'Google Drive Uploaded',
+            'Cloud backup uploaded successfully to Google Drive.',
+            0.88,
+          );
+
+          // Clean up cloud files older than retention policy
+          if (isIncremental) {
+            await _cleanupOldDriveBackups(driveApi, targetFolderId, daysToKeep: 14);
+          }
+        } catch (driveErr) {
+          debugPrint('Google Drive upload error (local copy preserved): $driveErr');
+          onProgress?.call(
+            ExitBackupPhase.uploadingDrive,
+            'Drive Upload Skipped',
+            'Local backup preserved. Google Drive offline: $driveErr',
+            0.88,
+          );
+        }
+      } else {
+        final reason = !driveEnabled
+            ? 'Google Drive sync disabled in Settings'
+            : 'Google Drive account is not connected';
+        onProgress?.call(
+          ExitBackupPhase.uploadingDrive,
+          'Local Backup Secured',
+          '$reason. Local offline copy is safely stored.',
+          0.88,
+        );
+        debugPrint('Google Drive not active ($reason). Local backup safe.');
+      }
 
       return true;
     } catch (e) {
       debugPrint('Backup System Error: $e');
-      rethrow;
+      return false;
+    } finally {
+      // Clean up staging temp zip
+      if (zipFile != null && await zipFile.exists()) {
+        try {
+          await zipFile.delete();
+        } catch (_) {}
+      }
     }
   }
 
-  Future<void> _handleLocalBackup(File zipFile, {bool isIncremental = false}) async {
+  Future<String?> _handleLocalBackup(File zipFile, {bool isIncremental = false}) async {
     try {
       final subfolder = isIncremental ? 'daily' : 'full';
       final backupDir = await _getLocalBackupDirectory(subfolder: subfolder);
@@ -143,34 +252,47 @@ class GoogleDriveService {
 
       // Cleanup: keep 14 days for daily deltas, 30 days for full baselines
       await _cleanupOldLocalBackups(backupDir, daysToKeep: isIncremental ? 14 : 30);
+      return targetPath;
     } catch (e) {
       debugPrint('Local Backup Error: $e. This might be due to folder permissions.');
+      return null;
     }
   }
 
   Future<Directory> _getLocalBackupDirectory({String subfolder = ''}) async {
     Directory baseDir;
     try {
-      // 1. Try Installation folder "backups"
-      String exePath = Platform.resolvedExecutable;
-      String appDir = p.dirname(exePath);
-      final idealDir = Directory(p.join(appDir, 'backups'));
-
-      // Test write permission (quick check)
-      final testFile = File(p.join(idealDir.path, '.test'));
-      await idealDir.create(recursive: true);
-      await testFile.writeAsString('test');
+      // 1. Prefer User Documents directory for visibility and easy access
+      final docsDir = await getApplicationDocumentsDirectory();
+      final idealDir = Directory(p.join(docsDir.path, 'MediPoss Backups'));
+      if (!await idealDir.exists()) {
+        await idealDir.create(recursive: true);
+      }
+      final testFile = File(p.join(idealDir.path, '.test_write'));
+      await testFile.writeAsString('ok');
       await testFile.delete();
-
       baseDir = idealDir;
     } catch (_) {
-      // 2. Fallback to App Support Directory if Program Files is restricted
-      final supportDir = await getApplicationSupportDirectory();
-      baseDir = Directory(p.join(supportDir.path, 'backups'));
+      try {
+        // 2. Fallback: Executable directory / backups
+        String exePath = Platform.resolvedExecutable;
+        String appDir = p.dirname(exePath);
+        final fallbackDir = Directory(p.join(appDir, 'backups'));
+        await fallbackDir.create(recursive: true);
+        baseDir = fallbackDir;
+      } catch (_) {
+        // 3. Fallback: Application Support Directory (Roaming)
+        final supportDir = await getApplicationSupportDirectory();
+        baseDir = Directory(p.join(supportDir.path, 'backups'));
+      }
     }
 
     if (subfolder.isNotEmpty) {
-      return Directory(p.join(baseDir.path, subfolder));
+      final sub = Directory(p.join(baseDir.path, subfolder));
+      if (!await sub.exists()) {
+        await sub.create(recursive: true);
+      }
+      return sub;
     }
     return baseDir;
   }

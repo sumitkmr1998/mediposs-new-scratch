@@ -1,3 +1,4 @@
+import '../models/exit_backup_status.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -88,7 +89,10 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> performManualBackup({bool incremental = false}) async {
+  Future<bool> performManualBackup({
+    bool incremental = false,
+    void Function(ExitBackupPhase phase, String title, String detail, double? progress)? onProgress,
+  }) async {
     _isGoogleLoading = true;
     _googleError = null;
     notifyListeners();
@@ -99,7 +103,10 @@ class SettingsProvider extends ChangeNotifier {
           : null;
       final since = (incremental && last != null) ? last : null;
 
-      final success = await _googleDrive.uploadBackup(since: since);
+      final success = await _googleDrive.uploadBackup(
+        since: since,
+        onProgress: onProgress,
+      );
       if (success) {
         _settings.lastBackupMillis = DateTime.now().millisecondsSinceEpoch;
         ObjectBoxService.instance.settingsBox.put(_settings);
@@ -183,17 +190,29 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   /// Triggers auto-backup based on the specified logic ('At Startup', 'On Close', 'Periodic')
-  Future<void> checkAndPerformAutoBackup(String trigger) async {
-    if (_settings.autoBackupFrequency == 'Never') return;
+  Future<bool> checkAndPerformAutoBackup(
+    String trigger, {
+    void Function(ExitBackupPhase phase, String title, String detail, double? progress)? onProgress,
+  }) async {
+    if (_settings.autoBackupFrequency == 'Never') {
+      onProgress?.call(
+        ExitBackupPhase.savingLocal,
+        'Auto-Backup Disabled',
+        'Auto-backup frequency is set to Never in Settings.',
+        0.8,
+      );
+      return false;
+    }
 
     final now = DateTime.now();
     final last = _settings.lastBackupMillis != null
         ? DateTime.fromMillisecondsSinceEpoch(_settings.lastBackupMillis!)
-        : DateTime(2000);
+        : null;
 
-    final isDifferentDay = (last.year != now.year || last.month != now.month || last.day != now.day);
+    final isDifferentDay = last == null ||
+        (last.year != now.year || last.month != now.month || last.day != now.day);
 
-    // Check if we are past the scheduled time today
+    // Check if we are past the scheduled time today (only relevant for Periodic background timer)
     bool isPastScheduledTime = true;
     if (_settings.autoBackupTime != null && _settings.autoBackupTime!.isNotEmpty) {
       try {
@@ -207,62 +226,97 @@ class SettingsProvider extends ChangeNotifier {
       } catch (_) {}
     }
 
-    final isLogicMatch = _settings.autoBackupLogic == trigger;
-    // Allow 'Periodic' to act as a catch-up if today's scheduled time has passed and backup hasn't run yet today
+    // Determine if this trigger applies:
+    // 1. Direct match: user selected this trigger in Settings (e.g. 'On Close', 'At Startup', 'Periodic')
+    // 2. Safety catch-up on close: if today has no backup yet, closing the app should ensure data safety
+    // 3. Periodic catch-up: if today has no backup and scheduled time passed while running
+    final isConfiguredTrigger = _settings.autoBackupLogic == trigger;
+    final isCloseCatchUp = trigger == 'On Close' && isDifferentDay;
     final isPeriodicCatchUp = trigger == 'Periodic' && isDifferentDay && isPastScheduledTime;
-    if (!isLogicMatch && !isPeriodicCatchUp) return;
+
+    if (!isConfiguredTrigger && !isCloseCatchUp && !isPeriodicCatchUp) {
+      return false;
+    }
 
     bool shouldBackup = false;
     if (_settings.autoBackupFrequency == 'Daily') {
-      if (isDifferentDay && isPastScheduledTime) {
-        shouldBackup = true;
+      if (trigger == 'Periodic') {
+        shouldBackup = (isDifferentDay && isPastScheduledTime) ||
+            (last != null && now.difference(last).inHours >= 24) ||
+            last == null;
+      } else {
+        // 'On Close' or 'At Startup' triggers once per day on different day
+        shouldBackup = isDifferentDay;
       }
     } else if (_settings.autoBackupFrequency == 'Weekly') {
-      final daysSince = now.difference(DateTime(last.year, last.month, last.day)).inDays;
-      if (daysSince >= 7 && isPastScheduledTime) {
-        shouldBackup = true;
+      final daysSince = last == null ? 999 : now.difference(DateTime(last.year, last.month, last.day)).inDays;
+      if (trigger == 'Periodic') {
+        shouldBackup = daysSince >= 7 && isPastScheduledTime;
+      } else {
+        shouldBackup = daysSince >= 7;
       }
     } else if (_settings.autoBackupFrequency == 'Monthly') {
-      final monthsDiff = (now.year - last.year) * 12 + (now.month - last.month);
-      if (monthsDiff >= 1 && isPastScheduledTime) {
-        shouldBackup = true;
+      final monthsDiff = last == null ? 999 : (now.year - last.year) * 12 + (now.month - last.month);
+      if (trigger == 'Periodic') {
+        shouldBackup = monthsDiff >= 1 && isPastScheduledTime;
+      } else {
+        shouldBackup = monthsDiff >= 1;
       }
     } else if (_settings.autoBackupFrequency == 'Always') {
       shouldBackup = true;
     }
 
-    if (shouldBackup && !_isAutoBackingUp) {
-      try {
-        _isAutoBackingUp = true;
-        notifyListeners();
-
-        debugPrint('Auto-Backup triggered by $trigger (Frequency: ${_settings.autoBackupFrequency})');
-
-        // Incremental vs Full:
-        // If last backup was within 7 days, generate an incremental daily delta.
-        // Otherwise, run a full baseline snapshot.
-        DateTime? since;
-        if (_settings.lastBackupMillis != null) {
-          final daysSinceLast = now.difference(last).inDays;
-          if (daysSinceLast < 7) {
-            since = last;
-          }
-        }
-
-        final success = await _googleDrive.uploadBackup(since: since);
-        if (success) {
-          _settings.lastBackupMillis = now.millisecondsSinceEpoch;
-          ObjectBoxService.instance.settingsBox.put(_settings);
-          debugPrint('Auto-Backup succeeded ($trigger). Recorded timestamp: $now (Incremental: ${since != null})');
-        }
-
-        _isAutoBackingUp = false;
-        notifyListeners();
-      } catch (e) {
-        debugPrint('Auto-Backup failed ($trigger): $e');
-        _isAutoBackingUp = false;
-        notifyListeners();
+    if (!shouldBackup) {
+      debugPrint('Auto-Backup check ($trigger): already up to date. Last backup: $last');
+      if (trigger == 'On Close' && last != null) {
+        onProgress?.call(
+          ExitBackupPhase.savingLocal,
+          'Backup Up-to-Date',
+          'Latest backup already completed today (${last.hour.toString().padLeft(2, '0')}:${last.minute.toString().padLeft(2, '0')}).',
+          0.85,
+        );
       }
+      return false;
+    }
+
+    if (_isAutoBackingUp) return false;
+
+    try {
+      _isAutoBackingUp = true;
+      notifyListeners();
+
+      debugPrint('Auto-Backup triggered by $trigger (Frequency: ${_settings.autoBackupFrequency})');
+
+      // Incremental vs Full:
+      // If last backup was within 7 days, generate an incremental daily delta.
+      // Otherwise, run a full baseline snapshot.
+      DateTime? since;
+      if (last != null) {
+        final daysSinceLast = now.difference(last).inDays;
+        if (daysSinceLast < 7) {
+          since = last;
+        }
+      }
+
+      final success = await _googleDrive.uploadBackup(
+        since: since,
+        onProgress: onProgress,
+      );
+
+      if (success) {
+        _settings.lastBackupMillis = now.millisecondsSinceEpoch;
+        ObjectBoxService.instance.settingsBox.put(_settings);
+        debugPrint('Auto-Backup succeeded ($trigger). Recorded timestamp: $now (Incremental: ${since != null})');
+      }
+
+      _isAutoBackingUp = false;
+      notifyListeners();
+      return success;
+    } catch (e) {
+      debugPrint('Auto-Backup failed ($trigger): $e');
+      _isAutoBackingUp = false;
+      notifyListeners();
+      return false;
     }
   }
 

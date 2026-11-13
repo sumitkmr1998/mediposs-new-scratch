@@ -105,9 +105,11 @@ class SalesProvider extends ChangeNotifier {
 
   List<Sale> get _filteredByTypeList {
     if (_typeFilter == 'retail') {
-      return _sales.where((s) => !s.isClinicalDispense).toList();
+      return _sales.where((s) => !s.isClinicalDispense && !s.invoiceNo.startsWith('OPD-')).toList();
     } else if (_typeFilter == 'dispense') {
-      return _sales.where((s) => s.isClinicalDispense).toList();
+      return _sales.where((s) => s.invoiceNo.startsWith('DISP-') || (s.isClinicalDispense && !s.invoiceNo.startsWith('OPD-'))).toList();
+    } else if (_typeFilter == 'opd') {
+      return _sales.where((s) => s.invoiceNo.startsWith('OPD-')).toList();
     }
     return _sales;
   }
@@ -290,6 +292,32 @@ class SalesProvider extends ChangeNotifier {
     final end = _effectiveEnd;
 
     if (!append) {
+      // Fast check: purge any legacy OPD sales that have been merged into DISP sales
+      final db = ObjectBoxService.instance;
+      final dispSalesWithOpd = db.saleBox
+          .query(Sale_.invoiceNo.startsWith('DISP-'))
+          .build()
+          .find()
+          .where((s) => s.opdInvoiceNo.isNotEmpty)
+          .map((s) => s.opdInvoiceNo.trim())
+          .toSet();
+      if (dispSalesWithOpd.isNotEmpty) {
+        final staleOpdSales = db.saleBox
+            .query(Sale_.invoiceNo.startsWith('OPD-'))
+            .build()
+            .find()
+            .where((s) => dispSalesWithOpd.contains(s.invoiceNo.trim()))
+            .toList();
+        if (staleOpdSales.isNotEmpty) {
+          for (final stale in staleOpdSales) {
+            db.saleBox.remove(stale.id);
+            try {
+              SalesFactService.instance.reverseSale(stale);
+            } catch (_) {}
+          }
+        }
+      }
+
       _dbTotalCount = _repo.countInRange(start, end);
       // Totals need full range for KPIs — stream in chunks, keep only pages in _sales.
       _recalculateTotalsFromDb(start, end);
@@ -389,8 +417,9 @@ class SalesProvider extends ChangeNotifier {
 
   void _accumulateSale(Sale s) {
     // Check type filter match
-    if (_typeFilter == 'retail' && s.isClinicalDispense) return;
-    if (_typeFilter == 'dispense' && !s.isClinicalDispense) return;
+    if (_typeFilter == 'retail' && (s.isClinicalDispense || s.invoiceNo.startsWith('OPD-'))) return;
+    if (_typeFilter == 'dispense' && (!s.isClinicalDispense || s.invoiceNo.startsWith('OPD-'))) return;
+    if (_typeFilter == 'opd' && !s.invoiceNo.startsWith('OPD-')) return;
 
     final isTodaySale = _isToday(s.createdAt);
     final med = s.medicineTotal;

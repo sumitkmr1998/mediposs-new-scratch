@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import '../services/device_identity_service.dart';
 import 'package:flutter/foundation.dart';
 import '../models/medicine.dart';
@@ -265,8 +266,9 @@ class CartProvider extends ChangeNotifier {
     if (!_isClinicalDispense) return 0.0;
     if (_linkedAppointmentId == null || _linkedAppointmentId == 0) return 0.0;
     final appt = ObjectBoxService.instance.appointmentBox.get(_linkedAppointmentId!);
-    if (appt?.consultationBilled == true) return 0.0;
-    return appt?.consultationFee ?? 0.0;
+    if (appt == null) return 0.0;
+    if (appt.consultationBilled) return 0.0;
+    return appt.consultationFee;
   }
 
   SaleTotals get _totals => SaleCalculator.calculate(
@@ -958,30 +960,95 @@ class CartProvider extends ChangeNotifier {
     final finalTotal = (finalSubtotal - _discountAmount + finalTaxAmount).clamp(0.0, double.infinity);
     final finalTotalRounded = (finalTotal * 10).round() / 10.0;
 
-    // Compute split logic
-    double fCash = 0, fUpi = 0, fCard = 0;
-    if (_paymentMethod == 'mixed') {
-      fCash = _mixedCash;
-      fUpi = _mixedUpi;
-      fCard = _mixedCard;
-      final appt = _linkedAppointmentId != null && _linkedAppointmentId != 0
-          ? db.appointmentBox.get(_linkedAppointmentId!)
-          : null;
-      final apptPayMethod = appt?.paymentMethod ?? 'cash';
-      if (apptPayMethod == 'upi') {
-        fUpi += fee;
-      } else if (apptPayMethod == 'card') {
-        fCard += fee;
-      } else {
-        fCash += fee;
+    // Locate linked appointment and any prior advance OPD sale for merging
+    final apptId = _linkedAppointmentId;
+    final appt = (_isClinicalDispense && apptId != null && apptId != 0 && !_isReturnMode)
+        ? db.appointmentBox.get(apptId)
+        : null;
+
+    Sale? existingOpdSale;
+    if (_isClinicalDispense && appt != null) {
+      // 1. Try match by OPD invoice note tag [OPD_INV:...]
+      final match = RegExp(r'\[OPD_INV:(OPD-[^\]]+)\]').firstMatch(appt.notes);
+      if (match != null) {
+        final targetInv = match.group(1)!;
+        existingOpdSale = db.saleBox.query(Sale_.invoiceNo.equals(targetInv)).build().findFirst();
       }
-    } else if (_paymentMethod == 'upi') {
-      fUpi = finalTotalRounded;
-    } else if (_paymentMethod == 'card') {
-      fCard = finalTotalRounded;
-    } else {
-      fCash = finalTotalRounded;
+
+      // 2. Try match by linkedAppointmentId
+      if (existingOpdSale == null) {
+        existingOpdSale = db.saleBox
+            .query(Sale_.linkedAppointmentId.equals(appt.id)
+                .and(Sale_.invoiceNo.startsWith('OPD-')))
+            .build()
+                .findFirst();
+      }
+
+      // 3. Fallback: match by date and patient info
+      if (existingOpdSale == null) {
+        final apptDate = appt.scheduledAt;
+        final startOfDay = DateTime(apptDate.year, apptDate.month, apptDate.day);
+        final endOfDay = DateTime(apptDate.year, apptDate.month, apptDate.day, 23, 59, 59);
+        final candidateSales = db.saleBox
+            .query(Sale_.invoiceNo.startsWith('OPD-').and(Sale_.createdAt.between(startOfDay.millisecondsSinceEpoch, endOfDay.millisecondsSinceEpoch)))
+            .build()
+            .find();
+        existingOpdSale = candidateSales.where((s) {
+          if (appt.patientId > 0 && s.patientId == appt.patientId) return true;
+          if (appt.patientPhone.isNotEmpty && s.patientPhone == appt.patientPhone) return true;
+          if (appt.patientName.toLowerCase().trim() == s.patientName.toLowerCase().trim()) return true;
+          return false;
+        }).firstOrNull;
+      }
     }
+
+    final resolvedOpdInvoiceNo = existingOpdSale?.invoiceNo ?? '';
+
+    // Compute split logic: merge prior advance OPD payment with pharmacy counter payment
+    double counterCash = 0, counterUpi = 0, counterCard = 0;
+    if (_paymentMethod == 'mixed') {
+      counterCash = _mixedCash;
+      counterUpi = _mixedUpi;
+      counterCard = _mixedCard;
+    } else if (_paymentMethod == 'upi') {
+      counterUpi = totalRounded;
+    } else if (_paymentMethod == 'card') {
+      counterCard = totalRounded;
+    } else {
+      counterCash = totalRounded;
+    }
+
+    double opdCash = 0, opdUpi = 0, opdCard = 0;
+    if (fee > 0) {
+      if (existingOpdSale != null) {
+        opdCash = existingOpdSale.cashAmount;
+        opdUpi = existingOpdSale.upiAmount;
+        opdCard = existingOpdSale.cardAmount;
+        if (opdCash == 0 && opdUpi == 0 && opdCard == 0) {
+          final m = existingOpdSale.paymentMethod;
+          if (m == 'upi') {
+            opdUpi = fee;
+          } else if (m == 'card') {
+            opdCard = fee;
+          } else {
+            opdCash = fee;
+          }
+        }
+      } else if (appt != null) {
+        final m = appt.paymentMethod;
+        if (m == 'upi') {
+          opdUpi = fee;
+        } else if (m == 'card') {
+          opdCard = fee;
+        } else {
+          opdCash = fee;
+        }
+      }
+    }
+
+    double fCash = counterCash + opdCash;
+    double fUpi = counterUpi + opdUpi;
+    double fCard = counterCard + opdCard;
 
     if (_isReturnMode) {
       fCash = -fCash;
@@ -989,37 +1056,15 @@ class CartProvider extends ChangeNotifier {
       fCard = -fCard;
     }
 
-    String resolvedOpdInvoiceNo = '';
-    final apptId = _linkedAppointmentId;
-    if (_isClinicalDispense && apptId != null && apptId != 0 && !_isReturnMode) {
-      final appt = db.appointmentBox.get(apptId);
-      if (appt != null) {
-        final apptDate = appt.scheduledAt;
-        final apptPhone = appt.patientPhone;
-        final apptName = appt.patientName;
-        Sale? existingOpdSale = db.saleBox
-            .query(Sale_.linkedAppointmentId.equals(appt.id)
-                .and(Sale_.invoiceNo.startsWith('OPD-')))
-            .build()
-            .findFirst();
-        if (existingOpdSale == null) {
-          final startOfDay = DateTime(apptDate.year, apptDate.month, apptDate.day);
-          final endOfDay = DateTime(apptDate.year, apptDate.month, apptDate.day, 23, 59, 59);
-          final candidateSales = db.saleBox
-              .query(Sale_.invoiceNo.startsWith('OPD-').and(Sale_.createdAt.between(startOfDay.millisecondsSinceEpoch, endOfDay.millisecondsSinceEpoch)))
-              .build()
-              .find();
-          existingOpdSale = candidateSales.where((sale) {
-            if (appt.patientId > 0 && sale.patientId == appt.patientId) return true;
-            if (apptPhone.isNotEmpty && sale.patientPhone == apptPhone) return true;
-            if (apptName.toLowerCase().trim() == sale.patientName.toLowerCase().trim()) return true;
-            return false;
-          }).firstOrNull;
-        }
-        if (existingOpdSale != null) {
-          resolvedOpdInvoiceNo = existingOpdSale.invoiceNo;
-        }
-      }
+    final String finalPaymentMethod;
+    if (fCash > 0 && fUpi == 0 && fCard == 0) {
+      finalPaymentMethod = 'cash';
+    } else if (fUpi > 0 && fCash == 0 && fCard == 0) {
+      finalPaymentMethod = 'upi';
+    } else if (fCard > 0 && fCash == 0 && fUpi == 0) {
+      finalPaymentMethod = 'card';
+    } else {
+      finalPaymentMethod = 'mixed';
     }
 
     final sale = Sale(
@@ -1034,7 +1079,7 @@ class CartProvider extends ChangeNotifier {
       taxRate: (_isClinicalDispense || settings.isCompositionScheme) ? 0.0 : settings.taxRate,
       taxAmount: _isReturnMode ? -finalTaxAmount : finalTaxAmount,
       total: _isReturnMode ? -finalTotalRounded : finalTotalRounded,
-      paymentMethod: _paymentMethod,
+      paymentMethod: finalPaymentMethod,
       cashAmount: fCash,
       upiAmount: fUpi,
       cardAmount: fCard,
@@ -1150,52 +1195,6 @@ class CartProvider extends ChangeNotifier {
           appt.updatedAt = DateTime.now();
           db.appointmentBox.put(appt);
 
-          // Find and remove the initial advance OPD consultation fee sale to prevent double counting.
-          // Match by linkedAppointmentId or fall back to matching patient info and date for sync-robustness.
-          final apptDate = appt.scheduledAt;
-          final apptPhone = appt.patientPhone;
-          final apptName = appt.patientName;
-          Sale? existingOpdSale = db.saleBox
-              .query(Sale_.linkedAppointmentId.equals(appt.id)
-                  .and(Sale_.invoiceNo.startsWith('OPD-')))
-              .build()
-              .findFirst();
-          if (existingOpdSale == null) {
-            final startOfDay = DateTime(apptDate.year, apptDate.month, apptDate.day);
-            final endOfDay = DateTime(apptDate.year, apptDate.month, apptDate.day, 23, 59, 59);
-            final candidateSales = db.saleBox
-                .query(Sale_.invoiceNo.startsWith('OPD-').and(Sale_.createdAt.between(startOfDay.millisecondsSinceEpoch, endOfDay.millisecondsSinceEpoch)))
-                .build()
-                .find();
-            existingOpdSale = candidateSales.where((sale) {
-              if (apptPhone.isNotEmpty && sale.patientPhone == apptPhone) return true;
-              if (apptName.toLowerCase().trim() == sale.patientName.toLowerCase().trim()) return true;
-              return false;
-            }).firstOrNull;
-          }
-
-          if (existingOpdSale != null) {
-            db.saleBox.remove(existingOpdSale.id);
-            
-            // Log the deletion to AuditLog so other clients will receive this deletion incrementally
-            await AuditService.instance.log(
-              action: 'VOID',
-              entityType: 'Sale',
-              entityId: existingOpdSale.invoiceNo,
-              description: 'Removed OPD Receipt during POS checkout: invoice ${existingOpdSale.invoiceNo}',
-              details: existingOpdSale.toJson(),
-              actor: actor,
-            );
-
-            if (isClient) {
-              SyncQueueService.instance.addToQueue(
-                entity: 'sale',
-                action: 'delete',
-                data: {'invoiceNo': existingOpdSale.invoiceNo},
-              );
-            }
-          }
-
           if (isClient) {
             SyncQueueService.instance.addToQueue(
               entity: 'appointment',
@@ -1204,6 +1203,41 @@ class CartProvider extends ChangeNotifier {
             );
           } else if (isHub && LocalServerService.instance.isRunning) {
             LocalServerService.instance.broadcast({'event': 'appointments_updated'});
+          }
+        }
+
+        // Merge & remove the prior advance OPD sale to prevent duplicate transactions
+        if (existingOpdSale != null) {
+          db.saleBox.remove(existingOpdSale.id);
+          try {
+            SalesFactService.instance.reverseSale(existingOpdSale);
+          } catch (e) {
+            debugPrint('CartProvider: Error reversing OPD sale facts: $e');
+          }
+
+          await AuditService.instance.log(
+            action: 'VOID',
+            entityType: 'Sale',
+            entityId: existingOpdSale.invoiceNo,
+            description: 'Merged OPD Receipt into Dispense Bill: invoice ${existingOpdSale.invoiceNo}',
+            details: existingOpdSale.toJson(),
+            actor: actor,
+          );
+
+          if (isClient) {
+            SyncQueueService.instance.addToQueue(
+              entity: 'sale',
+              action: 'delete',
+              data: {'invoiceNo': existingOpdSale.invoiceNo},
+            );
+          } else if (isHub && LocalServerService.instance.isRunning) {
+            LocalServerService.instance.broadcast({
+              'event': 'sale_deleted',
+              'invoiceNo': existingOpdSale.invoiceNo,
+            });
+            unawaited(FirebaseSyncService.instance
+                .deleteDocument('sales', existingOpdSale.invoiceNo)
+                .catchError((_) {}));
           }
         }
       }

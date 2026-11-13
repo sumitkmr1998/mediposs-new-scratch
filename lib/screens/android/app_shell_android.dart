@@ -393,10 +393,15 @@ class _AppShellAndroidState extends State<AppShellAndroid> {
               message: 'The Windows Hub is offline or unreachable. What would you like to do?',
               actions: [
                 ElevatedButton.icon(
-                  onPressed: () {
+                  onPressed: () async {
                     final savedId = ObjectBoxService.instance.settings.shopId;
-                    if (savedId.isNotEmpty) {
-                      sync.enterCloudMode(savedId);
+                    if (savedId.isNotEmpty && savedId != 'default_shop') {
+                      await sync.enterCloudMode(savedId);
+                      if (context.mounted) {
+                        context.read<InventoryProvider>().load();
+                        context.read<WarehouseProvider>().loadTransfers();
+                        context.read<SalesProvider>().load();
+                      }
                     } else {
                       showShopSelectionDialog(context);
                     }

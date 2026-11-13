@@ -247,6 +247,13 @@ class ObjectBoxService {
     final cleanShop = sanitizeShopId(shopId);
     if (_currentShopId == cleanShop) {
       debugPrint('ObjectBoxService: Already on partition $cleanShop');
+      if (!settingsBox.isEmpty()) {
+        final s = settingsBox.getAll().first;
+        if (s.shopId != cleanShop) {
+          s.shopId = cleanShop;
+          settingsBox.put(s);
+        }
+      }
       return;
     }
 

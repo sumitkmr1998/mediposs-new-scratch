@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../shared/services/sync_service.dart';
 import '../../shared/services/objectbox_service.dart';
+import '../../shared/providers/inventory_provider.dart';
+import '../../shared/providers/warehouse_provider.dart';
+import '../../shared/providers/sales_provider.dart';
 import '../../widgets/shop_selection_dialog.dart';
 import '../../theme/app_theme.dart';
 import '../../shared/services/discovery_service.dart';
@@ -312,6 +315,12 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
                   final s = settingsProv.settings;
                   s.shopId = finalId;
                   settingsProv.save(s);
+                  
+                  if (context.mounted) {
+                    context.read<InventoryProvider>().load();
+                    context.read<WarehouseProvider>().loadTransfers();
+                    context.read<SalesProvider>().load();
+                  }
                   
                   _fetchCloudflareUrl();
                 },
@@ -889,10 +898,15 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
                           ),
                           const SizedBox(height: 16),
                           ElevatedButton.icon(
-                            onPressed: () {
+                            onPressed: () async {
                               final savedId = ObjectBoxService.instance.settings.shopId;
-                              if (savedId.isNotEmpty) {
-                                sync.enterCloudMode(savedId);
+                              if (savedId.isNotEmpty && savedId != 'default_shop') {
+                                await sync.enterCloudMode(savedId);
+                                if (context.mounted) {
+                                  context.read<InventoryProvider>().load();
+                                  context.read<WarehouseProvider>().loadTransfers();
+                                  context.read<SalesProvider>().load();
+                                }
                               } else {
                                 showShopSelectionDialog(context);
                               }
@@ -918,19 +932,37 @@ class _ConnectionAndroidState extends State<ConnectionAndroid> {
                         color: AppTheme.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.cloud_done, color: AppTheme.primary),
-                          const SizedBox(width: 8),
-                          const Expanded(
-                            child: Text(
-                              'Active in Cloud Mode (Firebase)',
-                              style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold),
-                            ),
+                          Row(
+                            children: [
+                              const Icon(Icons.cloud_done, color: AppTheme.primary),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Active in Cloud Mode ($currentShopId)',
+                                  style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => sync.exitCloudMode(),
+                                child: const Text('Exit'),
+                              ),
+                            ],
                           ),
-                          TextButton(
-                            onPressed: () => sync.exitCloudMode(),
-                            child: const Text('Exit'),
+                          const SizedBox(height: 4),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: OutlinedButton.icon(
+                              onPressed: () => showShopSelectionDialog(context),
+                              icon: const Icon(Icons.store, size: 14),
+                              label: const Text('Switch Cloud Shop', style: TextStyle(fontSize: 12)),
+                              style: OutlinedButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              ),
+                            ),
                           ),
                         ],
                       ),

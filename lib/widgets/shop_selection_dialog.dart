@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../shared/services/sync_service.dart';
 import '../shared/services/firebase_sync_service.dart';
+import '../shared/providers/inventory_provider.dart';
+import '../shared/providers/warehouse_provider.dart';
+import '../shared/providers/sales_provider.dart';
 import '../theme/app_theme.dart';
 
 Future<void> showShopSelectionDialog(BuildContext context) async {
@@ -116,7 +119,7 @@ Future<void> showShopSelectionDialog(BuildContext context) async {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 final finalId = writeInController.text.trim();
                 if (finalId.isEmpty) {
                   scaffoldMessenger.showSnackBar(const SnackBar(
@@ -126,7 +129,12 @@ Future<void> showShopSelectionDialog(BuildContext context) async {
                   return;
                 }
                 Navigator.pop(ctx);
-                sync.enterCloudMode(finalId);
+                await sync.enterCloudMode(finalId);
+                if (context.mounted) {
+                  context.read<InventoryProvider>().load();
+                  context.read<WarehouseProvider>().loadTransfers();
+                  context.read<SalesProvider>().load();
+                }
               },
               child: const Text('Enter Cloud Mode'),
             ),

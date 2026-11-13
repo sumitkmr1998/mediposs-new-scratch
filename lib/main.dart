@@ -219,6 +219,18 @@ void main(List<String> args) async {
           });
         });
       });
+    } else if (event == 'sale_deleted') {
+      final inv = msg['invoiceNo'] as String? ?? '';
+      if (inv.isNotEmpty) {
+        final box = ObjectBoxService.instance.saleBox;
+        final q = box.query(Sale_.invoiceNo.equals(inv)).build();
+        final s = q.findFirst();
+        q.close();
+        if (s != null) {
+          box.remove(s.id);
+          salesProvider.load();
+        }
+      }
     } else if (event == 'sales_updated') {
       salesDebounce?.cancel();
       salesDebounce = Timer(const Duration(milliseconds: 300), () {

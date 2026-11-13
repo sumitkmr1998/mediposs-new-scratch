@@ -341,6 +341,13 @@ class _SalesHistoryAndroidState extends State<SalesHistoryAndroid> {
                               onTap: () => sales.setTypeFilter('dispense'),
                               style: AppFilterChipStyle.filled,
                             ),
+                            const SizedBox(width: 8),
+                            AppFilterChip(
+                              label: 'OPD',
+                              isSelected: sales.typeFilter == 'opd',
+                              onTap: () => sales.setTypeFilter('opd'),
+                              style: AppFilterChipStyle.filled,
+                            ),
                           ],
                         ),
                       ),
@@ -450,6 +457,27 @@ class _SaleRow extends StatelessWidget {
     final canEditSales = context.watch<AuthProvider>().canEditSales;
     final inv = context.read<InventoryProvider>();
 
+    final String typeBadgeText;
+    final Color typeBadgeColor;
+    final IconData typeIcon;
+    if (sale.isReturn) {
+      typeBadgeText = 'REFUND';
+      typeBadgeColor = AppTheme.danger;
+      typeIcon = Icons.assignment_return;
+    } else if (sale.invoiceNo.startsWith('OPD-')) {
+      typeBadgeText = 'OPD';
+      typeBadgeColor = AppTheme.primaryLight;
+      typeIcon = Icons.medical_services_outlined;
+    } else if (sale.invoiceNo.startsWith('DISP-') || sale.isClinicalDispense) {
+      typeBadgeText = 'DISPENSE';
+      typeBadgeColor = AppTheme.purple;
+      typeIcon = Icons.medication_rounded;
+    } else {
+      typeBadgeText = 'RETAIL';
+      typeBadgeColor = AppTheme.success;
+      typeIcon = Icons.receipt_long;
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -465,13 +493,12 @@ class _SaleRow extends StatelessWidget {
           width: 34,
           height: 34,
           decoration: BoxDecoration(
-            color: (sale.isReturn ? AppTheme.danger : AppTheme.primaryLight)
-                .withValues(alpha: 0.1),
+            color: typeBadgeColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(
-            sale.isReturn ? Icons.assignment_return : Icons.receipt_long,
-            color: sale.isReturn ? AppTheme.danger : AppTheme.primaryLight,
+            typeIcon,
+            color: typeBadgeColor,
             size: 16,
           ),
         ),
@@ -512,16 +539,19 @@ class _SaleRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 6),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                   decoration: BoxDecoration(
-                    color: AppTheme.success.withValues(alpha: 0.1),
+                    color: typeBadgeColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: const Text('VERIFIED',
-                      style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.success)),
+                  child: Text(
+                    typeBadgeText,
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: typeBadgeColor,
+                    ),
+                  ),
                 ),
                 const Spacer(),
                 Text(

@@ -433,7 +433,7 @@ class AppSettings {
     this.preferredRefreshRate = -1.0,
     this.enableAnimations = true,
     this.autoBackupFrequency = 'Never',
-    this.autoBackupLogic = 'At Startup',
+    this.autoBackupLogic = 'On Close',
     this.googleDriveLinked = false,
     this.googleDriveSyncEnabled = true,
     this.googleAuthData,

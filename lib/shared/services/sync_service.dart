@@ -2082,6 +2082,30 @@ class SyncService extends ChangeNotifier {
           }
 
           if (salesToPut.isNotEmpty) {
+            // Purge any prior advance OPD sales that were merged into incoming DISP sales
+            final List<int> mergedOpdIdsToRemove = [];
+            for (final s in salesToPut) {
+              final opdInv = s.opdInvoiceNo.trim();
+              if (opdInv.isNotEmpty) {
+                final oldOpd = localSalesMap[opdInv] ??
+                    localSalesMap[opdInv.toLowerCase()] ??
+                    box.query(Sale_.invoiceNo.equals(opdInv)).build().findFirst();
+                if (oldOpd != null && oldOpd.id > 0) {
+                  mergedOpdIdsToRemove.add(oldOpd.id);
+                  try {
+                    SalesFactService.instance.reverseSale(oldOpd);
+                  } catch (_) {}
+                  localSalesMap.remove(opdInv);
+                  localSalesMap.remove(opdInv.toLowerCase());
+                  allLocal.removeWhere((x) => x.id == oldOpd.id);
+                  debugPrint('SyncService: Purged superseded OPD sale $opdInv merged into ${s.invoiceNo}');
+                }
+              }
+            }
+            if (mergedOpdIdsToRemove.isNotEmpty) {
+              box.removeMany(mergedOpdIdsToRemove);
+            }
+
             // Apply fact rollups for newly seen invoices before put
             for (final s in salesToPut) {
               final invTrimmed = s.invoiceNo.trim();

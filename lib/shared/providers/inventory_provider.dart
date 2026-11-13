@@ -15,13 +15,13 @@ import '../utils/consumption_aggregator.dart';
 import '../models/sale.dart';
 import '../repositories/medicine_repository.dart';
 import '../services/mutation_service.dart';
+import '../services/migration_service.dart';
 import '../../objectbox.g.dart';
 
 class InventoryProvider extends ChangeNotifier {
   final MedicineRepository _medRepo = MedicineRepository();
   Box<Medicine> get _box => ObjectBoxService.instance.medicineBox;
-  Box<PurchaseRecord> get _purchaseBox =>
-      ObjectBoxService.instance.purchaseBox;
+  Box<PurchaseRecord> get _purchaseBox => ObjectBoxService.instance.purchaseBox;
   Box<MedicineBatch> get _batchBox => ObjectBoxService.instance.batchBox;
   Box<RestockRequest> get _restockBox =>
       ObjectBoxService.instance.restockRequestBox;
@@ -48,7 +48,8 @@ class InventoryProvider extends ChangeNotifier {
     return ConsumptionAggregator.build(sales);
   }
 
-  bool isSmartLowStock(Medicine m, List<Sale> sales, {ConsumptionResult? precomputed}) {
+  bool isSmartLowStock(Medicine m, List<Sale> sales,
+      {ConsumptionResult? precomputed}) {
     if (m.totalStock <= 0) return true;
     final result = precomputed ?? _consumptionForSmartStock(sales);
     final daily = result.dailyRateForMedicine(
@@ -65,19 +66,24 @@ class InventoryProvider extends ChangeNotifier {
 
   int getSmartLowStockCount(List<Sale> sales) {
     final result = _consumptionForSmartStock(sales);
-    return _medicines.where((m) => isSmartLowStock(m, sales, precomputed: result)).length;
+    return _medicines
+        .where((m) => isSmartLowStock(m, sales, precomputed: result))
+        .length;
   }
 
   List<Medicine> getSmartLowStockMedicines(List<Sale> sales) {
     final result = _consumptionForSmartStock(sales);
-    return _medicines.where((m) => isSmartLowStock(m, sales, precomputed: result)).toList();
+    return _medicines
+        .where((m) => isSmartLowStock(m, sales, precomputed: result))
+        .toList();
   }
 
   /// Store + Clinic Replenishment Helpers (Excludes Bulk Warehouses)
   /// Evaluates whether Store + Clinic stock is below target coverage duration (in days)
   int getDispensingStock(Medicine m) => m.storeStock + m.mainStock;
 
-  bool isStoreClinicReplenishmentNeeded(Medicine m, List<Sale> sales, {int targetDays = 15, ConsumptionResult? precomputed}) {
+  bool isStoreClinicReplenishmentNeeded(Medicine m, List<Sale> sales,
+      {int targetDays = 15, ConsumptionResult? precomputed}) {
     final dispensingStock = getDispensingStock(m);
     final result = precomputed ?? _consumptionForSmartStock(sales);
     final daily = result.dailyRateForMedicine(
@@ -94,14 +100,22 @@ class InventoryProvider extends ChangeNotifier {
     return dispensingStock <= m.lowStockThreshold;
   }
 
-  int getStoreClinicReplenishmentCount(List<Sale> sales, {int targetDays = 15}) {
+  int getStoreClinicReplenishmentCount(List<Sale> sales,
+      {int targetDays = 15}) {
     final result = _consumptionForSmartStock(sales);
-    return _medicines.where((m) => isStoreClinicReplenishmentNeeded(m, sales, targetDays: targetDays, precomputed: result)).length;
+    return _medicines
+        .where((m) => isStoreClinicReplenishmentNeeded(m, sales,
+            targetDays: targetDays, precomputed: result))
+        .length;
   }
 
-  List<Medicine> getStoreClinicReplenishmentMedicines(List<Sale> sales, {int targetDays = 15}) {
+  List<Medicine> getStoreClinicReplenishmentMedicines(List<Sale> sales,
+      {int targetDays = 15}) {
     final result = _consumptionForSmartStock(sales);
-    return _medicines.where((m) => isStoreClinicReplenishmentNeeded(m, sales, targetDays: targetDays, precomputed: result)).toList();
+    return _medicines
+        .where((m) => isStoreClinicReplenishmentNeeded(m, sales,
+            targetDays: targetDays, precomputed: result))
+        .toList();
   }
 
   int get expiredCount => expiredMedicines.length;
@@ -160,7 +174,8 @@ class InventoryProvider extends ChangeNotifier {
           final dup = list[i];
           for (final b in dup.batches) {
             final exists = primary.batches.any((pb) =>
-                pb.batchNo.trim().toUpperCase() == b.batchNo.trim().toUpperCase() &&
+                pb.batchNo.trim().toUpperCase() ==
+                    b.batchNo.trim().toUpperCase() &&
                 pb.expiryDate.year == b.expiryDate.year &&
                 pb.expiryDate.month == b.expiryDate.month &&
                 pb.expiryDate.day == b.expiryDate.day);
@@ -180,6 +195,9 @@ class InventoryProvider extends ChangeNotifier {
     if (duplicatesToRemove.isNotEmpty) {
       _box.removeMany(duplicatesToRemove);
     }
+
+    // Deduplicate batches per medicine and heal inflated quantities
+    MigrationService.deduplicateBatchesAndHealStock();
 
     // Recalculate stock and prices for all remaining medicines
     final remaining = _box.getAll();
@@ -307,7 +325,8 @@ class InventoryProvider extends ChangeNotifier {
   void addMedicine(Medicine m, {SyncService? syncService, AppUser? actor}) {
     if (actor != null &&
         !(actor.role.toLowerCase() == 'admin' || actor.canEditInventory)) {
-      throw Exception('Unauthorized: You do not have permission to add new medicines.');
+      throw Exception(
+          'Unauthorized: You do not have permission to add new medicines.');
     }
     m.name = m.name.trim();
     m.barcode = m.barcode.trim();
@@ -347,7 +366,8 @@ class InventoryProvider extends ChangeNotifier {
   void updateMedicine(Medicine m, {SyncService? syncService, AppUser? actor}) {
     if (actor != null &&
         !(actor.role.toLowerCase() == 'admin' || actor.canEditInventory)) {
-      throw Exception('Unauthorized: You do not have permission to update medicines.');
+      throw Exception(
+          'Unauthorized: You do not have permission to update medicines.');
     }
     m.name = m.name.trim();
     m.barcode = m.barcode.trim();
@@ -385,7 +405,8 @@ class InventoryProvider extends ChangeNotifier {
       action: 'UPDATE',
       entityType: 'Medicine',
       entityId: m.id.toString(),
-      description: 'Updated medicine details: ${m.name} (Barcode: ${m.barcode})',
+      description:
+          'Updated medicine details: ${m.name} (Barcode: ${m.barcode})',
       details: {
         'before': oldJson,
         'after': m.toJson(),
@@ -406,7 +427,8 @@ class InventoryProvider extends ChangeNotifier {
   void deleteMedicine(int id, {SyncService? syncService, AppUser? actor}) {
     if (actor != null &&
         !(actor.role.toLowerCase() == 'admin' || actor.canDeleteInventory)) {
-      throw Exception('Unauthorized: You do not have permission to delete medicines.');
+      throw Exception(
+          'Unauthorized: You do not have permission to delete medicines.');
     }
     final m = _box.get(id);
     if (m == null) return;
@@ -466,8 +488,11 @@ class InventoryProvider extends ChangeNotifier {
               batchNo: batch.batchNo,
               expiryDate: batch.expiryDate,
               qty: deduction,
-              sellingPrice: batch.sellingPrice > 0 ? batch.sellingPrice : m.sellingPrice,
-              purchasePrice: batch.purchasePrice > 0 ? batch.purchasePrice : m.purchasePrice,
+              sellingPrice:
+                  batch.sellingPrice > 0 ? batch.sellingPrice : m.sellingPrice,
+              purchasePrice: batch.purchasePrice > 0
+                  ? batch.purchasePrice
+                  : m.purchasePrice,
             ));
           }
         }
@@ -496,8 +521,12 @@ class InventoryProvider extends ChangeNotifier {
             batchNo: latestBatch.batchNo,
             expiryDate: latestBatch.expiryDate,
             qty: qty, // negative
-            sellingPrice: latestBatch.sellingPrice > 0 ? latestBatch.sellingPrice : m.sellingPrice,
-            purchasePrice: latestBatch.purchasePrice > 0 ? latestBatch.purchasePrice : m.purchasePrice,
+            sellingPrice: latestBatch.sellingPrice > 0
+                ? latestBatch.sellingPrice
+                : m.sellingPrice,
+            purchasePrice: latestBatch.purchasePrice > 0
+                ? latestBatch.purchasePrice
+                : m.purchasePrice,
           ));
         } else {
           deducted.add(DeductedBatch(
@@ -557,8 +586,11 @@ class InventoryProvider extends ChangeNotifier {
               batchNo: batch.batchNo,
               expiryDate: batch.expiryDate,
               qty: deduction,
-              sellingPrice: batch.sellingPrice > 0 ? batch.sellingPrice : m.sellingPrice,
-              purchasePrice: batch.purchasePrice > 0 ? batch.purchasePrice : m.purchasePrice,
+              sellingPrice:
+                  batch.sellingPrice > 0 ? batch.sellingPrice : m.sellingPrice,
+              purchasePrice: batch.purchasePrice > 0
+                  ? batch.purchasePrice
+                  : m.purchasePrice,
             ));
           }
         }
@@ -654,7 +686,8 @@ class InventoryProvider extends ChangeNotifier {
   }) {
     if (actor != null &&
         !(actor.role.toLowerCase() == 'admin' || actor.canTransferStock)) {
-      throw Exception('Unauthorized: You do not have permission to execute stock transfers.');
+      throw Exception(
+          'Unauthorized: You do not have permission to execute stock transfers.');
     }
 
     final m = _box.get(medicineId);
@@ -684,7 +717,9 @@ class InventoryProvider extends ChangeNotifier {
       } else if (batchNo != null && batchNo.trim().isNotEmpty) {
         // Transfer from a specific batch if specified (use case-insensitive trimmed match)
         final cleanBatchNo = batchNo.trim().toUpperCase();
-        final batch = batches.where((b) => b.batchNo.trim().toUpperCase() == cleanBatchNo).firstOrNull;
+        final batch = batches
+            .where((b) => b.batchNo.trim().toUpperCase() == cleanBatchNo)
+            .firstOrNull;
         if (batch != null) {
           _transferInBatch(batch, qty, from, to);
           remaining = 0;
@@ -792,7 +827,8 @@ class InventoryProvider extends ChangeNotifier {
             actor.canOverrideStock ||
             actor.canEditInventory ||
             actor.canAddStock)) {
-      throw Exception('Unauthorized: You do not have permission to modify batch stock.');
+      throw Exception(
+          'Unauthorized: You do not have permission to modify batch stock.');
     }
     final ids = {
       ...mainUpdates.keys,
@@ -846,8 +882,9 @@ class InventoryProvider extends ChangeNotifier {
         }
 
         // Update or create batch
-        final cleanBatchNo =
-            batchNo.trim().isNotEmpty ? batchNo.trim().toUpperCase() : 'GENERAL';
+        final cleanBatchNo = batchNo.trim().isNotEmpty
+            ? batchNo.trim().toUpperCase()
+            : 'GENERAL';
         final effectiveExpiry = expiryDate ?? DateTime(2099, 12, 31);
 
         var batch = m.batches
@@ -857,7 +894,8 @@ class InventoryProvider extends ChangeNotifier {
         if (batch == null) {
           // Check the database directly to prevent duplicates if relation list is stale/uncached
           final dbBatch = _batchBox
-              .query(MedicineBatch_.batchNo.equals(cleanBatchNo, caseSensitive: false)
+              .query(MedicineBatch_.batchNo
+                  .equals(cleanBatchNo, caseSensitive: false)
                   .and(MedicineBatch_.medicine.equals(m.id)))
               .build()
               .findFirst();
@@ -1013,7 +1051,8 @@ class InventoryProvider extends ChangeNotifier {
           action: 'UPDATE',
           entityType: 'Medicine',
           entityId: record.medicineId.toString(),
-          description: 'Added stock for ${record.medicineName}: +${record.qty} units (Batch: $batchNo)',
+          description:
+              'Added stock for ${record.medicineName}: +${record.qty} units (Batch: $batchNo)',
           details: {
             'medicineId': record.medicineId,
             'medicineName': record.medicineName,
@@ -1059,17 +1098,21 @@ class InventoryProvider extends ChangeNotifier {
         MedicineBatch? batch;
         if (p.batchNo.trim().isNotEmpty) {
           batch = m.batches
-              .where((b) => b.batchNo.trim().toUpperCase() == p.batchNo.trim().toUpperCase())
+              .where((b) =>
+                  b.batchNo.trim().toUpperCase() ==
+                  p.batchNo.trim().toUpperCase())
               .firstOrNull;
         }
         if (batch == null) {
-          final latest = m.batches.toList()..sort((a, b) => b.id.compareTo(a.id));
+          final latest = m.batches.toList()
+            ..sort((a, b) => b.id.compareTo(a.id));
           batch = latest.first;
         }
         if (p.location == 'store') {
           batch.storeStock = (batch.storeStock + diff).clamp(0, 999999);
         } else if (p.location == 'bulkClinic') {
-          batch.bulkClinicStock = (batch.bulkClinicStock + diff).clamp(0, 999999);
+          batch.bulkClinicStock =
+              (batch.bulkClinicStock + diff).clamp(0, 999999);
         } else if (p.location == 'bulkStore') {
           batch.bulkStoreStock = (batch.bulkStoreStock + diff).clamp(0, 999999);
         } else {
@@ -1091,7 +1134,8 @@ class InventoryProvider extends ChangeNotifier {
         action: 'UPDATE',
         entityType: 'PurchaseRecord',
         entityId: p.id.toString(),
-        description: 'Updated purchase quantity for ${p.medicineName}: $oldQty -> $newQty',
+        description:
+            'Updated purchase quantity for ${p.medicineName}: $oldQty -> $newQty',
         details: {
           'medicineId': p.medicineId,
           'medicineName': p.medicineName,
@@ -1119,7 +1163,8 @@ class InventoryProvider extends ChangeNotifier {
     }
   }
 
-  void deletePurchase(PurchaseRecord p, {SyncService? syncService, AppUser? actor}) {
+  void deletePurchase(PurchaseRecord p,
+      {SyncService? syncService, AppUser? actor}) {
     final m = _box.get(p.medicineId);
     if (m != null) {
       // Revert stock
@@ -1140,17 +1185,21 @@ class InventoryProvider extends ChangeNotifier {
         MedicineBatch? batch;
         if (p.batchNo.trim().isNotEmpty) {
           batch = m.batches
-              .where((b) => b.batchNo.trim().toUpperCase() == p.batchNo.trim().toUpperCase())
+              .where((b) =>
+                  b.batchNo.trim().toUpperCase() ==
+                  p.batchNo.trim().toUpperCase())
               .firstOrNull;
         }
         if (batch == null) {
-          final latest = m.batches.toList()..sort((a, b) => b.id.compareTo(a.id));
+          final latest = m.batches.toList()
+            ..sort((a, b) => b.id.compareTo(a.id));
           batch = latest.first;
         }
         if (p.location == 'store') {
           batch.storeStock = (batch.storeStock + diff).clamp(0, 999999);
         } else if (p.location == 'bulkClinic') {
-          batch.bulkClinicStock = (batch.bulkClinicStock + diff).clamp(0, 999999);
+          batch.bulkClinicStock =
+              (batch.bulkClinicStock + diff).clamp(0, 999999);
         } else if (p.location == 'bulkStore') {
           batch.bulkStoreStock = (batch.bulkStoreStock + diff).clamp(0, 999999);
         } else {
@@ -1169,7 +1218,8 @@ class InventoryProvider extends ChangeNotifier {
         action: 'DELETE',
         entityType: 'PurchaseRecord',
         entityId: p.id.toString(),
-        description: 'Deleted purchase record for ${p.medicineName} (-${p.qty} units)',
+        description:
+            'Deleted purchase record for ${p.medicineName} (-${p.qty} units)',
         details: {
           'medicineId': p.medicineId,
           'medicineName': p.medicineName,
@@ -1222,8 +1272,11 @@ class InventoryProvider extends ChangeNotifier {
     }
     load();
 
-    final isClient = Platform.isAndroid || (Platform.isWindows && ObjectBoxService.instance.settings.isWindowsClient);
-    final isHub = Platform.isWindows && !ObjectBoxService.instance.settings.isWindowsClient;
+    final isClient = Platform.isAndroid ||
+        (Platform.isWindows &&
+            ObjectBoxService.instance.settings.isWindowsClient);
+    final isHub = Platform.isWindows &&
+        !ObjectBoxService.instance.settings.isWindowsClient;
     if (isHub) {
       if (LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
@@ -1309,7 +1362,8 @@ class InventoryProvider extends ChangeNotifier {
         !(actor.role.toLowerCase() == 'admin' ||
             actor.canOverrideStock ||
             actor.canEditInventory)) {
-      throw Exception('Unauthorized: You do not have permission to modify batch details.');
+      throw Exception(
+          'Unauthorized: You do not have permission to modify batch details.');
     }
 
     final oldBatchNo = batch.batchNo;
@@ -1356,10 +1410,16 @@ class InventoryProvider extends ChangeNotifier {
         }
       }
     }
-    if (purchasePrice != null && (actor == null || actor.role.toLowerCase() == 'admin' || actor.canEditInventory)) {
+    if (purchasePrice != null &&
+        (actor == null ||
+            actor.role.toLowerCase() == 'admin' ||
+            actor.canEditInventory)) {
       batch.purchasePrice = purchasePrice.clamp(0.0, 9999999.0);
     }
-    if (sellingPrice != null && (actor == null || actor.role.toLowerCase() == 'admin' || actor.canEditInventory)) {
+    if (sellingPrice != null &&
+        (actor == null ||
+            actor.role.toLowerCase() == 'admin' ||
+            actor.canEditInventory)) {
       batch.sellingPrice = sellingPrice.clamp(0.0, 9999999.0);
     }
 
@@ -1465,7 +1525,8 @@ class InventoryProvider extends ChangeNotifier {
       action: 'PHYSICAL_AUDIT_ADJUSTMENT',
       entityType: 'Medicine',
       entityId: m.id.toString(),
-      description: 'Physical audit adjustment for ${m.name}: Clinic: $oldMainStock -> ${m.mainStock}, Store: $oldStoreStock -> ${m.storeStock} ($reason)',
+      description:
+          'Physical audit adjustment for ${m.name}: Clinic: $oldMainStock -> ${m.mainStock}, Store: $oldStoreStock -> ${m.storeStock} ($reason)',
       details: {
         'medicineId': m.id,
         'medicineName': m.name,
@@ -1503,7 +1564,8 @@ class InventoryProvider extends ChangeNotifier {
     }
   }
 
-  List<Map<String, dynamic>> toSyncJson() => _medicines.map((m) => m.toJson()).toList();
+  List<Map<String, dynamic>> toSyncJson() =>
+      _medicines.map((m) => m.toJson()).toList();
 }
 
 class DeductedBatch {

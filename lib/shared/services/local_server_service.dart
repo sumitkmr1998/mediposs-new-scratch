@@ -1003,7 +1003,13 @@ class LocalServerService {
       broadcast({'event': 'medicines_updated'});
       broadcast({'event': 'sync_received'});
       _incomingDataController.add('medicines');
-      final savedMed = existing ?? (box.query(barcode.isNotEmpty ? Medicine_.barcode.equals(barcode) : Medicine_.name.equals(name)).build().findFirst());
+      final savedMed = existing ??
+          (box
+              .query(barcode.isNotEmpty
+                  ? Medicine_.barcode.equals(barcode)
+                  : Medicine_.name.equals(name))
+              .build()
+              .findFirst());
       if (savedMed != null) {
         unawaited(FirebaseSyncService.instance
             .broadcastUpdate('medicines', savedMed.toJson())
@@ -1256,6 +1262,7 @@ class LocalServerService {
       }
 
       ObjectBoxService.instance.appointmentBox.put(a);
+      broadcast({'event': 'appointments_updated'});
       broadcast({'event': 'sync_received'});
       _incomingDataController.add('appointments');
 
@@ -1358,10 +1365,27 @@ class LocalServerService {
   }
 
   Response _appointmentsGetHandler(Request req) {
-    final appointments = ObjectBoxService.instance.appointmentBox.getAll();
+    final sinceStr = req.url.queryParameters['since'];
+    final sinceMs = int.tryParse(sinceStr ?? '') ??
+        (DateTime.tryParse(sinceStr ?? '')?.millisecondsSinceEpoch);
+
+    final box = ObjectBoxService.instance.appointmentBox;
+    final List<Appointment> appointments;
+    if (sinceMs != null && sinceMs > 0) {
+      final query =
+          box.query(Appointment_.updatedAt.greaterThan(sinceMs - 1)).build();
+      try {
+        appointments = query.find();
+      } finally {
+        query.close();
+      }
+    } else {
+      appointments = box.getAll();
+    }
+
     final patientBox = ObjectBoxService.instance.patientBox;
     final json = appointments.map((a) {
-      final patient = patientBox.get(a.patientId);
+      final patient = a.patientId > 0 ? patientBox.get(a.patientId) : null;
       return {
         'id': a.id,
         'patientId': a.patientId,
@@ -1386,7 +1410,11 @@ class LocalServerService {
       };
     }).toList();
     return Response.ok(
-      jsonEncode({'data': json, 'count': json.length}),
+      jsonEncode({
+        'data': json,
+        'count': json.length,
+        'serverTime': DateTime.now().millisecondsSinceEpoch,
+      }),
       headers: {'content-type': 'application/json'},
     );
   }
@@ -1736,7 +1764,8 @@ class LocalServerService {
           'name': actualName
         });
         _incomingDataController.add('inventory');
-        final docId = actualBarcode.isNotEmpty ? actualBarcode : m.id.toString();
+        final docId =
+            actualBarcode.isNotEmpty ? actualBarcode : m.id.toString();
         unawaited(FirebaseSyncService.instance
             .deleteDocument('medicines', docId)
             .catchError((_) {}));
@@ -1833,7 +1862,8 @@ class LocalServerService {
     final m = ObjectBoxService.instance.medicineBox.get(medicineId) ??
         (medicineName.isNotEmpty
             ? ObjectBoxService.instance.medicineBox
-                .query(Medicine_.name.equals(medicineName, caseSensitive: false))
+                .query(
+                    Medicine_.name.equals(medicineName, caseSensitive: false))
                 .build()
                 .findFirst()
             : null);
@@ -1955,7 +1985,8 @@ class LocalServerService {
           broadcast({'event': 'transfers_updated'});
           broadcast({'event': 'sync_received'});
         }
-        return Response.ok(jsonEncode({'status': 'success', 'note': 'deleted'}));
+        return Response.ok(
+            jsonEncode({'status': 'success', 'note': 'deleted'}));
       }
 
       if (action == 'update' && existingTransfer != null) {
@@ -1963,15 +1994,20 @@ class LocalServerService {
 
         existingTransfer
           ..qty = body['qty'] ?? existingTransfer.qty
-          ..fromWarehouse = body['fromWarehouse'] ?? existingTransfer.fromWarehouse
+          ..fromWarehouse =
+              body['fromWarehouse'] ?? existingTransfer.fromWarehouse
           ..toWarehouse = body['toWarehouse'] ?? existingTransfer.toWarehouse
           ..batchNo = body['batchNo']
           ..expiryDate = DateTime.tryParse(body['expiryDate'] ?? '')
           ..note = body['note'] ?? existingTransfer.note
-          ..initialFromQty = (body['initialFromQty'] as num?)?.toInt() ?? existingTransfer.initialFromQty
-          ..finalFromQty = (body['finalFromQty'] as num?)?.toInt() ?? existingTransfer.finalFromQty
-          ..initialToQty = (body['initialToQty'] as num?)?.toInt() ?? existingTransfer.initialToQty
-          ..finalToQty = (body['finalToQty'] as num?)?.toInt() ?? existingTransfer.finalToQty;
+          ..initialFromQty = (body['initialFromQty'] as num?)?.toInt() ??
+              existingTransfer.initialFromQty
+          ..finalFromQty = (body['finalFromQty'] as num?)?.toInt() ??
+              existingTransfer.finalFromQty
+          ..initialToQty = (body['initialToQty'] as num?)?.toInt() ??
+              existingTransfer.initialToQty
+          ..finalToQty = (body['finalToQty'] as num?)?.toInt() ??
+              existingTransfer.finalToQty;
 
         ObjectBoxService.instance.transferBox.put(existingTransfer);
         _applyTransferStockOnHub(existingTransfer);
@@ -1979,7 +2015,8 @@ class LocalServerService {
         broadcast({'event': 'medicines_updated'});
         broadcast({'event': 'transfers_updated'});
         broadcast({'event': 'sync_received'});
-        return Response.ok(jsonEncode({'status': 'success', 'note': 'updated'}));
+        return Response.ok(
+            jsonEncode({'status': 'success', 'note': 'updated'}));
       }
 
       if (existingTransfer != null) {
@@ -2604,7 +2641,8 @@ class LocalServerService {
   Handler _withAuth(Handler handler) => (Request req) {
         final secretHeader = req.headers['x-medipass-secret'];
         if (secretHeader != null && secretHeader == _jwtSecret) {
-          final adminUser = ObjectBoxService.instance.userBox.getAll().firstOrNull;
+          final adminUser =
+              ObjectBoxService.instance.userBox.getAll().firstOrNull;
           if (adminUser != null) {
             req = req.change(context: {'auth.user': adminUser});
           }
@@ -2623,13 +2661,15 @@ class LocalServerService {
           final payload = jwt.payload as Map<String, dynamic>?;
           final userId = payload?['userId'];
           if (userId != null) {
-            final appUser = ObjectBoxService.instance.userBox.get(userId as int) ??
-                ObjectBoxService.instance.userBox.getAll().firstOrNull;
+            final appUser =
+                ObjectBoxService.instance.userBox.get(userId as int) ??
+                    ObjectBoxService.instance.userBox.getAll().firstOrNull;
             if (appUser != null) {
               req = req.change(context: {'auth.user': appUser});
             }
           } else {
-            final fallbackUser = ObjectBoxService.instance.userBox.getAll().firstOrNull;
+            final fallbackUser =
+                ObjectBoxService.instance.userBox.getAll().firstOrNull;
             if (fallbackUser != null) {
               req = req.change(context: {'auth.user': fallbackUser});
             }
@@ -2735,26 +2775,215 @@ class LocalServerService {
             .broadcastUpdate('patients', p.toJson());
       } else if (entity == 'medicine' &&
           (action == 'create' || action == 'update')) {
-        final m = Medicine.fromJson(data);
-        m.id = 0; // Force ID 0 for Hub (ObjectBox IDs are local)
-        for (var b in m.batches) {
-          b.id = 0; // Force Batch IDs to 0 as well
-        }
+        final box = ObjectBoxService.instance.medicineBox;
+        final batchBox = ObjectBoxService.instance.batchBox;
+        final name = (data['name'] as String? ?? '').trim();
+        final barcode = (data['barcode'] as String? ?? '').trim();
 
-        // Deduplicate by name or barcode
-        Condition<Medicine> cond = Medicine_.name.equals(m.name);
-        if (m.barcode.isNotEmpty) {
-          cond = cond.and(Medicine_.barcode.equals(m.barcode));
+        // 1. Locate existing medicine: check barcode first (if non-empty), then case-insensitive trimmed name
+        Medicine? existing;
+        if (barcode.isNotEmpty) {
+          existing =
+              box.query(Medicine_.barcode.equals(barcode)).build().findFirst();
         }
-        final existing = ObjectBoxService.instance.medicineBox
-            .query(cond)
-            .build()
-            .findFirst();
+        if (existing == null && name.isNotEmpty) {
+          existing = box
+              .query(Medicine_.name.equals(name, caseSensitive: false))
+              .build()
+              .findFirst();
+        }
+        if (existing == null && name.isNotEmpty) {
+          final all = box.getAll();
+          final nameLower = name.toLowerCase();
+          existing = all
+              .where((m) => m.name.trim().toLowerCase() == nameLower)
+              .firstOrNull;
+        }
 
         if (existing != null) {
-          m.id = existing.id;
+          final targetExisting = existing;
+          // Purge any redundant duplicate medicine records if any exist
+          final all = box.getAll();
+          final duplicateIds = <int>[];
+          for (final m in all) {
+            if (m.id == targetExisting.id) continue;
+            final isSameBarcode =
+                barcode.isNotEmpty && m.barcode.trim() == barcode;
+            final isSameName = name.isNotEmpty &&
+                m.name.trim().toLowerCase() == name.toLowerCase();
+            if (isSameBarcode || isSameName) {
+              duplicateIds.add(m.id);
+            }
+          }
+          if (duplicateIds.isNotEmpty) {
+            box.removeMany(duplicateIds);
+          }
+
+          targetExisting
+            ..name = name
+            ..barcode = barcode.isNotEmpty ? barcode : targetExisting.barcode
+            ..category = data['category'] ?? targetExisting.category
+            ..unit = data['unit'] ?? targetExisting.unit
+            ..purchasePrice = (data['purchasePrice'] as num?)?.toDouble() ??
+                targetExisting.purchasePrice
+            ..sellingPrice = (data['sellingPrice'] as num?)?.toDouble() ??
+                targetExisting.sellingPrice
+            ..mainStock = data['mainStock'] ?? targetExisting.mainStock
+            ..storeStock = data['storeStock'] ?? targetExisting.storeStock
+            ..bulkClinicStock =
+                data['bulkClinicStock'] ?? targetExisting.bulkClinicStock
+            ..bulkStoreStock =
+                data['bulkStoreStock'] ?? targetExisting.bulkStoreStock
+            ..lowStockThreshold =
+                data['lowStockThreshold'] ?? targetExisting.lowStockThreshold
+            ..isScheduleH1 = data['isScheduleH1'] ?? targetExisting.isScheduleH1
+            ..updatedAt = DateTime.now();
+
+          // Sync batches safely without creating duplicates
+          if (data['batches'] != null) {
+            final incomingBatches = (data['batches'] as List);
+
+            final allDbBatches = batchBox
+                .query(MedicineBatch_.medicine.equals(targetExisting.id))
+                .build()
+                .find();
+
+            final existingBatchMap = <String, MedicineBatch>{};
+            final duplicateBatchIdsToRemove = <int>[];
+
+            for (final b in allDbBatches) {
+              final key = b.batchNo.trim().toUpperCase();
+              if (key.isEmpty) continue;
+              if (!existingBatchMap.containsKey(key)) {
+                existingBatchMap[key] = b;
+              } else {
+                duplicateBatchIdsToRemove.add(b.id);
+              }
+            }
+
+            if (duplicateBatchIdsToRemove.isNotEmpty) {
+              batchBox.removeMany(duplicateBatchIdsToRemove);
+            }
+
+            final activeBatchNos = <String>{};
+
+            for (var bItem in incomingBatches) {
+              final bNo =
+                  (bItem['batchNo'] as String? ?? '').trim().toUpperCase();
+              if (bNo.isEmpty) continue;
+              activeBatchNos.add(bNo);
+
+              final expDate = DateTime.tryParse(bItem['expiryDate'] ?? '') ??
+                  DateTime.now();
+              final pPrice =
+                  (bItem['purchasePrice'] as num?)?.toDouble() ?? 0.0;
+              final sPrice = (bItem['sellingPrice'] as num?)?.toDouble() ?? 0.0;
+              final mStock = (bItem['mainStock'] as num?)?.toInt() ?? 0;
+              final sStock = (bItem['storeStock'] as num?)?.toInt() ?? 0;
+              final bcStock = (bItem['bulkClinicStock'] as num?)?.toInt() ?? 0;
+              final bsStock = (bItem['bulkStoreStock'] as num?)?.toInt() ?? 0;
+
+              final existingBatch = existingBatchMap[bNo];
+              if (existingBatch != null) {
+                // Update in place without duplicating
+                existingBatch
+                  ..expiryDate = expDate
+                  ..purchasePrice = pPrice
+                  ..sellingPrice = sPrice
+                  ..mainStock = mStock
+                  ..storeStock = sStock
+                  ..bulkClinicStock = bcStock
+                  ..bulkStoreStock = bsStock;
+                existingBatch.medicine.target = targetExisting;
+                batchBox.put(existingBatch);
+              } else {
+                // Insert new unique batch
+                final newBatch = MedicineBatch(
+                  id: 0,
+                  batchNo: bNo,
+                  expiryDate: expDate,
+                  mainStock: mStock,
+                  storeStock: sStock,
+                  bulkClinicStock: bcStock,
+                  bulkStoreStock: bsStock,
+                  purchasePrice: pPrice,
+                  sellingPrice: sPrice,
+                );
+                newBatch.medicine.target = targetExisting;
+                final newId = batchBox.put(newBatch);
+                newBatch.id = newId;
+                existingBatchMap[bNo] = newBatch;
+              }
+            }
+
+            // Remove orphaned batches
+            final toRemoveIds = <int>[];
+            for (final entry in existingBatchMap.entries) {
+              if (!activeBatchNos.contains(entry.key)) {
+                if (entry.value.id > 0) toRemoveIds.add(entry.value.id);
+              }
+            }
+            if (toRemoveIds.isNotEmpty) {
+              batchBox.removeMany(toRemoveIds);
+            }
+
+            // Refresh targetExisting.batches relation from DB
+            targetExisting.batches.clear();
+            final refreshedBatches = batchBox
+                .query(MedicineBatch_.medicine.equals(targetExisting.id))
+                .build()
+                .find();
+            targetExisting.batches.addAll(refreshedBatches);
+          }
+
+          targetExisting.recalculateStockFromBatches();
+          box.put(targetExisting);
+        } else {
+          // Brand new medicine: insert medicine first, then attach batches once
+          final m = Medicine(
+            name: name,
+            barcode: barcode,
+            category: data['category'] ?? 'General',
+            unit: data['unit'] ?? 'Pcs',
+            purchasePrice: (data['purchasePrice'] as num?)?.toDouble() ?? 0.0,
+            sellingPrice: (data['sellingPrice'] as num?)?.toDouble() ?? 0.0,
+            mainStock: data['mainStock'] ?? 0,
+            storeStock: data['storeStock'] ?? 0,
+            bulkClinicStock: data['bulkClinicStock'] ?? 0,
+            bulkStoreStock: data['bulkStoreStock'] ?? 0,
+            lowStockThreshold: data['lowStockThreshold'] ?? 10,
+            isScheduleH1: data['isScheduleH1'] ?? false,
+            updatedAt: DateTime.now(),
+          );
+          final medId = box.put(m);
+          m.id = medId;
+
+          if (data['batches'] != null) {
+            for (var bItem in data['batches']) {
+              final newBatch = MedicineBatch(
+                id: 0,
+                batchNo: bItem['batchNo'] ?? '',
+                expiryDate: DateTime.tryParse(bItem['expiryDate'] ?? '') ??
+                    DateTime.now(),
+                mainStock: bItem['mainStock'] ?? 0,
+                storeStock: bItem['storeStock'] ?? 0,
+                bulkClinicStock: bItem['bulkClinicStock'] ?? 0,
+                bulkStoreStock: bItem['bulkStoreStock'] ?? 0,
+                purchasePrice:
+                    (bItem['purchasePrice'] as num?)?.toDouble() ?? 0.0,
+                sellingPrice:
+                    (bItem['sellingPrice'] as num?)?.toDouble() ?? 0.0,
+              );
+              newBatch.medicine.target = m;
+              final bId = batchBox.put(newBatch);
+              newBatch.id = bId;
+              m.batches.add(newBatch);
+            }
+          }
+          m.recalculateStockFromBatches();
+          box.put(m);
         }
-        ObjectBoxService.instance.medicineBox.put(m);
+
         broadcast({'event': 'medicines_updated'});
         broadcast({'event': 'sync_received'});
         _incomingDataController.add('inventory');
@@ -2862,20 +3091,27 @@ class LocalServerService {
           final transferUuid = (data['uuid'] as String? ?? '').trim();
           final box = ObjectBoxService.instance.transferBox;
           StockTransfer? existing = transferUuid.isNotEmpty
-              ? box.query(StockTransfer_.uuid.equals(transferUuid)).build().findFirst()
+              ? box
+                  .query(StockTransfer_.uuid.equals(transferUuid))
+                  .build()
+                  .findFirst()
               : null;
           if (existing == null && data['medicineName'] != null) {
-            final tName = (data['medicineName'] as String? ?? '').trim().toLowerCase();
+            final tName =
+                (data['medicineName'] as String? ?? '').trim().toLowerCase();
             final tQty = (data['qty'] as num?)?.toInt() ?? 0;
             final tFrom = data['fromWarehouse'] as String? ?? '';
             final tTo = data['toWarehouse'] as String? ?? '';
             final tBatch = data['batchNo'] as String?;
-            existing = box.getAll().where((t) =>
-                t.medicineName.trim().toLowerCase() == tName &&
-                t.qty == tQty &&
-                t.fromWarehouse == tFrom &&
-                t.toWarehouse == tTo &&
-                t.batchNo == tBatch).firstOrNull;
+            existing = box
+                .getAll()
+                .where((t) =>
+                    t.medicineName.trim().toLowerCase() == tName &&
+                    t.qty == tQty &&
+                    t.fromWarehouse == tFrom &&
+                    t.toWarehouse == tTo &&
+                    t.batchNo == tBatch)
+                .firstOrNull;
           }
           if (existing != null) {
             _revertTransferStockOnHub(existing);
@@ -2885,7 +3121,8 @@ class LocalServerService {
             broadcast({'event': 'sync_received'});
           }
         } else {
-          debugPrint('Hub [Firebase Delta]: Skipping unsupported cloud deletion: $entity');
+          debugPrint(
+              'Hub [Firebase Delta]: Skipping unsupported cloud deletion: $entity');
         }
       } else if (entity == 'procedure') {
         final p = Procedure.fromJson(data);
@@ -2959,8 +3196,9 @@ class LocalServerService {
           final log = AuditLog.fromJson(data);
           final box = ObjectBoxService.instance.store.box<AuditLog>();
           final existing = box
-              .query(AuditLog_.deviceId.equals(log.deviceId).and(
-                  AuditLog_.timestamp.equals(log.timestamp.millisecondsSinceEpoch)))
+              .query(AuditLog_.deviceId.equals(log.deviceId).and(AuditLog_
+                  .timestamp
+                  .equals(log.timestamp.millisecondsSinceEpoch)))
               .build()
               .findFirst();
           if (existing == null) {
@@ -2997,7 +3235,8 @@ class LocalServerService {
           final doc = Doctor.fromJson(data);
           doc.id = 0;
           final box = ObjectBoxService.instance.doctorBox;
-          final existing = box.query(Doctor_.name.equals(doc.name)).build().findFirst();
+          final existing =
+              box.query(Doctor_.name.equals(doc.name)).build().findFirst();
           if (existing != null) doc.id = existing.id;
           box.put(doc);
           broadcast({'event': 'doctors_updated'});
@@ -3011,7 +3250,9 @@ class LocalServerService {
           record.id = 0;
           final box = ObjectBoxService.instance.attendanceBox;
           final all = box.getAll();
-          final existing = all.where((r) => r.userId == record.userId && r.date == record.date).firstOrNull;
+          final existing = all
+              .where((r) => r.userId == record.userId && r.date == record.date)
+              .firstOrNull;
           if (existing != null) record.id = existing.id;
           box.put(record);
           broadcast({'event': 'attendance_updated'});
@@ -3034,7 +3275,10 @@ class LocalServerService {
           final template = PrescriptionTemplate.fromJson(data);
           template.id = 0;
           final box = ObjectBoxService.instance.templateBox;
-          final existing = box.query(PrescriptionTemplate_.name.equals(template.name)).build().findFirst();
+          final existing = box
+              .query(PrescriptionTemplate_.name.equals(template.name))
+              .build()
+              .findFirst();
           if (existing != null) template.id = existing.id;
           box.put(template);
           broadcast({'event': 'templates_updated'});
@@ -3043,7 +3287,8 @@ class LocalServerService {
           debugPrint('Hub: Error committing cloud template: $e');
         }
       } else {
-        debugPrint('Hub [Firebase Delta]: Skipping unsupported cloud mutation: $entity ($action)');
+        debugPrint(
+            'Hub [Firebase Delta]: Skipping unsupported cloud mutation: $entity ($action)');
       }
 
       // Mark as processed in Firebase
@@ -3059,7 +3304,8 @@ class LocalServerService {
 
   /// Hub-side: Broadcasts all critical data to Firebase for companion apps' offline consumption.
   /// Now performs "Mirroring" - deletes items from Cloud that no longer exist locally.
-  Future<void> broadcastAllToCloud() async {
+  Future<void> broadcastAllToCloud(
+      {void Function(String detail)? onProgress}) async {
     final settings = ObjectBoxService.instance.settings;
     if (!settings.firebaseEnabled) {
       debugPrint(
@@ -3071,6 +3317,8 @@ class LocalServerService {
           'Hub: Connection mode is not Firebase (mode=${settings.connectionMode}). Skipping database mirror upload to conserve quota.');
       return;
     }
+
+    onProgress?.call('Broadcasting database mirror to Cloud...');
 
     final bool isInitialSync = settings.lastCloudflareSync == null;
     if (isInitialSync) {
@@ -3325,6 +3573,7 @@ class LocalServerService {
       // Update sync marker to current time
       settings.lastCloudflareSync = DateTime.now().millisecondsSinceEpoch;
       ObjectBoxService.instance.settingsBox.put(settings);
+      onProgress?.call('Cloud mirror sync complete.');
       debugPrint(
           'Hub: Mirror Sync Complete. Pushed: $pushCount, Pruned: $pruneCount. Saved lastCloudflareSync: ${settings.lastCloudflareSync}');
     } catch (e) {
