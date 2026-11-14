@@ -65,7 +65,7 @@ class EditPurchaseDialogState extends State<EditPurchaseDialog> {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                 content: Text('Record updated and stock adjusted'),
-                backgroundColor: AppTheme.success,
+                backgroundColor: AppTheme.emerald,
                 behavior: SnackBarBehavior.floating,
               ));
             }

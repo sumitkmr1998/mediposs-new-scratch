@@ -410,7 +410,7 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
         SnackBar(
           content: Text(
               'Excel Import Complete: Added $added new, Updated $updated existing medicines.'),
-          backgroundColor: AppTheme.success,
+          backgroundColor: AppTheme.emerald,
         ),
       );
     }
@@ -447,10 +447,10 @@ class _WarehouseWindowsState extends State<WarehouseWindows>
               padding: const EdgeInsets.only(right: 8),
               child: FilledButton.icon(
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.success,
+                  backgroundColor: AppTheme.emerald,
                   foregroundColor: Colors.white,
                   elevation: 2,
-                  shadowColor: AppTheme.success.withValues(alpha: 0.3),
+                  shadowColor: AppTheme.emerald.withValues(alpha: 0.3),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10)),
                 ),

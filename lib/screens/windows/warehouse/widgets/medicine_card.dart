@@ -104,11 +104,11 @@ class ModernMedicineCardWindowsState
                     ),
                   ),
                   Text(
-                    '₹${displayPrice.toStringAsFixed(0)}',
+                    '₹${displayPrice.toStringAsFixed(2)}',
                     style: const TextStyle(
                         fontWeight: FontWeight.w900,
                         fontSize: 18,
-                        color: AppTheme.success),
+                        color: AppTheme.emerald),
                   ),
                 ],
               ),

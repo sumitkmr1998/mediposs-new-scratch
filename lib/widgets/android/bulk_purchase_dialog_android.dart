@@ -172,7 +172,7 @@ class _AndroidBulkPurchaseDialogState extends State<AndroidBulkPurchaseDialog> {
                             title: Text(m.name),
                             subtitle: Text(m.barcode),
                             trailing: isAdded
-                                ? const Icon(Icons.check_circle, color: AppTheme.success)
+                                ? const Icon(Icons.check_circle, color: AppTheme.emerald)
                                 : IconButton(
                                     icon: const Icon(Icons.add_circle_outline),
                                     onPressed: () {
@@ -367,7 +367,7 @@ class _AndroidBulkPurchaseDialogState extends State<AndroidBulkPurchaseDialog> {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                                 content: Text('Bulk purchase recorded!'),
-                                backgroundColor: AppTheme.success,
+                                backgroundColor: AppTheme.emerald,
                                 behavior: SnackBarBehavior.floating,
                               ));
                             },

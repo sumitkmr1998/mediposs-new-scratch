@@ -243,7 +243,7 @@ class TransferHistoryTabState extends State<TransferHistoryTab> {
                                                 Text('From: ${t.initialFromQty} → ${t.finalFromQty}',
                                                     style: TextStyle(fontSize: 11, color: context.textMutedColor, fontWeight: FontWeight.w600)),
                                                 Text('To: ${t.initialToQty} → ${t.finalToQty}',
-                                                    style: const TextStyle(fontSize: 11, color: AppTheme.success, fontWeight: FontWeight.w600)),
+                                                    style: const TextStyle(fontSize: 11, color: AppTheme.emerald, fontWeight: FontWeight.w600)),
                                               ],
                                             )
                                           : Text('-', style: TextStyle(color: context.textMutedColor))),

@@ -259,7 +259,7 @@ class PurchaseHistoryTabState extends State<PurchaseHistoryTab> {
                                                 ],
                                               )
                                       ),
-                                      DataCell(Text('₹${p.purchasePrice.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600, color: AppTheme.success))),
+                                      DataCell(Text('₹${p.purchasePrice.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600, color: AppTheme.emerald))),
                                       DataCell(Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                         decoration: BoxDecoration(color: AppTheme.indigo.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
@@ -348,7 +348,7 @@ class PurchaseHistoryTabState extends State<PurchaseHistoryTab> {
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                 content: Text('Record deleted and stock reverted'),
-                backgroundColor: AppTheme.success,
+                backgroundColor: AppTheme.emerald,
                 behavior: SnackBarBehavior.floating,
               ));
             },

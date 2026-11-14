@@ -321,7 +321,7 @@ class TransferDialogState extends State<TransferDialog> {
                 content: Text(isEdit
                     ? 'Transfer updated successfully'
                     : 'Stock transferred successfully'),
-                backgroundColor: AppTheme.success,
+                backgroundColor: AppTheme.emerald,
                 behavior: SnackBarBehavior.floating,
                 margin: const EdgeInsets.all(20),
               ));

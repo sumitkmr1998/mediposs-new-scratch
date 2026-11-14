@@ -65,7 +65,7 @@ class BackupRestoreService {
       // Write manifest
       final manifest = {
         'type': isIncremental ? 'incremental' : 'full',
-        'version': '3.0.13',
+        'version': '3.0.14',
         'timestamp': DateTime.now().toIso8601String(),
         if (since != null) 'since': since.toIso8601String(),
       };

@@ -229,7 +229,7 @@ class _AndroidBulkTransferDialogState extends State<AndroidBulkTransferDialog> {
                             title: Text(m.name),
                             subtitle: Text(m.barcode),
                             trailing: isAdded
-                                ? const Icon(Icons.check_circle, color: AppTheme.success)
+                                ? const Icon(Icons.check_circle, color: AppTheme.emerald)
                                 : IconButton(
                                     icon: const Icon(Icons.add_circle_outline),
                                     onPressed: () => _selectMedicine(m),
@@ -443,7 +443,7 @@ class _AndroidBulkTransferDialogState extends State<AndroidBulkTransferDialog> {
                                 } else {
                                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                                     content: Text('Successfully executed bulk transfer for $successCount items!'),
-                                    backgroundColor: AppTheme.success,
+                                    backgroundColor: AppTheme.emerald,
                                     behavior: SnackBarBehavior.floating,
                                   ));
                                 }

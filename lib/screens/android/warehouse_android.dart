@@ -353,7 +353,7 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text('₹${((widget.medicine.activeBatch?.sellingPrice ?? 0) > 0 ? widget.medicine.activeBatch!.sellingPrice : widget.medicine.sellingPrice).toStringAsFixed(0)}',
+                    Text('₹${((widget.medicine.activeBatch?.sellingPrice ?? 0) > 0 ? widget.medicine.activeBatch!.sellingPrice : widget.medicine.sellingPrice).toStringAsFixed(2)}',
                         style: const TextStyle(
                             fontWeight: FontWeight.w800,
                             color: AppTheme.primaryLight,
@@ -507,13 +507,13 @@ class _ModernMedicineCardState extends State<_ModernMedicineCard> {
                             Expanded(
                               child: ElevatedButton.icon(
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppTheme.success.withValues(alpha: 0.1),
-                                  foregroundColor: AppTheme.success,
+                                  backgroundColor: AppTheme.emerald.withValues(alpha: 0.1),
+                                  foregroundColor: AppTheme.emerald,
                                   elevation: 0,
                                   padding: const EdgeInsets.symmetric(vertical: 12),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
-                                    side: BorderSide(color: AppTheme.success.withValues(alpha: 0.2)),
+                                    side: BorderSide(color: AppTheme.emerald.withValues(alpha: 0.2)),
                                   ),
                                 ),
                                 onPressed: () => AndroidBulkPurchaseDialog.show(context, initialMedicine: widget.medicine),
@@ -845,7 +845,7 @@ class _TransferDialogState extends State<_TransferDialog> {
                     : widget.medicine.bulkStoreStock))));
 
     final toStore = _toLoc == 'store' || _toLoc == 'bulkStore';
-    final accentColor = toStore ? AppTheme.success : AppTheme.indigo;
+    final accentColor = toStore ? AppTheme.emerald : AppTheme.indigo;
 
     final availableBatches = widget.medicine.batches.where((b) =>
         _getStock(b, _fromLoc) > 0).toList();
@@ -1027,7 +1027,7 @@ class _TransferDialogState extends State<_TransferDialog> {
                   },
                   child: const Padding(
                     padding: EdgeInsets.fromLTRB(12, 12, 4, 12),
-                    child: Icon(Icons.add_circle_outline, color: AppTheme.success),
+                    child: Icon(Icons.add_circle_outline, color: AppTheme.emerald),
                   ),
                 ),
               ],
@@ -1233,7 +1233,7 @@ class _TransferHistoryTabState extends State<_TransferHistoryTab> {
                         final t = allTransfers[i];
                         final isSendOut = t.fromWarehouse == 'main' || t.fromWarehouse == 'clinic';
                         final accentColor =
-                            isSendOut ? AppTheme.success : AppTheme.indigo;
+                            isSendOut ? AppTheme.emerald : AppTheme.indigo;
                         return Container(
                           margin: const EdgeInsets.only(bottom: 8),
                           decoration: BoxDecoration(
@@ -1425,7 +1425,7 @@ class _SimpleBatchRow extends StatelessWidget {
         batch.expiryDate.isBefore(DateTime.now().add(const Duration(days: 90)));
     final Color statusColor = isExpired
         ? AppTheme.danger
-        : (isNear ? AppTheme.warning : AppTheme.success);
+        : (isNear ? AppTheme.warning : AppTheme.emerald);
 
     final currentUser = context.read<AuthProvider>().currentUser;
     final canViewCost = currentUser?.role.toLowerCase() == 'admin' || (currentUser?.canViewPurchasePrice ?? false);
@@ -1992,7 +1992,7 @@ class _PurchaseHistoryTabAndroidState extends State<_PurchaseHistoryTabAndroid> 
                                               fontWeight: FontWeight.w800,
                                               color: Colors.teal,
                                               fontSize: 14)),
-                                      Text('₹${(p.qty * p.purchasePrice).toStringAsFixed(0)}',
+                                      Text('₹${(p.qty * p.purchasePrice).toStringAsFixed(2)}',
                                           style: TextStyle(
                                               fontSize: 11,
                                               fontWeight: FontWeight.w700,

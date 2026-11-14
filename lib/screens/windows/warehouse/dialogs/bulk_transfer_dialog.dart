@@ -199,10 +199,10 @@ class BulkTransferDialogState extends State<BulkTransferDialog> {
                             child: Container(
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
-                                color: AppTheme.success.withValues(alpha: 0.08),
+                                color: AppTheme.emerald.withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                    color: AppTheme.success
+                                    color: AppTheme.emerald
                                         .withValues(alpha: 0.25),
                                     width: 1.5),
                               ),
@@ -212,13 +212,13 @@ class BulkTransferDialogState extends State<BulkTransferDialog> {
                                   const Row(
                                     children: [
                                       Icon(Icons.archive_outlined,
-                                          size: 16, color: AppTheme.success),
+                                          size: 16, color: AppTheme.emerald),
                                       SizedBox(width: 6),
                                       Text('TO (DESTINATION LOCATION)',
                                           style: TextStyle(
                                               fontSize: 11,
                                               fontWeight: FontWeight.w800,
-                                              color: AppTheme.success,
+                                              color: AppTheme.emerald,
                                               letterSpacing: 0.5)),
                                     ],
                                   ),
@@ -495,7 +495,7 @@ class BulkTransferDialogState extends State<BulkTransferDialog> {
               ),
               FilledButton.icon(
                 style:
-                    FilledButton.styleFrom(backgroundColor: AppTheme.success),
+                    FilledButton.styleFrom(backgroundColor: AppTheme.emerald),
                 icon: const Icon(Icons.send),
                 label: Text('Transfer Selected (${_selectedIds.length})'),
                 onPressed: _selectedIds.isEmpty
@@ -533,7 +533,7 @@ class BulkTransferDialogState extends State<BulkTransferDialog> {
                               SnackBar(
                                 content: Text(
                                     'Successfully transferred stock for $successCount medicines.'),
-                                backgroundColor: AppTheme.success,
+                                backgroundColor: AppTheme.emerald,
                               ),
                             );
                           } else {

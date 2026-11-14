@@ -476,16 +476,31 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-        leading: const SizedBox(width: 34), // Matches leading container width (18 icon + 8 + 8 padding)
         title: Row(
           children: [
             SizedBox(
               width: 230,
               child: Text('INVOICE ID', style: _headerStyle(context)),
             ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 160,
+              child: Text('DATE & TIME', style: _headerStyle(context)),
+            ),
+            const SizedBox(width: 12),
             Expanded(
               flex: 3,
               child: Text('CUSTOMER NAME', style: _headerStyle(context)),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 110,
+              child: Center(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text('TRANSACTION TYPE', style: _headerStyle(context)),
+                ),
+              ),
             ),
             const SizedBox(width: 12),
             SizedBox(
@@ -498,11 +513,6 @@ class _SalesHistoryWindowsState extends State<SalesHistoryWindows> {
               width: 130,
               child: Center(
                   child: Text('TOTAL AMOUNT', style: _headerStyle(context))),
-            ),
-            const SizedBox(width: 12),
-            SizedBox(
-              width: 160,
-              child: Text('DATE & TIME', style: _headerStyle(context)),
             ),
           ],
         ),
@@ -555,22 +565,6 @@ class _SaleRow extends StatelessWidget {
       child: ExpansionTile(
         tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
         childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: sale.isReturn
-                ? AppTheme.danger.withValues(alpha: 0.1)
-                : AppTheme.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(
-            sale.isReturn
-                ? Icons.keyboard_return_rounded
-                : Icons.receipt_long_rounded,
-            color: sale.isReturn ? AppTheme.danger : AppTheme.primary,
-            size: 18,
-          ),
-        ),
         title: Row(
           children: [
             SizedBox(
@@ -598,39 +592,34 @@ class _SaleRow extends StatelessWidget {
                 ],
               ),
             ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 160,
+              child: Text(
+                '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: context.textMutedColor),
+              ),
+            ),
+            const SizedBox(width: 12),
             Expanded(
               flex: 3,
-              child: Row(
-                children: [
-                  if (sale.isReturn)
-                    Container(
-                      margin: const EdgeInsets.only(right: 12),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppTheme.danger.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                            color: AppTheme.danger.withValues(alpha: 0.2)),
-                      ),
-                      child: const Text('REFUND',
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.danger,
-                              letterSpacing: 0.5)),
-                    ),
-                  Expanded(
-                    child: Text(
-                      sale.patientName.isEmpty
-                          ? 'Walk-in Customer'
-                          : sale.patientName,
-                      style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w600),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
+              child: Text(
+                sale.patientName.isEmpty
+                    ? 'Walk-in Customer'
+                    : sale.patientName,
+                style: const TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 110,
+              child: Center(
+                child: _buildTransactionTypeBadge(sale, context),
               ),
             ),
             const SizedBox(width: 12),
@@ -648,24 +637,12 @@ class _SaleRow extends StatelessWidget {
                   style: TextStyle(
                     fontWeight: FontWeight.w800,
                     fontSize: 14,
-                    color: sale.isReturn ? AppTheme.danger : AppTheme.success,
+                    color: sale.isReturn ? AppTheme.danger : AppTheme.emerald,
                     fontFamily: 'monospace',
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 12),
-            SizedBox(
-              width: 160,
-              child: Text(
-                '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}',
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: context.textMutedColor),
-              ),
-            ),
-            const SizedBox(width: 40),
           ],
         ),
         children: [
@@ -904,23 +881,41 @@ class _SaleRow extends StatelessWidget {
     );
   }
 
+  Widget _buildTransactionTypeBadge(Sale sale, BuildContext context) {
+    final (String label, Color color) = () {
+      if (sale.isReturn) {
+        return ('REFUND', AppTheme.danger);
+      } else if (sale.invoiceNo.startsWith('OPD-')) {
+        return ('OPD', AppTheme.primaryLight);
+      } else if (sale.invoiceNo.startsWith('DISP-') || sale.isClinicalDispense) {
+        return ('DISPENSE', AppTheme.purple);
+      } else {
+        return ('RETAIL', AppTheme.emerald);
+      }
+    }();
+
+    return AppStatusBadge(
+      label: label,
+      color: color,
+      style: AppStatusBadgeStyle.text,
+      fontSize: 10,
+      fontWeight: FontWeight.w700,
+    );
+  }
+
   Widget _buildPaymentBadge(String method, BuildContext context) {
-    final (Color color, IconData icon) = switch (method.toLowerCase()) {
-      'cash' => (AppTheme.success, Icons.payments_rounded),
-      'upi' => (AppTheme.primary, Icons.qr_code_2_rounded),
-      'card' => (AppTheme.accent, Icons.credit_card_rounded),
-      'mixed' => (AppTheme.purple, Icons.account_balance_rounded),
-      _ => (
-          Theme.of(context).textTheme.bodyMedium?.color ?? Colors.grey,
-          Icons.payments_outlined
-        ),
+    final Color color = switch (method.toLowerCase()) {
+      'cash' => AppTheme.emerald,
+      'upi' => AppTheme.primary,
+      'card' => AppTheme.accent,
+      'mixed' => AppTheme.purple,
+      _ => Theme.of(context).textTheme.bodyMedium?.color ?? Colors.grey,
     };
 
     return AppStatusBadge(
       label: method.toUpperCase(),
       color: color,
-      icon: icon,
-      style: AppStatusBadgeStyle.icon,
+      style: AppStatusBadgeStyle.text,
       fontSize: 10,
       fontWeight: FontWeight.w700,
     );

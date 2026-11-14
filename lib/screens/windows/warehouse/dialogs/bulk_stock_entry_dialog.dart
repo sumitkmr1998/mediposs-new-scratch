@@ -350,7 +350,7 @@ class BulkStockEntryDialogState extends State<BulkStockEntryDialog> {
                               Text('Hub Stock: ${m.mainStock}', style: TextStyle(color: context.textMutedColor)),
                               const SizedBox(width: 16),
                               if (isAdded)
-                                const Icon(Icons.check_circle, color: AppTheme.success, size: 20)
+                                const Icon(Icons.check_circle, color: AppTheme.emerald, size: 20)
                               else
                                 const Icon(Icons.add_circle_outline, color: AppTheme.primaryLight, size: 20),
                             ],
@@ -396,7 +396,7 @@ class BulkStockEntryDialogState extends State<BulkStockEntryDialog> {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                     content: Text('Purchase record created successfully'),
-                    backgroundColor: AppTheme.success,
+                    backgroundColor: AppTheme.emerald,
                     behavior: SnackBarBehavior.floating,
                   ));
                 },

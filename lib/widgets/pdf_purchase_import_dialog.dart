@@ -267,7 +267,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                                     'HSN: ${m.hsnCode.isEmpty ? 'N/A' : m.hsnCode} | Price: ₹${m.sellingPrice} | Stock: ${m.mainStock + m.storeStock} Pcs',
                                     style: TextStyle(fontSize: isMobile ? 9 : 11),
                                   ),
-                                  trailing: const Icon(Icons.check_circle_outline, color: AppTheme.success, size: 18),
+                                  trailing: const Icon(Icons.check_circle_outline, color: AppTheme.emerald, size: 18),
                                   onTap: () {
                                     setState(() {
                                       row.matchedMedicine = m;
@@ -414,7 +414,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Successfully imported $importedCount items from ${_parsedInvoices.length} PDF Invoices!'),
-            backgroundColor: AppTheme.success,
+            backgroundColor: AppTheme.emerald,
           ),
         );
         Navigator.pop(context);
@@ -587,9 +587,9 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                       margin: const EdgeInsets.only(right: 8, bottom: 8),
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: (isDupe ? AppTheme.warning : (isClinic ? AppTheme.success : AppTheme.primary)).withValues(alpha: 0.1),
+                        color: (isDupe ? AppTheme.warning : (isClinic ? AppTheme.emerald : AppTheme.primary)).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: isDupe ? AppTheme.warning : (isClinic ? AppTheme.success : AppTheme.primary).withValues(alpha: 0.4)),
+                        border: Border.all(color: isDupe ? AppTheme.warning : (isClinic ? AppTheme.emerald : AppTheme.primary).withValues(alpha: 0.4)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -605,7 +605,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                               ),
                               Text(
                                 isClinic ? '➔ CLINIC BULK' : '➔ STORE BULK',
-                                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: isClinic ? AppTheme.success : AppTheme.primary),
+                                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: isClinic ? AppTheme.emerald : AppTheme.primary),
                               ),
                             ],
                           ),
@@ -662,7 +662,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                                         value: row.targetLocation,
                                         isDense: true,
                                         underline: const SizedBox(),
-                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isClinic ? AppTheme.success : AppTheme.primary),
+                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isClinic ? AppTheme.emerald : AppTheme.primary),
                                         items: const [
                                           DropdownMenuItem(value: 'bulkClinic', child: Text('Clinic Bulk')),
                                           DropdownMenuItem(value: 'bulkStore', child: Text('Store Bulk')),
@@ -712,7 +712,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                                         style: TextStyle(
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
-                                          color: isMatched ? AppTheme.success : AppTheme.warning,
+                                          color: isMatched ? AppTheme.emerald : AppTheme.warning,
                                         ),
                                       ),
                                     ),
@@ -849,7 +849,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                                             value: row.targetLocation,
                                             isDense: true,
                                             underline: const SizedBox(),
-                                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isClinic ? AppTheme.success : AppTheme.primary),
+                                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isClinic ? AppTheme.emerald : AppTheme.primary),
                                             items: const [
                                               DropdownMenuItem(value: 'bulkClinic', child: Text('Clinic Bulk')),
                                               DropdownMenuItem(value: 'bulkStore', child: Text('Store Bulk')),
@@ -899,7 +899,7 @@ class _PdfPurchaseImportDialogState extends State<PdfPurchaseImportDialog> {
                                                 style: TextStyle(
                                                   fontSize: 10,
                                                   fontWeight: FontWeight.bold,
-                                                  color: isMatched ? AppTheme.success : AppTheme.warning,
+                                                  color: isMatched ? AppTheme.emerald : AppTheme.warning,
                                                 ),
                                               ),
                                             ),
