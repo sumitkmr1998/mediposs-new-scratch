@@ -39,10 +39,11 @@ class SalesProvider extends ChangeNotifier {
     final seen = <String>{};
     final deduped = <Sale>[];
     for (final s in raw) {
-      final inv = s.invoiceNo.trim();
-      if (inv.isEmpty || !seen.contains(inv)) {
+      final inv = s.invoiceNo.trim().toUpperCase();
+      final key = inv.isNotEmpty ? inv : (s.id > 0 ? '__ID_${s.id}' : null);
+      if (key == null || !seen.contains(key)) {
         deduped.add(s);
-        if (inv.isNotEmpty) seen.add(inv);
+        if (key != null) seen.add(key);
       }
     }
     _analyticsWindow = deduped;

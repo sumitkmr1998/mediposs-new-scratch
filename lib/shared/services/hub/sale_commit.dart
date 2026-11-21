@@ -42,6 +42,44 @@ class SaleCommit {
       }
       incoming.updatedAt = DateTime.now();
       incoming.synced = true;
+
+      // Normalize medicineIds in itemsJson to match the local Hub medicine database IDs by name
+      try {
+        final rawList = jsonDecode(incoming.itemsJson);
+        if (rawList is List) {
+          final allMeds = medicines.getAll();
+          final medNameMap = <String, int>{};
+          for (final m in allMeds) {
+            final key = m.name.trim().toLowerCase();
+            if (key.isNotEmpty && !medNameMap.containsKey(key)) {
+              medNameMap[key] = m.id;
+            }
+          }
+          bool modified = false;
+          final updated = [];
+          for (final rawItem in rawList) {
+            if (rawItem is Map) {
+              final item = Map<String, dynamic>.from(rawItem);
+              if (item['isProcedure'] != true) {
+                final name =
+                    (item['medicineName'] as String? ?? '').trim().toLowerCase();
+                final localId = medNameMap[name];
+                if (localId != null && item['medicineId'] != localId) {
+                  item['medicineId'] = localId;
+                  modified = true;
+                }
+              }
+              updated.add(item);
+            } else {
+              updated.add(rawItem);
+            }
+          }
+          if (modified) {
+            incoming.itemsJson = jsonEncode(updated);
+          }
+        }
+      } catch (_) {}
+
       StockRules.deductInventory(
         sale: incoming,
         getAllMedicines: medicines.getAll,

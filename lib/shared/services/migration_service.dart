@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/medicine.dart';
 import '../models/sale.dart';
 import '../models/patient.dart';
-import '../models/appointment.dart';
 import 'dart:convert';
 import '../../objectbox.g.dart';
 import 'objectbox_service.dart';
@@ -13,7 +12,7 @@ import 'sales_fact_service.dart';
 /// One-shot data repairs — never run from provider `load()` paths.
 class MigrationService {
   static const _prefsKey = 'mediposs_data_migration_version';
-  static const currentVersion = 8;
+  static const currentVersion = 9;
 
   /// Run pending migrations after ObjectBox is open.
   static Future<void> runIfNeeded() async {
@@ -66,6 +65,11 @@ class MigrationService {
       final n = _migrateV8MergeOpdIntoDispenseTreatmentPackage();
       debugPrint(
           'MigrationService v8: healed and merged $n OPD/Dispense treatment packages');
+    }
+    if (from < 9) {
+      final n = _migrateV9SanitizeSalesAndFactHealth();
+      debugPrint(
+          'MigrationService v9: sanitized sales items and healed facts for $n records');
     }
 
     await prefs.setInt(_prefsKey, currentVersion);
@@ -319,7 +323,8 @@ class MigrationService {
     var healedCount = 0;
 
     // 1. Mark all appointments that have an OPD sale as consultationBilled = true
-    final opdSales = allSales.where((s) => s.invoiceNo.startsWith('OPD-')).toList();
+    final opdSales =
+        allSales.where((s) => s.invoiceNo.startsWith('OPD-')).toList();
     for (final opd in opdSales) {
       if (opd.linkedAppointmentId > 0) {
         final appt = apptBox.get(opd.linkedAppointmentId);
@@ -347,17 +352,21 @@ class MigrationService {
       }
 
       final consultationIndex = items.indexWhere((item) =>
-          item.isProcedure && item.medicineName.toLowerCase().startsWith('consultation fee'));
+          item.isProcedure &&
+          item.medicineName.toLowerCase().startsWith('consultation fee'));
 
       if (consultationIndex == -1) continue;
 
       // Check if an OPD sale exists for this dispense sale
       Sale? matchingOpd;
       if (sale.linkedAppointmentId > 0) {
-        matchingOpd = opdSales.where((o) => o.linkedAppointmentId == sale.linkedAppointmentId).firstOrNull;
+        matchingOpd = opdSales
+            .where((o) => o.linkedAppointmentId == sale.linkedAppointmentId)
+            .firstOrNull;
       }
       if (matchingOpd == null && sale.opdInvoiceNo.isNotEmpty) {
-        matchingOpd = opdSales.where((o) => o.invoiceNo == sale.opdInvoiceNo).firstOrNull;
+        matchingOpd =
+            opdSales.where((o) => o.invoiceNo == sale.opdInvoiceNo).firstOrNull;
       }
       if (matchingOpd == null) {
         final dt = sale.createdAt;
@@ -367,9 +376,11 @@ class MigrationService {
               o.createdAt.day == dt.day;
           if (!isSameDay) return false;
           if (sale.patientId > 0 && o.patientId == sale.patientId) return true;
-          if (sale.patientPhone.isNotEmpty && o.patientPhone == sale.patientPhone) return true;
+          if (sale.patientPhone.isNotEmpty &&
+              o.patientPhone == sale.patientPhone) return true;
           if (sale.patientName.isNotEmpty &&
-              o.patientName.toLowerCase().trim() == sale.patientName.toLowerCase().trim()) return true;
+              o.patientName.toLowerCase().trim() ==
+                  sale.patientName.toLowerCase().trim()) return true;
           return false;
         }).firstOrNull;
       }
@@ -381,7 +392,8 @@ class MigrationService {
 
         items.removeAt(consultationIndex);
         sale.itemsJson = jsonEncode(items.map((i) => i.toJson()).toList());
-        sale.subtotal = (sale.subtotal - feeDeduction).clamp(0.0, double.infinity);
+        sale.subtotal =
+            (sale.subtotal - feeDeduction).clamp(0.0, double.infinity);
         sale.total = (sale.total - feeDeduction).clamp(0.0, double.infinity);
 
         // Adjust payment breakdown
@@ -393,7 +405,8 @@ class MigrationService {
           } else if (sale.cardAmount >= feeDeduction) {
             sale.cardAmount -= feeDeduction;
           } else {
-            sale.cashAmount = (sale.cashAmount - feeDeduction).clamp(0.0, double.infinity);
+            sale.cashAmount =
+                (sale.cashAmount - feeDeduction).clamp(0.0, double.infinity);
           }
         } else if (sale.paymentMethod == 'cash') {
           sale.cashAmount = sale.total;
@@ -428,7 +441,8 @@ class MigrationService {
     final allSales = saleBox.getAll();
     var healedCount = 0;
 
-    final opdSales = allSales.where((s) => s.invoiceNo.startsWith('OPD-')).toList();
+    final opdSales =
+        allSales.where((s) => s.invoiceNo.startsWith('OPD-')).toList();
     if (opdSales.isEmpty) return 0;
 
     for (final sale in allSales) {
@@ -440,7 +454,8 @@ class MigrationService {
           final dynamic decoded = jsonDecode(sale.itemsJson);
           final list = decoded is List ? decoded : [];
           items = list
-              .map((e) => SaleItem.fromJson(Map<String, dynamic>.from(e as Map)))
+              .map(
+                  (e) => SaleItem.fromJson(Map<String, dynamic>.from(e as Map)))
               .toList();
         }
       } catch (_) {}
@@ -448,10 +463,14 @@ class MigrationService {
       // Find matching OPD sale
       Sale? matchingOpd;
       if (sale.opdInvoiceNo.isNotEmpty) {
-        matchingOpd = opdSales.where((o) => o.invoiceNo.trim() == sale.opdInvoiceNo.trim()).firstOrNull;
+        matchingOpd = opdSales
+            .where((o) => o.invoiceNo.trim() == sale.opdInvoiceNo.trim())
+            .firstOrNull;
       }
       if (matchingOpd == null && sale.linkedAppointmentId > 0) {
-        matchingOpd = opdSales.where((o) => o.linkedAppointmentId == sale.linkedAppointmentId).firstOrNull;
+        matchingOpd = opdSales
+            .where((o) => o.linkedAppointmentId == sale.linkedAppointmentId)
+            .firstOrNull;
       }
       if (matchingOpd == null) {
         final dt = sale.createdAt;
@@ -461,48 +480,66 @@ class MigrationService {
               o.createdAt.day == dt.day;
           if (!isSameDay) return false;
           if (sale.patientId > 0 && o.patientId == sale.patientId) return true;
-          if (sale.patientPhone.isNotEmpty && o.patientPhone == sale.patientPhone) return true;
+          if (sale.patientPhone.isNotEmpty &&
+              o.patientPhone == sale.patientPhone) return true;
           if (sale.patientName.isNotEmpty &&
-              o.patientName.toLowerCase().trim() == sale.patientName.toLowerCase().trim()) return true;
+              o.patientName.toLowerCase().trim() ==
+                  sale.patientName.toLowerCase().trim()) return true;
           return false;
         }).firstOrNull;
       }
 
       if (matchingOpd != null) {
-        final fee = matchingOpd.total > 0 ? matchingOpd.total : matchingOpd.subtotal;
+        final fee =
+            matchingOpd.total > 0 ? matchingOpd.total : matchingOpd.subtotal;
         final hasConsultation = items.any((item) =>
-            item.isProcedure && item.medicineName.toLowerCase().startsWith('consultation fee'));
+            item.isProcedure &&
+            item.medicineName.toLowerCase().startsWith('consultation fee'));
 
         if (!hasConsultation && fee > 0) {
           // Re-insert consultation fee into dispense package
-          items.insert(0, SaleItem(
-            medicineId: 0,
-            procedureId: 0,
-            medicineName: 'Consultation Fee',
-            qty: 1,
-            unitPrice: fee,
-            isProcedure: true,
-            batchNo: '',
-            expiryDate: '',
-          ));
+          items.insert(
+              0,
+              SaleItem(
+                medicineId: 0,
+                procedureId: 0,
+                medicineName: 'Consultation Fee',
+                qty: 1,
+                unitPrice: fee,
+                isProcedure: true,
+                batchNo: '',
+                expiryDate: '',
+              ));
           sale.itemsJson = jsonEncode(items.map((i) => i.toJson()).toList());
           sale.subtotal = (sale.subtotal + fee).clamp(0.0, double.infinity);
           sale.total = (sale.total + fee).clamp(0.0, double.infinity);
 
           // Merge payment amounts
-          final opdCash = matchingOpd.cashAmount > 0 ? matchingOpd.cashAmount : (matchingOpd.paymentMethod == 'cash' ? fee : 0.0);
-          final opdUpi = matchingOpd.upiAmount > 0 ? matchingOpd.upiAmount : (matchingOpd.paymentMethod == 'upi' ? fee : 0.0);
-          final opdCard = matchingOpd.cardAmount > 0 ? matchingOpd.cardAmount : (matchingOpd.paymentMethod == 'card' ? fee : 0.0);
+          final opdCash = matchingOpd.cashAmount > 0
+              ? matchingOpd.cashAmount
+              : (matchingOpd.paymentMethod == 'cash' ? fee : 0.0);
+          final opdUpi = matchingOpd.upiAmount > 0
+              ? matchingOpd.upiAmount
+              : (matchingOpd.paymentMethod == 'upi' ? fee : 0.0);
+          final opdCard = matchingOpd.cardAmount > 0
+              ? matchingOpd.cardAmount
+              : (matchingOpd.paymentMethod == 'card' ? fee : 0.0);
 
           sale.cashAmount += opdCash;
           sale.upiAmount += opdUpi;
           sale.cardAmount += opdCard;
 
-          if (sale.cashAmount > 0 && sale.upiAmount == 0 && sale.cardAmount == 0) {
+          if (sale.cashAmount > 0 &&
+              sale.upiAmount == 0 &&
+              sale.cardAmount == 0) {
             sale.paymentMethod = 'cash';
-          } else if (sale.upiAmount > 0 && sale.cashAmount == 0 && sale.cardAmount == 0) {
+          } else if (sale.upiAmount > 0 &&
+              sale.cashAmount == 0 &&
+              sale.cardAmount == 0) {
             sale.paymentMethod = 'upi';
-          } else if (sale.cardAmount > 0 && sale.cashAmount == 0 && sale.upiAmount == 0) {
+          } else if (sale.cardAmount > 0 &&
+              sale.cashAmount == 0 &&
+              sale.upiAmount == 0) {
             sale.paymentMethod = 'card';
           } else {
             sale.paymentMethod = 'mixed';
@@ -535,5 +572,90 @@ class MigrationService {
       SalesFactService.instance.backfillFromSales(clearFirst: true);
     }
     return healedCount;
+  }
+
+  /// Purges duplicate sales by case-insensitive invoiceNo, normalizes itemsJson medicineIds to local
+  /// Hub medicine records by name to heal cross-device ID collisions, and rebuilds sales facts.
+  static int _migrateV9SanitizeSalesAndFactHealth() {
+    final db = ObjectBoxService.instance;
+    final box = db.saleBox;
+    final allSales = box.getAll();
+    if (allSales.isEmpty) return 0;
+
+    // 1. Purge duplicate sales (case-insensitive invoice number)
+    final bestByInvoice = <String, Sale>{};
+    final toDelete = <int>[];
+    for (final s in allSales) {
+      final inv = s.invoiceNo.trim().toUpperCase();
+      if (inv.isEmpty) continue;
+      final existing = bestByInvoice[inv];
+      if (existing == null) {
+        bestByInvoice[inv] = s;
+      } else if (s.id > existing.id) {
+        toDelete.add(existing.id);
+        bestByInvoice[inv] = s;
+      } else {
+        toDelete.add(s.id);
+      }
+    }
+    if (toDelete.isNotEmpty) {
+      box.removeMany(toDelete);
+      debugPrint(
+          'MigrationService v9: purged ${toDelete.length} duplicate sale records');
+    }
+
+    // 2. Align itemsJson medicineId with local medicines by canonical name
+    final allMeds = db.medicineBox.getAll();
+    final medNameMap = <String, int>{};
+    for (final m in allMeds) {
+      final key = m.name.trim().toLowerCase();
+      if (key.isNotEmpty && !medNameMap.containsKey(key)) {
+        medNameMap[key] = m.id;
+      }
+    }
+
+    final salesToUpdate = <Sale>[];
+    final remainingSales = box.getAll();
+
+    for (final sale in remainingSales) {
+      try {
+        final rawList = jsonDecode(sale.itemsJson);
+        if (rawList is! List) continue;
+        bool modified = false;
+        final updatedItems = [];
+        for (final rawItem in rawList) {
+          if (rawItem is! Map) {
+            updatedItems.add(rawItem);
+            continue;
+          }
+          final item = Map<String, dynamic>.from(rawItem);
+          if (item['isProcedure'] != true) {
+            final name =
+                (item['medicineName'] as String? ?? '').trim().toLowerCase();
+            final localId = medNameMap[name];
+            if (localId != null && item['medicineId'] != localId) {
+              item['medicineId'] = localId;
+              modified = true;
+            }
+          }
+          updatedItems.add(item);
+        }
+        if (modified) {
+          sale.itemsJson = jsonEncode(updatedItems);
+          salesToUpdate.add(sale);
+        }
+      } catch (_) {}
+    }
+
+    if (salesToUpdate.isNotEmpty) {
+      box.putMany(salesToUpdate);
+      debugPrint(
+          'MigrationService v9: healed ${salesToUpdate.length} sales with mismatched medicine IDs');
+    }
+
+    // 3. Rebuild SalesFactService cleanly
+    SalesFactService.instance.backfillFromSales(clearFirst: true);
+
+    return toDelete.length + salesToUpdate.length;
   }
 }

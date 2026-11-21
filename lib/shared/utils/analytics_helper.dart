@@ -93,13 +93,13 @@ class AnalyticsHelper {
 
     windowList.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     final span = DateTime.now().difference(windowList.first.createdAt).inDays;
-    if (span <= 0) return totalSold.toDouble();
-    return totalSold / span;
+    final effectiveSpan = span > 0 ? span : 1;
+    return totalSold / effectiveSpan;
   }
 
   /// Calculates predicted remaining days of stock for a medicine
   static double daysOfStockRemaining(Medicine medicine, List<Sale> sales, {int? trendDays}) {
-    final daily = dailyConsumptionRate(medicine.id, sales, trendDays: trendDays);
+    final daily = dailyConsumptionRate(medicine.id, sales, trendDays: trendDays ?? 30);
     if (daily <= 0) return 999.0; // Infinite stock (no sales activity)
     return medicine.totalStock / daily;
   }
@@ -249,7 +249,7 @@ class AnalyticsHelper {
     List<Sale> sales, {
     int trendDays = 30,
     int depletionDaysThreshold = 90,
-    int targetStockDays = 365,
+    int targetStockDays = 30,
   }) {
     final list = <ReorderRecommendation>[];
     Iterable<Sale> window = sales;

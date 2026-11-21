@@ -15,7 +15,7 @@ class ReorderAndDeadStockTab extends StatefulWidget {
 class _ReorderAndDeadStockTabState extends State<ReorderAndDeadStockTab> {
   int _reorderTrendDays = 30;
   int _reorderDepletionDays = 90;
-  int _reorderTargetDays = 365;
+  int _reorderTargetDays = 30;
 
   Widget _buildConfigDropdown<T>({
     required String label,
@@ -149,10 +149,11 @@ class _ReorderAndDeadStockTabState extends State<ReorderAndDeadStockTab> {
                   label: 'SUGGESTED STOCK TARGET',
                   value: _reorderTargetDays,
                   items: {
+                    30: '30 Days (1 Month)',
+                    60: '60 Days (2 Months)',
                     90: '90 Days (3 Months)',
                     180: '180 Days (6 Months)',
                     365: '365 Days (1 Year)',
-                    730: '730 Days (2 Years)',
                   },
                   onChanged: (val) {
                     if (val != null) {

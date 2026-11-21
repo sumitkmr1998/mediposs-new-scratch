@@ -41,10 +41,12 @@ class SalesFactService {
 
       final name = (map['medicineName'] as String? ?? '').toLowerCase().trim();
       if (name.isEmpty) continue;
-      final qty = (map['qty'] as num?)?.toInt() ?? 0;
+      final rawQty = (map['qty'] as num?)?.toInt() ?? 0;
+      final qty = rawQty.abs();
       final unitPrice = (map['unitPrice'] as num?)?.toDouble() ?? 0;
-      final lineTotal =
+      final rawLineTotal =
           (map['lineTotal'] as num?)?.toDouble() ?? (qty * unitPrice);
+      final lineTotal = rawLineTotal.abs();
       final medicineId = (map['medicineId'] as num?)?.toInt() ?? 0;
 
       _bump(

@@ -355,5 +355,42 @@ void main() {
       expect(targetBatch.storeStock, equals(20));
       expect(med.storeStock, equals(20));
     });
+
+    test('New Medicine initialized with initial batch preserves batch and quantities', () {
+      final initialBatch = MedicineBatch(
+        batchNo: 'B-TEST-01',
+        expiryDate: DateTime(2027, 12, 31),
+        mainStock: 25,
+        storeStock: 15,
+        bulkClinicStock: 10,
+        bulkStoreStock: 50,
+        purchasePrice: 20.0,
+        sellingPrice: 30.0,
+      );
+
+      final newMed = Medicine(
+        name: 'a123',
+        mainStock: 25,
+        storeStock: 15,
+        bulkClinicStock: 10,
+        bulkStoreStock: 50,
+        purchasePrice: 20.0,
+        sellingPrice: 30.0,
+      );
+      initialBatch.medicine.target = newMed;
+      newMed.batches.add(initialBatch);
+
+      expect(newMed.batches.length, equals(1));
+      expect(newMed.mainStock, equals(25));
+      expect(newMed.storeStock, equals(15));
+      expect(newMed.bulkClinicStock, equals(10));
+      expect(newMed.bulkStoreStock, equals(50));
+      expect(newMed.totalStock, equals(100));
+
+      final json = newMed.toJson();
+      expect((json['batches'] as List).length, equals(1));
+      expect(json['batches'][0]['batchNo'], equals('B-TEST-01'));
+      expect(json['batches'][0]['mainStock'], equals(25));
+    });
   });
 }

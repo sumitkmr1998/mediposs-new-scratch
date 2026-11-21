@@ -402,7 +402,11 @@ class _ProductPerformanceTabState extends State<ProductPerformanceTab> {
     
     double daysLeft = 999.0;
     if (medicine != null) {
-      final dailyConsumption = AnalyticsHelper.dailyConsumptionRate(medicine.id, sales);
+      final dailyConsumption = AnalyticsHelper.dailyConsumptionRate(
+        medicine.id,
+        sales,
+        trendDays: daysCount > 1 ? daysCount : 30,
+      );
       daysLeft = dailyConsumption <= 0 ? 999.0 : medicine.totalStock / dailyConsumption;
     }
     

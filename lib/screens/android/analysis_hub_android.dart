@@ -57,7 +57,7 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
 
   int _reorderTrendDays = 30;
   int _reorderDepletionDays = 90;
-  int _reorderTargetDays = 365;
+  int _reorderTargetDays = 30;
 
   int _replenishmentTargetDays = 15;
 
@@ -1464,9 +1464,11 @@ class _AnalysisHubScreenAndroidState extends State<AnalysisHubScreenAndroid> wit
                         label: 'STOCK TARGET',
                         value: _reorderTargetDays,
                         items: {
+                          30: '30 Days (Def)',
+                          60: '60 Days',
                           90: '90 Days',
                           180: '180 Days',
-                          365: '1 Year (Def)',
+                          365: '1 Year',
                         },
                         onChanged: (val) {
                           if (val != null) {

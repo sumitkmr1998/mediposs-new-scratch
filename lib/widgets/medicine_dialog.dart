@@ -479,6 +479,21 @@ class _MedicineDialogState extends State<MedicineDialog> {
 
     if (m == null) {
       // New medicine creation flow
+      final cleanBatchNo = _batchNoCtrl.text.isNotEmpty
+          ? _batchNoCtrl.text.trim().toUpperCase()
+          : 'B-${DateTime.now().millisecondsSinceEpoch}';
+
+      final initialBatch = MedicineBatch(
+        batchNo: cleanBatchNo,
+        expiryDate: _expiryDate,
+        mainStock: inputMain,
+        storeStock: inputStore,
+        bulkClinicStock: inputBulkClinic,
+        bulkStoreStock: inputBulkStore,
+        purchasePrice: effectiveBuy ?? 0.0,
+        sellingPrice: effectiveSell ?? 0.0,
+      );
+
       final newM = Medicine(
         name: _nameCtrl.text.trim(),
         barcode: _barcodeCtrl.text.trim(),
@@ -486,21 +501,27 @@ class _MedicineDialogState extends State<MedicineDialog> {
         unit: _unitCtrl.text.trim(),
         purchasePrice: effectiveBuy ?? 0.0,
         sellingPrice: effectiveSell ?? 0.0,
+        mainStock: inputMain,
+        storeStock: inputStore,
+        bulkClinicStock: inputBulkClinic,
+        bulkStoreStock: inputBulkStore,
         lowStockThreshold: int.tryParse(_thresholdCtrl.text) ?? 10,
         isScheduleH1: _isScheduleH1,
       );
+      initialBatch.medicine.target = newM;
+      newM.batches.add(initialBatch);
+
       inv.addMedicine(newM, syncService: sync, actor: actor);
-      
-      inv.addBatchStock(
-        {newM.id: inputMain},
-        storeUpdates: {newM.id: inputStore},
-        bulkClinicUpdates: {newM.id: inputBulkClinic},
-        bulkStoreUpdates: {newM.id: inputBulkStore},
-        batchNo: _batchNoCtrl.text.isNotEmpty ? _batchNoCtrl.text.trim() : 'B-${DateTime.now().millisecondsSinceEpoch}',
+
+      inv.recordInitialStockPurchases(
+        medicine: newM,
+        batchNo: cleanBatchNo,
         expiryDate: _expiryDate,
-        sellingPrice: effectiveSell,
-        purchasePrice: effectiveBuy,
-        syncService: sync,
+        mainQty: inputMain,
+        storeQty: inputStore,
+        bulkClinicQty: inputBulkClinic,
+        bulkStoreQty: inputBulkStore,
+        purchasePrice: effectiveBuy ?? 0.0,
         actor: actor,
       );
     } else {

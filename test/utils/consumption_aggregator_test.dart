@@ -30,7 +30,7 @@ void main() {
       expect(r.dailyRateForName('Paracetamol', 5), 1.0);
     });
 
-    test('returns reduce quantity', () {
+    test('returns reduce quantity (both positive and negative qty in itemsJson)', () {
       final sales = [
         Sale(
           invoiceNo: 'S1',
@@ -47,9 +47,64 @@ void main() {
           itemsJson:
               '[{"medicineId":2,"medicineName":"Amox","qty":2,"unitPrice":10,"isProcedure":false}]',
         ),
+        Sale(
+          invoiceNo: 'R2',
+          subtotal: -10,
+          total: -10,
+          isReturn: true,
+          // return_dialog and cart_provider write negative qty in itemsJson
+          itemsJson:
+              '[{"medicineId":2,"medicineName":"Amox","qty":-1,"unitPrice":10,"isProcedure":false}]',
+        ),
       ];
       final r = ConsumptionAggregator.build(sales);
-      expect(r.unitsForName('Amox'), 2);
+      expect(r.unitsForName('Amox'), 1);
+    });
+
+    test('protects against cross-device ID collision', () {
+      final sales = [
+        Sale(
+          invoiceNo: 'WIN-1',
+          subtotal: 50,
+          total: 50,
+          itemsJson:
+              '[{"medicineId":1,"medicineName":"Paracetamol 500mg","qty":5,"unitPrice":10,"isProcedure":false}]',
+        ),
+        Sale(
+          invoiceNo: 'AND-1',
+          subtotal: 500,
+          total: 500,
+          // Android device happened to use local ObjectBox id 1 for Gloves
+          itemsJson:
+              '[{"medicineId":1,"medicineName":"Surgical Gloves","qty":100,"unitPrice":5,"isProcedure":false}]',
+        ),
+      ];
+      final r = ConsumptionAggregator.build(sales);
+      // Looking up Paracetamol on Windows must NOT return 105
+      expect(r.unitsForId(1, fallbackName: 'Paracetamol 500mg'), 5);
+      // Looking up Gloves must return 100
+      expect(r.unitsForName('Surgical Gloves'), 100);
+    });
+
+    test('deduplicates invoices case-insensitively', () {
+      final sales = [
+        Sale(
+          invoiceNo: 'INV-100',
+          subtotal: 20,
+          total: 20,
+          itemsJson:
+              '[{"medicineId":3,"medicineName":"Cetirizine","qty":2,"unitPrice":10,"isProcedure":false}]',
+        ),
+        Sale(
+          invoiceNo: 'inv-100',
+          subtotal: 20,
+          total: 20,
+          itemsJson:
+              '[{"medicineId":3,"medicineName":"Cetirizine","qty":2,"unitPrice":10,"isProcedure":false}]',
+        ),
+      ];
+      final r = ConsumptionAggregator.build(sales);
+      expect(r.unitsForName('Cetirizine'), 2);
     });
   });
 }

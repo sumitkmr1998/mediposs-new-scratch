@@ -28,24 +28,26 @@ class ConsumptionResult {
       unitsByName[name.toLowerCase().trim()] ?? 0;
 
   int unitsForId(int id, {String? fallbackName}) {
+    final nameKey = fallbackName?.toLowerCase().trim();
+    final hasName = nameKey != null && nameKey.isNotEmpty;
+    final nameUnits = hasName ? (unitsByName[nameKey] ?? 0) : 0;
+
+    // Canonical medicine name is the authoritative identifier across multi-device sync
+    // topologies to prevent cross-device integer ID overlap/corruption.
+    if (hasName && unitsByName.containsKey(nameKey)) {
+      return nameUnits;
+    }
     if (id > 0 && unitsById.containsKey(id)) {
-      final idUnits = unitsById[id]!;
-      if (fallbackName != null && fallbackName.trim().isNotEmpty) {
-        final nameUnits = unitsForName(fallbackName);
-        // Use the larger count if name was also used on lines with medicineId == 0
-        return nameUnits > idUnits ? nameUnits : idUnits;
-      }
-      return idUnits;
+      return unitsById[id]!;
     }
-    if (fallbackName != null && fallbackName.trim().isNotEmpty) {
-      return unitsForName(fallbackName);
-    }
-    return 0;
+    return nameUnits;
   }
 
   double dailyRateForName(String name, int trendDays) {
     if (trendDays <= 0) return 0;
-    return unitsForName(name) / trendDays;
+    final units = unitsForName(name);
+    if (units <= 0) return 0.0;
+    return units / trendDays;
   }
 
   double dailyRateForMedicine({
@@ -55,6 +57,7 @@ class ConsumptionResult {
   }) {
     if (trendDays <= 0) return 0;
     final units = unitsForId(medicineId, fallbackName: medicineName);
+    if (units <= 0) return 0.0;
     return units / trendDays;
   }
 }
@@ -62,7 +65,7 @@ class ConsumptionResult {
 class ConsumptionAggregator {
   /// Build consumption maps in one pass over [sales].
   /// Skips procedure lines. Returns decrease qty/revenue on [Sale.isReturn].
-  /// Deduplicates sales by invoiceNo to prevent duplicate sync counting.
+  /// Deduplicates sales by invoiceNo (case-insensitive) to prevent duplicate sync counting.
   static ConsumptionResult build(List<Sale> sales) {
     final unitsByName = <String, int>{};
     final revenueByName = <String, double>{};
@@ -71,10 +74,15 @@ class ConsumptionAggregator {
     final seenInvoices = <String>{};
 
     for (final sale in sales) {
-      final inv = sale.invoiceNo.trim();
+      final inv = sale.invoiceNo.trim().toUpperCase();
+      final saleId = sale.id;
       if (inv.isNotEmpty) {
         if (seenInvoices.contains(inv)) continue;
         seenInvoices.add(inv);
+      } else if (saleId > 0) {
+        final idKey = '__ID_$saleId';
+        if (seenInvoices.contains(idKey)) continue;
+        seenInvoices.add(idKey);
       }
 
       final sign = sale.isReturn ? -1 : 1;
@@ -93,9 +101,13 @@ class ConsumptionAggregator {
         final name = (map['medicineName'] as String? ?? '').toLowerCase().trim();
         if (name.isEmpty) continue;
 
-        final qty = (map['qty'] as num?)?.toInt() ?? 0;
+        final rawQty = (map['qty'] as num?)?.toInt() ?? 0;
+        // Returns may already store negative qty (-q) in itemsJson. Taking abs() guarantees
+        // that sign (-1 for return, +1 for sale) reliably controls addition vs subtraction.
+        final qty = rawQty.abs();
         final unitPrice = (map['unitPrice'] as num?)?.toDouble() ?? 0;
-        final lineTotal = (map['lineTotal'] as num?)?.toDouble() ?? (qty * unitPrice);
+        final rawLineTotal = (map['lineTotal'] as num?)?.toDouble() ?? (qty * unitPrice);
+        final lineTotal = rawLineTotal.abs();
         final medicineId = (map['medicineId'] as num?)?.toInt() ?? 0;
 
         unitsByName[name] = (unitsByName[name] ?? 0) + sign * qty;

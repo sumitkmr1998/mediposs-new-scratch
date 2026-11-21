@@ -44,18 +44,24 @@ class InventoryProvider extends ChangeNotifier {
   List<Medicine> get lowStockMedicines =>
       _medicines.where((m) => m.isLowStock).toList();
 
-  ConsumptionResult _consumptionForSmartStock(List<Sale> sales) {
+  ConsumptionResult _consumptionForSmartStock(List<Sale> sales, {int trendDays = 30}) {
+    if (sales.isEmpty) return ConsumptionAggregator.build(const []);
+    if (trendDays > 0) {
+      final cutoff = DateTime.now().subtract(Duration(days: trendDays));
+      final window = sales.where((s) => s.createdAt.isAfter(cutoff)).toList();
+      return ConsumptionAggregator.build(window);
+    }
     return ConsumptionAggregator.build(sales);
   }
 
   bool isSmartLowStock(Medicine m, List<Sale> sales,
-      {ConsumptionResult? precomputed}) {
+      {ConsumptionResult? precomputed, int trendDays = 30}) {
     if (m.totalStock <= 0) return true;
-    final result = precomputed ?? _consumptionForSmartStock(sales);
+    final result = precomputed ?? _consumptionForSmartStock(sales, trendDays: trendDays);
     final daily = result.dailyRateForMedicine(
       medicineId: m.id,
       medicineName: m.name,
-      trendDays: 30,
+      trendDays: trendDays,
     );
     if (daily > 0) {
       final daysLeft = m.totalStock / daily;
@@ -64,17 +70,17 @@ class InventoryProvider extends ChangeNotifier {
     return m.isLowStock;
   }
 
-  int getSmartLowStockCount(List<Sale> sales) {
-    final result = _consumptionForSmartStock(sales);
+  int getSmartLowStockCount(List<Sale> sales, {int trendDays = 30}) {
+    final result = _consumptionForSmartStock(sales, trendDays: trendDays);
     return _medicines
-        .where((m) => isSmartLowStock(m, sales, precomputed: result))
+        .where((m) => isSmartLowStock(m, sales, precomputed: result, trendDays: trendDays))
         .length;
   }
 
-  List<Medicine> getSmartLowStockMedicines(List<Sale> sales) {
-    final result = _consumptionForSmartStock(sales);
+  List<Medicine> getSmartLowStockMedicines(List<Sale> sales, {int trendDays = 30}) {
+    final result = _consumptionForSmartStock(sales, trendDays: trendDays);
     return _medicines
-        .where((m) => isSmartLowStock(m, sales, precomputed: result))
+        .where((m) => isSmartLowStock(m, sales, precomputed: result, trendDays: trendDays))
         .toList();
   }
 
@@ -83,13 +89,13 @@ class InventoryProvider extends ChangeNotifier {
   int getDispensingStock(Medicine m) => m.storeStock + m.mainStock;
 
   bool isStoreClinicReplenishmentNeeded(Medicine m, List<Sale> sales,
-      {int targetDays = 15, ConsumptionResult? precomputed}) {
+      {int targetDays = 15, int trendDays = 30, ConsumptionResult? precomputed}) {
     final dispensingStock = getDispensingStock(m);
-    final result = precomputed ?? _consumptionForSmartStock(sales);
+    final result = precomputed ?? _consumptionForSmartStock(sales, trendDays: trendDays);
     final daily = result.dailyRateForMedicine(
       medicineId: m.id,
       medicineName: m.name,
-      trendDays: 30,
+      trendDays: trendDays,
     );
 
     if (daily > 0) {
@@ -101,20 +107,20 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   int getStoreClinicReplenishmentCount(List<Sale> sales,
-      {int targetDays = 15}) {
-    final result = _consumptionForSmartStock(sales);
+      {int targetDays = 15, int trendDays = 30}) {
+    final result = _consumptionForSmartStock(sales, trendDays: trendDays);
     return _medicines
         .where((m) => isStoreClinicReplenishmentNeeded(m, sales,
-            targetDays: targetDays, precomputed: result))
+            targetDays: targetDays, trendDays: trendDays, precomputed: result))
         .length;
   }
 
   List<Medicine> getStoreClinicReplenishmentMedicines(List<Sale> sales,
-      {int targetDays = 15}) {
-    final result = _consumptionForSmartStock(sales);
+      {int targetDays = 15, int trendDays = 30}) {
+    final result = _consumptionForSmartStock(sales, trendDays: trendDays);
     return _medicines
         .where((m) => isStoreClinicReplenishmentNeeded(m, sales,
-            targetDays: targetDays, precomputed: result))
+            targetDays: targetDays, trendDays: trendDays, precomputed: result))
         .toList();
   }
 
@@ -199,9 +205,44 @@ class InventoryProvider extends ChangeNotifier {
     // Deduplicate batches per medicine and heal inflated quantities
     MigrationService.deduplicateBatchesAndHealStock();
 
-    // Recalculate stock and prices for all remaining medicines
+    // Recalculate stock and prices for all remaining medicines, and heal any medicines missing batches but with purchase records
     final remaining = _box.getAll();
     for (final m in remaining) {
+      if (m.batches.isEmpty && m.totalStock == 0) {
+        final purchases = _purchaseBox
+            .query(PurchaseRecord_.medicineId.equals(m.id))
+            .build()
+            .find();
+        if (purchases.isNotEmpty) {
+          final Map<String, MedicineBatch> recovered = {};
+          for (final p in purchases) {
+            final bNo = p.batchNo.trim().toUpperCase().isNotEmpty
+                ? p.batchNo.trim().toUpperCase()
+                : 'GENERAL';
+            final b = recovered.putIfAbsent(
+              bNo,
+              () => MedicineBatch(
+                batchNo: bNo,
+                expiryDate: p.expiryDate ?? DateTime(2099, 12, 31),
+                purchasePrice:
+                    p.purchasePrice > 0 ? p.purchasePrice : m.purchasePrice,
+                sellingPrice: m.sellingPrice,
+              )..medicine.target = m,
+            );
+            if (p.location == 'clinic' || p.location == 'main') {
+              b.mainStock += p.qty;
+            }
+            if (p.location == 'store') b.storeStock += p.qty;
+            if (p.location == 'bulkClinic') b.bulkClinicStock += p.qty;
+            if (p.location == 'bulkStore') b.bulkStoreStock += p.qty;
+          }
+          for (final b in recovered.values) {
+            final bId = _batchBox.put(b);
+            b.id = bId;
+            m.batches.add(b);
+          }
+        }
+      }
       m.recalculateStockFromBatches();
       _box.put(m);
     }
@@ -918,6 +959,8 @@ class InventoryProvider extends ChangeNotifier {
             sellingPrice: sellingPrice ?? m.sellingPrice,
           );
           batch.medicine.target = m;
+          final bId = _batchBox.put(batch);
+          batch.id = bId;
           m.batches.add(batch);
         } else {
           batch.mainStock += mainQty;
@@ -1038,11 +1081,15 @@ class InventoryProvider extends ChangeNotifier {
             data: p.toJson(),
           );
         }
-        if (syncService != null) {
-          for (final m in finalUpdates) {
-            syncService.pushMedicine(m);
-          }
-        }
+      }
+
+      for (final m in finalUpdates) {
+        syncService?.pushMedicine(m);
+        MutationService.instance.publishEntity(
+          entity: 'medicine',
+          action: 'update',
+          data: m.toJson(),
+        );
       }
 
       // Log manual stock updates / batch additions
@@ -1073,6 +1120,106 @@ class InventoryProvider extends ChangeNotifier {
       if (isHub && LocalServerService.instance.isRunning) {
         LocalServerService.instance.broadcast({'event': 'medicines_updated'});
       }
+    }
+  }
+
+  /// Records purchase history records for a newly created medicine with initial batch stock
+  void recordInitialStockPurchases({
+    required Medicine medicine,
+    required String batchNo,
+    required DateTime expiryDate,
+    int mainQty = 0,
+    int storeQty = 0,
+    int bulkClinicQty = 0,
+    int bulkStoreQty = 0,
+    double purchasePrice = 0.0,
+    AppUser? actor,
+  }) {
+    final now = DateTime.now();
+    final List<PurchaseRecord> records = [];
+
+    if (mainQty > 0) {
+      records.add(PurchaseRecord(
+        medicineId: medicine.id,
+        medicineName: medicine.name,
+        qty: mainQty,
+        purchasePrice: purchasePrice,
+        purchasedAt: now,
+        location: 'clinic',
+        batchNo: batchNo,
+        expiryDate: expiryDate,
+        initialQty: 0,
+        finalQty: mainQty,
+      ));
+    }
+    if (storeQty > 0) {
+      records.add(PurchaseRecord(
+        medicineId: medicine.id,
+        medicineName: medicine.name,
+        qty: storeQty,
+        purchasePrice: purchasePrice,
+        purchasedAt: now,
+        location: 'store',
+        batchNo: batchNo,
+        expiryDate: expiryDate,
+        initialQty: 0,
+        finalQty: storeQty,
+      ));
+    }
+    if (bulkClinicQty > 0) {
+      records.add(PurchaseRecord(
+        medicineId: medicine.id,
+        medicineName: medicine.name,
+        qty: bulkClinicQty,
+        purchasePrice: purchasePrice,
+        purchasedAt: now,
+        location: 'bulkClinic',
+        batchNo: batchNo,
+        expiryDate: expiryDate,
+        initialQty: 0,
+        finalQty: bulkClinicQty,
+      ));
+    }
+    if (bulkStoreQty > 0) {
+      records.add(PurchaseRecord(
+        medicineId: medicine.id,
+        medicineName: medicine.name,
+        qty: bulkStoreQty,
+        purchasePrice: purchasePrice,
+        purchasedAt: now,
+        location: 'bulkStore',
+        batchNo: batchNo,
+        expiryDate: expiryDate,
+        initialQty: 0,
+        finalQty: bulkStoreQty,
+      ));
+    }
+
+    if (records.isNotEmpty) {
+      _purchaseBox.putMany(records);
+      for (final r in records) {
+        MutationService.instance.publishEntity(
+          entity: 'purchase',
+          action: 'create',
+          data: r.toJson(),
+        );
+        AuditService.instance.log(
+          action: 'UPDATE',
+          entityType: 'Medicine',
+          entityId: medicine.id.toString(),
+          description:
+              'Added stock for ${medicine.name}: +${r.qty} units (Batch: $batchNo)',
+          details: {
+            'medicineId': medicine.id,
+            'medicineName': medicine.name,
+            'addedQty': r.qty,
+            'batchNo': batchNo,
+            'location': r.location,
+          },
+          actor: actor,
+        );
+      }
+      load();
     }
   }
 
